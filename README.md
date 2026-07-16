@@ -88,7 +88,7 @@ GitHub naming: `sulfatelab/dalvikvm-multiplatform_<name>` (SSH).
 | `vendor/libprocinfo` | `libprocinfo` | `artmp_android-16.0.0_r4` | `1c617ca29fb6` |
 | `vendor/libziparchive` | `libziparchive` | `artmp_android-16.0.0_r4` | `a710e1e46346` |
 | `vendor/logging` | `logging` | `artmp_android-16.0.0_r4` | `c29f3eeaa37e` |
-| `vendor/unwinding` | `unwinding` | `artmp_android-16.0.0_r4` | `857c9d4f8abe` |
+| `vendor/unwinding` | `unwinding` | `artmp_android-16.0.0_r4` | `586f07c07f33` |
 
 Pinned SHAs above are the values recorded at first main commit of this multiplatform tree.
 Update them by committing inside the nested repo, then `git add <path>` on main.
