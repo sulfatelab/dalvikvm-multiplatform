@@ -533,3 +533,30 @@ Critical success conditions:
 **Locked fold:** `compat/windows/art` + `compat/windows/libcore` → nested `artmp_*`; **`compat/include` stays in main.**
 
 When ready to execute, say **execute**.
+
+## Execution status (agent01)
+
+**Date:** 2026-07-17  
+**Tree:** `/home/agent/Projects/dalvikvm-multiplatform`  
+**Main commit:** `0b75273` — *Initial multiplatform tree with nested artmp_* gitlinks*
+
+| Step | Status |
+|------|--------|
+| Nested artmp branches + commits (incl. art/libcore fold) | Done (20 clean repos on `artmp_android-16.0.0_r4`) |
+| Copy nested repos into multiplatform `vendor/` | Done |
+| Copy product docs/tools/`compat/include` (omit folded windows overlays) | Done |
+| `.gitmodules` for all nested paths | Done |
+| README + `.gitignore` (no blanket `vendor/` ignore) | Done |
+| Path rewires for folded art/libcore | Done (bootjar + win64 phase1 CMake) |
+| Main first commit with 20 gitlinks | Done |
+| Create GitHub repos | **You** |
+| Set remotes / push | **You** (SSH); Codex only when asked |
+| Smoke clone --recursive + gates | Pending after push |
+
+**Notes**
+
+- Nested trees remain **shallow** in places; unshallow before first nested push if full history is required.
+- `vendor/r8/r8.jar` is a product prebuilt (exception in `.gitignore`), not a nested repo.
+- `../dalvikvm-linux` left intact as fallback.
+- Local nested working trees stay full git repos; consumers use submodule protocol via `.gitmodules`.
+
