@@ -1,0 +1,17 @@
+Win64 Phase3 host goldens 2026-07-16 20:54:15.57
+run_hello exit=0
+run_props exit=0
+run_rtmem exit=0
+run_core exit=0
+run_io exit=0
+run_oserrno exit=0
+run_net exit=0
+run_dns exit=0
+run_gc exit=0
+run_gcforced exit=0
+run_interrupt exit=0
+run_threadstress exit=0
+run_goldenapp exit=0
+run_abspath exit=0
+run_throw exit=0
+OVERALL PASS

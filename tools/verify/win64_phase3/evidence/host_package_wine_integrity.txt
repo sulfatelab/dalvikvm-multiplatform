@@ -1,0 +1,7 @@
+PASS hello exit 0
+PASS props exit 0
+PASS rtmem exit 0
+PASS golden exit 0
+PASS abspath exit 0
+PASS throw exit 1
+OVERALL PASS

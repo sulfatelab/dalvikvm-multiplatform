@@ -1,0 +1,17 @@
+liblog
+libnativehelper
+libbase
+libartpalette
+liblzma
+libnativebridge
+libnativeloader
+libziparchive
+libartbase
+libdexfile
+libprocinfo
+libunwindstack
+libprofile
+libodrstatslog
+libelffile
+libart
+dalvikvm

@@ -1,0 +1,94 @@
+wrote /home/agent/Projects/dalvikvm-linux/build/win64_phase1/run/gcstressprobe.jar 2820
+wrote /home/agent/Projects/dalvikvm-linux/build/win64_phase1/run/threadheavyprobe.jar 3312
+wrote /home/agent/Projects/dalvikvm-linux/build/win64_phase1/run/handleleakprobe.jar 3936
+wrote /home/agent/Projects/dalvikvm-linux/build/win64_phase1/run/perfsmokeprobe.jar 1908
+wrote /home/agent/Projects/dalvikvm-linux/build/win64_phase1/run/crashabortprobe.jar 1160
+wrote /home/agent/Projects/dalvikvm-linux/build/win64_phase1/run/crashnativeprobe.jar 1244
+==== GATE P4_G1_GCSTRESS ====
+round=0 free=25165824 live=270 sink=523433
+round=1 free=25165824 live=320 sink=1045929
+round=2 free=25165824 live=340 sink=1566955
+round=3 free=25165824 live=360 sink=2094758
+round=4 free=25165824 live=360 sink=2612750
+round=5 free=25165824 live=360 sink=3131413
+round=6 free=25165824 live=360 sink=3647620
+round=7 free=25165824 live=360 sink=4164468
+checksum=45906 ms=140
+gcstress.ok=true
+GcStressProbe.done=ok
+exit 0
+=== ASSERT ===
+PASS exit0
+PASS gcstress.ok=true
+PASS GcStressProbe.done=ok
+PASS P4_G1_GCSTRESS
+==== GATE P4_G2_THREADHEAVY ====
+threads=24 iters=3000 counter=72000
+interrupt.ok=true
+threadheavy.ok=true
+ThreadHeavyProbe.done=ok
+exit 0
+=== ASSERT ===
+PASS exit0
+PASS threadheavy.ok=true
+PASS ThreadHeavyProbe.done=ok
+PASS P4_G2_THREADHEAVY
+==== GATE P4_G3_HANDLELEAK ====
+files.ok=true n=400
+socks.ok=true n=80
+final=handle-final
+handleleak.ok=true
+HandleLeakProbe.done=ok
+exit 0
+=== ASSERT ===
+PASS exit0
+PASS handleleak.ok=true
+PASS HandleLeakProbe.done=ok
+PASS P4_G3_HANDLELEAK
+==== GATE P4_G4_PERFSMOKE ====
+ms=6 sink=-56971340288
+perf.ok=true
+PerfSmokeProbe.done=ok
+exit 0
+=== ASSERT ===
+PASS exit0
+PASS perf.ok=true
+PASS PerfSmokeProbe.done=ok
+PASS P4_G4_PERFSMOKE
+==== GATE P4_G5_CRASHABORT ====
+CrashAbortProbe.start
+exit 1
+=== ASSERT ===
+PASS abort_nonzero_with_message
+PASS exception_printed
+PASS P4_G5_CRASHABORT
+==== GATE P4_G5b_CRASHNATIVE ====
+CrashNativeProbe.start
+ART Win64 VEH: exception 0xc0000005 at 0x6ffffcfb9750 access=1 fault_addr=0
+ART Win64 UEF: exception 0xc0000005 at 0x6ffffcfb9750 access=1 fault_addr=0
+ART Win64 crash: minidump written to Z:\home\agent\Projects\dalvikvm-linux\build\win64_phase1\run\crash\art-20260716-211251.dmp
+exit 5
+new_dumps ['run/crash/art-20260716-211251.dmp']
+=== ASSERT ===
+PASS native_crash_aborts
+PASS crash_diagnostics_or_dump
+PASS P4_G5b_CRASHNATIVE
+==== GATE P4_G6_GOLDEN_REG ====
+conf.match=true
+conf.path=run\tmp_golden\conf\app.cfg
+conf.abs=Z:\home\agent\Projects\dalvikvm-linux\build\win64_phase1\run\tmp_golden\conf\app.cfg
+server.port=35117
+served=32 okEcho=32 expected=32
+net.ok=true
+interrupt.ok=true
+golden.ok=true
+GoldenApp.done=ok
+exit 0
+=== ASSERT ===
+PASS exit0
+PASS golden.ok=true
+PASS net.ok=true
+PASS GoldenApp.done=ok
+PASS P4_G6_GOLDEN_REG
+==== SUMMARY ====
+PASS all wine Phase 4 gates

@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+
+# Build / package outputs
+/build/
+/out/
+/dist/
+/generated/
+/native/generated/
+
+# Compiled / binary artifacts
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dll
+*.exe
+*.pdb
+*.ilk
+*.exp
+*.dmp
+*.class
+*.dex
+*.jar
+!vendor/r8/r8.jar
+
+# Tool verify scratch
+tools/verify/**/bin/
+tools/verify/**/build*/
+tools/verify/**/*.log
+tools/verify/**/*.exit
+tools/verify/**/*status*
+tools/verify/**/watch.status
+tools/verify/**/hello_*.log
+tools/verify/**/cmake_*.log
+tools/verify/**/p2_*.txt
+tools/verify/**/poll_*.txt
+tools/verify/**/dalvikvm*_status.txt
+tools/verify/**/phase2_build_status.txt
+
+# Editor / OS noise
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/
+
+# Nested vendor/* are intentional gitlinks (do NOT blanket-ignore vendor/).
+# Local untracked scratch under vendor should be avoided; use build/ instead.

@@ -1,0 +1,60 @@
+[submodule "vendor/art"]
+	path = vendor/art
+	url = git@github.com:sulfatelab/dalvikvm-multiplatform_art.git
+[submodule "vendor/external/boringssl"]
+	path = vendor/external/boringssl
+	url = git@github.com:sulfatelab/dalvikvm-multiplatform_boringssl.git
+[submodule "vendor/external/cpu_features"]
+	path = vendor/external/cpu_features
+	url = git@github.com:sulfatelab/dalvikvm-multiplatform_cpu_features.git
+[submodule "vendor/external/dlmalloc"]
+	path = vendor/external/dlmalloc
+	url = git@github.com:sulfatelab/dalvikvm-multiplatform_dlmalloc.git
+[submodule "vendor/external/fmtlib"]
+	path = vendor/external/fmtlib
+	url = git@github.com:sulfatelab/dalvikvm-multiplatform_fmtlib.git
+[submodule "vendor/external/lzma"]
+	path = vendor/external/lzma
+	url = git@github.com:sulfatelab/dalvikvm-multiplatform_lzma.git
+[submodule "vendor/external/oj-libjdwp"]
+	path = vendor/external/oj-libjdwp
+	url = git@github.com:sulfatelab/dalvikvm-multiplatform_oj-libjdwp.git
+[submodule "vendor/external/tinyxml2"]
+	path = vendor/external/tinyxml2
+	url = git@github.com:sulfatelab/dalvikvm-multiplatform_tinyxml2.git
+[submodule "vendor/icu"]
+	path = vendor/icu
+	url = git@github.com:sulfatelab/dalvikvm-multiplatform_icu.git
+[submodule "vendor/java-external/bouncycastle"]
+	path = vendor/java-external/bouncycastle
+	url = git@github.com:sulfatelab/dalvikvm-multiplatform_bouncycastle.git
+[submodule "vendor/java-external/conscrypt"]
+	path = vendor/java-external/conscrypt
+	url = git@github.com:sulfatelab/dalvikvm-multiplatform_conscrypt.git
+[submodule "vendor/java-external/fdlibm"]
+	path = vendor/java-external/fdlibm
+	url = git@github.com:sulfatelab/dalvikvm-multiplatform_fdlibm.git
+[submodule "vendor/java-external/okhttp"]
+	path = vendor/java-external/okhttp
+	url = git@github.com:sulfatelab/dalvikvm-multiplatform_okhttp.git
+[submodule "vendor/libbase"]
+	path = vendor/libbase
+	url = git@github.com:sulfatelab/dalvikvm-multiplatform_libbase.git
+[submodule "vendor/libcore"]
+	path = vendor/libcore
+	url = git@github.com:sulfatelab/dalvikvm-multiplatform_libcore.git
+[submodule "vendor/libnativehelper"]
+	path = vendor/libnativehelper
+	url = git@github.com:sulfatelab/dalvikvm-multiplatform_libnativehelper.git
+[submodule "vendor/libprocinfo"]
+	path = vendor/libprocinfo
+	url = git@github.com:sulfatelab/dalvikvm-multiplatform_libprocinfo.git
+[submodule "vendor/libziparchive"]
+	path = vendor/libziparchive
+	url = git@github.com:sulfatelab/dalvikvm-multiplatform_libziparchive.git
+[submodule "vendor/logging"]
+	path = vendor/logging
+	url = git@github.com:sulfatelab/dalvikvm-multiplatform_logging.git
+[submodule "vendor/unwinding"]
+	path = vendor/unwinding
+	url = git@github.com:sulfatelab/dalvikvm-multiplatform_unwinding.git

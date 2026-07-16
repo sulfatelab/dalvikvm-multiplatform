@@ -1,0 +1,18 @@
+CrashNativeProbe.start
+ART Win64 VEH: exception 0xc0000005 at 0x6ffffcfb9750 access=1 fault_addr=0
+ART Win64 UEF: exception 0xc0000005 at 0x6ffffcfb9750 access=1 fault_addr=0
+ART Win64 crash: minidump written to Z:\home\agent\Projects\dalvikvm-linux\build\win64_phase1\run\crash\art-20260716-211124.dmp
+exit 5
+new_dumps ['run/crash/art-20260716-211124.dmp']
+=== ASSERT ===
+PASS native_crash_aborts
+PASS crash_diagnostics_or_dump
+CrashNativeProbe.start
+ART Win64 VEH: exception 0xc0000005 at 0x6ffffcfb9750 access=1 fault_addr=0
+ART Win64 UEF: exception 0xc0000005 at 0x6ffffcfb9750 access=1 fault_addr=0
+ART Win64 crash: minidump written to Z:\home\agent\Projects\dalvikvm-linux\build\win64_phase1\run\crash\art-20260716-211209.dmp
+exit 5
+new_dumps ['run/crash/art-20260716-211209.dmp']
+=== ASSERT ===
+PASS native_crash_aborts
+PASS crash_diagnostics_or_dump

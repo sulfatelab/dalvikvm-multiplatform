@@ -1,0 +1,343 @@
+wrote /home/agent/Projects/dalvikvm-linux/build/win64_phase1/run/pathprobe.jar 3736
+wrote /home/agent/Projects/dalvikvm-linux/build/win64_phase1/run/propsprobe.jar 3368
+wrote /home/agent/Projects/dalvikvm-linux/build/win64_phase1/run/oserrnoprobe.jar 4212
+wrote /home/agent/Projects/dalvikvm-linux/build/win64_phase1/run/threadstressprobe.jar 2400
+wrote /home/agent/Projects/dalvikvm-linux/build/win64_phase1/run/throwprobe.jar 1252
+==== GATE G3_G4_G5 ====
+=== Hello ===
+Hello from dalvikvm!
+java.version=1.8.0
+hello_exit 0
+=== PathProbe ===
+file.separator=\
+path.separator=;
+java.class.path=run/probe.jar;run/hello.jar
+File.pathSeparator=;
+File.separator=\
+user.dir=Z:\home\agent\Projects\dalvikvm-linux\build\win64_phase1
+isLetterC=false
+File.fs=java.io.WinNTFileSystem
+---
+in=C:\x
+path=C:\x
+prefixLength=3
+isAbsolute=true
+abs=C:\x
+---
+in=C:/x
+path=C:\x
+prefixLength=3
+isAbsolute=true
+abs=C:\x
+---
+in=C:\User/admin/.ssh/x
+path=C:\User\admin\.ssh\x
+prefixLength=3
+isAbsolute=true
+abs=C:\User\admin\.ssh\x
+---
+in=\\server\share\a
+path=\\server\share\a
+prefixLength=2
+isAbsolute=true
+abs=\\server\share\a
+---
+in=\foo
+path=\foo
+prefixLength=1
+isAbsolute=true
+abs=\foo
+---
+in=rel/path
+path=rel\path
+prefixLength=0
+isAbsolute=false
+abs=Z:\home\agent\Projects\dalvikvm-linux\build\win64_phase1\rel\path
+---
+in=file.txt
+path=file.txt
+prefixLength=0
+isAbsolute=false
+abs=Z:\home\agent\Projects\dalvikvm-linux\build\win64_phase1\file.txt
+---
+in=../just/works.txt
+path=..\just\works.txt
+prefixLength=0
+isAbsolute=false
+abs=Z:\home\agent\Projects\dalvikvm-linux\build\win64_phase1\..\just\works.txt
+---
+in=run/hello.jar
+path=run\hello.jar
+prefixLength=0
+isAbsolute=false
+abs=Z:\home\agent\Projects\dalvikvm-linux\build\win64_phase1\run\hello.jar
+---
+existsHello=true
+Hello.load=ok
+probe_exit 0
+=== ASSERT ===
+PASS hello_exit0
+PASS probe_exit0
+PASS path.separator=;
+PASS file.separator=\
+PASS multi-cp-semi
+PASS WinNTFileSystem
+PASS abs_drive_C
+PASS mixed_abs
+PASS unc_abs
+PASS Hello.load=ok
+NOTE Character.isLetter(C)=false (expected on imageless ART; WinNT uses ASCII isDriveLetter)
+PASS G3_G4_G5
+==== GATE G5b_G5c ====
+PASS P2_fwd
+PASS P3_back
+PASS P4_mixed
+path.separator=;
+file.separator=\
+java.class.path=C:\art_phase3\abs_dir\hello.jar;run/abspathprobe.jar
+PASS P5_parent
+PASS P5_name
+P5c_abs=Z:\home\agent\Projects\dalvikvm-linux\build\win64_phase1\rel\path\x
+PASS P5c_has_drive_or_root
+PASS P5c_backslash_style
+P5b_abs=Z:\home\agent\Projects\dalvikvm-linux\build\win64_phase1\..\file.txt
+PASS P5b_not_posix_root
+PASS abs_isAbsolute:C:\art_phase3\abs_dir\hello.jar
+PASS abs_exists:C:\art_phase3\abs_dir\hello.jar
+PASS abs_isFile:C:\art_phase3\abs_dir\hello.jar
+PASS abs_length:C:\art_phase3\abs_dir\hello.jar
+path=C:\art_phase3\abs_dir\hello.jar len=784
+PASS abs_isAbsolute:C:/art_phase3/abs_dir/hello.jar
+PASS abs_exists:C:/art_phase3/abs_dir/hello.jar
+PASS abs_isFile:C:/art_phase3/abs_dir/hello.jar
+PASS abs_length:C:/art_phase3/abs_dir/hello.jar
+path=C:\art_phase3\abs_dir\hello.jar len=784
+PASS abs_isAbsolute:C:\art_phase3\abs_dir/hello.jar
+PASS abs_exists:C:\art_phase3\abs_dir/hello.jar
+PASS abs_isFile:C:\art_phase3\abs_dir/hello.jar
+PASS abs_length:C:\art_phase3\abs_dir/hello.jar
+path=C:\art_phase3\abs_dir\hello.jar len=784
+PASS mkdir_c
+PASS P7_c_roundtrip
+Hello.load=ok
+PASS Hello.load
+mem free=66196760 total=67108864 max=536870912
+PASS Runtime.maxMemory>0
+PASS Runtime.totalMemory>=0
+PASS Runtime.freeMemory>=0
+PASS Runtime.max>=total
+AbsPathProbe.fails=0
+AbsPathProbe.done=ok
+abs_exit 0
+PASS P9c_colon_not_multi
+PASS P9c_abs_colon_not_two_jars
+=== ASSERT ===
+PASS overall
+PASS G5b_G5c
+==== GATE G6 ====
+mkdir=false exists=true isDir=true
+wrote len=13 path=run\tmp_io\roundtrip.txt
+read n=13 got=phase3-io-ok\n
+match=true
+mixedPath=run\tmp_io\mix_dir\nested\file.txt abs=false
+mixedRead=mixed-ok
+rename=true renExists=true oldExists=false
+delete=true after=false
+IoProbe.done=ok
+exit 0
+=== ASSERT ===
+PASS exit0
+PASS match
+PASS mixedRead
+PASS rename
+PASS delete
+PASS done
+PASS G6
+==== GATE G7 ====
+arraycopy=true
+charset=true nbytes=8
+reflect=reflect-ok
+threads.counter=2000
+threads.ok=true
+CoreProbe.done=ok
+exit 0
+=== ASSERT ===
+PASS exit0
+PASS arraycopy
+PASS charset
+PASS reflect
+PASS threads
+PASS done
+PASS G7
+==== GATE G7b ====
+freeMemory.mod=public native
+native=true
+free=66229984 total=67108864 max=536870912
+mem.ok=true
+RtMem.done=ok
+exit 0
+=== ASSERT ===
+PASS exit0
+PASS mem.ok=true
+PASS RtMem.done=ok
+PASS G7b
+==== GATE G7c ====
+java.version=1.8.0
+java.vm.version=2.1.0
+java.specification.version=0.9
+os.name=Windows
+os.arch=amd64
+file.separator=\
+path.separator=;
+line.separator=\r\n
+user.dir=Z:\home\agent\Projects\dalvikvm-linux\build\win64_phase1
+user.home=C:\users\agent
+user.name=agent
+file.encoding=UTF-8
+hardcoded.JAVA_VERSION=1.8.0
+millis.delta=50
+nanos.delta=50226700
+java.version.nonzero=true
+props.ok=true
+PropsProbe.done=ok
+exit 0
+=== ASSERT ===
+PASS exit0
+PASS props.ok=true
+PASS PropsProbe.done=ok
+PASS G7c
+==== GATE G7d ====
+PASS mkdir
+missing.err=FileNotFoundException
+PASS missing_open_fnfe
+dirWrite.err=FileNotFoundException:run\tmp_os\adir: open failed: EACCES (null)
+PASS dir_as_file_fails
+PASS utf8_exists
+PASS utf8_length
+PASS utf8_readback
+utf8.path=run\tmp_os\utf8_测试_äöü.txt
+utf8.abs=Z:\home\agent\Projects\dalvikvm-linux\build\win64_phase1\run\tmp_os\utf8_测试_äöü.txt
+PASS utf8_listed
+list.count=2
+PASS rename
+PASS delete
+OsErrnoProbe.fails=0
+OsErrnoProbe.done=ok
+exit 0
+=== ASSERT ===
+PASS exit0
+PASS OsErrnoProbe.done=ok
+PASS G7d
+==== GATE G8 ====
+server.port=40309
+server.accepting
+client.connecting
+client.connected local=127.0.0.1/127.0.0.1:33316 remote=127.0.0.1/127.0.0.1:40309
+accepted=127.0.0.1/127.0.0.1:33316
+client.wrote n=13
+server.got=phase3-net-ok n=13
+server.wroteEcho n=18
+client.resp=echo:phase3-net-ok n=18
+match=true
+echoMatch=true
+NetProbe.done=ok
+exit 0
+=== ASSERT ===
+PASS exit0
+PASS match
+PASS echoMatch
+PASS done
+PASS G8
+==== GATE G8b ====
+localhost.count=1
+localhost.addr=127.0.0.1
+localhost.loopback=true
+numeric=127.0.0.1
+payload=dns-ok
+dns.ok=true
+DnsProbe.done=ok
+exit 0
+=== ASSERT ===
+PASS exit0
+PASS dns.ok=true
+PASS DnsProbe.done=ok
+PASS G8b
+==== GATE G9 ====
+mem0 free=66290832 total=67108864 max=536870912
+mem1 free=45739552 total=67108864 live=64 sink=250779
+checksum=7424
+los.ok=true
+gc.ok=true
+GcProbe.done=ok
+exit 0
+=== ASSERT ===
+PASS exit0
+PASS gc.ok=true
+PASS GcProbe.done=ok
+PASS G9
+==== GATE G9b ====
+mem0 free=66290832 total=67108864 max=536870912
+tiny.ok=true live=200 sink=638971
+los.ok=true live=250 sink=684864
+before.gc free=61393000
+after.gc free=25165824
+checksum=32666 live=250
+gc.forced.ok=true
+GcForced.done=ok
+exit 0
+=== ASSERT ===
+PASS exit0
+PASS tiny.ok=true
+PASS los.ok=true
+PASS gc.forced.ok=true
+PASS GcForced.done=ok
+PASS G9b
+==== GATE G10 ====
+InterruptProbe.start
+InterruptProbe.started
+InterruptProbe.interrupted
+alive=false
+interrupt.ok=true
+InterruptProbe.done=ok
+exit 0
+=== ASSERT ===
+PASS exit0
+PASS interrupt.ok=true
+PASS InterruptProbe.done=ok
+PASS G10
+==== GATE G10b ====
+threads=16 iters=2000 counter=32000
+threadstress.ok=true
+ThreadStressProbe.done=ok
+exit 0
+=== ASSERT ===
+PASS exit0
+PASS threadstress.ok=true
+PASS ThreadStressProbe.done=ok
+PASS G10b
+==== GATE G11 ====
+conf.match=true
+conf.path=run\tmp_golden\conf\app.cfg
+conf.abs=Z:\home\agent\Projects\dalvikvm-linux\build\win64_phase1\run\tmp_golden\conf\app.cfg
+server.port=41645
+served=32 okEcho=32 expected=32
+net.ok=true
+interrupt.ok=true
+golden.ok=true
+GoldenApp.done=ok
+exit 0
+=== ASSERT ===
+PASS exit0
+PASS golden.ok=true
+PASS net.ok=true
+PASS GoldenApp.done=ok
+PASS G11
+==== GATE G11b ====
+ThrowProbe.start
+exit 1
+=== ASSERT ===
+PASS throw_nonzero_with_message
+PASS exception_printed
+PASS G11b
+==== SUMMARY ====
+PASS all wine Phase 3 gates
