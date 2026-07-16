@@ -25,3 +25,23 @@ Order: **all nested** `artmp_android-16.0.0_r4` first, then main `main`.
 Tags (default): only `android-16.0.0_r4` / `android-16.0.0_r*` / `artmp_*`.  
 Use `--all-tags` for full AOSP tag history (usually not desired).  
 Use `--no-tags` for branches only.
+
+## Unshallow all
+
+After a shallow clone (or shallow vendor pins), convert nested trees to full history:
+
+```bash
+# plan
+tools/git/unshallow_all.sh
+
+# real unshallow (network required; prefers nested `upstream` AOSP remote)
+tools/git/unshallow_all.sh --execute
+```
+
+Notes:
+
+- Prefer unshallow **before** first GitHub push if you want complete history/tags on origin.
+- Nested fetch remote preference: `upstream` (googlesource) then `origin`.
+- Main is usually already complete; the script skips work when not shallow unless `--force-full-fetch`.
+- Optional: `--nested-only`, `--main-only`, `--continue-on-error`.
+
