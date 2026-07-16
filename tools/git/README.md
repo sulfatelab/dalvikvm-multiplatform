@@ -45,3 +45,14 @@ Notes:
 - Main is usually already complete; the script skips work when not shallow unless `--force-full-fetch`.
 - Optional: `--nested-only`, `--main-only`, `--continue-on-error`.
 
+## Status all
+
+Show branch / HEAD / dirty / shallow for main + nested:
+
+```bash
+tools/git/status_all.sh              # short table
+tools/git/status_all.sh --long       # full status for each
+tools/git/status_all.sh --dirty-only  # only dirty / shallow / branch mismatch
+tools/git/status_all.sh --porcelain   # TSV for scripts
+```
+
