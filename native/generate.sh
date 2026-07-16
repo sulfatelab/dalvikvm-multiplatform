@@ -10,7 +10,7 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
-SRC_ROOT="${MDVM_NATIVE_SRC_ROOT:-$REPO/../MinDalvikVM-Archive/native}"
+SRC_ROOT="${MDVM_NATIVE_SRC_ROOT:-$REPO/vendor}"
 ARCHIVE="$(cd "$SRC_ROOT/.." && pwd)"
 VENDOR="$REPO/vendor"
 
@@ -26,8 +26,8 @@ COMMON_ARGS=(
     --overlay "$REPO/overlay/port_policy.py"
     --extra-root "$VENDOR:MDVM_ART_ROOT_DIR"
     --extra-root "$VENDOR/libcore:MDVM_LIBCORE_DIR"
-    --extra-root "$ARCHIVE/javalib/external/icu:MDVM_ICU_DIR"
-    --extra-root "$ARCHIVE/javalib/external/fdlibm:MDVM_FDLIBM_DIR"
+    --extra-root "$VENDOR/icu:MDVM_ICU_DIR"
+    --extra-root "$VENDOR/java-external/fdlibm:MDVM_FDLIBM_DIR"
     --root-module dalvikvm
     --root-module dex2oat
     --root-module libjavacore

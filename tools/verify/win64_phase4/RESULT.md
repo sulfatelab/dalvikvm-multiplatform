@@ -38,7 +38,7 @@ PASS native_crash_aborts
 
 | Item | Location |
 |------|----------|
-| UEF + MiniDumpWriteDump | `compat/windows/art/runtime_windows.cc` (links `dbghelp`) |
+| UEF + MiniDumpWriteDump | `vendor/art/runtime/multiplatform/windows/runtime_windows.cc` (links `dbghelp`) |
 | Phase 4 probes | `tools/verify/win64_phase4/src/*` |
 | Native AV JNI | `tools/win64/jni_stubs/win_runtime_natives.c` |
 

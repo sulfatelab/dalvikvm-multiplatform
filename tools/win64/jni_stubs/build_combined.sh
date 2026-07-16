@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Build Phase-3 PE JNI combined stub (libjavacore/libopenjdk/libicu_jni stand-in).
 set -euo pipefail
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 source "${WIN64_DEV_ENV:-/home/agent/Projects/win64-dev-env}/env.sh"
 cd "$ROOT"
 CFLAGS=(
   --target=x86_64-pc-windows-msvc -O2 -fms-compatibility -fms-extensions
-  -I/home/agent/Projects/MinDalvikVM-Archive/native/libnativehelper/include_jni
+  -I"$REPO/vendor/libnativehelper/include_jni"
   -isystem"$WIN64_DEV_ENV/xwin/sdk/include/ucrt"
   -isystem"$WIN64_DEV_ENV/xwin/sdk/include/shared"
   -isystem"$WIN64_DEV_ENV/xwin/sdk/include/um"

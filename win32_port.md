@@ -1,5 +1,7 @@
 # Feasibility: Full Native Win64 ART (no Android platform API, no WSL)
 
+Product tree: **dalvikvm-multiplatform** (nested vendor + artmp_*).
+
 > **Arch lock:** **64-bit only** (`x86_64-pc-windows-msvc`, PE32+). “Win32 API” below means the Windows platform API on x64, not a 32-bit product.
 
 Status: Phase 0–2 implementation gated (A2+A3 passed under wine64)  
@@ -123,7 +125,7 @@ Layer 2  port_policy:
 Layer 3  CMake emission + native/CMakeLists.txt OS branches
     │
     ▼
-compat/windows/   project-owned ART OS spine (new sources)
+vendor/art/.../multiplatform/windows/   ART OS spine (folded into nested artmp_*)
 vendor/…          AOSP with minimal patches; prefer overlay src injection
 ```
 
@@ -483,7 +485,7 @@ Windows-specific policies:
 
 ### 4.4 Project-owned Windows runtime spine (must write)
 
-New files under e.g. `compat/windows/art/` or injected via overlay `add_srcs`:
+New files under nested ART multipath paths (or injected via overlay `add_srcs`):
 
 | File | Role |
 |------|------|
@@ -526,7 +528,7 @@ Plan:
 1. **Inventory** every `native` method registered at boot (Class, Object, Throwable, System, File, …).
 2. Split into:
    - **Pure / already portable** (boringssl bignums, much of ICU, charset).
-   - **OS I/O / path** → Win32 in `compat/windows/libcore/` (see §4.7.1 path model).
+   - **OS I/O / path** → Win32 in nested `vendor/libcore` (ojluni + multiplatform/windows; see §4.7.1 / filesystem_win32.md).
    - **Linux-only** (`epoll`, `sendfile`, vsock, …) → Win32 IOCP/select equivalents or stub with checked exceptions.
 3. Replace forced `__GLIBC__` / `LINUX` defines in Windows overlay with a **Windows SDK / UCRT** policy (include paths from the kit; never glibc macros).
 4. `Portability.h`: Windows edition (no `byteswap.h` / `sys/sendfile.h` as mandatory).

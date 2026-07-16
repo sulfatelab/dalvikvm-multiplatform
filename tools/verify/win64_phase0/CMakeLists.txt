@@ -27,13 +27,15 @@ set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 get_filename_component(_repo "${CMAKE_CURRENT_SOURCE_DIR}/../../.." ABSOLUTE)
-set(MDVM_NATIVE_SRC_ROOT_DIR "/home/agent/Projects/MinDalvikVM-Archive/native"
-    CACHE PATH "AOSP native source tree (archive)")
+set(MDVM_NATIVE_SRC_ROOT_DIR "${_repo}/vendor" CACHE PATH "Native/AOSP-like source root (multiplatform vendor/)")
 set(MDVM_ART_ROOT_DIR "${_repo}/vendor" CACHE PATH "vendored art root")
 set(MDVM_COMPAT_INCLUDE_DIR "${_repo}/compat/include"
     CACHE PATH "project-owned compat shims")
 set(MDVM_GENSRC_DIR "${CMAKE_BINARY_DIR}/gensrc" CACHE PATH "generated sources")
-set(MDVM_WIN64_ENV "/home/agent/Projects/win64-dev-env" CACHE PATH "Win64 dev env")
+set(MDVM_WIN64_ENV "$ENV{WIN64_DEV_ENV}" CACHE PATH "Win64 dev env (clang/xwin/libc++)")
+if(NOT MDVM_WIN64_ENV)
+  set(MDVM_WIN64_ENV "/home/agent/Projects/win64-dev-env" CACHE PATH "Win64 dev env (clang/xwin/libc++)" FORCE)
+endif()
 
 # Host-side aconfig headers (header-only stubs).
 file(MAKE_DIRECTORY "${MDVM_GENSRC_DIR}")

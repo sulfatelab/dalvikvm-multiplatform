@@ -3,11 +3,11 @@ set -uo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 OUT=/tmp/bootbuild
 CLASSES=$OUT/classes
-# Run r8/D8 with the platform record property.
+# Prefer in-tree prebuilt (shipped with multiplatform); allow override.
 R8JAR="${MDVM_R8JAR:-$REPO/vendor/r8/r8.jar}"
 if [ ! -f "$R8JAR" ]; then
-  # Fallback to sibling dalvikvm-linux tree during migration.
-  R8JAR=/home/agent/Projects/dalvikvm-linux/vendor/r8/r8.jar
+  echo "!! missing $R8JAR (vendor/r8/r8.jar). Run tools/vendor-sync.sh or set MDVM_R8JAR." >&2
+  exit 1
 fi
 D8="java -Dcom.android.tools.r8.emitRecordAnnotationsInDex=1 -cp $R8JAR com.android.tools.r8.D8"
 rm -rf "$OUT/dex"; mkdir -p "$OUT/dex"

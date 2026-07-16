@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 REPO="$(cd "$(dirname "$0")/../../.." && pwd)"
-ARCHIVE="${MDVM_NATIVE_SRC_ROOT_DIR:-/home/agent/Projects/MinDalvikVM-Archive/native}"
+ARCHIVE="${MDVM_NATIVE_SRC_ROOT_DIR:-$REPO/vendor}"
 cd "$REPO"
 export PYTHONPATH="$REPO/tools/bp2cmake${PYTHONPATH:+:$PYTHONPATH}"
 python3 -m bp2cmake \

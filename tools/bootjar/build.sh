@@ -4,15 +4,23 @@ set -uo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 LC=$REPO/vendor/libcore
 # ICU Java sources: prefer nested vendor/icu if present, else MinDalvikVM-Archive layout.
-ARCHIVE="${MDVM_ARCHIVE:-/home/agent/Projects/MinDalvikVM-Archive}"
+# Optional archive fallback for annotation stubs / older ICU layouts.
+ARCHIVE="${MDVM_ARCHIVE:-$REPO/../MinDalvikVM-Archive}"
 if [ -d "$REPO/vendor/icu/android_icu4j" ]; then
   ICU=$REPO/vendor/icu/android_icu4j
 elif [ -d "$ARCHIVE/javalib/external/icu/android_icu4j" ]; then
   ICU=$ARCHIVE/javalib/external/icu/android_icu4j
 else
-  ICU=$ARCHIVE/javalib/external/icu/android_icu4j
+  ICU=$REPO/vendor/icu/android_icu4j
 fi
-STUB=$ARCHIVE/javalib/android-annotation-stub/java
+if [ -d "$REPO/compat/java-stubs" ]; then
+  : # FlaggedApi etc. added below via JSTUBS
+fi
+if [ -d "$ARCHIVE/javalib/android-annotation-stub/java" ]; then
+  STUB=$ARCHIVE/javalib/android-annotation-stub/java
+else
+  STUB=""  # optional; may be absent on pure multiplatform trees
+fi
 D8=~/Android/Sdk/cmdline-tools/latest/bin/d8
 # JDK 21 javac: android-16.0.0_r4 libcore uses Java 21 language features.
 JAVAC=/usr/lib/jvm/java-21-openjdk-amd64/bin/javac

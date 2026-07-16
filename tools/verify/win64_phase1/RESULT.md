@@ -63,7 +63,7 @@ Recorded log: [`showversion.log`](showversion.log)
 
 ```bash
 source /home/agent/Projects/win64-dev-env/env.sh
-cd /home/agent/Projects/dalvikvm-linux
+cd /home/agent/Projects/dalvikvm-multiplatform
 
 cmake -S tools/verify/win64_phase1 -B build/win64_phase1 -G Ninja \
   -DCMAKE_TOOLCHAIN_FILE=$WIN64_CMAKE_TOOLCHAIN \
@@ -91,7 +91,7 @@ WINEDEBUG=-all wine64 ./dalvikvm.exe -showversion
 | `tools/verify/win64_phase1/` | CMake harness |
 | `overlay/port_policy_windows.py` | Windows Layer 2 |
 | `compat/include/*`, `compat/src/win64_posix_stubs.c` | POSIX/CRT bridge |
-| `compat/windows/art/*` | thread/runtime/monitor/sigchain stubs |
+| `vendor/art/runtime/multiplatform/windows/*` | thread/runtime/monitor/sigchain stubs |
 | Archive `libnativehelper/JniInvocation.c`, `DlHelp.c` | PE library load name + LoadLibraryA |
 | `vendor/art/runtime/base/mutex-inl.h` | WaitOnAddress futex path |
 | `vendor/art/runtime/arch/x86_64/asm_support_x86_64.S` | PE `LOAD_RUNTIME_INSTANCE` |

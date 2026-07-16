@@ -59,7 +59,7 @@ Record durable patches under `vendor-patches/` / `archive-patches` as follow-up.
 source /home/agent/Projects/win64-dev-env/env.sh
 
 # regenerate cmake
-cd /home/agent/Projects/dalvikvm-linux
+cd /home/agent/Projects/dalvikvm-multiplatform
 PYTHONPATH=tools/bp2cmake python3 -m bp2cmake \
   --root /home/agent/Projects/MinDalvikVM-Archive/native \
   --overlay overlay/port_policy_windows.py \

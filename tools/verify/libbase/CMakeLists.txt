@@ -11,6 +11,9 @@
 cmake_minimum_required(VERSION 3.16)
 project(VerifyLibbase CXX C)
 
+# Repo root = tools/verify/<harness>/../../..
+get_filename_component(_repo "${CMAKE_CURRENT_SOURCE_DIR}/../../.." ABSOLUTE)
+
 # ART must be built with clang/clang++ (the archive forces this via
 # -DCMAKE_C_COMPILER=clang). Several cflags (-Wexit-time-destructors,
 # -Wthread-safety) are clang-only, so g++ cannot build this tree.
@@ -22,7 +25,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_C_STANDARD 11)
 
 # Point at the archive's native source tree (2023 pins — our prototype baseline).
-set(MDVM_NATIVE_SRC_ROOT_DIR "/home/agent/Projects/MinDalvikVM-Archive/native")
+set(MDVM_NATIVE_SRC_ROOT_DIR "${_repo}/vendor" CACHE PATH "Native/AOSP-like source root (multiplatform vendor/)")
 
 # Stub liblog so the `base` target's link dependency resolves.
 add_library(log SHARED stub_log.c)

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# dalvikvm-multiplatform helper: seed/refresh nested vendor pins from AOSP tags.
+# Prefer artmp_* branches + gitlinks in normal workflow; this script is a bootstrap/repair tool.
 # Fetch art + libcore at a coherent AOSP snapshot into vendor/, then apply the
 # host-toolchain patches recorded in //vendor-patches/README.md. Reproducible:
 # re-run after deleting vendor/art or vendor/libcore. The archive is NEVER used

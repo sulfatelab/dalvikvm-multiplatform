@@ -30,7 +30,7 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 # --- Paths (override on the command line as needed) -------------------------
 get_filename_component(_repo "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE)
-set(MDVM_NATIVE_SRC_ROOT_DIR "${_repo}/../MinDalvikVM-Archive/native"
+set(MDVM_NATIVE_SRC_ROOT_DIR "${_repo}/vendor"
     CACHE PATH "AOSP native source tree (submodules)")
 set(MDVM_COMPAT_INCLUDE_DIR "${_repo}/compat/include"
     CACHE PATH "Project-owned compat shim headers")
@@ -38,7 +38,7 @@ set(MDVM_BP2CMAKE "${_repo}/tools/bp2cmake" CACHE PATH "converter package dir")
 set(MDVM_GENSRC_DIR "${CMAKE_BINARY_DIR}/gensrc")
 # Extra source trees. art + libcore are bumped to android-16.0.0_r4 in the
 # project-owned vendor/ tree (resolves the libart<->libcore skew); the rest come
-# from the read-only archive. MDVM_ART_ROOT_DIR is vendor/ itself because art
+# from nested vendor/ where present. MDVM_ART_ROOT_DIR is vendor/ itself because art
 # module paths keep their `art/...` prefix.
 get_filename_component(_archive "${MDVM_NATIVE_SRC_ROOT_DIR}/.." ABSOLUTE)
 set(MDVM_ART_ROOT_DIR "${_repo}/vendor" CACHE PATH "vendored art snapshot root")
@@ -48,8 +48,8 @@ set(MDVM_LIBCORE_DIR "${_repo}/vendor/libcore" CACHE PATH "vendored libcore tree
 # libnativehelper. vendor-sync fetches them here; put first on art's include path.
 set(MDVM_NATIVEHELPER_HDRS_DIR "${_repo}/vendor/nativehelper-headers"
     CACHE PATH "vendored A16 libnativehelper header-only headers")
-set(MDVM_ICU_DIR "${_archive}/javalib/external/icu" CACHE PATH "ICU tree")
-set(MDVM_FDLIBM_DIR "${_archive}/javalib/external/fdlibm" CACHE PATH "fdlibm tree")
+set(MDVM_ICU_DIR "${_repo}/vendor/icu" CACHE PATH "ICU tree (nested vendor/icu)")
+set(MDVM_FDLIBM_DIR "${_repo}/vendor/java-external/fdlibm" CACHE PATH "fdlibm tree (nested)")
 
 # --- Code generation (replaces the archive's Gradle tasks) ------------------
 # operator_out is emitted as add_custom_commands inside the generated file; the

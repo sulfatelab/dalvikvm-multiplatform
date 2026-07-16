@@ -155,7 +155,7 @@ of OpenJDK.
 
 The sources are **AOSP components vendored as git submodules**, pinned to a
 2023-era snapshot (see Section 3). We are starting a fresh repository
-(`dalvikvm-linux`, currently empty) rather than continuing inside the archive.
+(`dalvikvm-multiplatform` / historical `dalvikvm-linux` fallback) rather than continuing inside the archive.
 
 ## 2. What the archive (`../MinDalvikVM-Archive`) actually contains
 
@@ -442,7 +442,7 @@ precisely why it rots on every update.
 
 ## 6. The goal (what "good" looks like)
 
-A new `dalvikvm-linux` project where:
+The `dalvikvm-multiplatform` project (historically started as `dalvikvm-linux`) where:
 
 1. **Native build is generated, not hand-written.** A tool reads the AOSP
    `Android.bp` files and emits `CMakeLists.txt`. When we bump a submodule, we

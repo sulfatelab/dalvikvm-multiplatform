@@ -6,6 +6,9 @@
 cmake_minimum_required(VERSION 3.16)
 project(VerifyDexfile CXX C)
 
+# Repo root = tools/verify/<harness>/../../..
+get_filename_component(_repo "${CMAKE_CURRENT_SOURCE_DIR}/../../.." ABSOLUTE)
+
 if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     message(FATAL_ERROR "This build requires clang/clang++ (got ${CMAKE_CXX_COMPILER_ID})")
 endif()
@@ -15,7 +18,7 @@ set(CMAKE_C_STANDARD 11)
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
-set(MDVM_NATIVE_SRC_ROOT_DIR "/home/agent/Projects/MinDalvikVM-Archive/native")
+set(MDVM_NATIVE_SRC_ROOT_DIR "${_repo}/vendor" CACHE PATH "Native/AOSP-like source root (multiplatform vendor/)")
 set(MDVM_COMPAT_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../compat/include")
 set(MDVM_GENSRC_DIR "${CMAKE_BINARY_DIR}/gensrc")
 

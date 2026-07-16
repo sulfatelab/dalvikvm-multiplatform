@@ -21,12 +21,15 @@ get_filename_component(_repo "${CMAKE_CURRENT_SOURCE_DIR}/../../.." ABSOLUTE)
 # Nested vendor layout after artmp migration. Native graph may still
 # point at MinDalvikVM-Archive for historical bp2cmake phase1.cmake paths;
 # override with -DMDVM_NATIVE_SRC_ROOT_DIR=... when regenerating against vendor/.
-set(MDVM_NATIVE_SRC_ROOT_DIR "/home/agent/Projects/MinDalvikVM-Archive/native" CACHE PATH "")
+set(MDVM_NATIVE_SRC_ROOT_DIR "${_repo}/vendor" CACHE PATH "Native/AOSP-like source root (multiplatform vendor/)")
 set(MDVM_ART_ROOT_DIR "${_repo}/vendor" CACHE PATH "")
 set(MDVM_ART_DIR "${_repo}/vendor/art" CACHE PATH "Nested ART tree (artmp_*)")
 set(MDVM_COMPAT_INCLUDE_DIR "${_repo}/compat/include" CACHE PATH "")
 set(MDVM_GENSRC_DIR "${CMAKE_BINARY_DIR}/gensrc" CACHE PATH "")
-set(MDVM_WIN64_ENV "/home/agent/Projects/win64-dev-env" CACHE PATH "")
+set(MDVM_WIN64_ENV "$ENV{WIN64_DEV_ENV}" CACHE PATH "Win64 dev env (clang/xwin/libc++)")
+if(NOT MDVM_WIN64_ENV)
+  set(MDVM_WIN64_ENV "/home/agent/Projects/win64-dev-env" CACHE PATH "Win64 dev env (clang/xwin/libc++)" FORCE)
+endif()
 # Folded from former compat/windows/art into nested ART multipath paths.
 set(MDVM_ART_WIN_RUNTIME "${MDVM_ART_DIR}/runtime/multiplatform/windows" CACHE PATH "")
 set(MDVM_ART_WIN_STUBS "${MDVM_ART_DIR}/multiplatform/windows" CACHE PATH "")

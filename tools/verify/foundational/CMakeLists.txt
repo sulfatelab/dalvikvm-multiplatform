@@ -7,6 +7,9 @@
 cmake_minimum_required(VERSION 3.16)
 project(VerifyFoundational CXX C)
 
+# Repo root = tools/verify/<harness>/../../..
+get_filename_component(_repo "${CMAKE_CURRENT_SOURCE_DIR}/../../.." ABSOLUTE)
+
 # ART must be built with clang (clang-only warning flags; see project_scope.md).
 if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     message(FATAL_ERROR "This build requires clang/clang++ (got ${CMAKE_CXX_COMPILER_ID})")
@@ -15,7 +18,7 @@ endif()
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_C_STANDARD 11)
 
-set(MDVM_NATIVE_SRC_ROOT_DIR "/home/agent/Projects/MinDalvikVM-Archive/native")
+set(MDVM_NATIVE_SRC_ROOT_DIR "${_repo}/vendor" CACHE PATH "Native/AOSP-like source root (multiplatform vendor/)")
 # Project-owned compat include root (vendored shims, e.g. gtest/gtest_prod.h).
 set(MDVM_COMPAT_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../compat/include")
 

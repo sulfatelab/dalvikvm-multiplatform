@@ -20,7 +20,7 @@ Requirements: clang (mandatory — ART uses clang-only flags). **Build type:
 RelWithDebInfo** — ART must be -O2; `Release` here is `-O3` which miscompiles ART
 (the VM misbehaves), and `Debug`'s GC is unusably slow. Also: host dev packages
 `libcap-dev` + `liblz4-dev`, and a checkout of the AOSP sources at
-`../MinDalvikVM-Archive/native` (override with `-DMDVM_NATIVE_SRC_ROOT_DIR=...`
+`$REPO/vendor` (nested multiplatform sources; override with `-DMDVM_NATIVE_SRC_ROOT_DIR=...`) (override with `-DMDVM_NATIVE_SRC_ROOT_DIR=...`
 or `MDVM_NATIVE_SRC_ROOT` for generate.sh).
 
 ## What's hand-written vs generated

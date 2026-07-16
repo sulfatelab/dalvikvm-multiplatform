@@ -33,6 +33,7 @@ dalvikvm-multiplatform/
     external/{boringssl,cpu_features,dlmalloc,fmtlib,lzma,oj-libjdwp,tinyxml2}/
     java-external/{bouncycastle,conscrypt,fdlibm,okhttp}/
     r8/r8.jar                 # prebuilt D8/R8 (not a nested repo)
+    fmtlib -> external/fmtlib # layout shim for generated CMake paths
   compat/
     include/                  # product POSIX/Win prelude headers (kept on main)
     java-stubs/ openjdk_inc/ src/
@@ -100,6 +101,12 @@ Update them by committing inside the nested repo, then `git add <path>` on main.
 - **64-bit only** for the WinNT/Win64 port.
 - **Wine64** optional for Linux-hosted PE smoke gates.
 - **C++ runtime for PE:** libc++ / compiler-rt as documented in `win32_port.md`.
+
+## Native source root
+
+Build harnesses default `MDVM_NATIVE_SRC_ROOT_DIR` to **`vendor/`** in this
+repo (nested multipath sources). Override only if you still point at a legacy
+MinDalvikVM-Archive tree.
 
 ## Quick product scripts
 

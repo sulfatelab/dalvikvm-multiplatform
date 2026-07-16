@@ -1,3 +1,5 @@
+Product tree: **dalvikvm-multiplatform** (nested `vendor/libcore` on `artmp_*`).
+
 # Feasibility: Win64 Path / Filesystem Model for ART + libcore
 
 > **Scope:** Path semantics and file I/O for native Win64 ART (PE32+, no WSL).  
@@ -445,7 +447,7 @@ Correct for path *syntax*, but streams (IoBridge/Os) and ART jar open still need
 | Drive letter vs classpath list sep | **Use `;` on Win64**; change ART parsers; do not split on `:` |
 | UTF-8 vs UTF-16 Windows paths | Always wide APIs (`*W`); convert at boundary |
 | Android BlockGuard / hiddenapi | Keep Java wrappers; only replace FileSystem impl + natives |
-| Dual maintenance Unix + Win FileSystem | Isolate under `compat/windows/libcore` or ojluni windows overlay |
+| Dual maintenance Unix + Win FileSystem | Nested `vendor/libcore` ojluni + `multiplatform/windows` mirrors |
 | Wine path quirks vs real NT | Host Windows smoke for P2–P4 |
 | Growing PE stub DLL forever | Replace with real `libjavacore` / Os natives early in 3a |
 
