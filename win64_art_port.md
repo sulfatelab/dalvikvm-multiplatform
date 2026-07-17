@@ -12,7 +12,7 @@ Product goal (owner requirement): **full native Windows NT support** for this re
 
 This document answers: *is that feasible, what does “full” mean, and what is the actual port plan?*
 
-Grounding: current Linux port (`project_scope.md`, `overlay/port_policy.py`, `native/CMakeLists.txt`) and vendored AOSP ART/libcore (android-16 era art + libcore).
+Grounding: current Linux port (`bp2cmake_linux_scope.md`, `overlay/port_policy.py`, `native/CMakeLists.txt`) and vendored AOSP ART/libcore (android-16 era art + libcore).
 
 ---
 
@@ -530,7 +530,7 @@ Plan:
 1. **Inventory** every `native` method registered at boot (Class, Object, Throwable, System, File, …).
 2. Split into:
    - **Pure / already portable** (boringssl bignums, much of ICU, charset).
-   - **OS I/O / path** → Win32 in nested `vendor/libcore` (ojluni + multiplatform/windows; see §4.7.1 / filesystem_win32.md).
+   - **OS I/O / path** → Win32 in nested `vendor/libcore` (ojluni + multiplatform/windows; see §4.7.1 / win32_filesystem.md).
    - **Linux-only** (`epoll`, `sendfile`, vsock, …) → Win32 IOCP/select equivalents or stub with checked exceptions.
 3. Replace forced `__GLIBC__` / `LINUX` defines in Windows overlay with a **Windows SDK / UCRT** policy (include paths from the kit; never glibc macros).
 4. `Portability.h`: Windows edition (no `byteswap.h` / `sys/sendfile.h` as mandatory).
@@ -539,9 +539,9 @@ Product-class apps (network bots, CLI) need A4+A7; pure compute may pass earlier
 
 #### 4.7.1 Win64 path model (mandatory mixed/hybrid paths)
 
-> Detailed layer analysis (libcore vs libart): **[filesystem_win32.md](filesystem_win32.md)**.
+> Detailed layer analysis (libcore vs libart): **[win32_filesystem.md](win32_filesystem.md)**.
 
-**Product requirement:** ART on Win64 must accept **Windows-native and mixed separators** in filesystem paths, and **resolve absolutes to normal Win32 form** (`C:\path\to\file`, not `/…` and not `\\?\` by default). See [filesystem_win32.md](filesystem_win32.md) §1.5. Examples:
+**Product requirement:** ART on Win64 must accept **Windows-native and mixed separators** in filesystem paths, and **resolve absolutes to normal Win32 form** (`C:\path\to\file`, not `/…` and not `\\?\` by default). See [win32_filesystem.md](win32_filesystem.md) §1.5. Examples:
 
 - `C:\Users\example\file.txt`
 - `C:/Users/example/file.txt`
@@ -575,7 +575,7 @@ Product-class apps (network bots, CLI) need A4+A7; pure compute may pass earlier
 5. **`path.separator=;`** on Win64; ART `-cp` / `-Xbootclasspath` parsing must use `;` (not hardcoded `:`).
 6. **Phase-2 stubs** (`UnixFileSystem.getBooleanAttributes0`, relative `run/…`) remain a **bootstrap**, not the product path model.
 
-**Decision:** **Option H (Hybrid)** locked — [filesystem_win32.md](filesystem_win32.md). WinNT-class `java.io` + Os/IoBridge + ART open; **`;` lists**; normal `C:\…` absolutes. **Windows NIO.2 is a non-goal for now.** Still smaller than “replace all of libcore.”
+**Decision:** **Option H (Hybrid)** locked — [win32_filesystem.md](win32_filesystem.md). WinNT-class `java.io` + Os/IoBridge + ART open; **`;` lists**; normal `C:\…` absolutes. **Windows NIO.2 is a non-goal for now.** Still smaller than “replace all of libcore.”
 
 ### 4.8 GC choice on Windows
 
@@ -681,7 +681,7 @@ Each phase has a kill-or-continue gate. This is the execution roadmap when imple
 - Phase 3 acceptance (A4–A7 + Option H + golden app on native Windows) **met**.
 
 - Systematic native registration matrix; file/path UTF-8; network.
-- **Path model (Option H / filesystem_win32.md):** WinNT-class `java.io` + Os/ART open; mixed paths; normal `C:\…` absolutes; **`path.separator=;`**. Drive math uses ASCII letters (not ICU `Character.isLetter`). **Windows NIO non-goal for now.**
+- **Path model (Option H / win32_filesystem.md):** WinNT-class `java.io` + Os/ART open; mixed paths; normal `C:\…` absolutes; **`path.separator=;`**. Drive math uses ASCII letters (not ICU `Character.isLetter`). **Windows NIO non-goal for now.**
 - ICU data loading on Windows paths (including mixed/drive-letter locations).
 - boringssl Windows ASM or C.
 - **Gate:** A4–A7 for target app class (define one golden app early), including golden paths:
@@ -809,9 +809,9 @@ With WSL and MinGW ruled out, and MSVC **compiler** ruled out, the only honest p
 
 ## 11. References (in-tree)
 
-- [filesystem_win32.md](filesystem_win32.md) — Win64 path/filesystem feasibility (layers A/B/C, mixed paths)
+- [win32_filesystem.md](win32_filesystem.md) — Win64 path/filesystem feasibility (layers A/B/C, mixed paths)
 
-- [project_scope.md](project_scope.md) — Linux product + three-layer converter  
+- [bp2cmake_linux_scope.md](bp2cmake_linux_scope.md) — Linux product + three-layer converter  
 - [overlay/port_policy.py](overlay/port_policy.py) — current Linux-only Layer 2  
 - [native/CMakeLists.txt](native/CMakeLists.txt) — Unix/clang harness  
 - `vendor/art/libartbase/base/globals.h` — target identity (extend for Windows)  

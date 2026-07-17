@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-// MDVM compat shim (project-owned glue, project_scope.md 5.3).
+// MDVM compat shim (project-owned glue, bp2cmake_linux_scope.md 5.3).
 //
 // android-16.0.0_r4 art's libartbase/base/macros.h now #includes
 // <android-base/stringify.h>, a header that did NOT exist in the archive's

@@ -1,7 +1,7 @@
 """Build configuration that Layer 1 resolves `arch{}`/`target{}` selects against.
 
 Default remains a glibc Linux host build. Windows is a first-class second OS
-(`os="windows"`) used by the Win64 port (win32_port.md Phase 0+).
+(`os="windows"`) used by the Win64 port (win64_art_port.md Phase 0+).
 """
 
 from __future__ import annotations

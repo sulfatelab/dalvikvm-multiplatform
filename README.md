@@ -39,7 +39,7 @@ dalvikvm-multiplatform/
     java-stubs/ openjdk_inc/ src/
   tools/                      # bp2cmake, bootjar, win64, verify gates
   overlay/                    # port policies
-  docs: win32_port.md, filesystem_win32.md, win32_tls_jit_entrypoints.md, win32_open_items.md, project_scope.md, git_repo_migrate.md
+  docs: win64_art_port.md, win32_filesystem.md, win32_tls_jit_entrypoints.md, win32_open_items.md, win32_libcore_os_natives.md, bp2cmake_linux_scope.md; archived/: git_repo_migrate.md, shared_bootjar_runtime_os_detection.md
 ```
 
 ### Folded Windows sources (no main `compat/windows/{art,libcore}`)
@@ -100,7 +100,7 @@ Update them by committing inside the nested repo, then `git add <path>` on main.
 - **Windows SDK headers/libs:** MSVC SDK content via `xwin` / `win64-dev-env` (headers from the SDK; not the MSVC compiler).
 - **64-bit only** for the WinNT/Win64 port.
 - **Wine64** optional for Linux-hosted PE smoke gates.
-- **C++ runtime for PE:** libc++ / compiler-rt as documented in `win32_port.md`.
+- **C++ runtime for PE:** libc++ / compiler-rt as documented in `win64_art_port.md`.
 
 ## Native source root
 
@@ -123,7 +123,7 @@ tools/bootjar/build_win64.sh
 
 ## Migration plan
 
-See [git_repo_migrate.md](git_repo_migrate.md) for the full nested-repo / de-overlay plan,
+See [archived/git_repo_migrate.md](archived/git_repo_migrate.md) for the full nested-repo / de-overlay plan,
 push order, and checklist. Sibling tree `../dalvikvm-linux` remains a local fallback until
 multiplatform gates are fully proven.
 

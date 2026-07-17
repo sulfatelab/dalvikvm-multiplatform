@@ -4,7 +4,7 @@
 **Date:** 2026-07-16  
 **Depends on:** Phase 3 complete (real Win10 G12 goldens)
 
-## Scope (from win32_port §Phase 4)
+## Scope (from win64_art_port §Phase 4)
 
 - GC stress, multi-thread stress, crash dumps, resource/handle leaks
 - Performance smoke (TLS/interpreter-level, not full JIT)

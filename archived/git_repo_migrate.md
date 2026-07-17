@@ -229,7 +229,7 @@ dalvikvm-multiplatform/
 
 **Copy (yes)**
 
-- Docs: `win32_port.md`, `filesystem_win32.md`, `project_scope.md`, `archive-patches/` (historical notes), this plan  
+- Docs: `../win64_art_port.md`, `../win32_filesystem.md`, `../bp2cmake_linux_scope.md`, `archive-patches/` (historical notes), this plan  
 - Product: `compat/include/` (**keep**), other non-folded `compat/*` if any, `overlay/`, `tools/` (bp2cmake, bootjar, win64, verify), useful `native/` recipes  
 - **Do not** keep `compat/windows/art` or `compat/windows/libcore` as long-term main overlays after fold (sources live in nested artmp)  
 - New `.gitignore` that does **not** blanket-ignore nested vendor pins  

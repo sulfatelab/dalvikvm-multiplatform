@@ -96,4 +96,4 @@ java.version=0
 
 - PE stubs: `tools/win64/jni_stubs/` (+ `build_combined.sh`)
 - Interpreter JNI helpers (vendor ignored tree): `archive-patches/win64_phase2_interpreter_jni.md`
-- Port plan: `win32_port.md` rev19 Phase 2 DONE
+- Port plan: `win64_art_port.md` rev19 Phase 2 DONE

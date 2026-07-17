@@ -3,7 +3,7 @@
 Converts AOSP `Android.bp` (Soong/Blueprint) modules into `CMakeLists.txt` for a
 GNU/Linux (glibc) host build of a minimal ART runtime.
 
-See `../../project_scope.md` for the full rationale. The short version: the
+See `../../bp2cmake_linux_scope.md` for the full rationale. The short version: the
 `.bp` files describe an Android/bionic build, and they are not the whole truth
 (ART injects flags from Go). A faithful translation would be *wrong* for Linux.
 So the converter is three layers:
@@ -21,7 +21,7 @@ drift-prone source lists), while Layer 2 (human judgment) rarely changes.
 
 Prototype targeting `libbase` against the archive's 2023 submodule pins, so the
 existing hand-written `native/cmake/libbase.cmake` serves as a validation
-baseline (minus its known bugs — see the audit in `project_scope.md` §5.4).
+baseline (minus its known bugs — see the audit in `bp2cmake_linux_scope.md` §5.4).
 
 ## Layout
 

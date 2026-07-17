@@ -3,15 +3,7 @@
 **Status:** DRAFT (research + design only; no implementation commitment in this document)  
 **Date:** 2026-07-17  
 **Scope:** Design **all** ART-WinNT ISA targets in theory; implement later with **x86_64 first**.  
-**Related:** [win32_port.md](win32_port.md) (product phases), [win32_open_items.md](win32_open_items.md) (open workarounds W-001+), Phase 3+ runtime hardening, Phase 5 JIT/oat.
-
-### Suggested filename
-
-| Name | Rationale |
-|------|-----------|
-| **`win32_tls_jit_entrypoints.md`** (this file) | Covers the inseparable triad: OS TLS, managed Thread base access, quick entrypoints that JIT/nterp call into |
-| `win32_tls_and_jit.md` | Slightly narrower; understates entrypoint/ABI volume |
-| `art_winnt_managed_abi.md` | Good long-term title if the doc grows beyond Windows-only notes |
+**Related:** [win64_art_port.md](win64_art_port.md) (product phases), [win32_open_items.md](win32_open_items.md) (open workarounds W-001+), Phase 3+ runtime hardening, Phase 5 JIT/oat.
 
 ---
 

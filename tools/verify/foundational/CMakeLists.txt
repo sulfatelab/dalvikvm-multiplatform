@@ -10,7 +10,7 @@ project(VerifyFoundational CXX C)
 # Repo root = tools/verify/<harness>/../../..
 get_filename_component(_repo "${CMAKE_CURRENT_SOURCE_DIR}/../../.." ABSOLUTE)
 
-# ART must be built with clang (clang-only warning flags; see project_scope.md).
+# ART must be built with clang (clang-only warning flags; see bp2cmake_linux_scope.md).
 if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     message(FATAL_ERROR "This build requires clang/clang++ (got ${CMAKE_CXX_COMPILER_ID})")
 endif()

@@ -2,7 +2,7 @@
 
 **Status:** living design map for hybrid `libjavacore`  
 **Preferred name:** `win32_libcore_os_natives.md` (vs `win32_libcore_syscalls.md`)  
-**Related:** L-001, W-007, [filesystem_win32.md](filesystem_win32.md)  
+**Related:** L-001, W-007, [win32_filesystem.md](win32_filesystem.md)  
 **Scope:** `libcore.io.Linux` / private helper natives used by Os & IoBridge (not NIO.2).
 
 ## Rules

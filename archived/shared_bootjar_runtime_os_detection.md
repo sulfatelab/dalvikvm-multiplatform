@@ -3,7 +3,7 @@
 **Status:** **CLOSED** as D-001 — single shared boot.jar goal met (property inject + `VMRuntime.isWindowsOs` + dual FS + separators); name/values **LOCKED** (§11)  
 **Date:** 2026-07-17  
 **Decision context:** multipath will use **runtime selection** so Linux ART and Windows ART can share one `boot.jar` (instead of build-time WinNT overlay only).  
-**Related:** L-005 (Linux Hello rejects WinNT boot), Option H WinNT FS, `filesystem_win32.md`, `tools/bootjar/build_win64.sh`
+**Related:** L-005 (Linux Hello rejects WinNT boot), Option H WinNT FS, `../win32_filesystem.md`, `tools/bootjar/build_win64.sh`
 
 ---
 

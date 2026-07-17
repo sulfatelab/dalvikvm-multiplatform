@@ -3,13 +3,13 @@ Product tree: **dalvikvm-multiplatform** (nested `vendor/libcore` on `artmp_*`).
 # Feasibility: Win64 Path / Filesystem Model for ART + libcore
 
 > **Scope:** Path semantics and file I/O for native Win64 ART (PE32+, no WSL).  
-> **Related:** [win32_port.md](win32_port.md) §4.7.1 (product path mandate), Phase 3 libcore bring-up.  
+> **Related:** [win64_art_port.md](win64_art_port.md) §4.7.1 (product path mandate), Phase 3 libcore bring-up.  
 > **Date:** 2026-07-16 (rev 4)  
 > **Status:** **Decision locked — Option H (Hybrid).** Windows NIO.2 provider is a **non-goal for now**. Path/FS foundations + wine path gates landing (see `tools/verify/win64_phase3/RESULT.md`).
 
 ## 0. Why a separate document
 
-Win64 path handling is **not** “one FileSystem class.” libcore and ART open paths through **three loosely coupled layers**. Choosing `UnixFileSystem` vs `WinNTFileSystem` only fixes layer A. Mixed paths (`C:\User\example/some/file`) are a **product mandate** (see win32_port §4.7.1) and force a clear design before Phase 3 coding.
+Win64 path handling is **not** “one FileSystem class.” libcore and ART open paths through **three loosely coupled layers**. Choosing `UnixFileSystem` vs `WinNTFileSystem` only fixes layer A. Mixed paths (`C:\User\example/some/file`) are a **product mandate** (see win64_art_port §4.7.1) and force a clear design before Phase 3 coding.
 
 This note answers:
 
@@ -375,7 +375,7 @@ Correct for path *syntax*, but streams (IoBridge/Os) and ART jar open still need
 
 | Topic | Rating | Notes |
 |-------|--------|-------|
-| Mixed path mandate | **Required** | Product / win32_port §4.7.1 |
+| Mixed path mandate | **Required** | Product / win64_art_port §4.7.1 |
 | Layer A WinNT-class | **Feasible** | OpenJDK source exists; Android refit needed |
 | Layer B Os file ops | **Feasible, large** | Breadth (~file subset of 136 natives), not path math |
 | Layer C ART open | **Feasible** | Smaller surface; share normalize |
@@ -429,7 +429,7 @@ Correct for path *syntax*, but streams (IoBridge/Os) and ART jar open still need
 
 ## 9. Recommended Phase 3 sequencing (FS only)
 
-1. **Spec freeze:** this doc + win32_port §4.7.1 (mixed mandatory, **`;` list separator** on Win64).  
+1. **Spec freeze:** this doc + win64_art_port §4.7.1 (mixed mandatory, **`;` list separator** on Win64).  
 2. **Shared `normalize_win_path`** (C++), unit-tested for P1–P5 strings.  
 3. **Layer B open/stat/read/write/close** on PE (unblocks streams even before full FileSystem math).  
 4. **Layer A WinNT-class FileSystem** + `DefaultFileSystem` switch on `ART_TARGET_WINDOWS`.  
@@ -466,7 +466,7 @@ Correct for path *syntax*, but streams (IoBridge/Os) and ART jar open still need
 
 ## 12. References (in-tree)
 
-- [win32_port.md](win32_port.md) — overall port; §4.7 / §4.7.1 path mandate  
+- [win64_art_port.md](win64_art_port.md) — overall port; §4.7 / §4.7.1 path mandate  
 - `vendor/libcore/ojluni/src/main/java/java/io/{File,FileSystem,DefaultFileSystem,UnixFileSystem}.java`  
 - `vendor/libcore/ojluni/src/main/native/UnixFileSystem_md.c`  
 - `vendor/libcore/luni/src/main/java/libcore/io/{IoBridge,Linux,Libcore}.java`  

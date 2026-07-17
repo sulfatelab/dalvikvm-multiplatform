@@ -1,7 +1,7 @@
 # Win64 Phase 0 — Foundations — RESULT
 
 Date: 2026-07-16  
-Gate (win32_port.md Phase 0): **libartbase links** as a Win64 PE DLL.
+Gate (win64_art_port.md Phase 0): **libartbase links** as a Win64 PE DLL.
 
 ## Status: **PASSED**
 

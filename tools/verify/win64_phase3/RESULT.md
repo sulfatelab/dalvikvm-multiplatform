@@ -2,7 +2,7 @@
 
 **Status:** **COMPLETE** — A4–A7 + Option H + product golden app **PASS on real Windows 10 host** (and wine oracle)  
 **Date:** 2026-07-16  
-**Plan:** [filesystem_win32.md](../../../filesystem_win32.md) (Option H locked; Windows NIO non-goal)
+**Plan:** [win32_filesystem.md](../../../win32_filesystem.md) (Option H locked; Windows NIO non-goal)
 
 ## Scope delivered
 

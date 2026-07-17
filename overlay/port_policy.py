@@ -2,7 +2,7 @@
 #
 # This file is the durable, human-owned record of every DELIBERATE deviation
 # from what the AOSP Android.bp files say, made because we target GNU/Linux on
-# host clang rather than Android/bionic. See project_scope.md sections 5 and 6.1.
+# host clang rather than Android/bionic. See bp2cmake_linux_scope.md sections 5 and 6.1.
 #
 # RULE: every entry carries a comment explaining the Android-vs-Linux reason.
 # A submodule bump re-runs Layer 1 (refreshing source lists/deps automatically);

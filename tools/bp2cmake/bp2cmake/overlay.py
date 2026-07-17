@@ -6,7 +6,7 @@ in comments) lives outside the package, under //overlay, and is loaded at
 runtime. Keeping schema and data apart means the data file reads as a reviewable
 list of "here is what we deliberately changed vs AOSP, and why".
 
-A faithful `.bp`->CMake translation is wrong for Linux (see project_scope.md
+A faithful `.bp`->CMake translation is wrong for Linux (see bp2cmake_linux_scope.md
 section 5). The overlay is where every deliberate Android->Linux deviation is
 recorded:
 

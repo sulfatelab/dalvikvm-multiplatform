@@ -1,7 +1,7 @@
 """bp2cmake — convert Android.bp (Soong/Blueprint) modules to CMakeLists.txt
 for a GNU/Linux (glibc) host build of a minimal ART runtime.
 
-The converter is structured in three layers (see project_scope.md section 5.5):
+The converter is structured in three layers (see bp2cmake_linux_scope.md section 5.5):
 
     Layer 1  parse + evaluate  -> normalized, config-resolved module graph
     Layer 2  port-policy overlay (human-owned) applied to the graph

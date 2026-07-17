@@ -1,7 +1,7 @@
 # Win64 Phase 1 — Skeleton VM — RESULT
 
 Date: 2026-07-16  
-Gate (win32_port.md Phase 1 / acceptance **A2**):  
+Gate (win64_art_port.md Phase 1 / acceptance **A2**):  
 `dalvikvm.exe -showversion` prints ART version on PE32+ (verified under wine64).
 
 ## Status: **PASSED**
