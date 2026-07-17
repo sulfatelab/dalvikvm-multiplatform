@@ -10,7 +10,13 @@ OUT="$REPO/tools/verify/win64_phase3/bin"
 SRC="$REPO/tools/verify/win64_phase3/src/${CLS}.java"
 rm -rf "$OUT/${CLS}_classes" "$OUT/${CLS}_dex"
 mkdir -p "$OUT/${CLS}_classes" "$OUT/${CLS}_dex"
-"$JAVAC" -d "$OUT/${CLS}_classes" "$SRC"
+# Optional BOOTCP (class dir) for probes using android.*/libcore.*
+BOOTCP="${MDVM_PROBE_BOOTCP:-}"
+if [[ -n "$BOOTCP" ]]; then
+  "$JAVAC" -d "$OUT/${CLS}_classes" -source 8 -target 8 -bootclasspath "$BOOTCP" -classpath "$BOOTCP" -Xlint:-options "$SRC"
+else
+  "$JAVAC" -d "$OUT/${CLS}_classes" "$SRC"
+fi
 "${D8[@]}" --release --min-api 31 --output "$OUT/${CLS}_dex" "$OUT/${CLS}_classes/${CLS}.class"
 python3 - <<PY
 import zipfile, os, sys

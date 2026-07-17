@@ -299,14 +299,23 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Workaround note:** Do not claim HTTPS until SSLContext.init + connect golden green.
 
 ### L-003 — Process/exec, rich locale, zip edge, UDP/IPv6 matrix
-- **State:** OPEN (partial — Process/exec + classic UDP IPv4 green under wine 2026-07-17)
+- **State:** CLOSED (2026-07-17)
 - **Kind:** leftover
 - **Area:** libcore / openjdk hybrid
-- **Gap:** ~~Runtime.exec / ProcessBuilder~~ **Win CreateProcess natives landed** (`win_process_natives.c`, registered from openjdk OnLoad). ~~UDP send/recv IPv4~~ **green** (`sendto`/`recvfrom` + InetSocketAddress holder fill). Still open: rich locale surface; zip edge cases; IPv6 bind/smoke under wine (infrastructure dual-stack + GroupReq/IpMreqn present; wine `::`/`::1` bind flaky so gate skips).
-- **Progress:** 2026-07-17 — ART InterpreterJni slots 8→12 for `forkAndExec`/`sendtoBytes`; `FileInputStream.available0` PeekNamedPipe for process pipes; ExecProbe + UdpProbe wine PASS.
-- **Exit criteria:** Process/UDP gates documented; remaining locale/zip/IPv6 host matrix or explicit non-goals.
-- **Code anchors:** `tools/win64/jni_stubs/win_process_natives.c`, `win_net_natives.c` (GroupReq/IpMreqn/recvfrom fill), `vendor/art/runtime/interpreter/interpreter.cc` (12-slot JNI), `FileInputStream.c` Win available0
+- **Gap:** Phase-3 product matrix for process/exec, locale (without full ICU4J bundles), zip edges, UDP IPv4, dual-stack IPv6 Os.socket bind.
+- **Fix:**
+  - `win_process_natives.c` CreateProcess `UNIXProcess` + openjdk OnLoad register
+  - InterpreterJni 12-slot path for multi-arg natives (`forkAndExec`, `sendtoBytes`)
+  - UDP `recvfrom` InetSocketAddress holder fill; multicast GroupReq/IpMreqn
+  - ZipFile CEN: Windows heap-read + DirectByteBuffer mirror (mmap CEN invalid under wine)
+  - LocaleProbe uses Calendar/String case without ICU DecimalFormatSymbols bundles
+  - Ipv6Probe: Os.socket AF_INET6 bind on raw `::` (avoid reverse-DNS hang)
+  - Gate: `tools/verify/win64_phase3/run_l003_wine.sh` — OVERALL PASS
+- **Exit criteria:** Process/UDP/locale/zip/IPv6 gates documented + wine green **met**.
+- **Non-goals / host residual:** TCP IPv4-mapped dual-stack under wine; full ICU Collator resources; zip STORED empty-dir edges beyond DEFLATED multi-entry.
+- **Code anchors:** `win_process_natives.c`, `win_net_natives.c`, `ZipFile.java` (Win CEN), `FileInputStream.c` available0, `interpreter.cc` 12-slot, probes under `tools/verify/win64_phase3/src/`
 - **Opened:** 2026-07-17
+- **Closed:** 2026-07-17
 
 ### L-004 — Shrink or replace multi-name DLL staging
 - **State:** CLOSED (2026-07-17) — product ships one PE soname each: `libicu_jni`/`libjavacore`/`libopenjdk`/`libopenjdkjvm`/`libcrypto`/`libssl`/`libjavacrypto` (+ `icuuc`/`icui18n`); short-name twins removed from packaging
@@ -374,6 +383,7 @@ If product reopens a non-goal, add an **L-** item and link the decision.
 ## Closed
 
 - **D-001** — shared boot.jar runtime OS selection (**single jar** goal; not dual-host FS proof)
+- **L-003** — Process/exec, locale, zip edge, UDP/IPv6 matrix (wine gate PASS)
 - **L-005** — Linux imageless Hello / boot.jar CI gate
 - **W-019..W-023** and other closed W- items: detail rows remain below / above with State CLOSED
 
@@ -478,4 +488,4 @@ If product reopens a non-goal, add an **L-** item and link the decision.
 - [ ] Permanent design choice (e.g. VEH forever) → move from W- to documented architecture; close workaround  
 - [ ] CLOSED items: one line in §Closed, leave detail above with State CLOSED  
 
-*Last snapshot: 2026-07-17 — L-003 partial (Runtime.exec + UDP IPv4 wine PASS); W-024 OPEN; D-001 CLOSED.*
+*Last snapshot: 2026-07-17 — L-003 CLOSED (run_l003_wine OVERALL PASS: exec/locale/zip/udp/ipv6); W-024 OPEN; D-001 CLOSED.*
