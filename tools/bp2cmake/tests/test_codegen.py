@@ -15,12 +15,14 @@ from bp2cmake.codegen import (
     CodegenConfig, gen_operator_out, gen_mterp, gen_asm_defines,
 )
 
-NATIVE = "/home/agent/Projects/MinDalvikVM-Archive/native"
+# Pure multipath: foundational native sources live under nested vendor/.
+# Historical absolute MinDalvikVM-Archive paths are intentionally not required.
+_REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+NATIVE = os.path.join(_REPO, "vendor")
 # art/* codegen inputs come from the bumped vendor art tree (android-16.0.0_r4),
 # matching the real build (native/CMakeLists.txt passes --art-root vendor).
-ART_ROOT = os.path.join(os.path.dirname(__file__), "..", "..", "..", "vendor")
-ART_ROOT = os.path.abspath(ART_ROOT)
-HAVE_ARCHIVE = os.path.isdir(NATIVE)
+ART_ROOT = os.path.join(_REPO, "vendor")
+HAVE_ARCHIVE = os.path.isdir(NATIVE) and os.path.isdir(os.path.join(NATIVE, "libbase"))
 HAVE_ART = os.path.isdir(os.path.join(ART_ROOT, "art"))
 HAVE_CLANG = shutil.which("clang++") is not None
 

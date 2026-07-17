@@ -105,8 +105,8 @@ Update them by committing inside the nested repo, then `git add <path>` on main.
 ## Native source root
 
 Build harnesses default `MDVM_NATIVE_SRC_ROOT_DIR` to **`vendor/`** in this
-repo (nested multipath sources). Override only if you still point at a legacy
-MinDalvikVM-Archive tree.
+repo (nested multipath sources). Product CMake graphs are pure-vendor (L-006):
+they must not require a sibling MinDalvikVM-Archive tree.
 
 ## Quick product scripts
 

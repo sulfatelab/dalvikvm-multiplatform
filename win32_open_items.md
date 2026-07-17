@@ -335,11 +335,18 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Closed:** 2026-07-17
 
 ### L-006 — phase1.cmake / generated Win graph pure-vendor consistency
-- **State:** OPEN
-- **Kind:** leftover
+- **State:** CLOSED (2026-07-17)
+- **Kind:** leftover / build
 - **Area:** build
-- **Gap:** Ensure no residual archive path assumptions inside generated Win/Linux cmake.
+- **Gap:** ~~Residual MinDalvikVM-Archive path assumptions in product scripts~~ **pure-vendor**.
+- **Fix / evidence:**
+  - Product CMake (`tools/verify/win64_phase1`, `win64_libcore_icu`, `native/`, Linux verify) already resolved via `${MDVM_NATIVE_SRC_ROOT_DIR}` → **`vendor/`**; `phase1.cmake` has no hard-coded archive absolutes.
+  - `tools/bootjar/build.sh` no longer auto-discovers sibling `MinDalvikVM-Archive(_)` for ICU/annotation stubs; requires nested `vendor/icu` + in-tree `compat/java-stubs` (expanded minimal android.annotation / android.compat.annotation set).
+  - `MDVM_ARCHIVE` remains an optional non-default escape hatch only.
+  - Docs/tests scrubbed: `README.md`, `native/{CMakeLists,generate}.sh`, `tools/bp2cmake` CODEGEN/codegen + unit tests point at multipath `vendor/`.
+  - Historical `tools/verify/*/RESULT.md` absolute archive paths left as past evidence only (not product inputs).
 - **Opened:** 2026-07-17
+- **Closed:** 2026-07-17
 
 ---
 

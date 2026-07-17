@@ -1,42 +1,38 @@
 #!/usr/bin/env bash
-# Build a boot.jar from vendor/libcore (android-16.0.0_r4) to match the bumped libart.
+# Build a boot.jar from nested vendor/libcore (+ vendor/icu) to match libart.
+# Pure-vendor: no MinDalvikVM-Archive sibling required.
 set -uo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 LC=$REPO/vendor/libcore
-# ICU Java sources: prefer nested vendor/icu if present, else MinDalvikVM-Archive layout.
-# Optional archive fallback for annotation stubs / older ICU layouts.
-# Prefer renamed archive dir if present (trailing underscore on this host).
-if [ -z "${MDVM_ARCHIVE:-}" ]; then
-  if [ -d "$REPO/../MinDalvikVM-Archive" ]; then
-    ARCHIVE="$REPO/../MinDalvikVM-Archive"
-  elif [ -d "$REPO/../MinDalvikVM-Archive_" ]; then
-    ARCHIVE="$REPO/../MinDalvikVM-Archive_"
-  else
-    ARCHIVE="$REPO/../MinDalvikVM-Archive"
-  fi
-else
-  ARCHIVE="$MDVM_ARCHIVE"
+ICU=$REPO/vendor/icu/android_icu4j
+JSTUBS=$REPO/compat/java-stubs
+
+if [ ! -d "$LC" ]; then
+  echo "!! missing $LC (nested vendor/libcore required)" >&2
+  exit 1
 fi
-if [ -d "$REPO/vendor/icu/android_icu4j" ]; then
-  ICU=$REPO/vendor/icu/android_icu4j
-elif [ -d "$ARCHIVE/javalib/external/icu/android_icu4j" ]; then
-  ICU=$ARCHIVE/javalib/external/icu/android_icu4j
-else
-  ICU=$REPO/vendor/icu/android_icu4j
+if [ ! -d "$ICU" ]; then
+  echo "!! missing $ICU (nested vendor/icu/android_icu4j required)" >&2
+  exit 1
 fi
-if [ -d "$REPO/compat/java-stubs" ]; then
-  : # FlaggedApi etc. added below via JSTUBS
+if [ ! -d "$JSTUBS" ]; then
+  echo "!! missing $JSTUBS (project annotation stubs for boot javac)" >&2
+  exit 1
 fi
-if [ -d "$ARCHIVE/javalib/android-annotation-stub/java" ]; then
-  STUB=$ARCHIVE/javalib/android-annotation-stub/java
-else
-  STUB=""  # optional; may be absent on pure multiplatform trees
+
+# Optional escape hatch only: MDVM_ARCHIVE may point at a legacy archive for
+# experimental extra sources. Product default is pure multipath vendor/.
+ARCHIVE="${MDVM_ARCHIVE:-}"
+STUB=""
+if [ -n "$ARCHIVE" ] && [ -d "$ARCHIVE/javalib/android-annotation-stub/java" ]; then
+  STUB="$ARCHIVE/javalib/android-annotation-stub/java"
+  echo "note: also scanning optional archive annotation stub: $STUB" >&2
 fi
+
 D8=~/Android/Sdk/cmdline-tools/latest/bin/d8
 # JDK 21 javac: android-16.0.0_r4 libcore uses Java 21 language features.
 JAVAC=/usr/lib/jvm/java-21-openjdk-amd64/bin/javac
 BP2CMAKE=$REPO/tools/bp2cmake
-JSTUBS=$REPO/compat/java-stubs
 OUT=/tmp/bootbuild
 CLASSES=$OUT/classes
 GENFLAGS=$OUT/genflags
@@ -68,7 +64,10 @@ for d in \
   "$ICU/libcore_bridge/src/java" \
   "$JSTUBS" \
   "$GENFLAGS" \
-  "$STUB" ; do
+  ${STUB:+"$STUB"} ; do
+    if [ -z "$d" ]; then
+      continue
+    fi
     if [ -d "$d" ]; then
       find "$d" -name '*.java' >> "$OUT/srclist.txt"
     else
@@ -93,5 +92,5 @@ echo "sources: $(wc -l < "$OUT/srclist.txt")"
 echo "javac exit: $?"
 echo "=== first javac errors ==="
 grep -E 'error:' "$OUT/javac.err" | head -15
-echo "error count: $(grep -c 'error:' "$OUT/javac.err")"
+echo "error count: $(grep -c 'error:' "$OUT/javac.err" || true)"
 echo "classes compiled: $(find "$CLASSES" -name '*.class' | wc -l)"

@@ -1,10 +1,10 @@
-# Python codegen driver (replaces the archive's Gradle tasks)
+# Python codegen driver (replaces historical AOSP Gradle tasks)
 
-The archive (MinDalvikVM-Archive) generated ART's headers/sources from Gradle:
+AOSP ART historically generated headers/sources from Gradle:
 `generateArtOpCxxSrc`, `generateArtMterpAsmSrc`, `generateArtAsmDefinitions`,
-`generateArtAsmHeader`. We dropped Gradle, so `bp2cmake/codegen.py` reproduces
-those steps in pure Python — one driver, no JVM, runnable standalone or wired
-into CMake.
+`generateArtAsmHeader`. This multipath tree drops Gradle; `bp2cmake/codegen.py`
+reproduces those steps in pure Python — one driver, no JVM, runnable standalone
+or wired into CMake.
 
 ## The three generation kinds
 
@@ -22,7 +22,7 @@ into CMake.
 
 ```
 PYTHONPATH=tools/bp2cmake python3 -m bp2cmake.codegen_main \
-    --root <archive>/native --gensrc <out-dir> --arch x86_64 --clang clang++
+    --root <repo>/vendor --gensrc <out-dir> --arch x86_64 --clang clang++
 ```
 
 Validated output (2026-06-20, clang-21): 33 operator_out.cc, mterp_x86_64.S

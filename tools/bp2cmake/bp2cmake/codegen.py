@@ -1,9 +1,9 @@
-"""Python codegen driver — replaces the archive's Gradle generation tasks.
+"""Python codegen driver — replaces historical AOSP Gradle generation tasks.
 
-The archive (MinDalvikVM-Archive) drove ART's source/header generation from
-Gradle (generateArtOpCxxSrc, generateArtMterpAsmSrc, generateArtAsmHeader,
-generateArtAsmDefinitions). We have dropped Gradle, so this module reproduces
-exactly those steps in Python, staging a `gensrc/` tree the generated CMake
+AOSP ART historically generated headers/sources from Gradle
+(generateArtOpCxxSrc, generateArtMterpAsmSrc, generateArtAsmHeader,
+generateArtAsmDefinitions). This multipath tree drops Gradle; this module
+reproduces those steps in Python, staging a `gensrc/` tree the generated CMake
 consumes. Three kinds of generation:
 
   1. operator_out  -- run art/tools/generate_operator_out.py over a set of
@@ -22,7 +22,7 @@ This driver is deliberately separate from the .bp->CMake converter: it is build
 orchestration, not description. It is invoked once before/at configure time to
 populate gensrc/, OR wired as CMake custom commands. The asm_defines step needs
 the same include/define context as libart, supplied here explicitly (mirroring
-the archive's $<TARGET_PROPERTY:art,...> wiring).
+historical $<TARGET_PROPERTY:art,...> wiring).
 """
 
 from __future__ import annotations
@@ -35,14 +35,13 @@ from dataclasses import dataclass, field
 
 @dataclass
 class CodegenConfig:
-    native_root: str               # .../MinDalvikVM-Archive/native (foundational libs, ICU)
+    native_root: str               # multipath vendor/ (foundational libs, ICU, …)
     gensrc_dir: str                # output tree, e.g. build/gensrc
     arch: str = "x86_64"
     clang: str = "clang++"
-    # Root of the bumped art tree. art/* inputs (mterp, asm_defines, operator_out
-    # headers) come from here, NOT the stale archive native/art (which would
-    # generate interpreter asm / asm_defines that mismatch the bumped libart).
-    # Defaults to native_root for backward-compat / standalone runs.
+    # Root of the art tree. art/* inputs (mterp, asm_defines, operator_out
+    # headers) come from here (nested vendor/art). Defaults to native_root for
+    # standalone runs where art lives under the same root.
     art_root: str = ""
     # aconfig flag declaration files to generate C++ headers for (android-16+
     # feature flags; no aconfig tool on host). art-tree files are relative to

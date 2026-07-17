@@ -18,9 +18,9 @@ set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 get_filename_component(_repo "${CMAKE_CURRENT_SOURCE_DIR}/../../.." ABSOLUTE)
-# Nested vendor layout after artmp migration. Native graph may still
-# point at MinDalvikVM-Archive for historical bp2cmake phase1.cmake paths;
-# override with -DMDVM_NATIVE_SRC_ROOT_DIR=... when regenerating against vendor/.
+# Pure multipath vendor/ layout (L-006). Generated phase1.cmake resolves
+# sources via ${MDVM_NATIVE_SRC_ROOT_DIR}/... — never a sibling archive tree.
+# Override only for experiments; product default is in-tree vendor/.
 set(MDVM_NATIVE_SRC_ROOT_DIR "${_repo}/vendor" CACHE PATH "Native/AOSP-like source root (multiplatform vendor/)")
 set(MDVM_ART_ROOT_DIR "${_repo}/vendor" CACHE PATH "")
 set(MDVM_ART_DIR "${_repo}/vendor/art" CACHE PATH "Nested ART tree (artmp_*)")

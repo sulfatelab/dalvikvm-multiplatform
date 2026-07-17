@@ -1,7 +1,7 @@
 # native — top-level build for `dalvikvm`
 
 Single entry point for the minimal ART runtime native build on GNU/Linux (glibc).
-Builds the whole `dalvikvm` graph (18 targets) from the archive's `Android.bp`
+Builds the whole `dalvikvm` graph (18 targets) from nested `vendor/` `Android.bp`
 via the bp2cmake converter — no hand-written per-module CMake.
 
 ## Build

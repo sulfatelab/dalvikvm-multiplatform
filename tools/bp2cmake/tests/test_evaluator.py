@@ -179,14 +179,15 @@ def test_avx2_off_by_default():
     assert "-mavx2" in e2.resolve("x").cflags
 
 
-LIBBASE_BP = "/home/agent/Projects/MinDalvikVM-Archive/native/libbase/Android.bp"
+_REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+LIBBASE_BP = os.path.join(_REPO, "vendor", "libbase", "Android.bp")
 
 
 def test_real_libbase_resolution():
     if not os.path.exists(LIBBASE_BP):
         return
     e = Evaluator(Config())
-    e.add_path(LIBBASE_BP, source_root="/home/agent/Projects/MinDalvikVM-Archive/native")
+    e.add_path(LIBBASE_BP, source_root=os.path.join(_REPO, "vendor"))
     m = e.resolve("libbase")
 
     srcs = m.effective_srcs()

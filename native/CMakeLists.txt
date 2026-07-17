@@ -1,8 +1,8 @@
 # Top-level native build for the minimal ART runtime (dalvikvm) on GNU/Linux.
 #
 # This is the SINGLE entry point: it builds the whole dalvikvm graph (18 targets)
-# from generated/dalvikvm.cmake, which is produced by ./generate.sh from the
-# archive's Android.bp via the bp2cmake converter. This file itself is the only
+# from generated/dalvikvm.cmake, which is produced by ./generate.sh from nested
+# vendor/ Android.bp via the bp2cmake converter. This file itself is the only
 # hand-written CMake -- project-owned glue that the converter cannot derive:
 #   - host/system imported libs (z, cap, lz4)
 #   - the Python codegen driver invocation (mterp + asm_defines)
@@ -20,9 +20,9 @@ if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 # android-16.0.0_r4 art relies on Soong's C++20 default (e.g. disassembler_x86.cc
-# uses std::ostringstream::view(), a C++20 method). The archive's 2023 sources
-# built at C++17; the bumped art needs C++20. Modules that set their own cpp_std
-# in the .bp still get a per-target -std= from the emitter, overriding this.
+# uses std::ostringstream::view(), a C++20 method). Older 2023 pins built at
+# C++17; current art needs C++20. Modules that set their own cpp_std in the .bp
+# still get a per-target -std= from the emitter, overriding this.
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_C_STANDARD 11)
 
@@ -40,22 +40,20 @@ set(MDVM_GENSRC_DIR "${CMAKE_BINARY_DIR}/gensrc")
 # project-owned vendor/ tree (resolves the libart<->libcore skew); the rest come
 # from nested vendor/ where present. MDVM_ART_ROOT_DIR is vendor/ itself because art
 # module paths keep their `art/...` prefix.
-get_filename_component(_archive "${MDVM_NATIVE_SRC_ROOT_DIR}/.." ABSOLUTE)
 set(MDVM_ART_ROOT_DIR "${_repo}/vendor" CACHE PATH "vendored art snapshot root")
 set(MDVM_LIBCORE_DIR "${_repo}/vendor/libcore" CACHE PATH "vendored libcore tree")
 # A16 art compiles against newer libnativehelper header-only headers (utils.h +
-# ScopedUtfChars' string_view conversion) absent from the archive's 2023
-# libnativehelper. vendor-sync fetches them here; put first on art's include path.
+# ScopedUtfChars' string_view conversion). vendor-sync fetches them here; put
+# first on art's include path.
 set(MDVM_NATIVEHELPER_HDRS_DIR "${_repo}/vendor/nativehelper-headers"
     CACHE PATH "vendored A16 libnativehelper header-only headers")
 set(MDVM_ICU_DIR "${_repo}/vendor/icu" CACHE PATH "ICU tree (nested vendor/icu)")
 set(MDVM_FDLIBM_DIR "${_repo}/vendor/java-external/fdlibm" CACHE PATH "fdlibm tree (nested)")
 
-# --- Code generation (replaces the archive's Gradle tasks) ------------------
+# --- Code generation (replaces historical Gradle tasks) --------------------
 # operator_out is emitted as add_custom_commands inside the generated file; the
 # aconfig headers + two-stage asm_defines + mterp are run here at configure time.
-# art/* inputs come from the bumped vendor art tree (--art-root), NOT the stale
-# archive native/art (whose 2023 mterp/asm_defines would mismatch the new libart).
+# art/* inputs come from nested vendor/art (--art-root).
 foreach(_kind aconfig mterp asm_defines)
     execute_process(
         COMMAND ${CMAKE_COMMAND} -E env "PYTHONPATH=${MDVM_BP2CMAKE}"

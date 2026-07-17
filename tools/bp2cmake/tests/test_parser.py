@@ -97,10 +97,11 @@ def test_string_escapes():
 
 
 def test_real_libbase_bp():
-    """Parse the actual archive libbase Android.bp end-to-end."""
-    archive = "/home/agent/Projects/MinDalvikVM-Archive/native/libbase/Android.bp"
+    """Parse nested vendor/libbase Android.bp end-to-end (pure multipath)."""
+    _repo = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    archive = os.path.join(_repo, "vendor", "libbase", "Android.bp")
     if not os.path.exists(archive):
-        return  # skip if archive not present
+        return  # skip if vendor/libbase not present
     with open(archive) as f:
         bp = parse(f.read(), archive)
     names = []
