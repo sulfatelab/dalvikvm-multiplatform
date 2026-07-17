@@ -19,6 +19,11 @@ typedef int pthread_rwlockattr_t;
 #define PTHREAD_ONCE_INIT 0
 #define PTHREAD_CREATE_JOINABLE 0
 #define PTHREAD_CREATE_DETACHED 1
+#define PTHREAD_MUTEX_NORMAL 0
+#define PTHREAD_MUTEX_RECURSIVE 1
+#define PTHREAD_MUTEX_ERRORCHECK 2
+#define PTHREAD_MUTEX_DEFAULT PTHREAD_MUTEX_NORMAL
+
 #define PTHREAD_STACK_MIN 65536
 #define PTHREAD_COND_INITIALIZER {0}
 #ifdef __cplusplus
@@ -29,6 +34,10 @@ int pthread_mutex_destroy(pthread_mutex_t*);
 int pthread_mutex_lock(pthread_mutex_t*);
 int pthread_mutex_unlock(pthread_mutex_t*);
 int pthread_mutex_trylock(pthread_mutex_t*);
+int pthread_mutexattr_init(pthread_mutexattr_t*);
+int pthread_mutexattr_destroy(pthread_mutexattr_t*);
+int pthread_mutexattr_settype(pthread_mutexattr_t*, int);
+
 int pthread_key_create(pthread_key_t*, void (*)(void*));
 int pthread_key_delete(pthread_key_t);
 void* pthread_getspecific(pthread_key_t);

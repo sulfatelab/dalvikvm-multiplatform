@@ -58,7 +58,7 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 |--------|---------|
 | Phases 0–3 | **Gate-complete** (P3 G12 real Win10 + wine) |
 | Phase 4 | **Wine complete**; host re-run still recommended |
-| PE libcore/ICU/openjdk | **ICU + hybrid javacore + hybrid openjdk PE** (NIO/Unix still incomplete) |
+| PE libcore/ICU/openjdk | **ICU + hybrid javacore + AOSP openjdk NIO PE** (NIO.2 still non-goal; linger/NetProbe gap) |
 | Quick/JIT/TLS | **Designed** in draft doc; **not implemented**; invoke forced to interpreter |
 | Linux multiplatform | Native `dalvikvm -showversion` OK; imageless Hello e2e not re-gated here |
 
@@ -211,13 +211,42 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 
 ---
 
+
+### W-016 — ICU needs external `ICU_DATA` / `icudt72l.dat` for wine smoke
+- **State:** OPEN
+- **Kind:** workaround
+- **Area:** icu / packaging
+- **Symptom / why:** Linked stubdata alone yields `u_init` `U_FILE_ACCESS_ERROR` under wine; full data file works.
+- **Current behavior:** Stage `run/icu/icudt72l.dat` and set `ICU_DATA=run/icu` (or absolute path). `Register.cpp` also calls `udata_setCommonData(&U_ICUDATA_ENTRY_POINT)` on Win.
+- **Proper fix:** Package full ICU data by default in host package scripts; verify embedded data path or always set ICU_DATA in runners.
+- **Code anchors:** `vendor/icu/android_icu4j/libcore_bridge/src/native/Register.cpp`; `build/win64_phase1/run/icu/`
+- **Opened:** 2026-07-17
+
+### W-017 — openjdk hybrid excludes NIO.2 / async / UNIXProcess; epoll via select
+- **State:** OPEN
+- **Kind:** workaround / incomplete port
+- **Area:** openjdk / nio
+- **Current behavior:** Phase B2 builds AOSP NIO channel natives with Winsock CRT-fd shims; `epoll_*` emulated with `select`; NIO.2 UnixNativeDispatcher/WatchService/async EPollPort not registered.
+- **Proper fix:** Keep NIO.2 non-goal; deepen channel/options matrix; optional IOCP epoll later if needed.
+- **Code anchors:** `tools/verify/win64_libcore_icu/CMakeLists.txt` (`_OJ_SRCS` filters); `compat/src/win64_socket_posix.c`
+- **Opened:** 2026-07-17
+
+### W-018 — NetProbe StructLinger NPE (getsockopt SO_LINGER incomplete in javacore Win bridge)
+- **State:** OPEN
+- **Kind:** leftover / bug
+- **Area:** libcore-stub / net
+- **Symptom / why:** `NetProbe` fails: `StructLinger.isOn()` on null from linger get.
+- **Proper fix:** Implement linger get/set in `win_net_natives` / Linux Os bridge returning real `StructLinger`.
+- **Code anchors:** `tools/win64/jni_stubs/win_net_natives.c`; NetProbe client path
+- **Opened:** 2026-07-17
+
 ## Product leftovers (not single-line workarounds)
 
 ### L-001 — Real PE libcore / openjdk / ICU module build
 - **State:** OPEN (ICU Phase A landed 2026-07-17)
 - **Kind:** leftover
 - **Area:** build / libcore / icu
-- **Gap:** Linux has full `.so` graph from bp2cmake; Win64 has **real ICU** + **hybrid javacore** (`tools/verify/win64_libcore_icu`). Still missing full AOSP `libcore_io_Linux`, Memory, Expat, NativeBN, NetworkUtilities, real `libopenjdk` / crypto PE; `libopenjdk` still `libcombined`.
+- **Gap:** Linux has full `.so` graph from bp2cmake; Win64 has **real ICU** + **hybrid javacore** (`tools/verify/win64_libcore_icu`). ICU + hybrid javacore + **AOSP openjdk NIO PE** landed. Still missing full AOSP `libcore_io_Linux`, Memory, Expat, NativeBN, NetworkUtilities, crypto PE; NIO.2 excluded by design.
 - **Exit criteria:** PE DLLs built from AOSP sources without `libcombined` aliasing; GoldenApp + charset/locale smoke still pass.
 - **Opened:** 2026-07-17
 - **Progress:** see `tools/verify/win64_libcore_icu/RESULT.md`
@@ -326,4 +355,4 @@ _(None yet in this tracker. When closing a W-/L-/H- item, move a one-line summar
 - [ ] Permanent design choice (e.g. VEH forever) → move from W- to documented architecture; close workaround  
 - [ ] CLOSED items: one line in §Closed, leave detail above with State CLOSED  
 
-*Last snapshot: 2026-07-17 — real ICU + hybrid javacore + hybrid openjdk PE; CoreProbe/IoProbe wine OK; full AOSP openjdk/NIO still open; JIT/TLS design drafted.*
+*Last snapshot: 2026-07-17 — real ICU + hybrid javacore + AOSP openjdk Unix/NIO PE (B2); CoreProbe/IoProbe wine OK with ICU_DATA; NetProbe linger NPE OPEN; JIT/TLS design drafted.*

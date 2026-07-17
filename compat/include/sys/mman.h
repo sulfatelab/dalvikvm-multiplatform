@@ -48,6 +48,11 @@ int mprotect(void* addr, size_t len, int prot);
 int madvise(void* addr, size_t length, int advice);
 void* mremap(void* old_addr, size_t old_size, size_t new_size, int flags, ...);
 int msync(void* addr, size_t length, int flags);
+void* mmap64(void* addr, size_t length, int prot, int flags, int fd, long long offset);
+int mincore(void* addr, size_t length, unsigned char* vec);
+#ifndef caddr_t
+typedef char* caddr_t;
+#endif
 #ifdef __cplusplus
 }
 #endif

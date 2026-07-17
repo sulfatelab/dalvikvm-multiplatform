@@ -3,7 +3,15 @@
 #include_next <sys/uio.h>
 #else
 #include <stddef.h>
-struct iovec { void* iov_base; size_t iov_len; };
+#include <stdint.h>
+#ifndef _SSIZE_T_DEFINED
+typedef intptr_t ssize_t;
+#define _SSIZE_T_DEFINED
+#endif
+struct iovec {
+  void* iov_base;
+  size_t iov_len;
+};
 #ifdef __cplusplus
 extern "C" {
 #endif

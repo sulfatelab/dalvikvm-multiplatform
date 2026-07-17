@@ -26,6 +26,8 @@ extern "C" {
 DIR* opendir(const char* name);
 struct dirent* readdir(DIR* dirp);
 int closedir(DIR* dirp);
+#define dirent64 dirent
+#define readdir64 readdir
 #ifdef __cplusplus
 }
 #endif

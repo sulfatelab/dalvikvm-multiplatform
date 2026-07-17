@@ -250,3 +250,14 @@ static inline int mdvm_strerror_r(int errnum, char* buf, size_t buflen) {
 #ifdef __cplusplus
 }
 #endif
+
+#include <string.h>
+#ifndef strtok_r
+static inline char* mdvm_strtok_r(char* str, const char* delim, char** saveptr) {
+  return strtok_s(str, delim, saveptr);
+}
+#define strtok_r mdvm_strtok_r
+#endif
+#ifndef PATH_MAX
+#define PATH_MAX 260
+#endif

@@ -84,3 +84,33 @@ showversion OK
 CoreProbe.done=ok
 IoProbe.done=ok
 ```
+
+
+## Phase B2 — AOSP openjdk Unix/NIO surface (2026-07-17)
+
+**Status:** **BUILT + wine smoke OK** (CoreProbe, IoProbe with `ICU_DATA=run/icu`)
+
+| Piece | Approach |
+|-------|----------|
+| NIO channels (`Net`, `SocketChannel`, `ServerSocketChannel`, `Datagram*`, `FileChannel`/`FileDispatcher`, `IOUtil`, `EPoll`, `PollArrayWrapper`, streams) | Real AOSP ojluni sources |
+| CRT fd ↔ Winsock + select-based epoll | `compat/src/win64_socket_posix.c` + improved `poll`/`ioctl`/`fcntl` |
+| `linux_close` / async-close / NativeThread | Win bridges under `vendor/libcore/multiplatform/windows/native/` |
+| `JVM_*` I/O + socket helpers | Expanded `openjdkjvm_memory_standalone.c` |
+| NIO.2 `sun.nio.fs` / async ports / UNIXProcess / UnixFileSystem_md | **Excluded** (non-goal / WinNT FS via javacore) |
+| System/Runtime | Still PE stubs (`hello3` / `win_runtime`) |
+
+Artifacts: `openjdk.dll` (~208K), `openjdkjvm.dll` (~38K)
+
+### Smoke
+
+```
+ICU_DATA=run/icu  # required: full icudt72l.dat under run/icu (stubdata alone → U_FILE_ACCESS_ERROR)
+showversion OK
+CoreProbe.done=ok
+IoProbe.done=ok
+NetProbe: FAIL (StructLinger NPE via javacore winsock bridge — not openjdk NIO register path)
+```
+
+### ICU note
+
+`icu_jni` `Register.cpp` now calls `udata_setCommonData(&U_ICUDATA_ENTRY_POINT)` on Windows; product smoke still needs **`ICU_DATA=run/icu`** with real `icudt72l.dat` until full data is embedded or path is hard-wired.

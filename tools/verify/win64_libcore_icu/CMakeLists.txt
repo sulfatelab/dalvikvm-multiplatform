@@ -37,7 +37,7 @@ if(NOT MDVM_WIN64_ENV)
 endif()
 
 option(MDVM_WIN64_BUILD_JAVACORE "Build hybrid real libjavacore PE" ON)
-option(MDVM_WIN64_BUILD_OPENJDK "Build real libopenjdk PE (experimental)" OFF)
+option(MDVM_WIN64_BUILD_OPENJDK "Build real libopenjdk PE (Unix/NIO hybrid)" ON)
 
 include(${CMAKE_CURRENT_SOURCE_DIR}/sources.cmake)
 
@@ -86,6 +86,8 @@ set(_ICU_COMMON_INCLUDES
 
 set(_WIN_DEFS _CRT_SECURE_NO_WARNINGS NOMINMAX WIN32_LEAN_AND_MEAN)
 set(_WIN_CFLAGS -Wno-unused-parameter -Wno-deprecated-declarations -Wno-sign-compare -Wno-missing-field-initializers)
+set(_WIN_PRELUDE "${MDVM_COMPAT_INCLUDE_DIR}/mdvm_win64_prelude.h")
+
 
 # --- icuuc (stubdata sources compiled into this DLL) ---
 # Windows treats U_ICUDATA_ENTRY_POINT as dllimport unless U_COMMON_IMPLEMENTATION is set
@@ -184,16 +186,28 @@ endif()
 
 
 
-# --- openjdkjvm (memory/GC exports for Runtime natives) ---
+# --- openjdkjvm (JVM_* I/O + memory for Runtime / NIO) ---
 if(MDVM_WIN64_BUILD_OPENJDK)
+  # Shared POSIX socket/epoll helpers (CRT fd <-> SOCKET)
+  add_library(win64_socket_posix STATIC
+    "${_repo}/compat/src/win64_socket_posix.c"
+    "${_repo}/compat/src/win64_posix_stubs.c"
+  )
+  target_include_directories(win64_socket_posix PUBLIC "${MDVM_COMPAT_INCLUDE_DIR}")
+  target_compile_definitions(win64_socket_posix PRIVATE ${_WIN_DEFS} MDVM_SOCKET_NO_MACROS=1)
+  target_compile_options(win64_socket_posix PRIVATE ${_WIN_CFLAGS})
+  target_link_libraries(win64_socket_posix PUBLIC ws2_32)
+
   add_library(openjdkjvm SHARED
     "${CMAKE_CURRENT_SOURCE_DIR}/openjdkjvm_memory_standalone.c"
   )
   target_include_directories(openjdkjvm PUBLIC
     "${MDVM_ART_ROOT_DIR}/libnativehelper/include_jni"
+    "${MDVM_COMPAT_INCLUDE_DIR}"
   )
   target_compile_definitions(openjdkjvm PRIVATE ${_WIN_DEFS})
-  target_link_libraries(openjdkjvm PRIVATE kernel32 psapi)
+  target_link_libraries(openjdkjvm PRIVATE kernel32 psapi ws2_32 win64_socket_posix)
+  set_target_properties(openjdkjvm PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS OFF)
 
   # --- fdlibm static ---
   add_library(fdlibm STATIC ${FDLIBM_SRCS})
@@ -201,37 +215,78 @@ if(MDVM_WIN64_BUILD_OPENJDK)
   target_compile_definitions(fdlibm PRIVATE ${_WIN_DEFS})
   target_compile_options(fdlibm PRIVATE -Wno-all)
 
-  # --- openjdk hybrid ---
-  # Phase B1 portable-ish AOSP + Win stubs for System/Runtime/math bits.
-  set(_OJ_PORTABLE
-    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/Inflater.c"
-    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/Deflater.c"
-    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/CRC32.c"
-    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/Adler32.c"
-    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/jni_util.c"
-    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/jni_util_md.c"
-    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/Float.c"
-    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/Double.c"
-    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/ObjectStreamClass.c"
-    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/ObjectOutputStream.c"
-    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/ObjectInputStream.c"
-    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/Character.cpp"
-    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/JniConstants.cpp"
-    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/jdk_internal_misc_VM.cpp"
+  # --- openjdk hybrid: full AOSP OPENJDK_SRCS minus hard Linux-only ---
+  # Phase B2: Unix/NIO channel surface + classic java.net streams.
+  set(_OJ_SRCS ${OPENJDK_SRCS})
+  list(FILTER _OJ_SRCS EXCLUDE REGEX "linux_close[.]cpp$")
+  list(FILTER _OJ_SRCS EXCLUDE REGEX "NativeThread[.]c$")
+  list(FILTER _OJ_SRCS EXCLUDE REGEX "OnLoad[.]cpp$")
+  list(FILTER _OJ_SRCS EXCLUDE REGEX "LinuxNativeDispatcher[.]c$")
+  list(FILTER _OJ_SRCS EXCLUDE REGEX "LinuxWatchService[.]c$")
+  list(FILTER _OJ_SRCS EXCLUDE REGEX "UnixCopyFile[.]c$")
+  list(FILTER _OJ_SRCS EXCLUDE REGEX "UnixNativeDispatcher[.]c$")
+  list(FILTER _OJ_SRCS EXCLUDE REGEX "UNIXProcess_md[.]c$")
+  list(FILTER _OJ_SRCS EXCLUDE REGEX "EPollPort[.]c$")
+  list(FILTER _OJ_SRCS EXCLUDE REGEX "UnixAsynchronousServerSocketChannelImpl[.]c$")
+  list(FILTER _OJ_SRCS EXCLUDE REGEX "UnixAsynchronousSocketChannelImpl[.]c$")
+  list(FILTER _OJ_SRCS EXCLUDE REGEX "FileSystemPreferences[.]c$")
+  list(FILTER _OJ_SRCS EXCLUDE REGEX "UnixDomainSockets[.]c$")
+  # System/Runtime still via PE stubs (hello3 / win_runtime) to avoid ART-linked paths
+  list(FILTER _OJ_SRCS EXCLUDE REGEX "UnixFileSystem_md[.]c$")
+  list(FILTER _OJ_SRCS EXCLUDE REGEX "System[.]c$")
+  list(FILTER _OJ_SRCS EXCLUDE REGEX "Runtime[.]c$")
+  # StrictMath/Math use fdlibm — keep them
+
+  set(_OJ_WIN
     "${MDVM_LIBCORE_DIR}/multiplatform/windows/native/openjdk_OnLoad_win.cpp"
-  )
-  # System/Runtime/math/time natives: use PE stubs that already work under wine gates.
-  set(_OJ_WIN_STUBS
+    "${MDVM_LIBCORE_DIR}/multiplatform/windows/native/win_close.cpp"
+    "${MDVM_LIBCORE_DIR}/multiplatform/windows/native/NativeThread_win.c"
+    "${MDVM_LIBCORE_DIR}/multiplatform/windows/native/AsynchronousCloseMonitor_win.cpp"
     "${_repo}/tools/win64/jni_stubs/win_runtime_natives.c"
     "${_repo}/tools/win64/jni_stubs/libcore_hello3.c"
   )
   set_source_files_properties("${_repo}/tools/win64/jni_stubs/libcore_hello3.c"
     PROPERTIES COMPILE_DEFINITIONS "JNI_OnLoad=openjdk_stub_JNI_OnLoad_unused;JNI_OnUnload=openjdk_stub_JNI_OnUnload_unused")
 
-  add_library(openjdk SHARED ${_OJ_PORTABLE} ${_OJ_WIN_STUBS})
+  # Empty registers for excluded NIO.2 / process / async modules
+  set(_OJ_STUB_REG "${CMAKE_CURRENT_BINARY_DIR}/openjdk_excluded_registers.cpp")
+  file(WRITE "${_OJ_STUB_REG}" [=[
+#include <jni.h>
+extern "C" void register_java_lang_UNIXProcess(JNIEnv*) {}
+extern "C" void register_java_sun_nio_fs_UnixNativeDispatcher(JNIEnv*) {}
+extern "C" void register_java_util_prefs_FileSystemPreferences(JNIEnv*) {}
+extern "C" void register_java_io_UnixFileSystem(JNIEnv*) {}
+// Linux NIO.2 / async not registered on Windows hybrid
+]=])
+
+  add_library(openjdk SHARED ${_OJ_SRCS} ${_OJ_WIN} ${_OJ_STUB_REG})
+  # C sources that use Android Linux code paths; do NOT define __linux__ on C++ (breaks libc++).
+  set(_OJ_LINUXISH_C
+    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/FileDispatcherImpl.c"
+    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/FileChannelImpl.c"
+    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/IOUtil.c"
+    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/Net.c"
+    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/net_util_md.c"
+    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/net_util.c"
+    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/EPoll.c"
+    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/SocketChannelImpl.c"
+    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/ServerSocketChannelImpl.c"
+    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/DatagramChannelImpl.c"
+    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/DatagramDispatcher.c"
+    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/PollArrayWrapper.c"
+    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/FileKey.c"
+    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/MappedByteBuffer.c"
+    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/FileInputStream.c"
+    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/io_util_md.c"
+    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/SocketInputStream.c"
+    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/SocketOutputStream.c"
+  )
+  set_source_files_properties(${_OJ_LINUXISH_C} PROPERTIES COMPILE_DEFINITIONS "__linux__=1")
   set_target_properties(openjdk PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS OFF)
-  set_target_properties(openjdkjvm PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS OFF)
-  target_include_directories(openjdk BEFORE PRIVATE "${MDVM_LIBCORE_DIR}/multiplatform/windows/native")
+  target_include_directories(openjdk BEFORE PRIVATE
+    "${MDVM_LIBCORE_DIR}/multiplatform/windows/native"
+    "${MDVM_COMPAT_INCLUDE_DIR}"
+  )
   target_include_directories(openjdk PUBLIC
     ${_WIN_INCLUDES}
     ${_ICU_COMMON_INCLUDES}
@@ -245,10 +300,13 @@ if(MDVM_WIN64_BUILD_OPENJDK)
   target_compile_definitions(openjdk PRIVATE
     ${_WIN_DEFS}
     U_USING_ICU_NAMESPACE=0
+    _LP64=1
   )
-  target_compile_options(openjdk PRIVATE ${_WIN_CFLAGS} -Wno-unused-parameter "SHELL:-D__INTRODUCED_IN(x)=")
+  target_compile_options(openjdk PRIVATE ${_WIN_CFLAGS} -Wno-unused-parameter
+    -Wno-incompatible-pointer-types -Wno-int-conversion
+    "SHELL:-D__INTRODUCED_IN(x)=")
   target_link_libraries(openjdk PUBLIC base log nativehelper openjdkjvm fdlibm z icuuc
-    PRIVATE kernel32 advapi32)
+    PRIVATE kernel32 advapi32 ws2_32 win64_socket_posix)
 endif()
 
 message(STATUS "Win64 libcore/ICU: icu + optional javacore/openjdk hybrids")

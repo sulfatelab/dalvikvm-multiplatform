@@ -1,5 +1,16 @@
+#include <winsock2.h>
 #include <windows.h>
+#include <fcntl.h>
+#include <sys/uio.h>
+#include <unistd.h>
+#include <limits.h>
+
 #include <stdlib.h>
+#include <stdarg.h>
+#include <termios.h>
+#include <sys/mman.h>
+#include <sys/sendfile.h>
+#include <io.h>
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
@@ -222,11 +233,21 @@ int pthread_rwlock_rdlock(CRITICAL_SECTION* l){ EnterCriticalSection(l); return 
 int pthread_rwlock_wrlock(CRITICAL_SECTION* l){ EnterCriticalSection(l); return 0;}
 int pthread_rwlock_unlock(CRITICAL_SECTION* l){ LeaveCriticalSection(l); return 0;}
 
-struct iovec { void* iov_base; size_t iov_len; };
+/* iovec is in sys/uio.h; do not redefine. */
 ssize_t readv(int fd, const struct iovec* iov, int iovcnt) {
   ssize_t total=0;
+  SOCKET s = (SOCKET)_get_osfhandle(fd);
   for(int i=0;i<iovcnt;i++){
-    int n=_read(fd, iov[i].iov_base, (unsigned)iov[i].iov_len);
+    int n;
+    if (s != INVALID_SOCKET && s != (SOCKET)-1) {
+      n = recv(s, (char*)iov[i].iov_base, (int)iov[i].iov_len, 0);
+      if (n == SOCKET_ERROR) {
+        /* fall back to CRT read for non-sockets */
+        n = _read(fd, iov[i].iov_base, (unsigned)iov[i].iov_len);
+      }
+    } else {
+      n = _read(fd, iov[i].iov_base, (unsigned)iov[i].iov_len);
+    }
     if(n<0) return total?total:-1;
     total+=n; if((size_t)n<iov[i].iov_len) break;
   }
@@ -234,8 +255,17 @@ ssize_t readv(int fd, const struct iovec* iov, int iovcnt) {
 }
 ssize_t writev(int fd, const struct iovec* iov, int iovcnt) {
   ssize_t total=0;
+  SOCKET s = (SOCKET)_get_osfhandle(fd);
   for(int i=0;i<iovcnt;i++){
-    int n=_write(fd, iov[i].iov_base, (unsigned)iov[i].iov_len);
+    int n;
+    if (s != INVALID_SOCKET && s != (SOCKET)-1) {
+      n = send(s, (const char*)iov[i].iov_base, (int)iov[i].iov_len, 0);
+      if (n == SOCKET_ERROR) {
+        n = _write(fd, iov[i].iov_base, (unsigned)iov[i].iov_len);
+      }
+    } else {
+      n = _write(fd, iov[i].iov_base, (unsigned)iov[i].iov_len);
+    }
     if(n<0) return total?total:-1;
     total+=n; if((size_t)n<iov[i].iov_len) break;
   }
@@ -366,7 +396,8 @@ long sysconf(int name) {
       DWORD ps = si.dwPageSize ? si.dwPageSize : 4096;
       return (long)(ms.ullTotalPhys / ps);
     }
-    return -1;
+    if (name == 60) return 16;
+  return -1;
   }
   errno = EINVAL; return -1;
 }
@@ -377,11 +408,58 @@ int pipe(int fds[2]) {
 }
 
 int poll(struct pollfd* fds, unsigned long nfds, int timeout) {
-  /* Minimal stub: no network readiness; treat as timeout or error. */
-  (void)fds; (void)nfds;
-  if (timeout == 0) return 0;
-  if (timeout > 0) Sleep((DWORD)timeout);
-  return 0;
+  /* Socket-aware poll via select on CRT fds that wrap SOCKETs. */
+  if (!fds) { errno = EINVAL; return -1; }
+  fd_set rfds, wfds, efds;
+  FD_ZERO(&rfds); FD_ZERO(&wfds); FD_ZERO(&efds);
+  SOCKET max_s = 0;
+  int saw_socket = 0;
+  int ready = 0;
+  for (unsigned long i = 0; i < nfds; i++) {
+    fds[i].revents = 0;
+    if (fds[i].fd < 0) continue;
+    intptr_t h = _get_osfhandle(fds[i].fd);
+    if (h == -1) { fds[i].revents = POLLNVAL; ready++; continue; }
+    /* Heuristic: try select; non-sockets will fail gracefully per-fd. */
+    SOCKET s = (SOCKET)h;
+    if (fds[i].events & (POLLIN | POLLRDNORM | POLLPRI)) FD_SET(s, &rfds);
+    if (fds[i].events & (POLLOUT | POLLWRNORM)) FD_SET(s, &wfds);
+    FD_SET(s, &efds);
+    if (s > max_s) max_s = s;
+    saw_socket = 1;
+  }
+  if (!saw_socket) {
+    if (timeout == 0) return ready;
+    if (timeout > 0) Sleep((DWORD)timeout);
+    return ready;
+  }
+  struct timeval tv, *ptv = NULL;
+  if (timeout >= 0) {
+    tv.tv_sec = timeout / 1000;
+    tv.tv_usec = (timeout % 1000) * 1000;
+    ptv = &tv;
+  }
+  int sr = select((int)max_s + 1, &rfds, &wfds, &efds, ptv);
+  if (sr == SOCKET_ERROR) {
+    /* If select fails (mixed non-socket handles), fall back to sleep. */
+    if (timeout == 0) return ready;
+    if (timeout > 0) Sleep((DWORD)timeout);
+    return ready;
+  }
+  if (sr == 0) return ready;
+  for (unsigned long i = 0; i < nfds; i++) {
+    if (fds[i].fd < 0) continue;
+    intptr_t h = _get_osfhandle(fds[i].fd);
+    if (h == -1) continue;
+    SOCKET s = (SOCKET)h;
+    short rev = fds[i].revents;
+    if (FD_ISSET(s, &rfds)) rev |= POLLIN;
+    if (FD_ISSET(s, &wfds)) rev |= POLLOUT;
+    if (FD_ISSET(s, &efds)) rev |= POLLERR;
+    if (rev && !(fds[i].revents)) ready++;
+    fds[i].revents = rev;
+  }
+  return ready;
 }
 
 int waitpid(int pid, int* status, int options) {
@@ -412,7 +490,33 @@ int waitid(int idtype, int id, void* infop, int options) {
   (void)idtype; (void)id; (void)infop; (void)options; errno = ENOSYS; return -1;
 }
 int ioctl(int fd, unsigned long request, ...) {
-  (void)fd; (void)request; errno = ENOSYS; return -1;
+  va_list ap;
+  va_start(ap, request);
+  void* arg = va_arg(ap, void*);
+  va_end(ap);
+  if (fd < 0) { errno = EBADF; return -1; }
+  SOCKET s = (SOCKET)_get_osfhandle(fd);
+  if (s == INVALID_SOCKET || s == (SOCKET)-1) { errno = EBADF; return -1; }
+  /* FIONREAD from winsock */
+  if (request == FIONREAD || request == 0x541B /* Linux FIONREAD */) {
+    u_long n = 0;
+    if (ioctlsocket(s, FIONREAD, &n) == SOCKET_ERROR) {
+      errno = EINVAL;
+      return -1;
+    }
+    if (arg) *(int*)arg = (int)n;
+    return 0;
+  }
+  if (request == FIONBIO) {
+    u_long nb = arg ? *(u_long*)arg : 0;
+    if (ioctlsocket(s, FIONBIO, &nb) == SOCKET_ERROR) {
+      errno = EINVAL;
+      return -1;
+    }
+    return 0;
+  }
+  errno = ENOSYS;
+  return -1;
 }
 
 
@@ -587,7 +691,37 @@ int msync(void* addr, size_t length, int flags) {
   return 0;
 }
 int fcntl(int fd, int cmd, ...) {
-  (void)fd; (void)cmd; return 0;
+  va_list ap;
+  va_start(ap, cmd);
+  int arg = 0;
+  if (cmd == F_SETFL || cmd == F_SETFD || cmd == F_SETLK || cmd == F_SETLKW ||
+      cmd == F_GETLK || cmd == F_DUPFD || cmd == F_DUPFD_CLOEXEC) {
+    arg = va_arg(ap, int);
+  }
+  va_end(ap);
+  if (fd < 0) { errno = EBADF; return -1; }
+  if (cmd == F_GETFD) return 0;
+  if (cmd == F_SETFD) return 0;
+  if (cmd == F_GETFL) {
+    /* Best-effort: report O_RDWR; O_NONBLOCK unknown without per-fd state. */
+    return O_RDWR;
+  }
+  if (cmd == F_SETFL) {
+    SOCKET s = (SOCKET)_get_osfhandle(fd);
+    if (s != INVALID_SOCKET && s != (SOCKET)-1) {
+      u_long nb = (arg & O_NONBLOCK) ? 1 : 0;
+      if (ioctlsocket(s, FIONBIO, &nb) == SOCKET_ERROR) {
+        errno = EINVAL;
+        return -1;
+      }
+    }
+    return 0;
+  }
+  if (cmd == F_DUPFD || cmd == F_DUPFD_CLOEXEC) {
+    int n = _dup(fd);
+    return n;
+  }
+  return 0;
 }
 int memfd_create(const char* name, unsigned int flags) {
   (void)name; (void)flags; errno = ENOSYS; return -1;
@@ -613,5 +747,95 @@ int pthread_getname_np(pthread_t t, char* buf, size_t len) {
   if (!buf || len == 0) return EINVAL;
   strncpy(buf, "thread", len - 1);
   buf[len - 1] = 0;
+  return 0;
+}
+
+
+/* ---- aliases expected by openjdk NIO/file natives ---- */
+int fsync(int fd) { return _commit(fd); }
+int fdatasync(int fd) { return _commit(fd); }
+long long lseek64(int fd, long long off, int whence) { return _lseeki64(fd, off, whence); }
+int mdvm_ftruncate(int fd, long long length) { return _chsize_s(fd, length); }
+int open64(const char* path, int flags, ...) {
+  va_list ap; va_start(ap, flags); int mode = va_arg(ap, int); va_end(ap);
+  return _open(path, flags | _O_BINARY, mode);
+}
+ssize_t pread64(int fd, void* buf, size_t count, long long offset) {
+  return pread(fd, buf, count, offset);
+}
+ssize_t pwrite64(int fd, const void* buf, size_t count, long long offset) {
+  return pwrite(fd, buf, count, offset);
+}
+
+
+void* mmap64(void* addr, size_t length, int prot, int flags, int fd, long long offset) {
+  return mmap(addr, length, prot, flags, fd, offset);
+}
+int mincore(void* addr, size_t length, unsigned char* vec) {
+  if (!vec) { errno = EINVAL; return -1; }
+  /* Best-effort: mark all pages resident if VirtualQuery says committed. */
+  size_t pages = (length + 4095) / 4096;
+  for (size_t i = 0; i < pages; i++) {
+    MEMORY_BASIC_INFORMATION mbi;
+    void* p = (char*)addr + i * 4096;
+    if (VirtualQuery(p, &mbi, sizeof(mbi)) == 0 || mbi.State != MEM_COMMIT) vec[i] = 0;
+    else vec[i] = 1;
+  }
+  return 0;
+}
+ssize_t sendfile(int out_fd, int in_fd, long long* offset, size_t count) {
+  (void)out_fd; (void)in_fd; (void)offset; (void)count;
+  errno = ENOSYS; return -1;
+}
+ssize_t sendfile64(int out_fd, int in_fd, long long* offset, size_t count) {
+  return sendfile(out_fd, in_fd, offset, count);
+}
+int tcgetattr(int fd, struct termios* t) {
+  (void)fd;
+  if (t) memset(t, 0, sizeof(*t));
+  return 0;
+}
+int tcsetattr(int fd, int optional_actions, const struct termios* t) {
+  (void)fd; (void)optional_actions; (void)t; return 0;
+}
+
+long pathconf(const char* path, int name) {
+  (void)path; (void)name;
+  return 255;
+}
+
+int gettimeofday(struct timeval* tv, void* tz) {
+  (void)tz;
+  if (!tv) return -1;
+  FILETIME ft; GetSystemTimeAsFileTime(&ft);
+  ULARGE_INTEGER u; u.LowPart = ft.dwLowDateTime; u.HighPart = ft.dwHighDateTime;
+  const unsigned long long EPOCH_DIFF = 116444736000000000ULL;
+  unsigned long long t = (u.QuadPart - EPOCH_DIFF) / 10ULL; /* us */
+  tv->tv_sec = (long)(t / 1000000ULL);
+  tv->tv_usec = (long)(t % 1000000ULL);
+  return 0;
+}
+
+int pthread_mutexattr_init(int* a) { if (a) *a = 0; return 0; }
+int pthread_mutexattr_destroy(int* a) { (void)a; return 0; }
+int pthread_mutexattr_settype(int* a, int t) { if (a) *a = t; return 0; }
+
+int clock_gettime(int clk_id, struct timespec* tp) {
+  (void)clk_id;
+  if (!tp) return -1;
+  FILETIME ft; GetSystemTimeAsFileTime(&ft);
+  ULARGE_INTEGER u; u.LowPart = ft.dwLowDateTime; u.HighPart = ft.dwHighDateTime;
+  const unsigned long long EPOCH_DIFF = 116444736000000000ULL;
+  unsigned long long t = u.QuadPart - EPOCH_DIFF; /* 100ns */
+  tp->tv_sec = (time_t)(t / 10000000ULL);
+  tp->tv_nsec = (long)((t % 10000000ULL) * 100ULL);
+  return 0;
+}
+int nanosleep(const struct timespec* req, struct timespec* rem) {
+  if (!req) return -1;
+  DWORD ms = (DWORD)(req->tv_sec * 1000 + (req->tv_nsec + 999999) / 1000000);
+  if (ms == 0 && (req->tv_sec || req->tv_nsec)) ms = 1;
+  Sleep(ms);
+  if (rem) { rem->tv_sec = 0; rem->tv_nsec = 0; }
   return 0;
 }

@@ -17,7 +17,6 @@
 #define _O_NOINHERIT 0x0080
 #endif
 
-/* Each flag guarded separately — prelude may define O_RDONLY early. */
 #ifndef O_RDONLY
 #define O_RDONLY _O_RDONLY
 #endif
@@ -82,8 +81,37 @@
 #define F_SETFD 2
 #define F_GETFL 3
 #define F_SETFL 4
+#define F_DUPFD 0
+#define F_GETLK 5
+#define F_SETLK 6
+#define F_SETLKW 7
+#define F_DUPFD_CLOEXEC 1030
 #define FD_CLOEXEC 1
 #endif
+#ifndef F_RDLCK
+#define F_RDLCK 0
+#define F_WRLCK 1
+#define F_UNLCK 2
+#endif
+#ifndef SEEK_SET
+#define SEEK_SET 0
+#define SEEK_CUR 1
+#define SEEK_END 2
+#endif
+#ifndef F_SETLK64
+#define F_SETLK64 F_SETLK
+#define F_SETLKW64 F_SETLKW
+#define F_GETLK64 F_GETLK
+#endif
+
+struct flock {
+  short l_type;
+  short l_whence;
+  long long l_start;
+  long long l_len;
+  int l_pid;
+};
+#define flock64 flock
 
 #ifdef __cplusplus
 extern "C" {

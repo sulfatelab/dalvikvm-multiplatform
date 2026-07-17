@@ -1,0 +1,15 @@
+#pragma once
+#if !defined(_WIN32)
+#include_next <limits.h>
+#else
+#include_next <limits.h>
+#ifndef PATH_MAX
+#define PATH_MAX 260
+#endif
+#ifndef NAME_MAX
+#define NAME_MAX 255
+#endif
+#ifndef IOV_MAX
+#define IOV_MAX 16
+#endif
+#endif
