@@ -62,3 +62,21 @@ bash tools/win64/host_package/package_win64_phase3.sh
 
 - Host re-run Phase 4 subset on real Windows (recommended for full product claim)
 - Phase 5 optional JIT
+
+## Multiplatform re-run (2026-07-17)
+
+Rebuilt PE in-tree (`build/win64_phase1`) from `dalvikvm-multiplatform` with
+win64-dev-env + wine64 10.0.
+
+| Gate | Result |
+|------|--------|
+| P4_G1 GC stress | PASS |
+| P4_G2 Thread heavy | PASS |
+| P4_G3 Handle leak | PASS |
+| P4_G4 Perf smoke | PASS |
+| P4_G5 Crash abort | PASS |
+| P4_G5b Crash native | PASS |
+| P4_G6 GoldenApp | PASS |
+| Suite | **PASS all wine Phase 4 gates** |
+
+Evidence: `evidence/all_wine_gates.txt`

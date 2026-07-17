@@ -1,0 +1,39 @@
+7:==== GATE P4_G1_GCSTRESS ====
+21:PASS exit0
+22:PASS gcstress.ok=true
+23:PASS GcStressProbe.done=ok
+24:PASS P4_G1_GCSTRESS
+25:==== GATE P4_G2_THREADHEAVY ====
+32:PASS exit0
+33:PASS threadheavy.ok=true
+34:PASS ThreadHeavyProbe.done=ok
+35:PASS P4_G2_THREADHEAVY
+36:==== GATE P4_G3_HANDLELEAK ====
+44:PASS exit0
+45:PASS handleleak.ok=true
+46:PASS HandleLeakProbe.done=ok
+47:PASS P4_G3_HANDLELEAK
+48:==== GATE P4_G4_PERFSMOKE ====
+54:PASS exit0
+55:PASS perf.ok=true
+56:PASS PerfSmokeProbe.done=ok
+57:PASS P4_G4_PERFSMOKE
+58:==== GATE P4_G5_CRASHABORT ====
+62:PASS abort_nonzero_with_message
+63:PASS exception_printed
+64:PASS P4_G5_CRASHABORT
+65:==== GATE P4_G5b_CRASHNATIVE ====
+67:ART Win64 VEH: exception 0xc0000005 at 0x6ffffcfb9750 access=1 fault_addr=0
+68:ART Win64 UEF: exception 0xc0000005 at 0x6ffffcfb9750 access=1 fault_addr=0
+69:ART Win64 crash: minidump written to Z:\home\agent\Projects\dalvikvm-multiplatform\build\win64_phase1\run\crash\art-20260717-022217.dmp
+73:PASS native_crash_aborts
+74:PASS crash_diagnostics_or_dump
+75:PASS P4_G5b_CRASHNATIVE
+76:==== GATE P4_G6_GOLDEN_REG ====
+88:PASS exit0
+89:PASS golden.ok=true
+90:PASS net.ok=true
+91:PASS GoldenApp.done=ok
+92:PASS P4_G6_GOLDEN_REG
+93:==== SUMMARY ====
+94:PASS all wine Phase 4 gates
