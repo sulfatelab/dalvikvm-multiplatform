@@ -262,6 +262,7 @@ if(MDVM_WIN64_BUILD_OPENJDK)
     "${MDVM_LIBCORE_DIR}/multiplatform/windows/native/AsynchronousCloseMonitor_win.cpp"
     "${_repo}/tools/win64/jni_stubs/win_runtime_natives.c"
     "${_repo}/tools/win64/jni_stubs/libcore_hello3.c"
+    "${_repo}/tools/win64/jni_stubs/win_process_natives.c"
   )
   set_source_files_properties("${_repo}/tools/win64/jni_stubs/libcore_hello3.c"
     PROPERTIES COMPILE_DEFINITIONS "JNI_OnLoad=openjdk_stub_JNI_OnLoad_unused;JNI_OnUnload=openjdk_stub_JNI_OnUnload_unused")
@@ -270,7 +271,7 @@ if(MDVM_WIN64_BUILD_OPENJDK)
   set(_OJ_STUB_REG "${CMAKE_CURRENT_BINARY_DIR}/openjdk_excluded_registers.cpp")
   file(WRITE "${_OJ_STUB_REG}" [=[
 #include <jni.h>
-extern "C" void register_java_lang_UNIXProcess(JNIEnv*) {}
+// register_java_lang_UNIXProcess provided by win_process_natives.c
 extern "C" void register_java_sun_nio_fs_UnixNativeDispatcher(JNIEnv*) {}
 extern "C" void register_java_util_prefs_FileSystemPreferences(JNIEnv*) {}
 extern "C" void register_java_io_UnixFileSystem(JNIEnv*) {}

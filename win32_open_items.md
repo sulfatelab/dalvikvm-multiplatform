@@ -299,11 +299,13 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Workaround note:** Do not claim HTTPS until SSLContext.init + connect golden green.
 
 ### L-003 — Process/exec, rich locale, zip edge, UDP/IPv6 matrix
-- **State:** OPEN
+- **State:** OPEN (partial — Process/exec + classic UDP IPv4 green under wine 2026-07-17)
 - **Kind:** leftover
-- **Area:** libcore-stub
-- **Gap:** Not covered by Phase 3 gates; behavior unknown or partial under stub.
-- **Exit criteria:** Gate list + implementations or documented unsupported.
+- **Area:** libcore / openjdk hybrid
+- **Gap:** ~~Runtime.exec / ProcessBuilder~~ **Win CreateProcess natives landed** (`win_process_natives.c`, registered from openjdk OnLoad). ~~UDP send/recv IPv4~~ **green** (`sendto`/`recvfrom` + InetSocketAddress holder fill). Still open: rich locale surface; zip edge cases; IPv6 bind/smoke under wine (infrastructure dual-stack + GroupReq/IpMreqn present; wine `::`/`::1` bind flaky so gate skips).
+- **Progress:** 2026-07-17 — ART InterpreterJni slots 8→12 for `forkAndExec`/`sendtoBytes`; `FileInputStream.available0` PeekNamedPipe for process pipes; ExecProbe + UdpProbe wine PASS.
+- **Exit criteria:** Process/UDP gates documented; remaining locale/zip/IPv6 host matrix or explicit non-goals.
+- **Code anchors:** `tools/win64/jni_stubs/win_process_natives.c`, `win_net_natives.c` (GroupReq/IpMreqn/recvfrom fill), `vendor/art/runtime/interpreter/interpreter.cc` (12-slot JNI), `FileInputStream.c` Win available0
 - **Opened:** 2026-07-17
 
 ### L-004 — Shrink or replace multi-name DLL staging
@@ -476,4 +478,4 @@ If product reopens a non-goal, add an **L-** item and link the decision.
 - [ ] Permanent design choice (e.g. VEH forever) → move from W- to documented architecture; close workaround  
 - [ ] CLOSED items: one line in §Closed, leave detail above with State CLOSED  
 
-*Last snapshot: 2026-07-17 — W-024 OPEN (restore AOSP Critical/FastNative after JIT/TLS/entrypoints); D-001 CLOSED; L-005 PASS on shared multipath jar.*
+*Last snapshot: 2026-07-17 — L-003 partial (Runtime.exec + UDP IPv4 wine PASS); W-024 OPEN; D-001 CLOSED.*

@@ -185,33 +185,91 @@ static int java_addr_to_sockaddr(JNIEnv* env, jobject inetAddress, jint port, st
   return java_addr_to_sockaddr_for_socket(env, INVALID_SOCKET, inetAddress, port, ss, len);
 }
 
+static jobject inet_address_from_bytes(JNIEnv* env, const unsigned char* bytes, int len) {
+  jclass c = (*env)->FindClass(env, "java/net/InetAddress");
+  if (!c) return NULL;
+  jmethodID mid = (*env)->GetStaticMethodID(env, c, "getByAddress", "([B)Ljava/net/InetAddress;");
+  if (!mid) return NULL;
+  jbyteArray ba = (*env)->NewByteArray(env, len);
+  if (!ba) return NULL;
+  (*env)->SetByteArrayRegion(env, ba, 0, len, (const jbyte*)bytes);
+  return (*env)->CallStaticObjectMethod(env, c, mid, ba);
+}
+
 static jobject sockaddr_to_inet_socket_address(JNIEnv* env, const struct sockaddr_storage* ss) {
-  char host[INET6_ADDRSTRLEN] = {0};
+  jobject addr = NULL;
   int port = 0;
   if (ss->ss_family == AF_INET) {
     const struct sockaddr_in* in = (const struct sockaddr_in*)ss;
-    inet_ntop(AF_INET, &in->sin_addr, host, sizeof(host));
+    unsigned char b[4];
+    memcpy(b, &in->sin_addr, 4);
+    addr = inet_address_from_bytes(env, b, 4);
     port = ntohs(in->sin_port);
   } else if (ss->ss_family == AF_INET6) {
     const struct sockaddr_in6* in6 = (const struct sockaddr_in6*)ss;
-    /* IPv4-mapped */
     if (IN6_IS_ADDR_V4MAPPED(&in6->sin6_addr)) {
-      struct in_addr a4;
-      memcpy(&a4, ((const uint8_t*)&in6->sin6_addr) + 12, 4);
-      inet_ntop(AF_INET, &a4, host, sizeof(host));
+      unsigned char b[4];
+      memcpy(b, ((const uint8_t*)&in6->sin6_addr) + 12, 4);
+      addr = inet_address_from_bytes(env, b, 4);
     } else {
-      inet_ntop(AF_INET6, &in6->sin6_addr, host, sizeof(host));
+      unsigned char b[16];
+      memcpy(b, &in6->sin6_addr, 16);
+      addr = inet_address_from_bytes(env, b, 16);
     }
     port = ntohs(in6->sin6_port);
   } else {
     return NULL;
   }
+  if (!addr || (*env)->ExceptionCheck(env)) {
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    return NULL;
+  }
   jclass c = (*env)->FindClass(env, "java/net/InetSocketAddress");
   if (!c) return NULL;
-  jmethodID ctor = (*env)->GetMethodID(env, c, "<init>", "(Ljava/lang/String;I)V");
+  jmethodID ctor = (*env)->GetMethodID(env, c, "<init>", "(Ljava/net/InetAddress;I)V");
   if (!ctor) return NULL;
-  jstring jhost = (*env)->NewStringUTF(env, host);
-  return (*env)->NewObject(env, c, ctor, jhost, (jint)port);
+  return (*env)->NewObject(env, c, ctor, addr, (jint)port);
+}
+
+/* AOSP-compatible fill of an existing empty InetSocketAddress (holder.addr/port). */
+static int fill_inet_socket_address(JNIEnv* env, jobject javaInetSocketAddress,
+                                    const struct sockaddr_storage* ss) {
+  if (!javaInetSocketAddress) return 0;
+  jobject peer = sockaddr_to_inet_socket_address(env, ss);
+  if (!peer) return -1;
+  jclass peer_c = (*env)->GetObjectClass(env, peer);
+  jmethodID ga = (*env)->GetMethodID(env, peer_c, "getAddress", "()Ljava/net/InetAddress;");
+  jmethodID gp = (*env)->GetMethodID(env, peer_c, "getPort", "()I");
+  if (!ga || !gp) return -1;
+  jobject addr = (*env)->CallObjectMethod(env, peer, ga);
+  jint port = (*env)->CallIntMethod(env, peer, gp);
+  if ((*env)->ExceptionCheck(env) || !addr) {
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    return -1;
+  }
+  jclass c = (*env)->FindClass(env, "java/net/InetSocketAddress");
+  jclass hc = (*env)->FindClass(env, "java/net/InetSocketAddress$InetSocketAddressHolder");
+  if (!c || !hc) {
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    return -1;
+  }
+  jfieldID holderFid = (*env)->GetFieldID(env, c, "holder",
+      "Ljava/net/InetSocketAddress$InetSocketAddressHolder;");
+  if (!holderFid) {
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    return -1;
+  }
+  jobject holder = (*env)->GetObjectField(env, javaInetSocketAddress, holderFid);
+  if (!holder) return -1;
+  jfieldID addressFid = (*env)->GetFieldID(env, hc, "addr", "Ljava/net/InetAddress;");
+  jfieldID portFid = (*env)->GetFieldID(env, hc, "port", "I");
+  if (!addressFid || !portFid) {
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    return -1;
+  }
+  (*env)->SetObjectField(env, holder, addressFid, addr);
+  (*env)->SetIntField(env, holder, portFid, port);
+  return 0;
 }
 
 /* ===== socket ===== */
@@ -1289,30 +1347,35 @@ __declspec(dllexport) jint Java_libcore_io_Linux_sendtoBytes__Ljava_io_FileDescr
 __declspec(dllexport) jint Java_libcore_io_Linux_recvfromBytes(
     JNIEnv* env, jobject thiz, jobject fdObj, jobject buffer, jint byteOffset, jint byteCount,
     jint flags, jobject srcAddress) {
-  (void)thiz; (void)flags; (void)srcAddress;
+  (void)thiz; (void)flags;
   ensure_wsa();
   SOCKET s = socket_from_fd(fd_to_int(env, fdObj));
   if (s == INVALID_SOCKET) { throw_errno(env, "recvfrom", A_EBADF); return -1; }
   jbyteArray arr = NULL;
+  jbyte* base = NULL;
   jbyte* p = NULL;
   if (buffer && (*env)->IsInstanceOf(env, buffer, (*env)->FindClass(env, "[B"))) {
     arr = (jbyteArray)buffer;
-    p = (*env)->GetByteArrayElements(env, arr, NULL);
-    if (!p) return -1;
-    p += byteOffset;
+    base = (*env)->GetByteArrayElements(env, arr, NULL);
+    if (!base) return -1;
+    p = base + byteOffset;
   } else {
     void* d = (*env)->GetDirectBufferAddress(env, buffer);
     if (!d) { throw_errno(env, "recvfrom", A_EINVAL); return -1; }
     p = (jbyte*)d + byteOffset;
   }
-  struct sockaddr_storage ss; int slen = sizeof(ss);
+  struct sockaddr_storage ss; memset(&ss, 0, sizeof(ss));
+  int slen = sizeof(ss);
   int n = recvfrom(s, (char*)p, byteCount, 0, (struct sockaddr*)&ss, &slen);
-  if (arr) (*env)->ReleaseByteArrayElements(env, arr, p - byteOffset, 0);
+  if (arr) (*env)->ReleaseByteArrayElements(env, arr, base, 0);
   if (n == SOCKET_ERROR) {
     int w = WSAGetLastError();
     if (w == WSAEWOULDBLOCK) return 0;
     throw_errno(env, "recvfrom", map_wsa_to_android(w));
     return -1;
+  }
+  if (srcAddress != NULL && slen > 0) {
+    fill_inet_socket_address(env, srcAddress, &ss);
   }
   return n;
 }
@@ -1377,4 +1440,169 @@ __declspec(dllexport) jint Java_libcore_io_Linux_recvmsg(JNIEnv* env, jobject th
 __declspec(dllexport) jint Java_libcore_io_Linux_recvmsg__Ljava_io_FileDescriptor_2Landroid_system_StructMsghdr_2I(
     JNIEnv* env, jobject thiz, jobject fd, jobject msg, jint flags) {
   return Java_libcore_io_Linux_recvmsg(env, thiz, fd, msg, flags);
+}
+
+/* ===== Multicast / group membership (UDP + IPv6) — L-003 ===== */
+
+/* Android IPPROTO_IP=0, IPPROTO_IPV6=41, common MCAST opts (bionic) */
+enum {
+  A_IPPROTO_IP = 0,
+  A_IPPROTO_IPV6 = 41,
+  A_IP_ADD_MEMBERSHIP = 35,
+  A_IP_DROP_MEMBERSHIP = 36,
+  A_IP_MULTICAST_IF = 32,
+  A_IPV6_ADD_MEMBERSHIP = 20,
+  A_IPV6_DROP_MEMBERSHIP = 21,
+  A_IPV6_MULTICAST_IF = 17
+};
+
+static int map_ipproto(int android_level) {
+  if (android_level == A_IPPROTO_IP) return IPPROTO_IP;
+  if (android_level == A_IPPROTO_IPV6 || android_level == 41) return IPPROTO_IPV6;
+  if (android_level == A_SOL_SOCKET) return SOL_SOCKET;
+  return android_level;
+}
+
+static int map_mcast_opt(int level, int option) {
+  if (level == A_IPPROTO_IP || level == IPPROTO_IP) {
+    if (option == A_IP_ADD_MEMBERSHIP || option == 35) return IP_ADD_MEMBERSHIP;
+    if (option == A_IP_DROP_MEMBERSHIP || option == 36) return IP_DROP_MEMBERSHIP;
+    if (option == A_IP_MULTICAST_IF || option == 32) return IP_MULTICAST_IF;
+  }
+  if (level == A_IPPROTO_IPV6 || level == 41 || level == IPPROTO_IPV6) {
+#ifdef IPV6_ADD_MEMBERSHIP
+    if (option == A_IPV6_ADD_MEMBERSHIP || option == 20) return IPV6_ADD_MEMBERSHIP;
+    if (option == A_IPV6_DROP_MEMBERSHIP || option == 21) return IPV6_DROP_MEMBERSHIP;
+#endif
+#ifdef IPV6_JOIN_GROUP
+    if (option == A_IPV6_ADD_MEMBERSHIP || option == 20) return IPV6_JOIN_GROUP;
+    if (option == A_IPV6_DROP_MEMBERSHIP || option == 21) return IPV6_LEAVE_GROUP;
+#endif
+    if (option == A_IPV6_MULTICAST_IF || option == 17) return IPV6_MULTICAST_IF;
+  }
+  return option;
+}
+
+/* setsockoptIpMreqn(fd, level, option, ifindex) — Android uses ifindex; Winsock
+ * ip_mreq uses interface address. For ifindex 0 use INADDR_ANY; else try
+ * index→IPv4 via GetAdaptersAddresses-less fallback: imr_interface = 0. */
+__declspec(dllexport) void Java_libcore_io_Linux_setsockoptIpMreqn(
+    JNIEnv* env, jobject thiz, jobject fdObj, jint level, jint option, jint value) {
+  (void)thiz;
+  ensure_wsa();
+  SOCKET s = socket_from_fd(fd_to_int(env, fdObj));
+  if (s == INVALID_SOCKET) { throw_errno(env, "setsockopt", A_EBADF); return; }
+  int wlevel = map_ipproto(level);
+  int wopt = map_mcast_opt(level, option);
+  struct ip_mreq mreq;
+  memset(&mreq, 0, sizeof(mreq));
+  /* value is interface index on Android; use ANY for 0, else leave 0 (best-effort) */
+  mreq.imr_multiaddr.s_addr = htonl(INADDR_ANY); /* caller usually uses GroupReq */
+  mreq.imr_interface.s_addr = htonl(INADDR_ANY);
+  (void)value;
+  /* Prefer treating as IP_MULTICAST_IF with index via DWORD on Vista+ */
+  if (wopt == IP_MULTICAST_IF) {
+    DWORD idx = (DWORD)value;
+    if (setsockopt(s, IPPROTO_IP, IP_MULTICAST_IF, (const char*)&idx, sizeof(idx)) != 0) {
+      /* fallback classic in_addr */
+      struct in_addr a; a.s_addr = htonl(INADDR_ANY);
+      if (setsockopt(s, IPPROTO_IP, IP_MULTICAST_IF, (const char*)&a, sizeof(a)) != 0) {
+        throw_errno(env, "setsockopt", map_wsa_to_android(WSAGetLastError()));
+      }
+    }
+    return;
+  }
+  /* For ADD/DROP membership without address this is underspecified — soft no-op */
+  if (wopt == IP_ADD_MEMBERSHIP || wopt == IP_DROP_MEMBERSHIP) {
+    return;
+  }
+  if (setsockopt(s, wlevel, wopt, (const char*)&mreq, sizeof(mreq)) != 0) {
+    int werr = WSAGetLastError();
+    if (werr != WSAENOPROTOOPT && werr != WSAEINVAL)
+      throw_errno(env, "setsockopt", map_wsa_to_android(werr));
+  }
+}
+__declspec(dllexport) void Java_libcore_io_Linux_setsockoptIpMreqn__Ljava_io_FileDescriptor_2III(
+    JNIEnv* env, jobject thiz, jobject fd, jint level, jint option, jint value) {
+  Java_libcore_io_Linux_setsockoptIpMreqn(env, thiz, fd, level, option, value);
+}
+
+/* Extract IPv4/IPv6 bytes from java.net.InetAddress */
+static int inet_addr_bytes(JNIEnv* env, jobject inet, unsigned char* out, int* out_len, int* is_v6) {
+  if (!inet) return -1;
+  jclass c = (*env)->GetObjectClass(env, inet);
+  jmethodID mid = (*env)->GetMethodID(env, c, "getAddress", "()[B");
+  if (!mid) return -1;
+  jbyteArray ba = (jbyteArray)(*env)->CallObjectMethod(env, inet, mid);
+  if (!ba || (*env)->ExceptionCheck(env)) return -1;
+  jsize n = (*env)->GetArrayLength(env, ba);
+  if (n != 4 && n != 16) return -1;
+  (*env)->GetByteArrayRegion(env, ba, 0, n, (jbyte*)out);
+  *out_len = n;
+  *is_v6 = (n == 16);
+  return 0;
+}
+
+__declspec(dllexport) void Java_libcore_io_Linux_setsockoptGroupReq(
+    JNIEnv* env, jobject thiz, jobject fdObj, jint level, jint option, jobject javaGroupReq) {
+  (void)thiz;
+  ensure_wsa();
+  if (!javaGroupReq) { throw_errno(env, "setsockopt", A_EINVAL); return; }
+  SOCKET s = socket_from_fd(fd_to_int(env, fdObj));
+  if (s == INVALID_SOCKET) { throw_errno(env, "setsockopt", A_EBADF); return; }
+
+  jclass grc = (*env)->GetObjectClass(env, javaGroupReq);
+  jfieldID if_fid = (*env)->GetFieldID(env, grc, "gr_interface", "I");
+  jfieldID grp_fid = (*env)->GetFieldID(env, grc, "gr_group", "Ljava/net/InetAddress;");
+  jint ifindex = if_fid ? (*env)->GetIntField(env, javaGroupReq, if_fid) : 0;
+  jobject group = grp_fid ? (*env)->GetObjectField(env, javaGroupReq, grp_fid) : NULL;
+  unsigned char addr[16];
+  int alen = 0, is_v6 = 0;
+  if (inet_addr_bytes(env, group, addr, &alen, &is_v6) != 0) {
+    throw_errno(env, "setsockopt", A_EINVAL);
+    return;
+  }
+
+  int wlevel = map_ipproto(level);
+  int wopt = map_mcast_opt(level, option);
+  /* Prefer family of group address */
+  if (!is_v6) {
+    struct ip_mreq mreq;
+    memset(&mreq, 0, sizeof(mreq));
+    memcpy(&mreq.imr_multiaddr, addr, 4);
+    mreq.imr_interface.s_addr = htonl(INADDR_ANY);
+    (void)ifindex;
+    wlevel = IPPROTO_IP;
+    if (option == A_IP_DROP_MEMBERSHIP || option == 36 || wopt == IP_DROP_MEMBERSHIP)
+      wopt = IP_DROP_MEMBERSHIP;
+    else
+      wopt = IP_ADD_MEMBERSHIP;
+    if (setsockopt(s, wlevel, wopt, (const char*)&mreq, sizeof(mreq)) != 0) {
+      throw_errno(env, "setsockopt", map_wsa_to_android(WSAGetLastError()));
+    }
+  } else {
+    struct ipv6_mreq mreq6;
+    memset(&mreq6, 0, sizeof(mreq6));
+    memcpy(&mreq6.ipv6mr_multiaddr, addr, 16);
+    mreq6.ipv6mr_interface = (unsigned int)ifindex;
+    wlevel = IPPROTO_IPV6;
+#ifdef IPV6_JOIN_GROUP
+    if (option == A_IPV6_DROP_MEMBERSHIP || option == 21)
+      wopt = IPV6_LEAVE_GROUP;
+    else
+      wopt = IPV6_JOIN_GROUP;
+#else
+    if (option == A_IPV6_DROP_MEMBERSHIP || option == 21)
+      wopt = IPV6_DROP_MEMBERSHIP;
+    else
+      wopt = IPV6_ADD_MEMBERSHIP;
+#endif
+    if (setsockopt(s, wlevel, wopt, (const char*)&mreq6, sizeof(mreq6)) != 0) {
+      throw_errno(env, "setsockopt", map_wsa_to_android(WSAGetLastError()));
+    }
+  }
+}
+__declspec(dllexport) void Java_libcore_io_Linux_setsockoptGroupReq__Ljava_io_FileDescriptor_2IILandroid_system_StructGroupReq_2(
+    JNIEnv* env, jobject thiz, jobject fd, jint level, jint option, jobject gr) {
+  Java_libcore_io_Linux_setsockoptGroupReq(env, thiz, fd, level, option, gr);
 }

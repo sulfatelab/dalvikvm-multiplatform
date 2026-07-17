@@ -96,10 +96,11 @@ static int fd_to_int(JNIEnv* env, jobject fdObj) {
 static int is_socket_fd(int fd) {
   if (fd < 0) return 0;
   SOCKET s = (SOCKET)_get_osfhandle(fd);
-  if (s == INVALID_SOCKET || s == (SOCKET)-1) return 0;
+  if (s == INVALID_SOCKET || s == (SOCKET)(intptr_t)-1) return 0;
   int type = 0; int len = sizeof(type);
-  if (getsockopt(s, SOL_SOCKET, SO_TYPE, (char*)&type, &len) == 0) return 1;
-  return 0;
+  if (getsockopt(s, SOL_SOCKET, SO_TYPE, (char*)&type, &len) != 0) return 0;
+  /* Anonymous pipes must not be treated as sockets (wine SO_TYPE quirks). */
+  return (type == SOCK_STREAM || type == SOCK_DGRAM || type == SOCK_RAW) ? 1 : 0;
 }
 
 /* ===== WinNTFileSystem natives ===== */

@@ -17,11 +17,11 @@
 
 | Bucket | Count |
 |--------|------:|
-| implemented | 80 |
+| implemented | 82 |
 | registered_missing_impl | 0 |
 | impl_unregistered | 0 |
 | needed | 0 |
-| enosys | 46 |
+| enosys | 44 |
 | **Total tracked natives** | **126** |
 
 ## Implemented
@@ -108,6 +108,8 @@
 | `unlink` |
 | `writeBytes` |
 | `writev` |
+| `setsockoptGroupReq` |
+| `setsockoptIpMreqn` |
 
 ## ENOSYS / unsupported for now
 
@@ -146,9 +148,7 @@
 | `setregid` |
 | `setreuid` |
 | `setsid` |
-| `setsockoptGroupReq` |
 | `setsockoptIfreq` |
-| `setsockoptIpMreqn` |
 | `setuid` |
 | `setxattr` |
 | `splice` |
@@ -171,4 +171,4 @@
 
 Keep AOSP `libcore_io_Linux.cpp` **out** on Win. Implement semantics via `win_fs_natives.c` / `win_net_natives.c` + register table.
 
-*Updated after L-001 deepen pass: implemented=80, needed=0, enosys=46.*
+*Updated L-003 pass: Runtime.exec (CreateProcess) + multicast GroupReq/IpMreqn; Os map counts approximate.*
