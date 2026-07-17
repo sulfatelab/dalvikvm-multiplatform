@@ -68,7 +68,7 @@ security.provider.3=com.android.org.conscrypt.JSSEProvider
 
 ssl.SocketFactory.provider=com.android.org.conscrypt.OpenSSLSocketFactoryImpl
 ssl.ServerSocketFactory.provider=com.android.org.conscrypt.OpenSSLSocketFactoryImpl
-keystore.type=BKS
+keystore.type=AndroidCAStore
 ssl.KeyManagerFactory.algorithm=PKIX
 ssl.TrustManagerFactory.algorithm=PKIX
 ssl.disablePeerCertificateChainVerification=false

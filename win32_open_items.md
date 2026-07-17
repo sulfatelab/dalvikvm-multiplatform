@@ -255,10 +255,10 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Progress:** 2026-07-17 — AOSP `Memory` in javacore; Linux bridge mmap/… + Needed pipe/pread/readv/timeval/sendto/…; see win32_libcore_os_natives.md (Needed residual small)
 
 ### L-002 — boringssl / conscrypt / SSL PE
-- **State:** OPEN (partial — C0–C2 + default JCA providers OK; SSLContext.init / HTTPS C3 open)
+- **State:** OPEN (partial — C0–C2 + default JCA providers + SSLContext.init OK; HTTPS connect golden still open)
 - **Kind:** leftover (priority only if apps need TLS)
 - **Area:** crypto
-- **Gap:** ~~libcrypto/ssl/javacrypto PE~~ **C0+C1 done.** ~~conscrypt Java absent from boot.jar~~ **C2 packaged**. ~~OpenSSLProvider construct / Security.getProviders~~ **done (2026-07-17)**. Still missing: win-x86_64 ASM; BC optional; default `jks` KeyStore for SSLContext.init path; HTTPS golden C3.
+- **Gap:** ~~libcrypto/ssl/javacrypto PE~~ **C0+C1 done.** ~~conscrypt Java absent from boot.jar~~ **C2 packaged**. ~~OpenSSLProvider construct / Security.getProviders~~ **done (2026-07-17)**. Still missing: win-x86_64 ASM; BC optional (BKS); HTTPS connect golden C3; system cacerts population for real TLS verify.
 - **Exit criteria:** HTTPS/crypto golden **or** explicit non-goal. Crypto digests/providers met; SSLContext.init/HTTPS still open.
 - **Code anchors:** hybrid CMake SSL/javacrypto; `tools/bootjar/build_conscrypt_win64.sh`; `libcore_hello3.c` mapLibraryName; boot.jar `com.android.org.conscrypt`
 - **Opened:** 2026-07-17
@@ -346,6 +346,16 @@ _(None yet in this tracker. When closing a W-/L-/H- item, move a one-line summar
 ---
 
 
+
+### W-021 — Default KeyStore type Android-compatible (AndroidCAStore)
+- **State:** CLOSED (2026-07-17)
+- **Kind:** config / compatibility
+- **Area:** JCA / conscrypt SSL defaults
+- **Root cause:** Win64 multipath deferred BouncyCastle, so `keystore.type=BKS` could not resolve. `Security.initializeStatic()` also omitted `keystore.type`, so `KeyStore.getDefaultType()` fell back to desktop `jks`, which is not registered. `KeyManagerFactory.init(null,null)` → `KeyStore.getInstance("jks")` failed and `SSLContext.init` aborted.
+- **Fix:** default `keystore.type=AndroidCAStore` (HarmonyJSSE/`TrustedCertificateKeyStoreSpi`, empty-loadable); restore loading `security.properties` on Windows after W-020; mirror in `build_conscrypt_win64.sh` and boot.jar resource.
+- **Exit criteria:** KeyStoreProbe + SslProviderProbe `sslcontext.init=ok` under wine.
+- **Opened/Closed:** 2026-07-17
+
 ### W-020 — FileChannelImpl.map0 pointer truncation on Win64 (LLP64)
 - **State:** CLOSED (2026-07-17) — `ptr_to_jlong(mapAddress)` instead of `(jlong)(unsigned long)`
 - **Kind:** bug / ABI
@@ -386,4 +396,4 @@ _(None yet in this tracker. When closing a W-/L-/H- item, move a one-line summar
 - [ ] Permanent design choice (e.g. VEH forever) → move from W- to documented architecture; close workaround  
 - [ ] CLOSED items: one line in §Closed, leave detail above with State CLOSED  
 
-*Last snapshot: 2026-07-17 — W-019/W-020 CLOSED; L-002 getProviders+digests OK; SSLContext.init needs jks / HTTPS still open.*
+*Last snapshot: 2026-07-17 — W-019/W-020 CLOSED; L-002 getProviders+digests+SSLContext.init OK; HTTPS connect still open.*

@@ -322,3 +322,12 @@ Root causes closed:
 2. `FileChannelImpl.map0` Win64 LLP64 pointer truncation (`unsigned long` cast)
 
 Residual: `SSLContext.init` needs `jks` KeyStore (SslProviderProbe exit 1).
+
+## L-002 AndroidCAStore default KeyStore (2026-07-17)
+
+Wine PASS:
+- KeyStore.getDefaultType()=AndroidCAStore
+- KeyManagerFactory/TrustManagerFactory init(null)
+- SSLContext.init(null,null,null) → SslProviderProbe.done=ok
+
+Note: empty system/user cacerts dirs until product ships roots; verify-path still needs CA population for real HTTPS.
