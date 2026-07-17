@@ -16,7 +16,7 @@ done
 # Never ship tools/win64/jni_stubs/libcombined.dll multi-name aliases (W-005).
 bash "$REPO/tools/win64/stage_native_modules.sh" "$OUT" \
   "${MDVM_HYBRID_BUILD:-$REPO/build/win64_libcore_icu}" "$BUILD"
-# Required product assets: boot.jar + run/icu/icudt72l.dat (same shipping class)
+# Required product assets: boot.jar + run/icu/icudt72l.dat + run/etc/security/cacerts
 bash "$REPO/tools/win64/stage_run_assets.sh" "$OUT" "$BUILD"
 for j in hello.jar goldenapp.jar probe.jar ioprobe.jar coreprobe.jar netprobe.jar \
          gcprobe.jar gcforced.jar interruptprobe.jar rtmem.jar abspathprobe.jar \

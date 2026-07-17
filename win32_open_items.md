@@ -258,7 +258,7 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **State:** OPEN (partial — C0–C2 + default JCA providers + SSLContext.init OK; HTTPS connect golden still open)
 - **Kind:** leftover (priority only if apps need TLS)
 - **Area:** crypto
-- **Gap:** ~~libcrypto/ssl/javacrypto PE~~ **C0+C1 done.** ~~conscrypt Java absent from boot.jar~~ **C2 packaged**. ~~OpenSSLProvider construct / Security.getProviders~~ **done (2026-07-17)**. Still missing: win-x86_64 ASM; BC optional (BKS); HTTPS connect golden C3; system cacerts population for real TLS verify.
+- **Gap:** ~~libcrypto/ssl/javacrypto PE~~ **C0+C1 done.** ~~conscrypt Java absent from boot.jar~~ **C2 packaged**. ~~OpenSSLProvider construct / Security.getProviders~~ **done (2026-07-17)**. Still missing: win-x86_64 ASM; BC optional (BKS); HTTPS URL handler/connect golden C3 (cacerts product asset landed).
 - **Exit criteria:** HTTPS/crypto golden **or** explicit non-goal. Crypto digests/providers met; SSLContext.init/HTTPS still open.
 - **Code anchors:** hybrid CMake SSL/javacrypto; `tools/bootjar/build_conscrypt_win64.sh`; `libcore_hello3.c` mapLibraryName; boot.jar `com.android.org.conscrypt`
 - **Opened:** 2026-07-17
@@ -347,6 +347,16 @@ _(None yet in this tracker. When closing a W-/L-/H- item, move a one-line summar
 
 
 
+
+### W-022 — Product default CA bundle (AndroidCAStore cacerts)
+- **State:** CLOSED (2026-07-17)
+- **Kind:** packaging / product asset
+- **Area:** TLS trust / AndroidCAStore
+- **Root cause:** Android `TrustedCertificateStore` reads `$ANDROID_ROOT/etc/security/cacerts/<subject_hash_old>.N`. Product previously shipped empty dirs, so SSLContext.init worked but trust set was empty.
+- **Fix:** generate Mozilla/system PEM bundle into OpenSSL hash_old layout (`tools/win64/generate_cacerts.sh`), hermetic assets under `tools/win64/assets/cacerts`, stage via `stage_run_assets.sh` as required asset (with `boot.jar` / `icudt72l.dat`). LocaleData hard-coded fallback so OpenSSLX509Certificate date parsing works without full ICU4J resource bundles in boot.jar.
+- **Exit criteria:** TrustStoreProbe AndroidCAStore.size>=50 and acceptedIssuers>=50 under wine with ANDROID_ROOT=run.
+- **Opened/Closed:** 2026-07-17
+
 ### W-021 — Default KeyStore type Android-compatible (AndroidCAStore)
 - **State:** CLOSED (2026-07-17)
 - **Kind:** config / compatibility
@@ -396,4 +406,4 @@ _(None yet in this tracker. When closing a W-/L-/H- item, move a one-line summar
 - [ ] Permanent design choice (e.g. VEH forever) → move from W- to documented architecture; close workaround  
 - [ ] CLOSED items: one line in §Closed, leave detail above with State CLOSED  
 
-*Last snapshot: 2026-07-17 — W-019/W-020 CLOSED; L-002 getProviders+digests+SSLContext.init OK; HTTPS connect still open.*
+*Last snapshot: 2026-07-17 — W-019/W-020/W-021 CLOSED; default cacerts staged; L-002 SSLContext+trust store OK; HTTPS URL/connect still open.*

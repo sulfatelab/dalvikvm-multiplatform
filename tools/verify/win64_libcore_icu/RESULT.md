@@ -331,3 +331,13 @@ Wine PASS:
 - SSLContext.init(null,null,null) → SslProviderProbe.done=ok
 
 Note: empty system/user cacerts dirs until product ships roots; verify-path still needs CA population for real HTTPS.
+
+## Product default CA bundle (2026-07-17)
+
+Staged like ICU data:
+- generator: `tools/win64/generate_cacerts.sh`
+- hermetic assets: `tools/win64/assets/cacerts` (121 roots, subject_hash_old)
+- stage: `tools/win64/stage_run_assets.sh` → `run/etc/security/cacerts`
+- wine: TrustStoreProbe AndroidCAStore.size=121, acceptedIssuers=121, SSLContext.init ok
+
+Residual HTTPS: `HttpsURLConnection` needs `com.android.okhttp.HttpsHandler` (not packaged yet).
