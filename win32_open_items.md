@@ -58,7 +58,7 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 |--------|---------|
 | Phases 0–3 | **Gate-complete** (P3 G12 real Win10 + wine) |
 | Phase 4 | **Wine complete**; host re-run still recommended |
-| PE libcore/ICU/openjdk | **ICU real PE + hybrid javacore PE**; openjdk still combined stub |
+| PE libcore/ICU/openjdk | **ICU + hybrid javacore + hybrid openjdk PE** (NIO/Unix still incomplete) |
 | Quick/JIT/TLS | **Designed** in draft doc; **not implemented**; invoke forced to interpreter |
 | Linux multiplatform | Native `dalvikvm -showversion` OK; imageless Hello e2e not re-gated here |
 
@@ -326,4 +326,4 @@ _(None yet in this tracker. When closing a W-/L-/H- item, move a one-line summar
 - [ ] Permanent design choice (e.g. VEH forever) → move from W- to documented architecture; close workaround  
 - [ ] CLOSED items: one line in §Closed, leave detail above with State CLOSED  
 
-*Last snapshot: 2026-07-17 — real ICU PE + hybrid javacore PE; CoreProbe/IoProbe wine OK; openjdk still stub; JIT/TLS design drafted.*
+*Last snapshot: 2026-07-17 — real ICU + hybrid javacore + hybrid openjdk PE; CoreProbe/IoProbe wine OK; full AOSP openjdk/NIO still open; JIT/TLS design drafted.*

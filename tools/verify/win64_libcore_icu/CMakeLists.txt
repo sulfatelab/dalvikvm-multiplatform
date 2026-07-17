@@ -183,4 +183,73 @@ endif()
 
 
 
-message(STATUS "Win64 libcore/ICU Phase A: icuuc + icui18n + icu_jni")
+
+# --- openjdkjvm (memory/GC exports for Runtime natives) ---
+if(MDVM_WIN64_BUILD_OPENJDK)
+  add_library(openjdkjvm SHARED
+    "${CMAKE_CURRENT_SOURCE_DIR}/openjdkjvm_memory_standalone.c"
+  )
+  target_include_directories(openjdkjvm PUBLIC
+    "${MDVM_ART_ROOT_DIR}/libnativehelper/include_jni"
+  )
+  target_compile_definitions(openjdkjvm PRIVATE ${_WIN_DEFS})
+  target_link_libraries(openjdkjvm PRIVATE kernel32 psapi)
+
+  # --- fdlibm static ---
+  add_library(fdlibm STATIC ${FDLIBM_SRCS})
+  target_include_directories(fdlibm PUBLIC "${MDVM_FDLIBM_DIR}")
+  target_compile_definitions(fdlibm PRIVATE ${_WIN_DEFS})
+  target_compile_options(fdlibm PRIVATE -Wno-all)
+
+  # --- openjdk hybrid ---
+  # Phase B1 portable-ish AOSP + Win stubs for System/Runtime/math bits.
+  set(_OJ_PORTABLE
+    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/Inflater.c"
+    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/Deflater.c"
+    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/CRC32.c"
+    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/Adler32.c"
+    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/jni_util.c"
+    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/jni_util_md.c"
+    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/Float.c"
+    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/Double.c"
+    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/ObjectStreamClass.c"
+    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/ObjectOutputStream.c"
+    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/ObjectInputStream.c"
+    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/Character.cpp"
+    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/JniConstants.cpp"
+    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/jdk_internal_misc_VM.cpp"
+    "${MDVM_LIBCORE_DIR}/multiplatform/windows/native/openjdk_OnLoad_win.cpp"
+  )
+  # System/Runtime/math/time natives: use PE stubs that already work under wine gates.
+  set(_OJ_WIN_STUBS
+    "${_repo}/tools/win64/jni_stubs/win_runtime_natives.c"
+    "${_repo}/tools/win64/jni_stubs/libcore_hello3.c"
+  )
+  set_source_files_properties("${_repo}/tools/win64/jni_stubs/libcore_hello3.c"
+    PROPERTIES COMPILE_DEFINITIONS "JNI_OnLoad=openjdk_stub_JNI_OnLoad_unused;JNI_OnUnload=openjdk_stub_JNI_OnUnload_unused")
+
+  add_library(openjdk SHARED ${_OJ_PORTABLE} ${_OJ_WIN_STUBS})
+  set_target_properties(openjdk PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS OFF)
+  set_target_properties(openjdkjvm PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS OFF)
+  target_include_directories(openjdk BEFORE PRIVATE "${MDVM_LIBCORE_DIR}/multiplatform/windows/native")
+  target_include_directories(openjdk PUBLIC
+    ${_WIN_INCLUDES}
+    ${_ICU_COMMON_INCLUDES}
+    "${MDVM_LIBCORE_DIR}/ojluni/src/main/native"
+    "${MDVM_LIBCORE_DIR}/luni/src/main/native"
+    "${MDVM_FDLIBM_DIR}"
+    "${_repo}/compat/openjdk_inc/anchor1/anchor2"
+    "${MDVM_ART_ROOT_DIR}/external/boringssl/src/include"
+    "${MDVM_WIN64_ENV}/lib/zlib/include"
+  )
+  target_compile_definitions(openjdk PRIVATE
+    ${_WIN_DEFS}
+    U_USING_ICU_NAMESPACE=0
+  )
+  target_compile_options(openjdk PRIVATE ${_WIN_CFLAGS} -Wno-unused-parameter "SHELL:-D__INTRODUCED_IN(x)=")
+  target_link_libraries(openjdk PUBLIC base log nativehelper openjdkjvm fdlibm z icuuc
+    PRIVATE kernel32 advapi32)
+endif()
+
+message(STATUS "Win64 libcore/ICU: icu + optional javacore/openjdk hybrids")
+

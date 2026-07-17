@@ -9,5 +9,12 @@ if [[ -f "$ICU/javacore.dll" ]]; then
   cp -f "$ICU/javacore.dll" "$P1/javacore.dll"
   cp -f "$ICU/javacore.dll" "$P1/libjavacore.dll"
 fi
+if [[ -f "$ICU/openjdk.dll" ]]; then
+  cp -f "$ICU/openjdk.dll" "$P1/openjdk.dll"
+  cp -f "$ICU/openjdk.dll" "$P1/libopenjdk.dll"
+fi
+if [[ -f "$ICU/openjdkjvm.dll" ]]; then
+  cp -f "$ICU/openjdkjvm.dll" "$P1/openjdkjvm.dll" 2>/dev/null || true
+fi
 echo "Installed real ICU(+javacore if built) PE into $P1"
 ls -lh "$P1"/icuuc.dll "$P1"/icui18n.dll "$P1"/icu_jni.dll "$P1"/libicu_jni.dll "$P1"/libjavacore.dll 2>/dev/null || true

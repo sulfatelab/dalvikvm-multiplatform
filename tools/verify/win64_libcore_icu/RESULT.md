@@ -62,3 +62,25 @@ showversion → ART version 2.1.0 x86_64
 CoreProbe.done=ok
 IoProbe.done=ok
 ```
+
+## Phase B1 — hybrid `openjdk.dll` (2026-07-17)
+
+**Status:** **BUILT + wine smoke OK** (CoreProbe, IoProbe)
+
+| Piece | Approach |
+|-------|----------|
+| Zip Inflater/Deflater/CRC/Adler | Real AOSP ojluni |
+| Float/Double, Object streams, Character, jdk.internal.misc.VM | Real AOSP |
+| System/Runtime/math/time | PE stubs (`libcore_hello3` + `win_runtime_natives`) |
+| `JVM_*` memory helpers | Standalone `openjdkjvm.dll` (process memory heuristics; not full ART heap yet) |
+| NIO/EPoll/Unix FS/process | **Not included** (classic Socket via javacore Win bridge) |
+
+Artifact: `build/win64_libcore_icu/openjdk.dll` (~113K), `openjdkjvm.dll` (~13K)
+
+### Smoke (with real ICU + hybrid javacore + hybrid openjdk)
+
+```
+showversion OK
+CoreProbe.done=ok
+IoProbe.done=ok
+```
