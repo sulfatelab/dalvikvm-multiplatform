@@ -1,0 +1,13 @@
+{
+  "method": "clang-frontend -Wvoid-pointer-to-int-cast / -Wint-to-void-pointer-cast",
+  "tus": 1426,
+  "elapsed_sec": 560.7647635936737,
+  "high": [],
+  "med": [],
+  "all_hits": [],
+  "parse_fail_count": 0,
+  "dbs": [
+    "build/win64_phase1",
+    "build/win64_libcore_icu"
+  ]
+}

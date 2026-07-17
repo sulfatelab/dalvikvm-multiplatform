@@ -46,6 +46,19 @@ Looks for:
 - `static_cast` / `reinterpret_cast` of pointer to `long`
 - bad `#define ptr_to_jlong ... (int)`
 
+
+### Full compile_commands frontend scan (recommended for whole Win graph)
+
+```bash
+python3 -u tools/verify/llp64_ptr_cast_audit/scan_compile_db_warnings.py \
+  build/win64_phase1 build/win64_libcore_icu --jobs 16 \
+  --out tools/verify/llp64_ptr_cast_audit/FULL_AST_RESULT.md \
+  --json-out tools/verify/llp64_ptr_cast_audit/FULL_AST_RESULT.json
+```
+
+Uses the real Win64 compile flags and Clang's size model (`long` is 32-bit on
+`x86_64-pc-windows-msvc`). Prefer **jobs=16** on agent01; jobs=32 previously OOM'd.
+
 ### 2) AST via compile_commands + clang-query
 
 Generate compile DB:
