@@ -341,3 +341,12 @@ Staged like ICU data:
 - wine: TrustStoreProbe AndroidCAStore.size=121, acceptedIssuers=121, SSLContext.init ok
 
 Residual HTTPS: `HttpsURLConnection` needs `com.android.okhttp.HttpsHandler` (not packaged yet).
+
+## OkHttp handlers + HTTPS smoke (2026-07-17)
+
+- Build: `tools/bootjar/build_okhttp_win64.sh` → boot.jar includes `com.android.okhttp.*` + okio (241 classes; multi-dex)
+- Wine HttpsProbe:
+  - handler.http=`HttpURLConnectionImpl`
+  - handler.https=`HttpsURLConnectionImpl`
+  - `https://example.com/` → status 200
+- Multipath ASCII fallbacks: `java.net.IDN`, `java.text.Normalizer` (ICU4J tables still deferred)

@@ -255,10 +255,10 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Progress:** 2026-07-17 — AOSP `Memory` in javacore; Linux bridge mmap/… + Needed pipe/pread/readv/timeval/sendto/…; see win32_libcore_os_natives.md (Needed residual small)
 
 ### L-002 — boringssl / conscrypt / SSL PE
-- **State:** OPEN (partial — C0–C2 + default JCA providers + SSLContext.init OK; HTTPS connect golden still open)
+- **State:** OPEN (partial — C0–C3 smoke OK under wine; HTTPS golden suite / non-ASCII IDNA / win ASM still open)
 - **Kind:** leftover (priority only if apps need TLS)
 - **Area:** crypto
-- **Gap:** ~~libcrypto/ssl/javacrypto PE~~ **C0+C1 done.** ~~conscrypt Java absent from boot.jar~~ **C2 packaged**. ~~OpenSSLProvider construct / Security.getProviders~~ **done (2026-07-17)**. Still missing: win-x86_64 ASM; BC optional (BKS); HTTPS URL handler/connect golden C3 (cacerts product asset landed).
+- **Gap:** ~~libcrypto/ssl/javacrypto PE~~ **C0+C1 done.** ~~conscrypt Java absent from boot.jar~~ **C2 packaged**. ~~OpenSSLProvider construct / Security.getProviders~~ **done (2026-07-17)**. Still missing: win-x86_64 ASM; BC optional (BKS); broader ICU4J resources for non-ASCII IDNA/normalization; HTTPS golden beyond smoke.
 - **Exit criteria:** HTTPS/crypto golden **or** explicit non-goal. Crypto digests/providers met; SSLContext.init/HTTPS still open.
 - **Code anchors:** hybrid CMake SSL/javacrypto; `tools/bootjar/build_conscrypt_win64.sh`; `libcore_hello3.c` mapLibraryName; boot.jar `com.android.org.conscrypt`
 - **Opened:** 2026-07-17
@@ -348,6 +348,16 @@ _(None yet in this tracker. When closing a W-/L-/H- item, move a one-line summar
 
 
 
+
+### W-023 — OkHttp Http(s)Handler on bootclasspath + ASCII IDN/Normalizer multipath
+- **State:** CLOSED (2026-07-17)
+- **Kind:** packaging / compatibility
+- **Area:** java.net URL / HTTPS
+- **Root cause:** Android resolves `http/https` via `com.android.okhttp.HttpHandler`/`HttpsHandler`, not packaged in multipath boot.jar. After packaging, pure-ASCII OkHttp/TLS paths still required ICU4J StringPrep/Normalizer tables not present in boot.jar.
+- **Fix:** `tools/bootjar/build_okhttp_win64.sh` merges repackaged OkHttp+okio into boot; `IDN.toASCII` and `java.text.Normalizer` short-circuit pure-ASCII; product ICU data preferred over stub in `libicu_jni` Register.cpp; cacerts already staged.
+- **Exit criteria:** HttpsProbe handler resolution + `https://example.com/` status 200 under wine.
+- **Opened/Closed:** 2026-07-17
+
 ### W-022 — Product default CA bundle (AndroidCAStore cacerts)
 - **State:** CLOSED (2026-07-17)
 - **Kind:** packaging / product asset
@@ -406,4 +416,4 @@ _(None yet in this tracker. When closing a W-/L-/H- item, move a one-line summar
 - [ ] Permanent design choice (e.g. VEH forever) → move from W- to documented architecture; close workaround  
 - [ ] CLOSED items: one line in §Closed, leave detail above with State CLOSED  
 
-*Last snapshot: 2026-07-17 — W-019/W-020/W-021 CLOSED; default cacerts staged; L-002 SSLContext+trust store OK; HTTPS URL/connect still open.*
+*Last snapshot: 2026-07-17 — W-019..W-023 CLOSED; OkHttp handlers + live HTTPS smoke (example.com 200) under wine.*
