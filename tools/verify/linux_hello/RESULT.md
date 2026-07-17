@@ -1,7 +1,7 @@
 # L-005 Linux imageless Hello gate
 
 **Status:** PASS
-**Date:** 2026-07-17T08:50:54Z
+**Date:** 2026-07-17T09:44:51Z
 **Host:** agent01
 
 ## Command
@@ -14,7 +14,7 @@ tools/verify/linux_hello/run_imageless_hello.sh
 
 - `dalvikvm -showversion` prints ART version
 - Imageless `-Xint` Hello.main prints `Hello from dalvikvm!` and exits 0
-- boot.jar is Linux-compatible (UnixFileSystem; not WinNT product boot)
+- boot.jar is shared multipath (Unix+WinNT+VMRuntime.isWindowsOs); Linux selects Unix path at runtime
 
 ## Artifacts
 
