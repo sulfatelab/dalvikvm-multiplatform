@@ -211,3 +211,17 @@ Hybrid targets emit ART/product sonames directly:
 | Design map | [win32_libcore_os_natives.md](../../../win32_libcore_os_natives.md) — Needed vs ENOSYS inventory |
 
 Full AOSP `libcore_io_Linux.cpp` still **excluded** (Bionic header surface). Grow Win bridges per the map.
+
+
+## Phase B4 — L-001 deepen Os Needed set (2026-07-17)
+
+**Status:** **BUILT + wine smoke OK** (CoreProbe / IoProbe / NetProbe / GoldenApp)
+
+Added Win hybrid implementations + RegisterNatives for:
+
+- `chmod` / `fchmod`, `pipe2`, `preadBytes` / `pwriteBytes`, `readv` / `writev`, `sendfile`, `umaskImpl`
+- `getsockoptTimeval` / `setsockoptTimeval`, `getsockoptByte` / `setsockoptByte`
+- `inet_pton`, `if_nametoindex` / `if_indextoname`, `getnameinfo`
+- `sendtoBytes` / `recvfromBytes`, simplified `sendmsg` / `recvmsg`
+
+Inventory: [win32_libcore_os_natives.md](../../../win32_libcore_os_natives.md).

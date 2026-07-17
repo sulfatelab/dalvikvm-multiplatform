@@ -248,11 +248,11 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **State:** OPEN (ICU+javacore+openjdk PE staged for product; surface still hybrid)
 - **Kind:** leftover
 - **Area:** build / libcore / icu
-- **Gap:** Linux has full `.so` graph from bp2cmake; Win64 has **real ICU** + **hybrid javacore** (`tools/verify/win64_libcore_icu`). ICU + hybrid javacore + **AOSP openjdk NIO PE** landed and are **product-default** via `stage_native_modules.sh` (W-005 closed). Still missing full AOSP `libcore_io_Linux`, Memory, Expat, NativeBN, NetworkUtilities, crypto PE; NIO.2 excluded by design.
+- **Gap:** Linux has full `.so` graph from bp2cmake; Win64 has **real ICU** + **hybrid javacore** (`tools/verify/win64_libcore_icu`). ICU + hybrid javacore + **AOSP openjdk NIO PE** landed and are **product-default** via `stage_native_modules.sh` (W-005 closed). Memory enabled; Os bridge substantially expanded (see win32_libcore_os_natives.md). Still missing full AOSP `libcore_io_Linux` compile, Expat, NativeBN, NetworkUtilities; NIO.2 excluded; crypto PE under L-002.
 - **Exit criteria:** PE DLLs built from AOSP sources without `libcombined` aliasing; GoldenApp + charset/locale smoke still pass.
 - **Opened:** 2026-07-17
 - **Progress:** see `tools/verify/win64_libcore_icu/RESULT.md`; Os map [win32_libcore_os_natives.md](win32_libcore_os_natives.md)
-- **Progress:** 2026-07-17 — AOSP `Memory` in javacore; Linux bridge +mmap/ftruncate/isatty/…; still hybrid (Needed ~16, ENOSYS ~46)
+- **Progress:** 2026-07-17 — AOSP `Memory` in javacore; Linux bridge mmap/… + Needed pipe/pread/readv/timeval/sendto/…; see win32_libcore_os_natives.md (Needed residual small)
 
 ### L-002 — boringssl / conscrypt / SSL PE
 - **State:** OPEN (partial — crypto PE landed 2026-07-17)
@@ -361,4 +361,4 @@ _(None yet in this tracker. When closing a W-/L-/H- item, move a one-line summar
 - [ ] Permanent design choice (e.g. VEH forever) → move from W- to documented architecture; close workaround  
 - [ ] CLOSED items: one line in §Closed, leave detail above with State CLOSED  
 
-*Last snapshot: 2026-07-17 — Memory+Linux Os map; L-001 hybrid deeper; L-004 closed; L-002 partial crypto.*
+*Last snapshot: 2026-07-17 — L-001 deepen Os Needed (pipe/pread/readv/timeval/send*); GoldenApp wine OK; L-002 partial crypto.*

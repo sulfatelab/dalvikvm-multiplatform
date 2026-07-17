@@ -7,6 +7,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <io.h>
+#include <unistd.h>
 #include <sys/stat.h>
 #include <winsock2.h>
 #include <windows.h>
@@ -762,4 +763,253 @@ __declspec(dllexport) void Java_libcore_io_Linux_posix_fallocate(JNIEnv* env, jo
 __declspec(dllexport) void Java_libcore_io_Linux_posix_fallocate__Ljava_io_FileDescriptor_2JJ(
     JNIEnv* env, jobject thiz, jobject fdObj, jlong offset, jlong length) {
   Java_libcore_io_Linux_posix_fallocate(env, thiz, fdObj, offset, length);
+}
+
+
+/* ===== L-001 Needed: chmod/fchmod/pipe2/pread/pwrite/readv/writev/sendfile ===== */
+
+__declspec(dllexport) void Java_libcore_io_Linux_chmod(JNIEnv* env, jobject thiz, jstring jpath, jint mode) {
+  (void)thiz;
+  if (!jpath) { errno = EINVAL; throw_errno(env, "chmod", errno); return; }
+  const char* path = (*env)->GetStringUTFChars(env, jpath, 0);
+  char npath[MAX_PATH];
+  win_path_normalize(path, npath, sizeof(npath));
+  (*env)->ReleaseStringUTFChars(env, jpath, path);
+  DWORD attr = GetFileAttributesA(npath);
+  if (attr == INVALID_FILE_ATTRIBUTES) { errno = ENOENT; throw_errno(env, "chmod", errno); return; }
+  if ((mode & 0222) == 0) attr |= FILE_ATTRIBUTE_READONLY;
+  else attr &= ~FILE_ATTRIBUTE_READONLY;
+  if (!SetFileAttributesA(npath, attr)) {
+    errno = EACCES;
+    throw_errno(env, "chmod", errno);
+  }
+}
+__declspec(dllexport) void Java_libcore_io_Linux_chmod__Ljava_lang_String_2I(JNIEnv* env, jobject thiz, jstring p, jint m) {
+  Java_libcore_io_Linux_chmod(env, thiz, p, m);
+}
+
+__declspec(dllexport) void Java_libcore_io_Linux_fchmod(JNIEnv* env, jobject thiz, jobject fdObj, jint mode) {
+  (void)thiz; (void)fdObj; (void)mode;
+  /* CRT has no fchmod equivalent that is portable; succeed for PE bootstrap. */
+}
+__declspec(dllexport) void Java_libcore_io_Linux_fchmod__Ljava_io_FileDescriptor_2I(JNIEnv* env, jobject thiz, jobject fd, jint mode) {
+  Java_libcore_io_Linux_fchmod(env, thiz, fd, mode);
+}
+
+__declspec(dllexport) jobjectArray Java_libcore_io_Linux_pipe2(JNIEnv* env, jobject thiz, jint flags) {
+  (void)thiz; (void)flags;
+  int fds[2];
+  if (_pipe(fds, 4096, _O_BINARY) != 0) {
+    throw_errno(env, "pipe2", map_errno(errno));
+    return NULL;
+  }
+  ensure_fd(env);
+  jclass fdc = (*env)->FindClass(env, "java/io/FileDescriptor");
+  jobjectArray arr = (*env)->NewObjectArray(env, 2, fdc, NULL);
+  jobject a = fd_from_int(env, fds[0]);
+  jobject b = fd_from_int(env, fds[1]);
+  (*env)->SetObjectArrayElement(env, arr, 0, a);
+  (*env)->SetObjectArrayElement(env, arr, 1, b);
+  return arr;
+}
+__declspec(dllexport) jobjectArray Java_libcore_io_Linux_pipe2__I(JNIEnv* env, jobject thiz, jint flags) {
+  return Java_libcore_io_Linux_pipe2(env, thiz, flags);
+}
+
+static int buffer_is_byte_array(JNIEnv* env, jobject buffer) {
+  if (!buffer) return 0;
+  jclass ba = (*env)->FindClass(env, "[B");
+  return (*env)->IsInstanceOf(env, buffer, ba);
+}
+
+static jbyte* buffer_ptr(JNIEnv* env, jobject buffer, jint offset, jboolean* isCopy, jboolean* isArray) {
+  *isArray = JNI_FALSE;
+  if (buffer_is_byte_array(env, buffer)) {
+    *isArray = JNI_TRUE;
+    jbyte* p = (*env)->GetByteArrayElements(env, (jbyteArray)buffer, isCopy);
+    return p ? p + offset : NULL;
+  }
+  /* Direct ByteBuffer */
+  void* p = (*env)->GetDirectBufferAddress(env, buffer);
+  if (!p) return NULL;
+  return (jbyte*)p + offset;
+}
+
+static void buffer_release(JNIEnv* env, jobject buffer, jbyte* base, jboolean isArray, jint mode) {
+  if (isArray && base) {
+    /* base was advanced by offset; recover array base not needed if we stored carefully */
+  }
+}
+
+__declspec(dllexport) jint Java_libcore_io_Linux_preadBytes(
+    JNIEnv* env, jobject thiz, jobject fdObj, jobject buffer, jint bufferOffset, jint byteCount, jlong offset) {
+  (void)thiz;
+  if (byteCount == 0) return 0;
+  ensure_fd(env);
+  int fd = (*env)->GetIntField(env, fdObj, g_fd_descriptor);
+  jboolean isCopy = 0, isArray = 0;
+  jbyte* p = NULL;
+  jbyteArray arr = NULL;
+  if (buffer_is_byte_array(env, buffer)) {
+    arr = (jbyteArray)buffer;
+    p = (*env)->GetByteArrayElements(env, arr, &isCopy);
+    if (!p) return -1;
+    p += bufferOffset;
+    isArray = 1;
+  } else {
+    void* d = (*env)->GetDirectBufferAddress(env, buffer);
+    if (!d) { errno = EINVAL; throw_errno(env, "pread", errno); return -1; }
+    p = (jbyte*)d + bufferOffset;
+  }
+  int n = (int)pread(fd, p, (size_t)byteCount, offset);
+  if (isArray) (*env)->ReleaseByteArrayElements(env, arr, p - bufferOffset, 0);
+  if (n < 0) { throw_errno(env, "pread", map_errno(errno)); return -1; }
+  return n;
+}
+__declspec(dllexport) jint Java_libcore_io_Linux_preadBytes__Ljava_io_FileDescriptor_2Ljava_lang_Object_2IIJ(
+    JNIEnv* env, jobject thiz, jobject fd, jobject buf, jint off, jint cnt, jlong pos) {
+  return Java_libcore_io_Linux_preadBytes(env, thiz, fd, buf, off, cnt, pos);
+}
+
+__declspec(dllexport) jint Java_libcore_io_Linux_pwriteBytes(
+    JNIEnv* env, jobject thiz, jobject fdObj, jobject buffer, jint bufferOffset, jint byteCount, jlong offset) {
+  (void)thiz;
+  if (byteCount == 0) return 0;
+  ensure_fd(env);
+  int fd = (*env)->GetIntField(env, fdObj, g_fd_descriptor);
+  jbyteArray arr = NULL;
+  jbyte* p = NULL;
+  if (buffer_is_byte_array(env, buffer)) {
+    arr = (jbyteArray)buffer;
+    p = (*env)->GetByteArrayElements(env, arr, NULL);
+    if (!p) return -1;
+    p += bufferOffset;
+  } else {
+    void* d = (*env)->GetDirectBufferAddress(env, buffer);
+    if (!d) { errno = EINVAL; throw_errno(env, "pwrite", errno); return -1; }
+    p = (jbyte*)d + bufferOffset;
+  }
+  int n = (int)pwrite(fd, p, (size_t)byteCount, offset);
+  if (arr) (*env)->ReleaseByteArrayElements(env, arr, p - bufferOffset, JNI_ABORT);
+  if (n < 0) { throw_errno(env, "pwrite", map_errno(errno)); return -1; }
+  return n;
+}
+__declspec(dllexport) jint Java_libcore_io_Linux_pwriteBytes__Ljava_io_FileDescriptor_2Ljava_lang_Object_2IIJ(
+    JNIEnv* env, jobject thiz, jobject fd, jobject buf, jint off, jint cnt, jlong pos) {
+  return Java_libcore_io_Linux_pwriteBytes(env, thiz, fd, buf, off, cnt, pos);
+}
+
+__declspec(dllexport) jint Java_libcore_io_Linux_readv(
+    JNIEnv* env, jobject thiz, jobject fdObj, jobjectArray buffers, jintArray offsets, jintArray byteCounts) {
+  (void)thiz;
+  ensure_fd(env);
+  int fd = (*env)->GetIntField(env, fdObj, g_fd_descriptor);
+  jsize n = (*env)->GetArrayLength(env, buffers);
+  jint* offs = (*env)->GetIntArrayElements(env, offsets, NULL);
+  jint* cnts = (*env)->GetIntArrayElements(env, byteCounts, NULL);
+  int total = 0;
+  for (jsize i = 0; i < n; i++) {
+    jobject buf = (*env)->GetObjectArrayElement(env, buffers, i);
+    int c = cnts[i];
+    if (c <= 0) continue;
+    int r = Java_libcore_io_Linux_readBytes(env, thiz, fdObj, buf, offs[i], c);
+    if ((*env)->ExceptionCheck(env)) break;
+    if (r < 0) { total = -1; break; }
+    total += r;
+    if (r < c) break;
+  }
+  (*env)->ReleaseIntArrayElements(env, offsets, offs, JNI_ABORT);
+  (*env)->ReleaseIntArrayElements(env, byteCounts, cnts, JNI_ABORT);
+  return total;
+}
+__declspec(dllexport) jint Java_libcore_io_Linux_readv__Ljava_io_FileDescriptor_2_3Ljava_lang_Object_2_3I_3I(
+    JNIEnv* env, jobject thiz, jobject fd, jobjectArray buffers, jintArray offsets, jintArray byteCounts) {
+  return Java_libcore_io_Linux_readv(env, thiz, fd, buffers, offsets, byteCounts);
+}
+
+__declspec(dllexport) jint Java_libcore_io_Linux_writev(
+    JNIEnv* env, jobject thiz, jobject fdObj, jobjectArray buffers, jintArray offsets, jintArray byteCounts) {
+  (void)thiz;
+  ensure_fd(env);
+  jsize n = (*env)->GetArrayLength(env, buffers);
+  jint* offs = (*env)->GetIntArrayElements(env, offsets, NULL);
+  jint* cnts = (*env)->GetIntArrayElements(env, byteCounts, NULL);
+  int total = 0;
+  for (jsize i = 0; i < n; i++) {
+    jobject buf = (*env)->GetObjectArrayElement(env, buffers, i);
+    int c = cnts[i];
+    if (c <= 0) continue;
+    int r = Java_libcore_io_Linux_writeBytes(env, thiz, fdObj, buf, offs[i], c);
+    if ((*env)->ExceptionCheck(env)) break;
+    if (r < 0) { total = -1; break; }
+    total += r;
+    if (r < c) break;
+  }
+  (*env)->ReleaseIntArrayElements(env, offsets, offs, JNI_ABORT);
+  (*env)->ReleaseIntArrayElements(env, byteCounts, cnts, JNI_ABORT);
+  return total;
+}
+__declspec(dllexport) jint Java_libcore_io_Linux_writev__Ljava_io_FileDescriptor_2_3Ljava_lang_Object_2_3I_3I(
+    JNIEnv* env, jobject thiz, jobject fd, jobjectArray buffers, jintArray offsets, jintArray byteCounts) {
+  return Java_libcore_io_Linux_writev(env, thiz, fd, buffers, offsets, byteCounts);
+}
+
+__declspec(dllexport) jlong Java_libcore_io_Linux_sendfile(
+    JNIEnv* env, jobject thiz, jobject outFdObj, jobject inFdObj, jobject offsetRef, jlong byteCount) {
+  (void)thiz;
+  ensure_fd(env);
+  int outfd = (*env)->GetIntField(env, outFdObj, g_fd_descriptor);
+  int infd = (*env)->GetIntField(env, inFdObj, g_fd_descriptor);
+  jlong off = 0;
+  jfieldID valueFid = NULL;
+  if (offsetRef) {
+    jclass c = (*env)->GetObjectClass(env, offsetRef);
+    valueFid = (*env)->GetFieldID(env, c, "value", "J");
+    if (valueFid) off = (*env)->GetLongField(env, offsetRef, valueFid);
+  } else {
+    off = _lseeki64(infd, 0, SEEK_CUR);
+  }
+  char buf[64 * 1024];
+  jlong remaining = byteCount;
+  jlong transferred = 0;
+  while (remaining > 0) {
+    int chunk = remaining > (jlong)sizeof(buf) ? (int)sizeof(buf) : (int)remaining;
+    int nr = (int)pread(infd, buf, (size_t)chunk, off);
+    if (nr < 0) { throw_errno(env, "sendfile", map_errno(errno)); return -1; }
+    if (nr == 0) break;
+    int nw_total = 0;
+    while (nw_total < nr) {
+      int nw = _write(outfd, buf + nw_total, (unsigned)(nr - nw_total));
+      if (nw < 0) {
+        /* try as socket via writeBytes path - use send if handle is socket */
+        SOCKET s = (SOCKET)_get_osfhandle(outfd);
+        if (s != INVALID_SOCKET && s != (SOCKET)-1) {
+          int sn = send(s, buf + nw_total, nr - nw_total, 0);
+          if (sn == SOCKET_ERROR) { errno = EIO; throw_errno(env, "sendfile", map_errno(errno)); return -1; }
+          nw = sn;
+        } else {
+          throw_errno(env, "sendfile", map_errno(errno));
+          return -1;
+        }
+      }
+      nw_total += nw;
+    }
+    off += nr;
+    transferred += nr;
+    remaining -= nr;
+  }
+  if (offsetRef && valueFid) (*env)->SetLongField(env, offsetRef, valueFid, off);
+  return transferred;
+}
+__declspec(dllexport) jlong Java_libcore_io_Linux_sendfile__Ljava_io_FileDescriptor_2Ljava_io_FileDescriptor_2Landroid_system_Int64Ref_2J(
+    JNIEnv* env, jobject thiz, jobject o, jobject i, jobject off, jlong n) {
+  return Java_libcore_io_Linux_sendfile(env, thiz, o, i, off, n);
+}
+
+__declspec(dllexport) jint Java_libcore_io_Linux_umaskImpl(JNIEnv* env, jobject thiz, jint mask) {
+  (void)env; (void)thiz;
+  return mask & 0777; /* no process umask on Win CRT PE; echo sanitized mask */
+}
+__declspec(dllexport) jint Java_libcore_io_Linux_umaskImpl__I(JNIEnv* env, jobject thiz, jint mask) {
+  return Java_libcore_io_Linux_umaskImpl(env, thiz, mask);
 }

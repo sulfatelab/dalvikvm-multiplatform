@@ -1065,3 +1065,316 @@ __declspec(dllexport) void Java_java_net_SocketOutputStream_socketWrite0__Ljava_
     JNIEnv* env, jobject thiz, jobject fdObj, jbyteArray data, jint off, jint len) {
   Java_java_net_SocketOutputStream_socketWrite0(env, thiz, fdObj, data, off, len);
 }
+
+
+/* ===== L-001 Needed: timeval/byte sockopts, inet_pton, if_*, getnameinfo ===== */
+
+static jclass g_timeval_class;
+static jmethodID g_timeval_ctor; /* not public - use reflection of fields after NewObject? StructTimeval has private ctor and fromMillis */
+/* Use fromMillis static factory */
+static jmethodID g_timeval_fromMillis;
+static jfieldID g_timeval_sec;
+static jfieldID g_timeval_usec;
+
+static void ensure_timeval(JNIEnv* env) {
+  if (g_timeval_class) return;
+  jclass c = (*env)->FindClass(env, "android/system/StructTimeval");
+  g_timeval_class = (jclass)(*env)->NewGlobalRef(env, c);
+  g_timeval_fromMillis = (*env)->GetStaticMethodID(env, g_timeval_class, "fromMillis", "(J)Landroid/system/StructTimeval;");
+  g_timeval_sec = (*env)->GetFieldID(env, g_timeval_class, "tv_sec", "J");
+  g_timeval_usec = (*env)->GetFieldID(env, g_timeval_class, "tv_usec", "J");
+}
+
+__declspec(dllexport) jobject Java_libcore_io_Linux_getsockoptTimeval(
+    JNIEnv* env, jobject thiz, jobject fdObj, jint level, jint option) {
+  (void)thiz;
+  ensure_wsa(); ensure_timeval(env);
+  SOCKET s = socket_from_fd(fd_to_int(env, fdObj));
+  if (s == INVALID_SOCKET) { throw_errno(env, "getsockopt", A_EBADF); return NULL; }
+  int wlevel = (level == A_SOL_SOCKET) ? SOL_SOCKET : level;
+  int wopt = option;
+  /* Common Android SO_RCVTIMEO/SO_SNDTIMEO map - values often 20/21 on bionic */
+  if (level == A_SOL_SOCKET) {
+    if (option == 20) wopt = SO_RCVTIMEO;
+    else if (option == 21) wopt = SO_SNDTIMEO;
+  }
+  struct timeval tv; memset(&tv, 0, sizeof(tv));
+  int len = sizeof(tv);
+  if (getsockopt(s, wlevel, wopt, (char*)&tv, &len) != 0) {
+    /* Windows uses DWORD ms for some timeout opts */
+    DWORD ms = 0; int mlen = sizeof(ms);
+    if (getsockopt(s, wlevel, wopt, (char*)&ms, &mlen) == 0) {
+      jlong millis = (jlong)ms;
+      return (*env)->CallStaticObjectMethod(env, g_timeval_class, g_timeval_fromMillis, millis);
+    }
+    int werr = WSAGetLastError();
+    if (werr == WSAENOPROTOOPT) {
+      return (*env)->CallStaticObjectMethod(env, g_timeval_class, g_timeval_fromMillis, (jlong)0);
+    }
+    throw_errno(env, "getsockopt", map_wsa_to_android(werr));
+    return NULL;
+  }
+  jlong millis = (jlong)tv.tv_sec * 1000 + (jlong)tv.tv_usec / 1000;
+  return (*env)->CallStaticObjectMethod(env, g_timeval_class, g_timeval_fromMillis, millis);
+}
+__declspec(dllexport) jobject Java_libcore_io_Linux_getsockoptTimeval__Ljava_io_FileDescriptor_2II(
+    JNIEnv* env, jobject thiz, jobject fd, jint level, jint option) {
+  return Java_libcore_io_Linux_getsockoptTimeval(env, thiz, fd, level, option);
+}
+
+__declspec(dllexport) void Java_libcore_io_Linux_setsockoptTimeval(
+    JNIEnv* env, jobject thiz, jobject fdObj, jint level, jint option, jobject value) {
+  (void)thiz;
+  ensure_wsa(); ensure_timeval(env);
+  if (!value) return;
+  SOCKET s = socket_from_fd(fd_to_int(env, fdObj));
+  if (s == INVALID_SOCKET) { throw_errno(env, "setsockopt", A_EBADF); return; }
+  jlong sec = (*env)->GetLongField(env, value, g_timeval_sec);
+  jlong usec = (*env)->GetLongField(env, value, g_timeval_usec);
+  DWORD ms = (DWORD)(sec * 1000 + usec / 1000);
+  int wlevel = (level == A_SOL_SOCKET) ? SOL_SOCKET : level;
+  int wopt = option;
+  if (level == A_SOL_SOCKET) {
+    if (option == 20) wopt = SO_RCVTIMEO;
+    else if (option == 21) wopt = SO_SNDTIMEO;
+  }
+  if (setsockopt(s, wlevel, wopt, (const char*)&ms, sizeof(ms)) != 0) {
+    int werr = WSAGetLastError();
+    if (werr != WSAENOPROTOOPT) throw_errno(env, "setsockopt", map_wsa_to_android(werr));
+  }
+}
+__declspec(dllexport) void Java_libcore_io_Linux_setsockoptTimeval__Ljava_io_FileDescriptor_2IILandroid_system_StructTimeval_2(
+    JNIEnv* env, jobject thiz, jobject fd, jint level, jint option, jobject value) {
+  Java_libcore_io_Linux_setsockoptTimeval(env, thiz, fd, level, option, value);
+}
+
+__declspec(dllexport) jint Java_libcore_io_Linux_getsockoptByte(
+    JNIEnv* env, jobject thiz, jobject fdObj, jint level, jint option) {
+  /* Treat as int option lower 8 bits */
+  return Java_libcore_io_Linux_getsockoptInt(env, thiz, fdObj, level, option) & 0xff;
+}
+__declspec(dllexport) jint Java_libcore_io_Linux_getsockoptByte__Ljava_io_FileDescriptor_2II(
+    JNIEnv* env, jobject thiz, jobject fd, jint level, jint option) {
+  return Java_libcore_io_Linux_getsockoptByte(env, thiz, fd, level, option);
+}
+
+__declspec(dllexport) void Java_libcore_io_Linux_setsockoptByte(
+    JNIEnv* env, jobject thiz, jobject fdObj, jint level, jint option, jint value) {
+  Java_libcore_io_Linux_setsockoptInt(env, thiz, fdObj, level, option, value & 0xff);
+}
+__declspec(dllexport) void Java_libcore_io_Linux_setsockoptByte__Ljava_io_FileDescriptor_2III(
+    JNIEnv* env, jobject thiz, jobject fd, jint level, jint option, jint value) {
+  Java_libcore_io_Linux_setsockoptByte(env, thiz, fd, level, option, value);
+}
+
+__declspec(dllexport) jobject Java_libcore_io_Linux_inet_1pton(JNIEnv* env, jobject thiz, jint family, jstring jaddress) {
+  (void)thiz;
+  ensure_wsa();
+  if (!jaddress) return NULL;
+  const char* s = (*env)->GetStringUTFChars(env, jaddress, 0);
+  int af = (family == A_AF_INET6 || family == 10) ? AF_INET6 : AF_INET;
+  unsigned char buf[16];
+  int ok = inet_pton(af, s, buf);
+  (*env)->ReleaseStringUTFChars(env, jaddress, s);
+  if (ok != 1) return NULL;
+  jclass ia;
+  jmethodID getByAddr = NULL;
+  if (af == AF_INET) {
+    jbyteArray arr = (*env)->NewByteArray(env, 4);
+    (*env)->SetByteArrayRegion(env, arr, 0, 4, (jbyte*)buf);
+    ia = (*env)->FindClass(env, "java/net/InetAddress");
+    getByAddr = (*env)->GetStaticMethodID(env, ia, "getByAddress", "([B)Ljava/net/InetAddress;");
+    return (*env)->CallStaticObjectMethod(env, ia, getByAddr, arr);
+  } else {
+    jbyteArray arr = (*env)->NewByteArray(env, 16);
+    (*env)->SetByteArrayRegion(env, arr, 0, 16, (jbyte*)buf);
+    ia = (*env)->FindClass(env, "java/net/InetAddress");
+    getByAddr = (*env)->GetStaticMethodID(env, ia, "getByAddress", "([B)Ljava/net/InetAddress;");
+    return (*env)->CallStaticObjectMethod(env, ia, getByAddr, arr);
+  }
+}
+__declspec(dllexport) jobject Java_libcore_io_Linux_inet_pton(JNIEnv* env, jobject thiz, jint family, jstring jaddress) {
+  return Java_libcore_io_Linux_inet_1pton(env, thiz, family, jaddress);
+}
+__declspec(dllexport) jobject Java_libcore_io_Linux_inet_pton__ILjava_lang_String_2(JNIEnv* env, jobject thiz, jint family, jstring jaddress) {
+  return Java_libcore_io_Linux_inet_1pton(env, thiz, family, jaddress);
+}
+
+__declspec(dllexport) jint Java_libcore_io_Linux_if_1nametoindex(JNIEnv* env, jobject thiz, jstring jname) {
+  (void)thiz;
+  ensure_wsa();
+  if (!jname) return 0;
+  const char* name = (*env)->GetStringUTFChars(env, jname, 0);
+  /* Best-effort: enumerate adapters not available without iphlpapi; return 1 for "lo"/"Loopback" */
+  int idx = 0;
+  if (_stricmp(name, "lo") == 0 || _stricmp(name, "loopback") == 0) idx = 1;
+  (*env)->ReleaseStringUTFChars(env, jname, name);
+  return idx;
+}
+__declspec(dllexport) jint Java_libcore_io_Linux_if_nametoindex(JNIEnv* env, jobject thiz, jstring jname) {
+  return Java_libcore_io_Linux_if_1nametoindex(env, thiz, jname);
+}
+__declspec(dllexport) jint Java_libcore_io_Linux_if_nametoindex__Ljava_lang_String_2(JNIEnv* env, jobject thiz, jstring jname) {
+  return Java_libcore_io_Linux_if_1nametoindex(env, thiz, jname);
+}
+
+__declspec(dllexport) jstring Java_libcore_io_Linux_if_1indextoname(JNIEnv* env, jobject thiz, jint index) {
+  (void)thiz;
+  if (index == 1) return (*env)->NewStringUTF(env, "lo");
+  char buf[32];
+  snprintf(buf, sizeof(buf), "if%d", (int)index);
+  return (*env)->NewStringUTF(env, buf);
+}
+__declspec(dllexport) jstring Java_libcore_io_Linux_if_indextoname(JNIEnv* env, jobject thiz, jint index) {
+  return Java_libcore_io_Linux_if_1indextoname(env, thiz, index);
+}
+__declspec(dllexport) jstring Java_libcore_io_Linux_if_indextoname__I(JNIEnv* env, jobject thiz, jint index) {
+  return Java_libcore_io_Linux_if_1indextoname(env, thiz, index);
+}
+
+__declspec(dllexport) jstring Java_libcore_io_Linux_getnameinfo(
+    JNIEnv* env, jobject thiz, jobject inetAddress, jint flags) {
+  (void)thiz; (void)flags;
+  ensure_wsa();
+  if (!inetAddress) return NULL;
+  jclass c = (*env)->GetObjectClass(env, inetAddress);
+  jmethodID mid = (*env)->GetMethodID(env, c, "getHostAddress", "()Ljava/lang/String;");
+  if (!mid) return NULL;
+  return (*env)->CallObjectMethod(env, inetAddress, mid);
+}
+__declspec(dllexport) jstring Java_libcore_io_Linux_getnameinfo__Ljava_net_InetAddress_2I(
+    JNIEnv* env, jobject thiz, jobject inetAddress, jint flags) {
+  return Java_libcore_io_Linux_getnameinfo(env, thiz, inetAddress, flags);
+}
+
+/* sendtoBytes / recvfromBytes for classic datagram paths */
+__declspec(dllexport) jint Java_libcore_io_Linux_sendtoBytes(
+    JNIEnv* env, jobject thiz, jobject fdObj, jobject buffer, jint byteOffset, jint byteCount,
+    jint flags, jobject inetAddress, jint port) {
+  (void)thiz; (void)flags;
+  ensure_wsa();
+  SOCKET s = socket_from_fd(fd_to_int(env, fdObj));
+  if (s == INVALID_SOCKET) { throw_errno(env, "sendto", A_EBADF); return -1; }
+  jbyteArray arr = NULL;
+  jbyte* p = NULL;
+  if (buffer && (*env)->IsInstanceOf(env, buffer, (*env)->FindClass(env, "[B"))) {
+    arr = (jbyteArray)buffer;
+    p = (*env)->GetByteArrayElements(env, arr, NULL);
+    if (!p) return -1;
+    p += byteOffset;
+  } else {
+    void* d = (*env)->GetDirectBufferAddress(env, buffer);
+    if (!d) { throw_errno(env, "sendto", A_EINVAL); return -1; }
+    p = (jbyte*)d + byteOffset;
+  }
+  struct sockaddr_storage ss; int slen = 0;
+  if (inetAddress) {
+    if (java_addr_to_sockaddr_for_socket(env, s, inetAddress, port, &ss, &slen) != 0) {
+      if (arr) (*env)->ReleaseByteArrayElements(env, arr, p - byteOffset, JNI_ABORT);
+      throw_errno(env, "sendto", A_EINVAL); return -1;
+    }
+  }
+  int n = sendto(s, (const char*)p, byteCount, 0,
+                 inetAddress ? (struct sockaddr*)&ss : NULL,
+                 inetAddress ? slen : 0);
+  if (arr) (*env)->ReleaseByteArrayElements(env, arr, p - byteOffset, JNI_ABORT);
+  if (n == SOCKET_ERROR) { throw_errno(env, "sendto", map_wsa_to_android(WSAGetLastError())); return -1; }
+  return n;
+}
+__declspec(dllexport) jint Java_libcore_io_Linux_sendtoBytes__Ljava_io_FileDescriptor_2Ljava_lang_Object_2IIILjava_net_InetAddress_2I(
+    JNIEnv* env, jobject thiz, jobject fd, jobject buf, jint off, jint cnt, jint flags, jobject addr, jint port) {
+  return Java_libcore_io_Linux_sendtoBytes(env, thiz, fd, buf, off, cnt, flags, addr, port);
+}
+
+__declspec(dllexport) jint Java_libcore_io_Linux_recvfromBytes(
+    JNIEnv* env, jobject thiz, jobject fdObj, jobject buffer, jint byteOffset, jint byteCount,
+    jint flags, jobject srcAddress) {
+  (void)thiz; (void)flags; (void)srcAddress;
+  ensure_wsa();
+  SOCKET s = socket_from_fd(fd_to_int(env, fdObj));
+  if (s == INVALID_SOCKET) { throw_errno(env, "recvfrom", A_EBADF); return -1; }
+  jbyteArray arr = NULL;
+  jbyte* p = NULL;
+  if (buffer && (*env)->IsInstanceOf(env, buffer, (*env)->FindClass(env, "[B"))) {
+    arr = (jbyteArray)buffer;
+    p = (*env)->GetByteArrayElements(env, arr, NULL);
+    if (!p) return -1;
+    p += byteOffset;
+  } else {
+    void* d = (*env)->GetDirectBufferAddress(env, buffer);
+    if (!d) { throw_errno(env, "recvfrom", A_EINVAL); return -1; }
+    p = (jbyte*)d + byteOffset;
+  }
+  struct sockaddr_storage ss; int slen = sizeof(ss);
+  int n = recvfrom(s, (char*)p, byteCount, 0, (struct sockaddr*)&ss, &slen);
+  if (arr) (*env)->ReleaseByteArrayElements(env, arr, p - byteOffset, 0);
+  if (n == SOCKET_ERROR) {
+    int w = WSAGetLastError();
+    if (w == WSAEWOULDBLOCK) return 0;
+    throw_errno(env, "recvfrom", map_wsa_to_android(w));
+    return -1;
+  }
+  return n;
+}
+__declspec(dllexport) jint Java_libcore_io_Linux_recvfromBytes__Ljava_io_FileDescriptor_2Ljava_lang_Object_2IIILjava_net_InetSocketAddress_2(
+    JNIEnv* env, jobject thiz, jobject fd, jobject buf, jint off, jint cnt, jint flags, jobject src) {
+  return Java_libcore_io_Linux_recvfromBytes(env, thiz, fd, buf, off, cnt, flags, src);
+}
+
+/* sendmsg/recvmsg: simplified — only first iov ByteBuffer/array, ignore control */
+__declspec(dllexport) jint Java_libcore_io_Linux_sendmsg(JNIEnv* env, jobject thiz, jobject fdObj, jobject msg, jint flags) {
+  (void)thiz; (void)flags;
+  if (!msg) { throw_errno(env, "sendmsg", A_EINVAL); return -1; }
+  jclass mc = (*env)->GetObjectClass(env, msg);
+  jfieldID iovFid = (*env)->GetFieldID(env, mc, "msg_iov", "[Ljava/nio/ByteBuffer;");
+  jobjectArray iov = (jobjectArray)(*env)->GetObjectField(env, msg, iovFid);
+  if (!iov || (*env)->GetArrayLength(env, iov) < 1) return 0;
+  jobject bb = (*env)->GetObjectArrayElement(env, iov, 0);
+  jclass bbc = (*env)->FindClass(env, "java/nio/ByteBuffer");
+  jmethodID pos = (*env)->GetMethodID(env, bbc, "position", "()I");
+  jmethodID rem = (*env)->GetMethodID(env, bbc, "remaining", "()I");
+  jmethodID isDirect = (*env)->GetMethodID(env, bbc, "isDirect", "()Z");
+  jint p = (*env)->CallIntMethod(env, bb, pos);
+  jint r = (*env)->CallIntMethod(env, bb, rem);
+  if ((*env)->CallBooleanMethod(env, bb, isDirect)) {
+    return Java_libcore_io_Linux_sendtoBytes(env, thiz, fdObj, bb, p, r, 0, NULL, 0);
+  }
+  /* heap buffer: use array */
+  jmethodID array = (*env)->GetMethodID(env, bbc, "array", "()[B");
+  jmethodID aoff = (*env)->GetMethodID(env, bbc, "arrayOffset", "()I");
+  jbyteArray ba = (jbyteArray)(*env)->CallObjectMethod(env, bb, array);
+  jint ao = (*env)->CallIntMethod(env, bb, aoff);
+  return Java_libcore_io_Linux_sendtoBytes(env, thiz, fdObj, ba, ao + p, r, 0, NULL, 0);
+}
+__declspec(dllexport) jint Java_libcore_io_Linux_sendmsg__Ljava_io_FileDescriptor_2Landroid_system_StructMsghdr_2I(
+    JNIEnv* env, jobject thiz, jobject fd, jobject msg, jint flags) {
+  return Java_libcore_io_Linux_sendmsg(env, thiz, fd, msg, flags);
+}
+
+__declspec(dllexport) jint Java_libcore_io_Linux_recvmsg(JNIEnv* env, jobject thiz, jobject fdObj, jobject msg, jint flags) {
+  (void)thiz; (void)flags;
+  if (!msg) { throw_errno(env, "recvmsg", A_EINVAL); return -1; }
+  jclass mc = (*env)->GetObjectClass(env, msg);
+  jfieldID iovFid = (*env)->GetFieldID(env, mc, "msg_iov", "[Ljava/nio/ByteBuffer;");
+  jobjectArray iov = (jobjectArray)(*env)->GetObjectField(env, msg, iovFid);
+  if (!iov || (*env)->GetArrayLength(env, iov) < 1) return 0;
+  jobject bb = (*env)->GetObjectArrayElement(env, iov, 0);
+  jclass bbc = (*env)->FindClass(env, "java/nio/ByteBuffer");
+  jmethodID pos = (*env)->GetMethodID(env, bbc, "position", "()I");
+  jmethodID rem = (*env)->GetMethodID(env, bbc, "remaining", "()I");
+  jmethodID isDirect = (*env)->GetMethodID(env, bbc, "isDirect", "()Z");
+  jint p = (*env)->CallIntMethod(env, bb, pos);
+  jint r = (*env)->CallIntMethod(env, bb, rem);
+  if ((*env)->CallBooleanMethod(env, bb, isDirect)) {
+    return Java_libcore_io_Linux_recvfromBytes(env, thiz, fdObj, bb, p, r, 0, NULL);
+  }
+  jmethodID array = (*env)->GetMethodID(env, bbc, "array", "()[B");
+  jmethodID aoff = (*env)->GetMethodID(env, bbc, "arrayOffset", "()I");
+  jbyteArray ba = (jbyteArray)(*env)->CallObjectMethod(env, bb, array);
+  jint ao = (*env)->CallIntMethod(env, bb, aoff);
+  return Java_libcore_io_Linux_recvfromBytes(env, thiz, fdObj, ba, ao + p, r, 0, NULL);
+}
+__declspec(dllexport) jint Java_libcore_io_Linux_recvmsg__Ljava_io_FileDescriptor_2Landroid_system_StructMsghdr_2I(
+    JNIEnv* env, jobject thiz, jobject fd, jobject msg, jint flags) {
+  return Java_libcore_io_Linux_recvmsg(env, thiz, fd, msg, flags);
+}
