@@ -182,3 +182,18 @@ Configure flag: `-DMDVM_WIN64_BUILD_CRYPTO=ON` (default ON in harness).
 - `ssl.dll` / full TLS stack
 - conscrypt `libjavacrypto` PE + Java provider wiring
 - HTTPS golden app
+
+
+## Single product DLL names (L-004 CLOSED)
+
+Hybrid targets emit ART/product sonames directly:
+
+| Target | OUTPUT_NAME |
+|--------|-------------|
+| `icu_jni` | `libicu_jni` |
+| `javacore` | `libjavacore` |
+| `openjdk` | `libopenjdk` |
+| `openjdkjvm` | `libopenjdkjvm` |
+| `crypto` | `libcrypto` |
+
+`stage_native_modules.sh` stages only these (plus `icuuc`/`icui18n`) and removes short-name twins (`icu_jni.dll`, `javacore.dll`, …).

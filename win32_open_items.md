@@ -271,10 +271,10 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Opened:** 2026-07-17
 
 ### L-004 — Shrink or replace multi-name DLL staging
-- **State:** OPEN (reduced)
+- **State:** CLOSED (2026-07-17) — product ships one PE soname each: `libicu_jni`/`libjavacore`/`libopenjdk`/`libopenjdkjvm`/`libcrypto` (+ `icuuc`/`icui18n`); short-name twins removed from packaging
 - **Kind:** leftover / packaging debt
 - **Depends on:** L-001, W-005
-- **Note:** W-005 closed — no more one-stub-six-names. Remaining dual names are intentional ART sonames (`libicu_jni`/`libjavacore`/`libopenjdk`) plus short build names; optional cleanup only.
+- **Fix:** CMake `OUTPUT_NAME` for hybrid targets; `stage_native_modules.sh` stages only product names and deletes short twins; install rejects short-name reappearance
 - **Opened:** 2026-07-17
 
 ### L-005 — Linux multiplatform imageless Hello / boot.jar CI gate
@@ -359,4 +359,4 @@ _(None yet in this tracker. When closing a W-/L-/H- item, move a one-line summar
 - [ ] Permanent design choice (e.g. VEH forever) → move from W- to documented architecture; close workaround  
 - [ ] CLOSED items: one line in §Closed, leave detail above with State CLOSED  
 
-*Last snapshot: 2026-07-17 — L-002 partial (crypto.dll PE + CryptoSmoke); W-005/W-006/W-016 CLOSED; NetProbe OK.*
+*Last snapshot: 2026-07-17 — L-004 CLOSED (single product DLL sonames); L-002 partial crypto; W-005/W-006/W-016 CLOSED.*

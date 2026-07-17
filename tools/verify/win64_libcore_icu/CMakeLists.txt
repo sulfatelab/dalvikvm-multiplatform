@@ -108,6 +108,8 @@ target_link_libraries(icui18n PUBLIC icuuc)
 
 # --- icu_jni (real NativeConverter etc.) ---
 add_library(icu_jni SHARED ${ICU_JNI_SRCS})
+set_target_properties(icu_jni PROPERTIES OUTPUT_NAME "libicu_jni")
+
 target_include_directories(icu_jni PUBLIC
   ${_WIN_INCLUDES}
   ${_ICU_COMMON_INCLUDES}
@@ -159,6 +161,8 @@ void register_libcore_io_Memory(JNIEnv*) {}
 ")
 
   add_library(javacore SHARED ${_JC_SRCS} ${_JC_WIN_BRIDGE} ${_JC_WIN_STUB_REG})
+  set_target_properties(javacore PROPERTIES OUTPUT_NAME "libjavacore")
+
   target_include_directories(javacore
     PUBLIC ${_WIN_INCLUDES}
     PUBLIC ${_ICU_COMMON_INCLUDES}
@@ -201,6 +205,7 @@ if(MDVM_WIN64_BUILD_OPENJDK)
   add_library(openjdkjvm SHARED
     "${CMAKE_CURRENT_SOURCE_DIR}/openjdkjvm_memory_standalone.c"
   )
+  set_target_properties(openjdkjvm PROPERTIES OUTPUT_NAME "libopenjdkjvm")
   target_include_directories(openjdkjvm PUBLIC
     "${MDVM_ART_ROOT_DIR}/libnativehelper/include_jni"
     "${MDVM_COMPAT_INCLUDE_DIR}"
@@ -260,6 +265,8 @@ extern "C" void register_java_io_UnixFileSystem(JNIEnv*) {}
 ]=])
 
   add_library(openjdk SHARED ${_OJ_SRCS} ${_OJ_WIN} ${_OJ_STUB_REG})
+  set_target_properties(openjdk PROPERTIES OUTPUT_NAME "libopenjdk")
+
   # C sources that use Android Linux code paths; do NOT define __linux__ on C++ (breaks libc++).
   set(_OJ_LINUXISH_C
     "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/FileDispatcherImpl.c"
@@ -325,7 +332,7 @@ if(MDVM_WIN64_BUILD_CRYPTO)
 
   add_library(crypto SHARED ${_CRYPTO_SRCS})
   set_target_properties(crypto PROPERTIES
-    OUTPUT_NAME "crypto"
+    OUTPUT_NAME "libcrypto"
     WINDOWS_EXPORT_ALL_SYMBOLS ON
   )
   target_include_directories(crypto PUBLIC

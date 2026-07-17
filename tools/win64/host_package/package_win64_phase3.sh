@@ -171,7 +171,7 @@ Logs land in `logs\*.log` and summary in `logs\RESULT_HOST.txt`.
 
 ## Environment
 
-Product ships real PE natives (`stage_native_modules.sh`: libicu_jni/libjavacore/libopenjdk + icuuc/i18n/openjdkjvm; optional `crypto`/`libcrypto` when built; **no libcombined**), plus `run/boot.jar` and `run/icu/icudt72l.dat` (`stage_run_assets.sh`). Scripts set `ANDROID_ROOT`, `ANDROID_ART_ROOT`, `ANDROID_I18N_ROOT`, `ANDROID_DATA`, `ICU_DATA=run\\icu`.
+Product ships real PE natives with **one soname each** (`stage_native_modules.sh`: `libicu_jni`/`libjavacore`/`libopenjdk` + `icuuc`/`icui18n`/`libopenjdkjvm`; optional `libcrypto`; **no libcombined**, **no short-name twins**). Also `run/boot.jar` + `run/icu/icudt72l.dat`. Scripts set `ANDROID_ROOT`, `ANDROID_ART_ROOT`, `ANDROID_I18N_ROOT`, `ANDROID_DATA`, `ICU_DATA=run\\icu`.
 
 ## Expected PASS markers
 
