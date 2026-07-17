@@ -579,3 +579,187 @@ __declspec(dllexport) void Java_libcore_io_Linux_fdatasync(JNIEnv* env, jobject 
 __declspec(dllexport) void Java_libcore_io_Linux_fdatasync__Ljava_io_FileDescriptor_2(JNIEnv* env, jobject thiz, jobject fdObj) {
   Java_libcore_io_Linux_fsync(env, thiz, fdObj);
 }
+
+
+/* ===== mmap / msync / munmap / madvise / ftruncate / isatty / strerror ===== */
+#include <sys/mman.h>
+
+__declspec(dllexport) jlong Java_libcore_io_Linux_mmap(
+    JNIEnv* env, jobject thiz, jlong address, jlong byteCount, jint prot, jint flags,
+    jobject fdObj, jlong offset) {
+  (void)thiz;
+  if (byteCount <= 0) { errno = EINVAL; throw_errno(env, "mmap", errno); return -1; }
+  int fd = -1;
+  if (fdObj) {
+    ensure_fd(env);
+    fd = (*env)->GetIntField(env, fdObj, g_fd_descriptor);
+  }
+  void* hint = (void*)(uintptr_t)address;
+  void* p = mmap(hint, (size_t)byteCount, prot, flags, fd, offset);
+  if (p == MAP_FAILED) {
+    throw_errno(env, "mmap", map_errno(errno));
+    return -1;
+  }
+  return (jlong)(uintptr_t)p;
+}
+__declspec(dllexport) jlong Java_libcore_io_Linux_mmap__JJIILjava_io_FileDescriptor_2J(
+    JNIEnv* env, jobject thiz, jlong address, jlong byteCount, jint prot, jint flags,
+    jobject fdObj, jlong offset) {
+  return Java_libcore_io_Linux_mmap(env, thiz, address, byteCount, prot, flags, fdObj, offset);
+}
+
+__declspec(dllexport) void Java_libcore_io_Linux_munmap(JNIEnv* env, jobject thiz, jlong address, jlong byteCount) {
+  (void)thiz;
+  if (munmap((void*)(uintptr_t)address, (size_t)byteCount) != 0)
+    throw_errno(env, "munmap", map_errno(errno));
+}
+__declspec(dllexport) void Java_libcore_io_Linux_munmap__JJ(JNIEnv* env, jobject thiz, jlong a, jlong b) {
+  Java_libcore_io_Linux_munmap(env, thiz, a, b);
+}
+
+__declspec(dllexport) void Java_libcore_io_Linux_msync(JNIEnv* env, jobject thiz, jlong address, jlong byteCount, jint flags) {
+  (void)thiz;
+  if (msync((void*)(uintptr_t)address, (size_t)byteCount, flags) != 0)
+    throw_errno(env, "msync", map_errno(errno));
+}
+__declspec(dllexport) void Java_libcore_io_Linux_msync__JJI(JNIEnv* env, jobject thiz, jlong a, jlong b, jint f) {
+  Java_libcore_io_Linux_msync(env, thiz, a, b, f);
+}
+
+__declspec(dllexport) void Java_libcore_io_Linux_madvise(JNIEnv* env, jobject thiz, jlong address, jlong byteCount, jint advice) {
+  (void)thiz;
+  if (madvise((void*)(uintptr_t)address, (size_t)byteCount, advice) != 0)
+    throw_errno(env, "madvise", map_errno(errno));
+}
+__declspec(dllexport) void Java_libcore_io_Linux_madvise__JJI(JNIEnv* env, jobject thiz, jlong a, jlong b, jint adv) {
+  Java_libcore_io_Linux_madvise(env, thiz, a, b, adv);
+}
+
+__declspec(dllexport) void Java_libcore_io_Linux_mlock(JNIEnv* env, jobject thiz, jlong address, jlong byteCount) {
+  (void)env; (void)thiz; (void)address; (void)byteCount;
+  /* VirtualLock optional; no-op success for PE bootstrap */
+}
+__declspec(dllexport) void Java_libcore_io_Linux_mlock__JJ(JNIEnv* env, jobject thiz, jlong a, jlong b) {
+  Java_libcore_io_Linux_mlock(env, thiz, a, b);
+}
+__declspec(dllexport) void Java_libcore_io_Linux_munlock(JNIEnv* env, jobject thiz, jlong address, jlong byteCount) {
+  (void)env; (void)thiz; (void)address; (void)byteCount;
+}
+__declspec(dllexport) void Java_libcore_io_Linux_munlock__JJ(JNIEnv* env, jobject thiz, jlong a, jlong b) {
+  Java_libcore_io_Linux_munlock(env, thiz, a, b);
+}
+
+__declspec(dllexport) void Java_libcore_io_Linux_mincore(JNIEnv* env, jobject thiz, jlong address, jlong byteCount, jbyteArray vector) {
+  (void)thiz;
+  if (!vector) { errno = EINVAL; throw_errno(env, "mincore", errno); return; }
+  jsize n = (*env)->GetArrayLength(env, vector);
+  jbyte* vec = (*env)->GetByteArrayElements(env, vector, 0);
+  if (!vec) return;
+  int rc = mincore((void*)(uintptr_t)address, (size_t)byteCount, (unsigned char*)vec);
+  (*env)->ReleaseByteArrayElements(env, vector, vec, 0);
+  if (rc != 0) throw_errno(env, "mincore", map_errno(errno));
+}
+__declspec(dllexport) void Java_libcore_io_Linux_mincore__JJ_3B(JNIEnv* env, jobject thiz, jlong a, jlong b, jbyteArray v) {
+  Java_libcore_io_Linux_mincore(env, thiz, a, b, v);
+}
+
+__declspec(dllexport) void Java_libcore_io_Linux_ftruncate(JNIEnv* env, jobject thiz, jobject fdObj, jlong length) {
+  (void)thiz;
+  ensure_fd(env);
+  int fd = (*env)->GetIntField(env, fdObj, g_fd_descriptor);
+  if (_chsize_s(fd, length) != 0) throw_errno(env, "ftruncate", map_errno(errno));
+}
+__declspec(dllexport) void Java_libcore_io_Linux_ftruncate__Ljava_io_FileDescriptor_2J(
+    JNIEnv* env, jobject thiz, jobject fdObj, jlong length) {
+  Java_libcore_io_Linux_ftruncate(env, thiz, fdObj, length);
+}
+
+__declspec(dllexport) jboolean Java_libcore_io_Linux_isatty(JNIEnv* env, jobject thiz, jobject fdObj) {
+  (void)thiz;
+  ensure_fd(env);
+  int fd = (*env)->GetIntField(env, fdObj, g_fd_descriptor);
+  return (jboolean)(_isatty(fd) ? JNI_TRUE : JNI_FALSE);
+}
+__declspec(dllexport) jboolean Java_libcore_io_Linux_isatty__Ljava_io_FileDescriptor_2(
+    JNIEnv* env, jobject thiz, jobject fdObj) {
+  return Java_libcore_io_Linux_isatty(env, thiz, fdObj);
+}
+
+__declspec(dllexport) jstring Java_libcore_io_Linux_strerror(JNIEnv* env, jobject thiz, jint errnum) {
+  (void)thiz;
+  char buf[256];
+  if (strerror_s(buf, sizeof(buf), errnum) != 0) snprintf(buf, sizeof(buf), "errno %d", errnum);
+  return (*env)->NewStringUTF(env, buf);
+}
+__declspec(dllexport) jstring Java_libcore_io_Linux_strerror__I(JNIEnv* env, jobject thiz, jint errnum) {
+  return Java_libcore_io_Linux_strerror(env, thiz, errnum);
+}
+
+__declspec(dllexport) jstring Java_libcore_io_Linux_gai_strerror(JNIEnv* env, jobject thiz, jint error) {
+  (void)thiz;
+  char sys[128];
+  DWORD n = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                           NULL, (DWORD)error, 0, sys, (DWORD)sizeof(sys), NULL);
+  if (n > 0) {
+    while (n > 0) {
+      char c = sys[n - 1];
+      if (c != 13 && c != 10 && c != 32) break;
+      sys[--n] = 0;
+    }
+    return (*env)->NewStringUTF(env, sys);
+  }
+  char buf[64];
+  snprintf(buf, sizeof(buf), "gai error %d", (int)error);
+  return (*env)->NewStringUTF(env, buf);
+}
+__declspec(dllexport) jstring Java_libcore_io_Linux_gai_strerror__I(JNIEnv* env, jobject thiz, jint error) {
+  return Java_libcore_io_Linux_gai_strerror(env, thiz, error);
+}
+
+__declspec(dllexport) jobjectArray Java_libcore_io_Linux_environ(JNIEnv* env, jobject thiz) {
+  (void)thiz;
+  extern char** _environ;
+  int n = 0;
+  if (_environ) while (_environ[n]) n++;
+  jclass sc = (*env)->FindClass(env, "java/lang/String");
+  jobjectArray arr = (*env)->NewObjectArray(env, n, sc, NULL);
+  for (int i = 0; i < n; i++) {
+    jstring s = (*env)->NewStringUTF(env, _environ[i]);
+    (*env)->SetObjectArrayElement(env, arr, i, s);
+  }
+  return arr;
+}
+__declspec(dllexport) jobjectArray Java_libcore_io_Linux_environ__(JNIEnv* env, jobject thiz) {
+  return Java_libcore_io_Linux_environ(env, thiz);
+}
+
+__declspec(dllexport) jstring Java_libcore_io_Linux_readlink(JNIEnv* env, jobject thiz, jstring jpath) {
+  (void)thiz;
+  /* Windows: no symlink readlink by default; return path as-is if exists */
+  if (!jpath) { errno = EINVAL; throw_errno(env, "readlink", errno); return NULL; }
+  const char* path = (*env)->GetStringUTFChars(env, jpath, 0);
+  char buf[MAX_PATH];
+  DWORD n = GetFullPathNameA(path, MAX_PATH, buf, NULL);
+  (*env)->ReleaseStringUTFChars(env, jpath, path);
+  if (n == 0 || n >= MAX_PATH) { errno = ENOENT; throw_errno(env, "readlink", errno); return NULL; }
+  return (*env)->NewStringUTF(env, buf);
+}
+__declspec(dllexport) jstring Java_libcore_io_Linux_readlink__Ljava_lang_String_2(JNIEnv* env, jobject thiz, jstring jpath) {
+  return Java_libcore_io_Linux_readlink(env, thiz, jpath);
+}
+
+__declspec(dllexport) void Java_libcore_io_Linux_posix_fallocate(JNIEnv* env, jobject thiz, jobject fdObj, jlong offset, jlong length) {
+  (void)thiz;
+  ensure_fd(env);
+  int fd = (*env)->GetIntField(env, fdObj, g_fd_descriptor);
+  /* Extend file if needed */
+  __int64 end = offset + length;
+  __int64 cur = _lseeki64(fd, 0, SEEK_END);
+  if (cur >= 0 && end > cur) {
+    if (_chsize_s(fd, end) != 0) throw_errno(env, "posix_fallocate", map_errno(errno));
+  }
+}
+__declspec(dllexport) void Java_libcore_io_Linux_posix_fallocate__Ljava_io_FileDescriptor_2JJ(
+    JNIEnv* env, jobject thiz, jobject fdObj, jlong offset, jlong length) {
+  Java_libcore_io_Linux_posix_fallocate(env, thiz, fdObj, offset, length);
+}

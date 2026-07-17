@@ -21,6 +21,7 @@ Do **not** list permanent non-goals as OPEN workarounds—list them under §Non-
 | [win32_port.md](win32_port.md) | Product phases / feasibility |
 | [filesystem_win32.md](filesystem_win32.md) | Option H path model |
 | [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md) | TLS / managed ABI / quick / JIT design (draft) |
+| [win32_libcore_os_natives.md](win32_libcore_os_natives.md) | Os/`Linux` natives: Implemented / Needed / ENOSYS |
 | `tools/verify/win64_phase*/RESULT.md` | Gate evidence |
 
 ---
@@ -250,7 +251,8 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Gap:** Linux has full `.so` graph from bp2cmake; Win64 has **real ICU** + **hybrid javacore** (`tools/verify/win64_libcore_icu`). ICU + hybrid javacore + **AOSP openjdk NIO PE** landed and are **product-default** via `stage_native_modules.sh` (W-005 closed). Still missing full AOSP `libcore_io_Linux`, Memory, Expat, NativeBN, NetworkUtilities, crypto PE; NIO.2 excluded by design.
 - **Exit criteria:** PE DLLs built from AOSP sources without `libcombined` aliasing; GoldenApp + charset/locale smoke still pass.
 - **Opened:** 2026-07-17
-- **Progress:** see `tools/verify/win64_libcore_icu/RESULT.md`
+- **Progress:** see `tools/verify/win64_libcore_icu/RESULT.md`; Os map [win32_libcore_os_natives.md](win32_libcore_os_natives.md)
+- **Progress:** 2026-07-17 — AOSP `Memory` in javacore; Linux bridge +mmap/ftruncate/isatty/…; still hybrid (Needed ~16, ENOSYS ~46)
 
 ### L-002 — boringssl / conscrypt / SSL PE
 - **State:** OPEN (partial — crypto PE landed 2026-07-17)
@@ -359,4 +361,4 @@ _(None yet in this tracker. When closing a W-/L-/H- item, move a one-line summar
 - [ ] Permanent design choice (e.g. VEH forever) → move from W- to documented architecture; close workaround  
 - [ ] CLOSED items: one line in §Closed, leave detail above with State CLOSED  
 
-*Last snapshot: 2026-07-17 — L-004 CLOSED (single product DLL sonames); L-002 partial crypto; W-005/W-006/W-016 CLOSED.*
+*Last snapshot: 2026-07-17 — Memory+Linux Os map; L-001 hybrid deeper; L-004 closed; L-002 partial crypto.*

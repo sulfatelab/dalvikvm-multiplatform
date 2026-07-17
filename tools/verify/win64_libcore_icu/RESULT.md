@@ -197,3 +197,17 @@ Hybrid targets emit ART/product sonames directly:
 | `crypto` | `libcrypto` |
 
 `stage_native_modules.sh` stages only these (plus `icuuc`/`icui18n`) and removes short-name twins (`icu_jni.dll`, `javacore.dll`, …).
+
+
+## Phase B3 — `libcore.io.Memory` + Linux Os expansion (2026-07-17)
+
+**Status:** **BUILT + wine smoke OK** (CoreProbe / IoProbe / NetProbe)
+
+| Piece | Change |
+|-------|--------|
+| AOSP `libcore_io_Memory.cpp` | Enabled in hybrid `libjavacore` (no longer empty register) |
+| Linux Os bridge | Added mmap/munmap/msync/madvise/mincore/mlock/munlock, ftruncate, isatty, strerror, gai_strerror, environ, readlink, posix_fallocate |
+| Link | `libjavacore` links `win64_socket_posix` (posix stubs: mmap family) |
+| Design map | [win32_libcore_os_natives.md](../../../win32_libcore_os_natives.md) — Needed vs ENOSYS inventory |
+
+Full AOSP `libcore_io_Linux.cpp` still **excluded** (Bionic header surface). Grow Win bridges per the map.

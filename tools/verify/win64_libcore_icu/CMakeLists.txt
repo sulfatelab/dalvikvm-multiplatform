@@ -125,6 +125,19 @@ target_link_libraries(icu_jni PUBLIC icuuc icui18n base log nativehelper)
 
 # Optional later phases
 
+
+# POSIX stubs for hybrid javacore (mmap/poll/etc.) even when openjdk is off
+if(NOT TARGET win64_socket_posix)
+  add_library(win64_socket_posix STATIC
+    "${_repo}/compat/src/win64_socket_posix.c"
+    "${_repo}/compat/src/win64_posix_stubs.c"
+  )
+  target_include_directories(win64_socket_posix PUBLIC "${MDVM_COMPAT_INCLUDE_DIR}")
+  target_compile_definitions(win64_socket_posix PRIVATE ${_WIN_DEFS} MDVM_SOCKET_NO_MACROS=1)
+  target_compile_options(win64_socket_posix PRIVATE ${_WIN_CFLAGS})
+  target_link_libraries(win64_socket_posix PUBLIC ws2_32)
+endif()
+
 # --- javacore (hybrid: AOSP sources + Win libcore_io stubs) ---
 if(MDVM_WIN64_BUILD_JAVACORE)
   set(_JC_SRCS ${JAVACORE_SRCS})
@@ -135,7 +148,6 @@ if(MDVM_WIN64_BUILD_JAVACORE)
   list(FILTER _JC_SRCS EXCLUDE REGEX "NativeBN[.]cpp$")
   list(FILTER _JC_SRCS EXCLUDE REGEX "cbigint[.]cpp$")
   list(FILTER _JC_SRCS EXCLUDE REGEX "android_system_OsConstantsHolder[.]cpp$")
-  list(FILTER _JC_SRCS EXCLUDE REGEX "libcore_io_Memory[.]cpp$")
   # NetworkUtilities uses Linux sockaddr helpers heavily; keep out for Phase B0
   # Async close monitor is Linux signal-based
   # Expat + NativeBN need extra PE deps; exclude Phase B0
@@ -157,7 +169,6 @@ void register_libcore_io_AsynchronousCloseMonitor(JNIEnv*) {}
 void register_libcore_math_NativeBN(JNIEnv*) {}
 void register_org_apache_harmony_xml_ExpatParser(JNIEnv*) {}
 void register_android_system_OsConstantsHolder(JNIEnv*) {}
-void register_libcore_io_Memory(JNIEnv*) {}
 ")
 
   add_library(javacore SHARED ${_JC_SRCS} ${_JC_WIN_BRIDGE} ${_JC_WIN_STUB_REG})
@@ -183,7 +194,7 @@ void register_libcore_io_Memory(JNIEnv*) {}
   target_compile_options(javacore PRIVATE ${_WIN_CFLAGS} -Wno-unused-parameter "SHELL:-D__INTRODUCED_IN(x)=")
   # Import real ICU from this build; zip/base/log/nativehelper from phase1
   target_link_libraries(javacore PUBLIC base log nativehelper ziparchive z icuuc icui18n
-    PRIVATE ws2_32 kernel32 advapi32)
+    PRIVATE ws2_32 kernel32 advapi32 win64_socket_posix)
   # Also export WinNT FileSystem natives from same DLL (from win_fs)
 endif()
 
@@ -192,15 +203,17 @@ endif()
 
 # --- openjdkjvm (JVM_* I/O + memory for Runtime / NIO) ---
 if(MDVM_WIN64_BUILD_OPENJDK)
-  # Shared POSIX socket/epoll helpers (CRT fd <-> SOCKET)
-  add_library(win64_socket_posix STATIC
-    "${_repo}/compat/src/win64_socket_posix.c"
-    "${_repo}/compat/src/win64_posix_stubs.c"
-  )
-  target_include_directories(win64_socket_posix PUBLIC "${MDVM_COMPAT_INCLUDE_DIR}")
-  target_compile_definitions(win64_socket_posix PRIVATE ${_WIN_DEFS} MDVM_SOCKET_NO_MACROS=1)
-  target_compile_options(win64_socket_posix PRIVATE ${_WIN_CFLAGS})
-  target_link_libraries(win64_socket_posix PUBLIC ws2_32)
+  # Shared POSIX socket/epoll helpers may already exist for javacore
+  if(NOT TARGET win64_socket_posix)
+    add_library(win64_socket_posix STATIC
+      "${_repo}/compat/src/win64_socket_posix.c"
+      "${_repo}/compat/src/win64_posix_stubs.c"
+    )
+    target_include_directories(win64_socket_posix PUBLIC "${MDVM_COMPAT_INCLUDE_DIR}")
+    target_compile_definitions(win64_socket_posix PRIVATE ${_WIN_DEFS} MDVM_SOCKET_NO_MACROS=1)
+    target_compile_options(win64_socket_posix PRIVATE ${_WIN_CFLAGS})
+    target_link_libraries(win64_socket_posix PUBLIC ws2_32)
+  endif()
 
   add_library(openjdkjvm SHARED
     "${CMAKE_CURRENT_SOURCE_DIR}/openjdkjvm_memory_standalone.c"
