@@ -60,7 +60,7 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 | Phases 0–3 | **Gate-complete** (P3 G12 real Win10 + wine) |
 | Phase 4 | **Wine complete**; host re-run still recommended |
 | PE libcore/ICU/openjdk | **Product-default real PE** (icu/javacore/openjdk); NIO.2 non-goal; NetProbe OK |
-| Quick/JIT/TLS | **Designed** in draft doc; **not implemented**; invoke forced to interpreter |
+| Quick/JIT/TLS | **Designed** in draft doc; **not implemented**; invoke forced to interpreter; **W-024** restore Critical/FastNative after |
 | Linux multiplatform | Native `dalvikvm -showversion` OK; imageless Hello e2e not re-gated here |
 
 ---
@@ -98,6 +98,39 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Code anchors:** `vendor/art/runtime/arch/x86_64/asm_support_x86_64.S`, `quick_entrypoints_x86_64.S` (`#if defined(__APPLE__) \|\| defined(_WIN32)`)
 - **Depends on:** W-001, W-002
 - **Opened:** 2026-07-16
+
+
+### W-024 — Restore original @CriticalNative / @FastNative surfaces after JIT/TLS/entrypoints
+- **State:** OPEN
+- **Kind:** workaround / debt (must revert multipath demotions)
+- **Area:** art / libcore / JNI ABI
+- **Symptom / why:** Official AOSP libcore marks many natives `@CriticalNative` or `@FastNative` (Math/StrictMath were **@FastNative → @CriticalNative** in AOSP; see libcore `d021f1d8475c`). Win64 multipath cannot yet honor those ABIs because:
+  1. **W-001** forces interpreter invoke (no quick/managed entrypoints / TLS).
+  2. Interpreter JNI historically lacked full CriticalNative shorty coverage (partially papered by **W-019** for Math `DD`/`DDD`/…).
+  3. Product demotions for bring-up: **Math.ceil / Math.floor** are pure Java (`ART-WinNT` comments in `Math.java`; natives unregistered in `Math.c`) even though AOSP exposes them as `@CriticalNative` natives.
+  4. Win `Math.c` uses a PE-specific registration table (`gMethodsWin` CriticalNative-shaped pointers) vs Linux `FAST_NATIVE_METHOD` macro table — temporary dual path until PE trampolines match AOSP.
+- **Current behavior:**
+  - Annotations remain on most Math/StrictMath/etc. methods, but **ceil/floor are non-native pure Java**.
+  - Win64 relies on interpreter CriticalNative shorty dispatch + correct CriticalNative binding (no `JNIEnv*`) rather than real quick CriticalNative stubs.
+  - FastNative methods stay Runnable on the interpreter bridge (W-019 supporting fix) instead of true FastNative entrypoints.
+- **Proper fix (when JIT / TLS / quick entrypoints land — W-001–W-003 + [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md)):**
+  1. Restore **every** multipath demotion of methods that were originally `@CriticalNative` / `@FastNative` in AOSP (starting with **Math.ceil / Math.floor** → native + `@CriticalNative` again).
+  2. Re-register matching natives in `Math.c` (and any other demoted tables) on **both** PE and ELF with AOSP-correct CriticalNative/FastNative ABIs.
+  3. Prefer real ART CriticalNative/FastNative trampolines over InterpreterJni shorty expansion; then **trim** PE-only shorty explosion (**W-011**) and dual `gMethodsWin` paths where redundant.
+  4. Audit libcore for other `ART-WinNT` pure-Java / ABI demotions of Critical/Fast natives (not just Math) and revert once entrypoints are product-default.
+- **Exit criteria:**
+  - No pure-Java stand-ins for AOSP `@CriticalNative`/`@FastNative` Math (ceil/floor native again).
+  - Wine + Linux smokes for Math/HashMap/conscrypt without relying on pure-Java ceil or incomplete CriticalNative shorty lists.
+  - Document that W-019 temporary ABI/shorty fixes are superseded (may remain as defensive fallback until deleted).
+- **Code anchors:**
+  - `vendor/libcore/ojluni/src/main/java/java/lang/Math.java` (`ART-WinNT` pure-Java ceil/floor)
+  - `vendor/libcore/ojluni/src/main/native/Math.c` (`gMethodsWin` / no ceil|floor register; Linux `FAST_NATIVE_METHOD`)
+  - `vendor/art/runtime/interpreter/interpreter.cc` (`InterpreterJniGeneric` CriticalNative shorties)
+  - `vendor/art/runtime/art_method.cc` (Win32 force interpreter invoke)
+  - AOSP history: `d021f1d8475c` FastNative→CriticalNative Math; multipath `f16cd44db5fe` pure-Java ceil/floor; `b9265e7b5da6` CriticalNative register fix; art `7ea144b073` / `4c17423714` interpreter Critical/FastNative bridge
+- **Blocked on:** W-001–W-003 implementation (JIT/TLS/quick entrypoints)
+- **Related:** W-019 (CLOSED temporary Math ABI fix), W-011 (InterpreterJni shorty expansion)
+- **Opened:** 2026-07-17
 
 ### W-004 — `LOAD_RUNTIME_INSTANCE` PE helper call (vs GOT)
 - **State:** OPEN (acceptable interim; still temporary vs ideal PE codegen)
@@ -394,6 +427,7 @@ If product reopens a non-goal, add an **L-** item and link the decision.
 
 ### W-019 — Math @CriticalNative / FastNative double ABI on Win64
 - **State:** CLOSED (2026-07-17) — Math.ceil/floor/sqrt + HashSet wine PASS after interpreter CriticalNative DD/DDD
+- **See also:** **W-024** — full restore of AOSP Critical/FastNative after JIT/TLS/entrypoints (ceil/floor pure-Java demotion still OPEN debt)
 - **Kind:** workaround / runtime ABI
 - **Area:** libcore Math / ART interpreter JNI (Win64 -Xint)
 - **Root cause:** Official AOSP CriticalNative is fine on Linux quick/generic-JNI. Win64 multipath forces `ArtMethod::Invoke` through the interpreter; `InterpreterJniGeneric` only handled CriticalNative shorties `II`/`I`/`Z`/`ZI`. `Math.ceil` is shorty `DD` (`(D)D`), so dispatch fell through and crashed. Secondary: registering `Math_*_jni(JNIEnv*,jclass,jdouble)` under CriticalNative is the wrong ABI.
@@ -427,7 +461,7 @@ If product reopens a non-goal, add an **L-** item and link the decision.
 ## Suggested next closures (priority)
 
 1. ~~**D-001**~~ **CLOSED** — single shared boot.jar (runtime OS selection); dual-host FS smoke is not the close bar.  
-2. **W-001–W-003** — after TLS/entrypoint implementation (design draft ready).  
+2. **W-001–W-003** — TLS/entrypoint implementation (design draft ready); then **W-024** restore Critical/FastNative surfaces.  
 3. **L-001** — deepen hybrid libcore surface (Memory/Expat/NativeBN/…); W-005/W-006 closed for ICU product PE.  
 4. **H-001** — host Phase-4 with multiplatform package.  
 5. ~~**L-005** — Linux Hello gate~~ **CLOSED**.
@@ -442,4 +476,4 @@ If product reopens a non-goal, add an **L-** item and link the decision.
 - [ ] Permanent design choice (e.g. VEH forever) → move from W- to documented architecture; close workaround  
 - [ ] CLOSED items: one line in §Closed, leave detail above with State CLOSED  
 
-*Last snapshot: 2026-07-17 — D-001 CLOSED (single shared boot.jar via runtime OS selection; L-005 PASS on shared multipath jar). Dual-host FS smoke not required for close.*
+*Last snapshot: 2026-07-17 — W-024 OPEN (restore AOSP Critical/FastNative after JIT/TLS/entrypoints); D-001 CLOSED; L-005 PASS on shared multipath jar.*
