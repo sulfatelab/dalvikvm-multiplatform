@@ -14,30 +14,13 @@ for f in art.dll artpalette.dll base.dll c++.dll log.dll lzma.dll \
          javacore.dll openjdk.dll icu_jni.dll; do
   if [[ -f "$BUILD/$f" ]]; then cp -a "$BUILD/$f" "$OUT/"; else echo "WARN missing $f" >&2; fi
 done
-cp -a "$BUILD/run/boot.jar" "$OUT/run/"
+# Required product assets: boot.jar + run/icu/icudt72l.dat (same shipping class)
+bash "$REPO/tools/win64/stage_run_assets.sh" "$OUT" "$BUILD"
 for j in hello.jar goldenapp.jar probe.jar ioprobe.jar coreprobe.jar netprobe.jar \
          gcprobe.jar gcforced.jar interruptprobe.jar rtmem.jar abspathprobe.jar \
          dnsprobe.jar propsprobe.jar oserrnoprobe.jar threadstressprobe.jar throwprobe.jar gcstressprobe.jar threadheavyprobe.jar handleleakprobe.jar perfsmokeprobe.jar crashabortprobe.jar crashnativeprobe.jar; do
   [[ -f "$BUILD/run/$j" ]] && cp -a "$BUILD/run/$j" "$OUT/run/" || true
 done
-# ICU data (required for real icu_jni PE; stubdata alone is insufficient under wine/Win)
-if [[ -d "$BUILD/run/icu" ]]; then
-  cp -a "$BUILD/run/icu/." "$OUT/run/icu/" 2>/dev/null || true
-fi
-if [[ ! -f "$OUT/run/icu/icudt72l.dat" ]]; then
-  for cand in       "$BUILD/run/icu/icudt72l.dat"       "$REPO/vendor/icu/icu4c/source/stubdata/icudt72l.dat"       "$REPO/dist/win64_phase3_host/run/icu/icudt72l.dat"; do
-    if [[ -f "$cand" ]]; then
-      mkdir -p "$OUT/run/icu"
-      cp -a "$cand" "$OUT/run/icu/icudt72l.dat"
-      echo "Staged ICU_DATA file from $cand"
-      break
-    fi
-  done
-fi
-if [[ ! -f "$OUT/run/icu/icudt72l.dat" ]]; then
-  echo "ERROR: missing run/icu/icudt72l.dat — CoreProbe/locale will fail (W-016). Place full ICU data under $BUILD/run/icu/." >&2
-  exit 1
-fi
 # Prefer real hybrid PE modules when present (icu + javacore + openjdk)
 for f in icuuc.dll icui18n.dll openjdkjvm.dll; do
   if [[ -f "$BUILD/$f" ]]; then cp -a "$BUILD/$f" "$OUT/"; fi
@@ -196,7 +179,7 @@ Logs land in `logs\*.log` and summary in `logs\RESULT_HOST.txt`.
 
 ## Environment
 
-Scripts set `ANDROID_ROOT`, `ANDROID_ART_ROOT`, `ANDROID_I18N_ROOT`, `ANDROID_DATA`, `ICU_DATA` under `run\`.
+Product ships `run/boot.jar` and `run/icu/icudt72l.dat` (via `tools/win64/stage_run_assets.sh`). Scripts set `ANDROID_ROOT`, `ANDROID_ART_ROOT`, `ANDROID_I18N_ROOT`, `ANDROID_DATA`, `ICU_DATA=run\\icu`.
 
 ## Expected PASS markers
 

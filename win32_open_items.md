@@ -213,7 +213,7 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 
 
 ### W-016 — ICU needs external `ICU_DATA` / `icudt72l.dat` for wine smoke
-- **State:** OPEN (runners defaulted 2026-07-17; still need data file present)
+- **State:** CLOSED (2026-07-17) — product always stages run/icu/icudt72l.dat via tools/win64/stage_run_assets.sh (same class as boot.jar); libicu_jni defaults ICU_DATA to run/icu when unset
 - **Kind:** workaround
 - **Area:** icu / packaging
 - **Symptom / why:** Linked stubdata alone yields `u_init` `U_FILE_ACCESS_ERROR` under wine; full data file works.
@@ -356,4 +356,4 @@ _(None yet in this tracker. When closing a W-/L-/H- item, move a one-line summar
 - [ ] Permanent design choice (e.g. VEH forever) → move from W- to documented architecture; close workaround  
 - [ ] CLOSED items: one line in §Closed, leave detail above with State CLOSED  
 
-*Last snapshot: 2026-07-17 — openjdk NIO B2 + linger fix; CoreProbe/IoProbe/NetProbe wine OK with ICU_DATA=run/icu; package enforces icudt72l.dat; JIT/TLS design drafted.*
+*Last snapshot: 2026-07-17 — icudt72l.dat always shipped (stage_run_assets); W-016 CLOSED; CoreProbe/IoProbe/NetProbe wine OK.*

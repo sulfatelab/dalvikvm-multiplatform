@@ -120,3 +120,17 @@ NetProbe.done=ok (after W-018 linger get/set in win_net_natives)
 
 - **W-018 CLOSED:** `getsockoptLinger` / `setsockoptLinger` in `tools/win64/jni_stubs/win_net_natives.c` + register table; wine NetProbe PASS.
 - **ICU_DATA defaults:** phase3/phase4 runners already export `ICU_DATA=run/icu`; `package_win64_phase3.sh` now **requires** `run/icu/icudt72l.dat` (copies from build or vendor stubdata path fallback) and stages `icuuc`/`icui18n`/`openjdkjvm` when present.
+
+
+## Product ICU data shipping (2026-07-17, W-016 CLOSED)
+
+`icudt72l.dat` is a **required product asset** staged like `boot.jar`:
+
+```bash
+tools/win64/stage_run_assets.sh <dest_root> [build_dir]
+# -> <dest>/run/boot.jar
+# -> <dest>/run/icu/icudt72l.dat
+```
+
+Used by `package_win64_phase3.sh` and `install_into_phase1.sh`.  
+`libicu_jni` `Register.cpp` defaults `ICU_DATA` to `<cwd>/run/icu` when unset if `icudt72l.dat` is present.
