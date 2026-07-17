@@ -58,7 +58,7 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 |--------|---------|
 | Phases 0–3 | **Gate-complete** (P3 G12 real Win10 + wine) |
 | Phase 4 | **Wine complete**; host re-run still recommended |
-| PE libcore/ICU/openjdk | Still **combined JNI stub**, not real AOSP PE modules |
+| PE libcore/ICU/openjdk | **ICU Phase A real PE**; javacore/openjdk still **combined stub** |
 | Quick/JIT/TLS | **Designed** in draft doc; **not implemented**; invoke forced to interpreter |
 | Linux multiplatform | Native `dalvikvm -showversion` OK; imageless Hello e2e not re-gated here |
 
@@ -118,13 +118,14 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Opened:** 2026-07-16 (Phase 2; expanded Phase 3)
 
 ### W-006 — Minimal NativeConverter / ICU version shims (not full ICU4C)
-- **State:** OPEN
+- **State:** OPEN (partially superseded 2026-07-17)
 - **Kind:** workaround
 - **Area:** icu
-- **Current behavior:** `native_converter.c` implements a small charset set; `libcore.icu.ICU_get*Version` style shims; `icudt*.dat` may be staged but **not** driven by real `libicuuc` PE.
-- **Proper fix:** Cross-build ICU4C for Win64 + real `libicu_jni` / android_icu4j natives; or explicitly product-limit encodings and fail closed elsewhere.
-- **Code anchors:** `tools/win64/jni_stubs/native_converter.c`, `libcore_hello3.c` ICU version symbols
+- **Current behavior:** Phase-3 package historically used `native_converter.c` stubs. **Phase A progress:** real PE `icuuc.dll` / `icui18n.dll` / `icu_jni.dll` now build from AOSP sources (`tools/verify/win64_libcore_icu/`) and can replace stub `libicu_jni` in `build/win64_phase1`. `libjavacore`/`libopenjdk` still combined stubs (may still register overlapping charset helpers until removed).
+- **Proper fix:** Default package/install to real ICU PE only; remove charset exports from `libcombined`; verify full data (`ICU_DATA` / icudt) vs stubdata; complete L-001 for javacore/openjdk.
+- **Code anchors:** `tools/verify/win64_libcore_icu/`, `tools/win64/jni_stubs/native_converter.c`
 - **Opened:** 2026-07-16
+- **Progress:** 2026-07-17 — real ICU PE + CoreProbe wine OK with hybrid package
 
 ### W-007 — Classic sockets / poll via Winsock `select` (not full Os/NIO)
 - **State:** OPEN (functional for GoldenApp; incomplete API surface)
@@ -213,12 +214,13 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 ## Product leftovers (not single-line workarounds)
 
 ### L-001 — Real PE libcore / openjdk / ICU module build
-- **State:** OPEN
+- **State:** OPEN (ICU Phase A landed 2026-07-17)
 - **Kind:** leftover
 - **Area:** build / libcore / icu
-- **Gap:** Linux has full `.so` graph from bp2cmake; Win64 does not. No Win64 `generate.sh` closure for javacore/icu/openjdk/crypto.
-- **Exit criteria:** PE DLLs built from AOSP sources (or documented subset) without `libcombined` aliasing; GoldenApp + charset/locale smoke still pass.
+- **Gap:** Linux has full `.so` graph from bp2cmake; Win64 now has **real** `icuuc`/`icui18n`/`icu_jni` via `tools/verify/win64_libcore_icu`. Still missing real `libjavacore` / `libopenjdk` / crypto PE; package still hybrid with `libcombined` for non-ICU.
+- **Exit criteria:** PE DLLs built from AOSP sources without `libcombined` aliasing; GoldenApp + charset/locale smoke still pass.
 - **Opened:** 2026-07-17
+- **Progress:** see `tools/verify/win64_libcore_icu/RESULT.md`
 
 ### L-002 — boringssl / conscrypt / SSL PE
 - **State:** OPEN
@@ -324,4 +326,4 @@ _(None yet in this tracker. When closing a W-/L-/H- item, move a one-line summar
 - [ ] Permanent design choice (e.g. VEH forever) → move from W- to documented architecture; close workaround  
 - [ ] CLOSED items: one line in §Closed, leave detail above with State CLOSED  
 
-*Last snapshot: 2026-07-17 — multiplatform host native build OK; Win64 PE rebuild + wine Phase 4 PASS; JIT/TLS design drafted.*
+*Last snapshot: 2026-07-17 — real ICU PE (icuuc/icui18n/icu_jni) + CoreProbe wine OK; javacore/openjdk still stubs; JIT/TLS design drafted.*

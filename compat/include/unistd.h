@@ -22,6 +22,10 @@ typedef unsigned int useconds_t;
 typedef intptr_t ssize_t;
 #define _SSIZE_T_DEFINED
 #endif
+#ifndef _PID_T_DEFINED
+typedef int pid_t;
+#define _PID_T_DEFINED
+#endif
 #ifndef STDIN_FILENO
 #define STDIN_FILENO 0
 #define STDOUT_FILENO 1
