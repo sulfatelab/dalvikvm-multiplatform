@@ -58,7 +58,7 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 |--------|---------|
 | Phases 0–3 | **Gate-complete** (P3 G12 real Win10 + wine) |
 | Phase 4 | **Wine complete**; host re-run still recommended |
-| PE libcore/ICU/openjdk | **ICU Phase A real PE**; javacore/openjdk still **combined stub** |
+| PE libcore/ICU/openjdk | **ICU real PE + hybrid javacore PE**; openjdk still combined stub |
 | Quick/JIT/TLS | **Designed** in draft doc; **not implemented**; invoke forced to interpreter |
 | Linux multiplatform | Native `dalvikvm -showversion` OK; imageless Hello e2e not re-gated here |
 
@@ -217,7 +217,7 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **State:** OPEN (ICU Phase A landed 2026-07-17)
 - **Kind:** leftover
 - **Area:** build / libcore / icu
-- **Gap:** Linux has full `.so` graph from bp2cmake; Win64 now has **real** `icuuc`/`icui18n`/`icu_jni` via `tools/verify/win64_libcore_icu`. Still missing real `libjavacore` / `libopenjdk` / crypto PE; package still hybrid with `libcombined` for non-ICU.
+- **Gap:** Linux has full `.so` graph from bp2cmake; Win64 has **real ICU** + **hybrid javacore** (`tools/verify/win64_libcore_icu`). Still missing full AOSP `libcore_io_Linux`, Memory, Expat, NativeBN, NetworkUtilities, real `libopenjdk` / crypto PE; `libopenjdk` still `libcombined`.
 - **Exit criteria:** PE DLLs built from AOSP sources without `libcombined` aliasing; GoldenApp + charset/locale smoke still pass.
 - **Opened:** 2026-07-17
 - **Progress:** see `tools/verify/win64_libcore_icu/RESULT.md`
@@ -326,4 +326,4 @@ _(None yet in this tracker. When closing a W-/L-/H- item, move a one-line summar
 - [ ] Permanent design choice (e.g. VEH forever) → move from W- to documented architecture; close workaround  
 - [ ] CLOSED items: one line in §Closed, leave detail above with State CLOSED  
 
-*Last snapshot: 2026-07-17 — real ICU PE (icuuc/icui18n/icu_jni) + CoreProbe wine OK; javacore/openjdk still stubs; JIT/TLS design drafted.*
+*Last snapshot: 2026-07-17 — real ICU PE + hybrid javacore PE; CoreProbe/IoProbe wine OK; openjdk still stub; JIT/TLS design drafted.*

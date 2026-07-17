@@ -36,7 +36,7 @@ if(NOT MDVM_WIN64_ENV)
   set(MDVM_WIN64_ENV "/home/agent/Projects/win64-dev-env" CACHE PATH "" FORCE)
 endif()
 
-option(MDVM_WIN64_BUILD_JAVACORE "Build real libjavacore PE (experimental)" OFF)
+option(MDVM_WIN64_BUILD_JAVACORE "Build hybrid real libjavacore PE" ON)
 option(MDVM_WIN64_BUILD_OPENJDK "Build real libopenjdk PE (experimental)" OFF)
 
 include(${CMAKE_CURRENT_SOURCE_DIR}/sources.cmake)
@@ -120,23 +120,67 @@ target_compile_options(icu_jni PRIVATE ${_WIN_CFLAGS} -Wno-unused-parameter "SHE
 target_link_libraries(icu_jni PUBLIC icuuc icui18n base log nativehelper)
 
 # Optional later phases
+
+# --- javacore (hybrid: AOSP sources + Win libcore_io stubs) ---
 if(MDVM_WIN64_BUILD_JAVACORE)
-  message(STATUS "javacore PE: experimental — expect Linux-only compile failures")
-  add_library(javacore SHARED ${JAVACORE_SRCS})
-  target_include_directories(javacore PUBLIC
-    ${_WIN_INCLUDES}
-    ${_ICU_COMMON_INCLUDES}
-    "${MDVM_ICU_DIR}/libicu/ndk_headers"
-    "${MDVM_ART_ROOT_DIR}/libziparchive/include"
-    "${MDVM_ART_ROOT_DIR}/external/boringssl/src/include"
+  set(_JC_SRCS ${JAVACORE_SRCS})
+  list(FILTER _JC_SRCS EXCLUDE REGEX "libcore_io_Linux[.]cpp$")
+  list(FILTER _JC_SRCS EXCLUDE REGEX "NetworkUtilities[.]cpp$")
+  list(FILTER _JC_SRCS EXCLUDE REGEX "libcore_io_AsynchronousCloseMonitor[.]cpp$")
+  list(FILTER _JC_SRCS EXCLUDE REGEX "ExpatParser[.]cpp$")
+  list(FILTER _JC_SRCS EXCLUDE REGEX "NativeBN[.]cpp$")
+  list(FILTER _JC_SRCS EXCLUDE REGEX "cbigint[.]cpp$")
+  list(FILTER _JC_SRCS EXCLUDE REGEX "android_system_OsConstantsHolder[.]cpp$")
+  list(FILTER _JC_SRCS EXCLUDE REGEX "libcore_io_Memory[.]cpp$")
+  # NetworkUtilities uses Linux sockaddr helpers heavily; keep out for Phase B0
+  # Async close monitor is Linux signal-based
+  # Expat + NativeBN need extra PE deps; exclude Phase B0
+
+  set(_JC_WIN_BRIDGE
+    "${MDVM_LIBCORE_DIR}/multiplatform/windows/native/register_libcore_io_Linux_win.cpp"
+    "${_repo}/tools/win64/jni_stubs/win_path.c"
+    "${_repo}/tools/win64/jni_stubs/win_fs_natives.c"
+    "${_repo}/tools/win64/jni_stubs/win_net_natives.c"
+    "${_repo}/tools/win64/jni_stubs/libcore_hello3.c"
   )
+  set_source_files_properties("${_repo}/tools/win64/jni_stubs/libcore_hello3.c"
+    PROPERTIES COMPILE_DEFINITIONS "JNI_OnLoad=javacore_stub_JNI_OnLoad_unused;JNI_OnUnload=javacore_stub_JNI_OnUnload_unused")
+  # Provide empty registers for excluded modules to satisfy Register.cpp
+  set(_JC_WIN_STUB_REG "${CMAKE_CURRENT_BINARY_DIR}/javacore_excluded_registers.cpp")
+  file(WRITE "${_JC_WIN_STUB_REG}"
+"#include <jni.h>
+void register_libcore_io_AsynchronousCloseMonitor(JNIEnv*) {}
+void register_libcore_math_NativeBN(JNIEnv*) {}
+void register_org_apache_harmony_xml_ExpatParser(JNIEnv*) {}
+void register_android_system_OsConstantsHolder(JNIEnv*) {}
+void register_libcore_io_Memory(JNIEnv*) {}
+")
+
+  add_library(javacore SHARED ${_JC_SRCS} ${_JC_WIN_BRIDGE} ${_JC_WIN_STUB_REG})
+  target_include_directories(javacore
+    PUBLIC ${_WIN_INCLUDES}
+    PUBLIC ${_ICU_COMMON_INCLUDES}
+    PUBLIC "${MDVM_ICU_DIR}/libicu/ndk_headers"
+    PUBLIC "${MDVM_ART_ROOT_DIR}/libziparchive/include"
+    PUBLIC "${MDVM_LIBCORE_DIR}/luni/src/main/native"
+    PUBLIC "${MDVM_LIBCORE_DIR}/multiplatform/windows/native"
+    PRIVATE "${_repo}/tools/win64/jni_stubs"
+  )
+  # Prefer multipath Portability.h
+  target_include_directories(javacore BEFORE PRIVATE "${MDVM_LIBCORE_DIR}/multiplatform/windows/native")
   target_compile_definitions(javacore PRIVATE
     ${_WIN_DEFS}
     U_USING_ICU_NAMESPACE=0
     LIBICU_U_SHOW_CPLUSPLUS_API=1
+    ANDROID_LINK_SHARED_ICU4C
   )
-  target_compile_options(javacore PRIVATE "SHELL:-D__INTRODUCED_IN(x)=")
-  target_link_libraries(javacore PUBLIC base log nativehelper icuuc ziparchive z)
+  target_compile_options(javacore PRIVATE ${_WIN_CFLAGS} -Wno-unused-parameter "SHELL:-D__INTRODUCED_IN(x)=")
+  # Import real ICU from this build; zip/base/log/nativehelper from phase1
+  target_link_libraries(javacore PUBLIC base log nativehelper ziparchive z icuuc icui18n
+    PRIVATE ws2_32 kernel32 advapi32)
+  # Also export WinNT FileSystem natives from same DLL (from win_fs)
 endif()
+
+
 
 message(STATUS "Win64 libcore/ICU Phase A: icuuc + icui18n + icu_jni")
