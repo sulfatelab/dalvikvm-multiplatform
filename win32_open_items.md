@@ -255,15 +255,15 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Progress:** 2026-07-17 — AOSP `Memory` in javacore; Linux bridge mmap/… + Needed pipe/pread/readv/timeval/sendto/…; see win32_libcore_os_natives.md (Needed residual small)
 
 ### L-002 — boringssl / conscrypt / SSL PE
-- **State:** OPEN (partial — C0 crypto + C1 ssl/javacrypto PE; HTTPS Java still open)
+- **State:** OPEN (partial — C0/C1 PE done; C2 Java packaged; provider init blocked by W-019)
 - **Kind:** leftover (priority only if apps need TLS)
 - **Area:** crypto
-- **Gap:** ~~No `libcrypto` PE~~ **C0 done.** ~~No `libssl` / `libjavacrypto` PE~~ **C1 done** (wine LoadLibrary + `JNI_OnLoad` export). Still missing: win-x86_64 ASM path; **conscrypt Java classes on bootclasspath** (boot.jar has provider *name* strings only, no `NativeCrypto`/conscrypt class bodies); HTTPS golden.
-- **Exit criteria:** HTTPS/crypto golden **or** explicit non-goal product statement. **Crypto golden met** (`CryptoSmoke.done=ok`); native TLS PE met for C1; full HTTPS still open (C2/C3).
-- **Code anchors:** `tools/verify/win64_libcore_icu/CMakeLists.txt` (`MDVM_WIN64_BUILD_CRYPTO` / `MDVM_WIN64_BUILD_SSL`), `crypto_sha_smoke.c`, `vendor/external/boringssl/android-sources.cmake`, conscrypt JNI under `vendor/java-external/conscrypt/`, `stage_native_modules.sh`
+- **Gap:** ~~libcrypto/ssl/javacrypto PE~~ **C0+C1 done.** ~~conscrypt Java absent from boot.jar~~ **C2 packaged** (`build_conscrypt_win64.sh`). Still missing: win-x86_64 ASM; **OpenSSLProvider construction** (blocked by Math `@CriticalNative` crash W-019); BC optional; HTTPS golden C3.
+- **Exit criteria:** HTTPS/crypto golden **or** explicit non-goal. Crypto golden met; native TLS PE met; conscrypt Java on boot met; full provider/HTTPS still open.
+- **Code anchors:** hybrid CMake SSL/javacrypto; `tools/bootjar/build_conscrypt_win64.sh`; `libcore_hello3.c` mapLibraryName; boot.jar `com.android.org.conscrypt`
 - **Opened:** 2026-07-17
-- **Progress:** 2026-07-17 — C0 `libcrypto` wine PASS; C1 `libssl`+`libjavacrypto` build/stage + wine LoadLibrary PASS; vendor patches for ART `AttachCurrentThread` + `ssize_t` guard
-- **Workaround note:** Until C2, product may ship native crypto PE without a working `SSLContext` provider; do not claim HTTPS support.
+- **Progress:** 2026-07-17 — C2 boot.jar has NativeCrypto/OpenSSLProvider; loadLibrary ok; provider ctor aborts in Math.ceil (W-019)
+- **Workaround note:** Do not claim HTTPS until W-019 fixed and SslProviderProbe green.
 
 ### L-003 — Process/exec, rich locale, zip edge, UDP/IPv6 matrix
 - **State:** OPEN
@@ -345,6 +345,16 @@ _(None yet in this tracker. When closing a W-/L-/H- item, move a one-line summar
 
 ---
 
+### W-019 — Math @CriticalNative / FastNative double ABI on Win64
+- **State:** OPEN
+- **Kind:** workaround / runtime ABI
+- **Area:** libcore Math / ART JNI
+- **Gap:** `java.lang.Math` methods annotated `@CriticalNative` crash on Win64 PE (`Math.ceil` aborts with access violation / ART abort). Blocks `HashMap` sizing and conscrypt `OpenSSLProvider`/`NativeCrypto` clinit. Hybrid openjdk registers Math as ordinary JNI on Win, but Java annotations still select critical-native calling convention.
+- **Exit criteria:** `MathProbe` (ceil/floor/sqrt/HashSet) and `SslProviderProbe` pass under wine; then real Win critical-native ABI or pure-Java Math for Win boot.
+- **Code anchors:** `vendor/libcore/ojluni/src/main/native/Math.c` (Win JNI wrappers), `java/lang/Math.java`, ART critical native trampolines
+- **Opened:** 2026-07-17
+- **Progress:** 2026-07-17 — reproduced; wrappers alone insufficient while `@CriticalNative` remains
+
 ## Suggested next closures (priority)
 
 1. **W-001–W-003** — after TLS/entrypoint implementation (design draft ready).  
@@ -362,4 +372,4 @@ _(None yet in this tracker. When closing a W-/L-/H- item, move a one-line summar
 - [ ] Permanent design choice (e.g. VEH forever) → move from W- to documented architecture; close workaround  
 - [ ] CLOSED items: one line in §Closed, leave detail above with State CLOSED  
 
-*Last snapshot: 2026-07-17 — L-002 C1 libssl+libjavacrypto PE wine LoadLibrary OK; HTTPS blocked on conscrypt Java in boot.jar (C2).*
+*Last snapshot: 2026-07-17 — L-002 C2 conscrypt Java packaged + loadLibrary OK; provider init blocked by W-019 Math.ceil CriticalNative.*

@@ -32,3 +32,16 @@ Requires:
 Dex with AOSP r8 and
 `-Dcom.android.tools.r8.emitRecordAnnotationsInDex=1 --android-platform-build`
 so `java.lang.Record` remains in boot dex (ART WellKnownClasses).
+
+## Conscrypt on Win64 boot (L-002 C2)
+
+```bash
+bash tools/bootjar/build.sh            # or reuse existing /tmp/bootbuild/classes
+bash tools/bootjar/build_win64.sh      # WinNT FileSystem overlay
+bash tools/bootjar/build_conscrypt_win64.sh
+```
+
+Merges jarjar `com.android.org.conscrypt` into boot classes, embeds
+`java/security/security.properties`, re-dexes, and stages
+`build/win64_phase1/run/boot.jar`. Requires host `g++` + boringssl headers for
+`NativeConstants`. Provider init at runtime still needs W-019 (Math CriticalNative).

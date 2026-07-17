@@ -202,6 +202,34 @@ __declspec(dllexport) jlong Java_java_lang_System_nanoTime(void) {
   return (jlong)((now.QuadPart * 1000000000ULL) / (unsigned long long)freq.QuadPart);
 }
 
+/* ART-WinNT: System.mapLibraryName -> libNAME.dll (product PE sonames). */
+__declspec(dllexport) jstring Java_java_lang_System_mapLibraryName(JNIEnv* env, jclass cls, jstring libname) {
+  (void)cls;
+  if (libname == NULL) {
+    jclass npe = (*env)->FindClass(env, "java/lang/NullPointerException");
+    if (npe) (*env)->ThrowNew(env, npe, "libname == null");
+    return NULL;
+  }
+  const char* name = (*env)->GetStringUTFChars(env, libname, NULL);
+  if (!name) return NULL;
+  char buf[320];
+  /* leave room for "lib" + ".dll" + NUL */
+  size_t n = 0;
+  while (name[n] && n < 240) n++;
+  if (n >= 240) {
+    (*env)->ReleaseStringUTFChars(env, libname, name);
+    jclass iae = (*env)->FindClass(env, "java/lang/IllegalArgumentException");
+    if (iae) (*env)->ThrowNew(env, iae, "name too long");
+    return NULL;
+  }
+  snprintf(buf, sizeof(buf), "lib%s.dll", name);
+  (*env)->ReleaseStringUTFChars(env, libname, name);
+  return (*env)->NewStringUTF(env, buf);
+}
+__declspec(dllexport) jstring Java_java_lang_System_mapLibraryName__Ljava_lang_String_2(JNIEnv* env, jclass cls, jstring libname) {
+  return Java_java_lang_System_mapLibraryName(env, cls, libname);
+}
+
 
 /* FileDescriptor critical natives */
 __declspec(dllexport) jboolean Java_java_io_FileDescriptor_getAppend(jint fd) {

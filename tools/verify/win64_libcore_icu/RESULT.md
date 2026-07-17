@@ -219,6 +219,41 @@ OK libjavacrypto.dll ... JNI_OnLoad=<non-null>
 - Full HTTPS golden requires packaging conscrypt Java (jarjar `com.android.org.conscrypt`)
   onto bootclasspath (or extension jar) then a TLS golden (loopback or external).
 
+## Phase C2 — conscrypt Java on bootclasspath (L-002 partial, 2026-07-17)
+
+**Status:** **PACKAGED + partial runtime** (provider construction blocked by Math CriticalNative ABI)
+
+### Packaging
+- Script: `tools/bootjar/build_conscrypt_win64.sh`
+  - Generates `NativeConstants.java` (host g++ + boringssl headers)
+  - Compiles repackaged `com.android.org.conscrypt` + publicapi against boot classes
+  - Merges into `/tmp/bootbuild/classes`, re-dexes, embeds `java/security/security.properties`
+- Staged `run/boot.jar` contains:
+  - `Lcom/android/org/conscrypt/` + `NativeCrypto` + `OpenSSLProvider`
+  - resource `java/security/security.properties` (C2 provider list without BC)
+
+### Runtime PE support
+- `System.mapLibraryName("javacrypto")` → `libjavacrypto.dll` via `tools/win64/jni_stubs/libcore_hello3.c`
+- Wine `System.load` / `System.loadLibrary("javacrypto")` **OK** (LoadCryptoProbe)
+- `Class.forName(OpenSSLProvider)` **OK**
+
+### Blockers remaining (not C2 packaging)
+- **W-019:** `java.lang.Math` `@CriticalNative` (and FastNative double ABI) crashes on Win64 PE
+  (`Math.ceil` aborts; HashMap/`OpenSSLProvider.<init>`/`NativeCrypto.<clinit>` trip on it)
+- BootClassLoader resource `getResourceAsStream` still hits incomplete NIO.2 ZipFile path;
+  Windows `Security` clinit **skips** resource load and uses `initializeStatic()`
+- BC provider deferred (not on bootclasspath)
+- Full HTTPS golden (C3) still open
+
+### Wine evidence (LoadCryptoProbe)
+```
+map=libjavacrypto.dll
+System.load=ok
+System.loadLibrary=ok
+OpenSSLProvider.class=com.android.org.conscrypt.OpenSSLProvider
+# then abort in Math.ceil during OpenSSLProvider construction
+```
+
 ## Single product DLL names (L-004 CLOSED)
 
 Hybrid targets emit ART/product sonames directly:
