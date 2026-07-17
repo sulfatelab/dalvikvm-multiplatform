@@ -39,7 +39,7 @@ dalvikvm-multiplatform/
     java-stubs/ openjdk_inc/ src/
   tools/                      # bp2cmake, bootjar, win64, verify gates
   overlay/                    # port policies
-  docs: win32_port.md, filesystem_win32.md, win32_tls_jit_entrypoints.md, project_scope.md, git_repo_migrate.md
+  docs: win32_port.md, filesystem_win32.md, win32_tls_jit_entrypoints.md, win32_open_items.md, project_scope.md, git_repo_migrate.md
 ```
 
 ### Folded Windows sources (no main `compat/windows/{art,libcore}`)

@@ -6,6 +6,8 @@ Product tree: **dalvikvm-multiplatform** (nested vendor + artmp_*).
 
 Status: Phase 0–2 implementation gated (A2+A3 passed under wine64)  
 Date: 2026-07-16 (rev 37 — Phase 4 wine hardening COMPLETE: GC/thread/handle/crash-dump gates PASS)  
+
+**Living tracker (leftovers + temporary workarounds):** [win32_open_items.md](win32_open_items.md)
 Product goal (owner requirement): **full native Windows NT support** for this repo’s ART runtime — a real `dalvikvm.exe` + DLLs + `boot.jar` that runs plain Java on Win32/Win64 **without** Android platform APIs and **without** WSL/VM indirection.
 
 This document answers: *is that feasible, what does “full” mean, and what is the actual port plan?*

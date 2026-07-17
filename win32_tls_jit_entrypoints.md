@@ -3,7 +3,7 @@
 **Status:** DRAFT (research + design only; no implementation commitment in this document)  
 **Date:** 2026-07-17  
 **Scope:** Design **all** ART-WinNT ISA targets in theory; implement later with **x86_64 first**.  
-**Related:** [win32_port.md](win32_port.md) (product phases), Phase 3+ runtime hardening, Phase 5 JIT/oat.
+**Related:** [win32_port.md](win32_port.md) (product phases), [win32_open_items.md](win32_open_items.md) (open workarounds W-001+), Phase 3+ runtime hardening, Phase 5 JIT/oat.
 
 ### Suggested filename
 
