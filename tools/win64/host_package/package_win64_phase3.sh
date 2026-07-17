@@ -9,11 +9,13 @@ mkdir -p "$OUT/run/data" "$OUT/run/icu" "$OUT/run/framework" "$OUT/scripts" "$OU
 cp -a "$BUILD/dalvikvm.exe" "$OUT/"
 for f in art.dll artpalette.dll base.dll c++.dll log.dll lzma.dll \
          nativebridge.dll nativehelper.dll nativeloader.dll procinfo.dll \
-         sigchain.dll ziparchive.dll \
-         libjavacore.dll libopenjdk.dll libicu_jni.dll \
-         javacore.dll openjdk.dll icu_jni.dll; do
+         sigchain.dll ziparchive.dll; do
   if [[ -f "$BUILD/$f" ]]; then cp -a "$BUILD/$f" "$OUT/"; else echo "WARN missing $f" >&2; fi
 done
+# Required product PE: real libicu_jni/libjavacore/libopenjdk (+icuuc/i18n/openjdkjvm).
+# Never ship tools/win64/jni_stubs/libcombined.dll multi-name aliases (W-005).
+bash "$REPO/tools/win64/stage_native_modules.sh" "$OUT" \
+  "${MDVM_HYBRID_BUILD:-$REPO/build/win64_libcore_icu}" "$BUILD"
 # Required product assets: boot.jar + run/icu/icudt72l.dat (same shipping class)
 bash "$REPO/tools/win64/stage_run_assets.sh" "$OUT" "$BUILD"
 for j in hello.jar goldenapp.jar probe.jar ioprobe.jar coreprobe.jar netprobe.jar \
@@ -21,16 +23,6 @@ for j in hello.jar goldenapp.jar probe.jar ioprobe.jar coreprobe.jar netprobe.ja
          dnsprobe.jar propsprobe.jar oserrnoprobe.jar threadstressprobe.jar throwprobe.jar gcstressprobe.jar threadheavyprobe.jar handleleakprobe.jar perfsmokeprobe.jar crashabortprobe.jar crashnativeprobe.jar; do
   [[ -f "$BUILD/run/$j" ]] && cp -a "$BUILD/run/$j" "$OUT/run/" || true
 done
-# Prefer real hybrid PE modules when present (icu + javacore + openjdk)
-for f in icuuc.dll icui18n.dll openjdkjvm.dll; do
-  if [[ -f "$BUILD/$f" ]]; then cp -a "$BUILD/$f" "$OUT/"; fi
-done
-if [[ -f "$BUILD/icuuc.dll" ]]; then
-  # dual-name loaders
-  cp -a "$BUILD/icu_jni.dll" "$OUT/libicu_jni.dll" 2>/dev/null || true
-  cp -a "$BUILD/javacore.dll" "$OUT/libjavacore.dll" 2>/dev/null || true
-  cp -a "$BUILD/openjdk.dll" "$OUT/libopenjdk.dll" 2>/dev/null || true
-fi
 
 # Shared env fragment for cmd scripts
 write_runner() {
@@ -179,7 +171,7 @@ Logs land in `logs\*.log` and summary in `logs\RESULT_HOST.txt`.
 
 ## Environment
 
-Product ships `run/boot.jar` and `run/icu/icudt72l.dat` (via `tools/win64/stage_run_assets.sh`). Scripts set `ANDROID_ROOT`, `ANDROID_ART_ROOT`, `ANDROID_I18N_ROOT`, `ANDROID_DATA`, `ICU_DATA=run\\icu`.
+Product ships real PE natives (`stage_native_modules.sh`: libicu_jni/libjavacore/libopenjdk + icuuc/i18n/openjdkjvm; **no libcombined**), plus `run/boot.jar` and `run/icu/icudt72l.dat` (`stage_run_assets.sh`). Scripts set `ANDROID_ROOT`, `ANDROID_ART_ROOT`, `ANDROID_I18N_ROOT`, `ANDROID_DATA`, `ICU_DATA=run\\icu`.
 
 ## Expected PASS markers
 

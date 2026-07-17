@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# LEGACY / NON-PRODUCT (W-005 CLOSED for product packaging).
+# Historical Phase-2/3 combined stub: one DLL aliased as libjavacore/libopenjdk/libicu_jni.
+# Product packaging MUST use tools/win64/stage_native_modules.sh with real hybrid PE from
+# tools/verify/win64_libcore_icu (icuuc/icui18n/icu_jni/javacore/openjdk/openjdkjvm).
+# Sources here (win_fs/win_net/…) may still be *linked into* real javacore PE hybrids.
 # Build Phase-3 PE JNI combined stub (libjavacore/libopenjdk/libicu_jni stand-in).
 set -euo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"

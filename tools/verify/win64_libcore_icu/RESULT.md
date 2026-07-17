@@ -1,7 +1,7 @@
 # Win64 real ICU PE — RESULT
 
 **Date:** 2026-07-17  
-**Status:** **Phase A PARTIAL SUCCESS** — real `icuuc.dll` + `icui18n.dll` + `icu_jni.dll` cross-built
+**Status:** **Phase A–B2 SUCCESS for product PE** — real ICU + hybrid javacore + AOSP openjdk NIO; **W-005 CLOSED** (no libcombined product aliases)
 
 ## What built
 
@@ -134,3 +134,15 @@ tools/win64/stage_run_assets.sh <dest_root> [build_dir]
 
 Used by `package_win64_phase3.sh` and `install_into_phase1.sh`.  
 `libicu_jni` `Register.cpp` defaults `ICU_DATA` to `<cwd>/run/icu` when unset if `icudt72l.dat` is present.
+
+
+## Packaging (W-005 CLOSED)
+
+Product trees use:
+
+```bash
+tools/win64/stage_native_modules.sh <dest> [build/win64_libcore_icu] [build/win64_phase1]
+```
+
+Stages real `icuuc`/`icui18n`/`openjdkjvm` + `icu_jni`/`javacore`/`openjdk`, then ART sonames `libicu_jni`/`libjavacore`/`libopenjdk` as copies of those real modules.  
+`tools/win64/jni_stubs/libcombined.dll` is **legacy / non-product**.

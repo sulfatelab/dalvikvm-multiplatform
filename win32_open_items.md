@@ -58,7 +58,7 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 |--------|---------|
 | Phases 0–3 | **Gate-complete** (P3 G12 real Win10 + wine) |
 | Phase 4 | **Wine complete**; host re-run still recommended |
-| PE libcore/ICU/openjdk | **ICU + hybrid javacore + AOSP openjdk NIO PE** (NIO.2 non-goal; NetProbe wine OK) |
+| PE libcore/ICU/openjdk | **Product-default real PE** (icu/javacore/openjdk); NIO.2 non-goal; NetProbe OK |
 | Quick/JIT/TLS | **Designed** in draft doc; **not implemented**; invoke forced to interpreter |
 | Linux multiplatform | Native `dalvikvm -showversion` OK; imageless Hello e2e not re-gated here |
 
@@ -108,7 +108,7 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Opened:** 2026-07-16
 
 ### W-005 — Combined PE JNI stub DLL aliased as libjavacore/libopenjdk/libicu_jni
-- **State:** OPEN
+- **State:** CLOSED (2026-07-17) — product packaging uses stage_native_modules.sh (real PE only); libcombined is legacy non-product
 - **Kind:** workaround
 - **Area:** libcore-stub / packaging
 - **Symptom / why:** Full ojluni + ICU4C PE ports not built; ART `InitNativeMethods` still dlopens those sonames.
@@ -244,10 +244,10 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 ## Product leftovers (not single-line workarounds)
 
 ### L-001 — Real PE libcore / openjdk / ICU module build
-- **State:** OPEN (ICU Phase A landed 2026-07-17)
+- **State:** OPEN (ICU+javacore+openjdk PE staged for product; surface still hybrid)
 - **Kind:** leftover
 - **Area:** build / libcore / icu
-- **Gap:** Linux has full `.so` graph from bp2cmake; Win64 has **real ICU** + **hybrid javacore** (`tools/verify/win64_libcore_icu`). ICU + hybrid javacore + **AOSP openjdk NIO PE** landed. Still missing full AOSP `libcore_io_Linux`, Memory, Expat, NativeBN, NetworkUtilities, crypto PE; NIO.2 excluded by design.
+- **Gap:** Linux has full `.so` graph from bp2cmake; Win64 has **real ICU** + **hybrid javacore** (`tools/verify/win64_libcore_icu`). ICU + hybrid javacore + **AOSP openjdk NIO PE** landed and are **product-default** via `stage_native_modules.sh` (W-005 closed). Still missing full AOSP `libcore_io_Linux`, Memory, Expat, NativeBN, NetworkUtilities, crypto PE; NIO.2 excluded by design.
 - **Exit criteria:** PE DLLs built from AOSP sources without `libcombined` aliasing; GoldenApp + charset/locale smoke still pass.
 - **Opened:** 2026-07-17
 - **Progress:** see `tools/verify/win64_libcore_icu/RESULT.md`
@@ -269,9 +269,10 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Opened:** 2026-07-17
 
 ### L-004 — Shrink or replace multi-name DLL staging
-- **State:** OPEN
+- **State:** OPEN (reduced)
 - **Kind:** leftover / packaging debt
 - **Depends on:** L-001, W-005
+- **Note:** W-005 closed — no more one-stub-six-names. Remaining dual names are intentional ART sonames (`libicu_jni`/`libjavacore`/`libopenjdk`) plus short build names; optional cleanup only.
 - **Opened:** 2026-07-17
 
 ### L-005 — Linux multiplatform imageless Hello / boot.jar CI gate
@@ -356,4 +357,4 @@ _(None yet in this tracker. When closing a W-/L-/H- item, move a one-line summar
 - [ ] Permanent design choice (e.g. VEH forever) → move from W- to documented architecture; close workaround  
 - [ ] CLOSED items: one line in §Closed, leave detail above with State CLOSED  
 
-*Last snapshot: 2026-07-17 — icudt72l.dat always shipped (stage_run_assets); W-016 CLOSED; CoreProbe/IoProbe/NetProbe wine OK.*
+*Last snapshot: 2026-07-17 — W-005 CLOSED (real PE modules product-default, no libcombined); W-016 CLOSED; NetProbe OK.*
