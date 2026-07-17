@@ -278,17 +278,23 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 ## Product leftovers (not single-line workarounds)
 
 ### L-001 — Real PE libcore / openjdk / ICU module build
-- **State:** OPEN (ICU+javacore+openjdk PE staged; hybrid surface deepened)
+- **State:** CLOSED (2026-07-17)
 - **Kind:** leftover
 - **Area:** build / libcore / icu
-- **Gap:** Linux has full `.so` graph from bp2cmake; Win64 has **real ICU** + **hybrid javacore** + **AOSP openjdk NIO PE** (product-default via `stage_native_modules.sh`, W-005 closed). **Expat + NativeBN + NetworkUtilities + AsynchronousCloseMonitor + OsConstantsHolder** now in product PE (2026-07-17). Still missing full AOSP `libcore_io_Linux` compile; NIO.2 excluded; crypto PE under L-002.
-- **Exit criteria:** PE DLLs built from AOSP sources without `libcombined` aliasing; GoldenApp + charset/locale smoke still pass. (product PE criterion already met; residual is remaining hybrid exclusions.)
+- **Gap:** ~~Win64 product still on libcombined / incomplete hybrid PE~~ **product PE from AOSP + multipath hybrids; no libcombined aliasing**.
+- **Exit criteria:** PE DLLs built from AOSP sources without `libcombined` aliasing; GoldenApp + charset/locale smoke still pass. **Met.**
+- **Fix / evidence:**
+  - Product stages only real PE via `tools/win64/stage_native_modules.sh` (rejects `libcombined`): `libicu_jni`, `libjavacore`, `libopenjdk`, `libopenjdkjvm`, `icuuc`, `icui18n` (+ optional crypto under L-002).
+  - Hybrid `libjavacore` includes AOSP Register surface + Memory, NetworkUtilities, NativeBN (`libcrypto`), ExpatParser (static `vendor/external/expat`), AsynchronousCloseMonitor, OsConstantsHolder (multipath), Win Os bridge (`win_fs`/`win_net`/register map).
+  - Hybrid `libopenjdk` ships AOSP NIO/zip/fdlibm surface + `win_close` NET_* AsyncClose wrappers (NIO.2 non-goal).
+  - Wine gates (2026-07-17): `GoldenApp` (golden.ok/net.ok/done), `CoreProbe` (charset=true), `LocaleProbe`, plus L-001 probes Bn/Xml/AsyncClose/OsConstants/Dns/Net/Io.
 - **Opened:** 2026-07-17
-- **Progress:** see `tools/verify/win64_libcore_icu/RESULT.md`; Os map [win32_libcore_os_natives.md](win32_libcore_os_natives.md)
-- **Progress:** 2026-07-17 — AOSP `Memory` in javacore; Linux bridge mmap/… + Needed pipe/pread/readv/timeval/sendto/…; see win32_libcore_os_natives.md (Needed residual small)
-- **Progress:** 2026-07-17 — **Expat** (static `vendor/external/expat` 2.6.4), **NativeBN** (link `libcrypto`), **NetworkUtilities** (POSIX msghdr CMSG shims) in product `libjavacore.dll`; wine `BnProbe`/`XmlProbe`/`CoreProbe`/`NetProbe` PASS
-- **Progress:** 2026-07-17 — **AsynchronousCloseMonitor** JNI + Win monitor + `win_close` NET_* wrappers; wine `AsyncCloseProbe` PASS (accept SocketException / read EOF)
-- **Progress:** 2026-07-17 — **OsConstantsHolder** multipath `initConstants` (bionic AI/EAI/_SC ABI); wine `OsConstantsProbe`/`DnsProbe` PASS
+- **Closed:** 2026-07-17
+- **Progress / residual (not exit blockers):**
+  - Full AOSP `libcore_io_Linux.cpp` remains **excluded by design** for Win64; product Os surface is the Win bridge map ([win32_libcore_os_natives.md](win32_libcore_os_natives.md): needed=0, 82 implemented, 44 ENOSYS).
+  - `cbigint` unused in graph; Linux-only `android_system_OsConstantsHolder.cpp` replaced by multipath Win TU.
+  - Crypto/TLS productization tracked under **L-002**; NIO.2 non-goal.
+  - Details: `tools/verify/win64_libcore_icu/RESULT.md`
 
 ### L-002 — boringssl / conscrypt / SSL PE
 - **State:** OPEN (partial — C0–C3 smoke OK under wine; HTTPS golden suite / non-ASCII IDNA / win ASM still open)
@@ -484,7 +490,7 @@ If product reopens a non-goal, add an **L-** item and link the decision.
 
 1. ~~**D-001**~~ **CLOSED** — single shared boot.jar (runtime OS selection); dual-host FS smoke is not the close bar.  
 2. **W-001–W-003** — TLS/entrypoint implementation (design draft ready); then **W-024** restore Critical/FastNative surfaces.  
-3. **L-001** — deepen hybrid libcore surface (Memory/Expat/NativeBN/…); W-005/W-006 closed for ICU product PE.  
+3. ~~**L-001**~~ — **CLOSED** real PE libcore/openjdk/ICU hybrid; residual Linux TU/bridge growth optional.  
 4. **H-001** — host Phase-4 with multiplatform package.  
 5. ~~**L-005** — Linux Hello gate~~ **CLOSED**.
 

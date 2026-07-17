@@ -31,7 +31,7 @@ cp build/win64_libcore_icu/icu_jni.dll build/win64_phase1/libicu_jni.dll
 
 ## Not done (Phase B+)
 
-- Real `libjavacore.dll` / `libopenjdk.dll` (still `libcombined` stubs) — L-001 / W-005
+- ~~Real `libjavacore.dll` / `libopenjdk.dll`~~ **product PE** (W-005/L-001 closed)
 - Full ICU data load path vs stubdata (file `ICU_DATA` / `icudt*.dat` packaging verification)
 - Drop dual-name staging once ART load names settle
 - Wire install into `package_win64_phase3.sh`
@@ -416,3 +416,16 @@ DnsProbe.done=ok
 NetProbe.done=ok
 CoreProbe.done=ok
 ```
+
+## L-001 CLOSED (2026-07-17)
+
+**Exit criteria met:** product PE without `libcombined`; GoldenApp + charset (`CoreProbe`) + `LocaleProbe` PASS under wine.
+
+| Product DLL | Role |
+|-------------|------|
+| `libjavacore.dll` | Hybrid AOSP + Win Os bridge + Expat/NativeBN/NetworkUtilities/AsyncClose/OsConstantsHolder |
+| `libopenjdk.dll` | Hybrid AOSP NIO/zip + win_close AsyncClose |
+| `libicu_jni.dll` / `icuuc` / `icui18n` | Real ICU PE |
+| `libopenjdkjvm.dll` | JVM_* helpers |
+
+**Intentional residual:** AOSP `libcore_io_Linux.cpp` not compiled on Win64; Os map uses Win bridges (needed=0). Crypto under L-002.
