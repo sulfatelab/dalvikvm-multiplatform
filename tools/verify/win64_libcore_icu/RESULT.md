@@ -40,3 +40,25 @@ cp build/win64_libcore_icu/icu_jni.dll build/win64_phase1/libicu_jni.dll
 
 - `compat/include/unistd.h` — `typedef int pid_t` on Win32
 - `compat/include/byteswap.h` — new shim for ICU bridge sources
+
+## Phase B0 — hybrid `javacore.dll` (2026-07-17)
+
+**Status:** **BUILT + wine smoke OK** (CoreProbe, IoProbe)
+
+| Piece | Approach |
+|-------|----------|
+| AOSP `Register.cpp`, ICU helpers, MethodHandle/VarHandle, NativeAllocationRegistry | Real sources |
+| `libcore.io.Linux` | **Excluded** AOSP `libcore_io_Linux.cpp`; Win bridge registers ~50 methods from `win_fs`/`win_net` stubs |
+| WinNT FS / sockets / OsConstants init | Same PE stub C sources linked into `javacore.dll` |
+| Expat, NativeBN, Memory, NetworkUtilities, AsyncClose, full OsConstantsHolder | **Not yet** (empty register stubs / deferred) |
+| `libopenjdk.dll` | Still pure `libcombined` alias |
+
+Artifact: `build/win64_libcore_icu/javacore.dll` (~92K)
+
+### Smoke
+
+```
+showversion → ART version 2.1.0 x86_64
+CoreProbe.done=ok
+IoProbe.done=ok
+```
