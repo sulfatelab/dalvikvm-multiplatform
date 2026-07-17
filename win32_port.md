@@ -696,6 +696,10 @@ Each phase has a kill-or-continue gate. This is the execution roadmap when imple
 
 ### Phase 5 — JIT / oat (optional v1.1+)
 
+> **Design draft:** TLS / managed ABI / quick entrypoints / JIT for WinNT (all ISAs sketched, x86_64 first):
+> [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md).
+
+
 - Win64 quick entrypoints complete.
 - JIT code cache W^X.
 - dex2oat either ported or deferred (interpreter+JIT may suffice).
