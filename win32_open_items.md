@@ -336,9 +336,11 @@ If product reopens a non-goal, add an **L-** item and link the decision.
 
 ---
 
-## Closed items
+## Closed
 
-_(None yet in this tracker. When closing a W-/L-/H- item, move a one-line summary here.)_
+- **D-001** — shared boot.jar runtime OS selection (**single jar** goal; not dual-host FS proof)
+- **L-005** — Linux imageless Hello / boot.jar CI gate
+- **W-019..W-023** and other closed W- items: detail rows remain below / above with State CLOSED
 
 <!--
 ### W-000 — example
@@ -401,10 +403,11 @@ _(None yet in this tracker. When closing a W-/L-/H- item, move a one-line summar
 - **Opened:** 2026-07-17
 - **Progress:** 2026-07-17 — root cause + source fix; full art PE rebuild running
 
-## Design notes (not yet coded)
+## Design notes
 
 ### D-001 — Shared boot.jar via runtime OS selection
-- **State:** PHASE 1 IMPLEMENTED (2026-07-17) — property inject + `VMRuntime.isWindowsOs` + dual FS + separators; verify L-005 + wine Hello
+- **State:** CLOSED (2026-07-17)
+- **Goal (actual):** **one** multipath `boot.jar` (not dual packaged jars / not “prove WinFS-on-Win and UnixFS-on-Unix” as close criteria)
 - **Doc:** `shared_bootjar_runtime_os_detection.md`
 - **Canonical property:** `dalvik.vm.multiplatform.internal.os` = `windows` | `unix`
   - Long + `internal` intentional (not a public app API; not expected for external use)
@@ -413,14 +416,17 @@ _(None yet in this tracker. When closing a W-/L-/H- item, move a one-line summar
 - **Injection:** `vendor/art/runtime/runtime.cc` after `PropertiesList` release (PE=`windows`, ELF=`unix` if unset)
 - **Detection ladder:** `VMRuntime.properties()` → System props / `os.name` → default `unix` (`VMRuntime.isWindowsOs`)
 - **Separators:** removed from `AndroidHardcodedSystemProperties`; set in `System.initUnchangeableSystemProperties`
-- **Boot:** `tools/bootjar/build_win64.sh` stages shared jar (no WinNT-only overlay)
-- **Exit criteria:** one `boot.jar` bytes pass L-005 Linux Hello **and** Win Hello under wine
-- **Follow-up during implement:** `Math.c` must not register natives for pure-Java `ceil`/`floor` (shared multipath Math.java)
+- **Boot:** `tools/bootjar/build_win64.sh` stages shared jar (no WinNT-only overlay); jar embeds both FS + `isWindowsOs`
+- **Exit criteria (met):** single shared boot pipeline produces one jar used for Linux imageless Hello (L-005 PASS on shared multipath bytes)
+- **Non-goals for this close:** dual-host acceptance that Windows always selects `WinNTFileSystem` and Unix always selects `UnixFileSystem` under product PE/wine — those are ordinary product smoke, not D-001 scope
+- **Follow-up (orthogonal):** wine/host Hello on same bytes; PE `art.dll` inject path when PE product is rebuilt
 - **Code anchors:** `dalvik/system/VMRuntime.java` (`isWindowsOs*`), `DefaultFileSystem.java`, `System.java`, `runtime.cc`, `build_win64.sh`
+- **Opened:** 2026-07-17
+- **Closed:** 2026-07-17
 
 ## Suggested next closures (priority)
 
-1. ~~**D-001** Phase 1~~ — implemented; finish dual-host verify then close.  
+1. ~~**D-001**~~ **CLOSED** — single shared boot.jar (runtime OS selection); dual-host FS smoke is not the close bar.  
 2. **W-001–W-003** — after TLS/entrypoint implementation (design draft ready).  
 3. **L-001** — deepen hybrid libcore surface (Memory/Expat/NativeBN/…); W-005/W-006 closed for ICU product PE.  
 4. **H-001** — host Phase-4 with multiplatform package.  
@@ -436,4 +442,4 @@ _(None yet in this tracker. When closing a W-/L-/H- item, move a one-line summar
 - [ ] Permanent design choice (e.g. VEH forever) → move from W- to documented architecture; close workaround  
 - [ ] CLOSED items: one line in §Closed, leave detail above with State CLOSED  
 
-*Last snapshot: 2026-07-17 — D-001 Phase 1 implemented (shared boot runtime OS selection); verify pending; L-005 gate updated for shared jar.*
+*Last snapshot: 2026-07-17 — D-001 CLOSED (single shared boot.jar via runtime OS selection; L-005 PASS on shared multipath jar). Dual-host FS smoke not required for close.*

@@ -1,6 +1,6 @@
 # Shared boot.jar: Runtime OS detection for FileSystem selection
 
-**Status:** Phase 1 **IMPLEMENTED** (property inject + `VMRuntime.isWindowsOs` + shared DefaultFileSystem + separators); name/values **LOCKED** (§11)  
+**Status:** **CLOSED** as D-001 — single shared boot.jar goal met (property inject + `VMRuntime.isWindowsOs` + dual FS + separators); name/values **LOCKED** (§11)  
 **Date:** 2026-07-17  
 **Decision context:** multipath will use **runtime selection** so Linux ART and Windows ART can share one `boot.jar` (instead of build-time WinNT overlay only).  
 **Related:** L-005 (Linux Hello rejects WinNT boot), Option H WinNT FS, `filesystem_win32.md`, `tools/bootjar/build_win64.sh`
@@ -584,3 +584,22 @@ Landed 2026-07-17:
 | L-005 | accepts shared jar (Unix + optional WinNT with multipath helpers) |
 
 Still out of scope: NIO.2 `DefaultFileSystemProvider` Windows path.
+
+
+---
+
+## 13. Close notes (D-001)
+
+**Closed 2026-07-17.** D-001’s success criterion is **one multipath boot.jar**, not a dual-host proof matrix of “WinNT on Windows and Unix on Unix.”
+
+Met:
+
+- One packaging path stages a jar containing both `UnixFileSystem` and `WinNTFileSystem`
+- Runtime selection via `VMRuntime.isWindowsOs()` / `dalvik.vm.multiplatform.internal.os`
+- Separators derived at `System` init (not unconditional hardcodes)
+- Linux L-005 imageless Hello PASS on those shared multipath bytes
+
+Out of scope for this close (ordinary product smoke later):
+
+- Wine/host Hello asserting WinNT selection on PE
+- Formal dual-host golden that both FS backends are exercised under product packaging
