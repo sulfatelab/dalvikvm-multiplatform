@@ -62,7 +62,7 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 | Phases 0–3 | **Gate-complete** (P3 G12 real Win10 + wine) |
 | Phase 4 | **Wine complete**; host re-run still recommended |
 | PE libcore/ICU/openjdk | **Product-default real PE** (icu/javacore/openjdk); NIO.2 non-goal; NetProbe OK |
-| Quick/JIT/TLS | **Designed** in draft doc; **not implemented**; invoke forced to interpreter; **W-024** restore Critical/FastNative after |
+| Quick/JIT/TLS | **Partial:** rSELF/macros/invoke stubs + nterp off; opt-in `ART_WIN64_QUICK_INVOKE`; wine Hello/Math/Io/Net no-`-Xint` PASS; JIT not started; **W-024** after |
 | Linux multiplatform | Native `dalvikvm -showversion` OK; imageless Hello e2e not re-gated here |
 
 ---
@@ -70,36 +70,40 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 ## Temporary workarounds (must be removed later)
 
 ### W-001 — Force interpreter invoke (quick entrypoints effectively disabled)
-- **State:** OPEN
+- **State:** OPEN (opt-in path exists)
 - **Kind:** workaround
 - **Area:** art / invoke
-- **Symptom / why:** Win64 `art_quick_invoke_*` stubs assume SysV + managed `%gs:Thread*`; not ported.
-- **Current behavior:** On `_WIN32`, `ArtMethod::Invoke` sets `use_interpreter_invoke = true` for invokable non-proxy methods → always `EnterInterpreterFromInvoke` (including natives via interpreter JNI).
-- **Proper fix:** Win64 invoke stubs + managed self (see [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md)); then remove the unconditional Win32 force (keep legitimate debugger/force-interpreter cases).
-- **Code anchors:** `vendor/art/runtime/art_method.cc` (`#if defined(_WIN32)` force); comments on SysV + `%gs`
-- **Blocked on:** TLS/entrypoint design lock-in + implementation
+- **Symptom / why:** Win64 product still defaults to interpreter invoke until quick path is smoke-validated.
+- **Current behavior:** On `_WIN32`, invokable non-proxy methods force `EnterInterpreterFromInvoke` **unless** `ART_WIN64_QUICK_INVOKE=1`. With the env set, `art_quick_invoke_*` (MS entry → SysV body, rSELF=r15) is used.
+- **Proper fix:** Expand wine matrix + host re-run; then default the env path on and delete the force (keep debugger/`-Xint` cases).
+- **Code anchors:** `vendor/art/runtime/art_method.cc`; `quick_entrypoints_x86_64.S` Win prologues; [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md) §12b
+- **Blocked on:** product default decision (Hello/Math/Io/Net no-`-Xint` green under opt-in; CoreProbe independent NPE)
 - **Opened:** 2026-07-16 (Phase 2)
+- **Updated:** 2026-07-18 — wine Hello/Math/Io/Net PASS with quick invoke ± `-Xint`; force-interp remains product default
 
 ### W-002 — No managed GS / Thread base on Windows (`InitCpu` no-op for GS)
-- **State:** OPEN
+- **State:** OPEN (partial — macros landed; not product-default)
 - **Kind:** workaround
 - **Area:** art / TLS
 - **Symptom / why:** Linux x86_64 uses `ARCH_SET_GS` so quick/nterp use `%gs:OFFSET`. Windows GS is TEB.
-- **Current behavior:** `thread_x86_64.cc::InitCpu` Win32 branch only documents TODO; relies on C++ `thread_local` / no GS verify. Quick asm that still uses `%gs` is unsafe/unused while W-001 holds.
-- **Proper fix:** Explicit managed self register (draft: `r15`) + THREAD_LOAD/STORE macros; never set GS to Thread*.
-- **Code anchors:** `vendor/art/runtime/arch/x86_64/thread_x86_64.cc`; design §6 in `win32_tls_jit_entrypoints.md`
+- **Current behavior:** `InitCpu` does **not** touch GS (correct). Asm uses `THREAD_*` macros: r15 base on `_WIN32`, GS on Linux. rSELF published in `art_quick_invoke_*` when quick invoke is enabled.
+- **Proper fix:** Keep r15 model; ensure every managed entry (JNI return, attach) publishes rSELF; port mterp off `%gs`/`rREFS=r15` conflict or keep permanent switch-interp; then close when product default uses rSELF path.
+- **Code anchors:** `thread_x86_64.cc`; `asm_support_x86_64.S` `THREAD_*`; `nterp.cc` (`IsNterpSupported` false on Win); design §6 / §12b
 - **Opened:** 2026-07-16
+- **Updated:** 2026-07-18 — THREAD macros + r15; nterp disabled on Win (switch interp) so no-`-Xint` Hello works
+- **Design:** mterp port options/register map in [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md) **§15** (prefer N-1)
 
 ### W-003 — Quick entrypoint SETUP frames `int3` on Windows
-- **State:** OPEN
-- **Kind:** workaround (hard fail if reached)
+- **State:** OPEN (partial — SETUP_SAVE_REFS_ONLY / ALL_CALLEE_SAVES un-int3'd on Win)
+- **Kind:** workaround (hard fail if other paths still stubbed)
 - **Area:** art / quick asm
-- **Symptom / why:** Many `SETUP_SAVE_*_FRAME` paths are stubbed for Apple/Win32.
-- **Current behavior:** Hitting those macros traps (`int3`) rather than building callee-save frames.
-- **Proper fix:** Port macros with Win self base + MS C++ edge ABI; remove `int3` guards.
-- **Code anchors:** `vendor/art/runtime/arch/x86_64/asm_support_x86_64.S`, `quick_entrypoints_x86_64.S` (`#if defined(__APPLE__) \|\| defined(_WIN32)`)
-- **Depends on:** W-001, W-002
+- **Symptom / why:** Apple still traps; Win now builds frames via shared SETUP with `THREAD_STORE` for top quick frame.
+- **Current behavior:** `SETUP_SAVE_REFS_ONLY_FRAME` / `SETUP_SAVE_ALL_CALLEE_SAVES_FRAME` no longer `int3` on `_WIN32`. C++ helpers called as `sysv_abi` (`ART_QUICK_ENTRYPOINT_ABI`).
+- **Proper fix:** Smoke the invoke→interpreter bridge; close when no Win SETUP path traps and product default uses quick invoke.
+- **Code anchors:** `asm_support_x86_64.S`; `ART_QUICK_ENTRYPOINT_ABI` in macros + entrypoints
+- **Depends on:** W-001 validation
 - **Opened:** 2026-07-16
+- **Updated:** 2026-07-18 — Win SETUP enabled
 
 ### W-004 — `LOAD_RUNTIME_INSTANCE` PE helper call (vs GOT)
 - **State:** OPEN (acceptable interim; still temporary vs ideal PE codegen)
@@ -540,4 +544,4 @@ _No open design notes. Closed D- items live under §Closed._
 - [ ] Permanent design choice (e.g. VEH forever) → move from W- to documented architecture; close workaround  
 - [ ] CLOSED items: move full item into §Closed (sorted by ID); keep State CLOSED history  
 
-*Last snapshot: 2026-07-17 — L-003 CLOSED (run_l003_wine OVERALL PASS: exec/locale/zip/udp/ipv6); W-024 OPEN; D-001 CLOSED.*
+*Last snapshot: 2026-07-18 — next phase: nterp off on Win; wine Hello/Math/Io/Net PASS without -Xint under ART_WIN64_QUICK_INVOKE=1; CoreProbe pre-existing NPE both modes; W-001 default ON; W-024 OPEN.*

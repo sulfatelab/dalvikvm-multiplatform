@@ -1,7 +1,7 @@
 # ART on Windows NT — TLS, Managed ABI, Quick Entrypoints, and JIT
 
-**Status:** DRAFT (research + design only; no implementation commitment in this document)  
-**Date:** 2026-07-17  
+**Status:** DRAFT + **implementation started** (Win64 x86_64 spine); **mterp design §15**  
+**Date:** 2026-07-18  
 **Scope:** Design **all** ART-WinNT ISA targets in theory; implement later with **x86_64 first**.  
 **Related:** [win64_art_port.md](win64_art_port.md) (product phases), [win32_open_items.md](win32_open_items.md) (open workarounds W-001+), Phase 3+ runtime hardening, Phase 5 JIT/oat.
 
@@ -621,6 +621,324 @@ Quick entrypoint **asm prologues** are where these differences are centralized.
 
 ---
 
+
+## 12b. Implementation progress (2026-07-18)
+
+Locked for coding (from §9 lean recommendations):
+
+1. **Managed arg regs:** Linux-like SysV shape inside managed/quick asm; convert only at edges.  
+2. **rSELF:** **r15** on win-x86_64.  
+3. **C++ quick helpers:** `ART_QUICK_ENTRYPOINT_ABI` = `sysv_abi` on Win64 so asm can keep SysV `call` sites.  
+4. **Invoke stubs:** Microsoft x64 entry at `art_quick_invoke_*`, then map to SysV body + publish r15.  
+5. **Force-interpreter (W-001):** still default ON; opt-in `ART_WIN64_QUICK_INVOKE=1`.
+
+Landed in tree:
+
+| Item | Location |
+|------|----------|
+| `THREAD_*` macros (GS vs r15) | `asm_support_x86_64.S` |
+| `%gs:` sites → macros | x86_64 `*.S` |
+| SETUP frames enabled on Win (no `int3`) | `asm_support_x86_64.S` |
+| Win64 invoke prologues + rSELF publish | `quick_entrypoints_x86_64.S` |
+| `ART_QUICK_ENTRYPOINT_ABI` | `libartbase/base/macros.h` + entrypoint defs |
+| Invoke force gated by env | `art_method.cc` |
+| `InitCpu` Win comments | `thread_x86_64.cc` |
+| Nterp disabled on `_WIN32` | `interpreter/mterp/nterp.cc` |
+
+Wine smoke (2026-07-18, `build/win64_phase1`):
+
+| Gate | Result |
+|------|--------|
+| `dalvikvm.exe -showversion` | PASS (`ART version 2.1.0 x86_64`) |
+| Hello default (force-interp) | PASS (`Hello from dalvikvm!`, `java.version=1.8.0`) |
+| Hello `ART_WIN64_QUICK_INVOKE=1` + `-Xint` | **PASS** — no `ArtMethod::Invoke via interpreter` spam; invoke→quick stub→interpreter bridge works |
+
+### Next-phase progress (2026-07-18, design §12 steps 4–5)
+
+**Nterp disabled on Win32** (`IsNterpSupported() → false`): generated `mterp_x86_64` still uses `%gs` Thread TLS and occupies `r15` as `rREFS`, conflicting with managed rSELF. Switch interpreter is used instead until mterp is ported.
+
+Wine matrix with `ART_WIN64_QUICK_INVOKE=1` (fresh PE, imageless):
+
+| Gate | `-Xint` | no `-Xint` |
+|------|---------|------------|
+| Hello | PASS | **PASS** (was AV before nterp off) |
+| MathProbe | PASS | **PASS** |
+| IoProbe | PASS | **PASS** |
+| NetProbe | PASS | **PASS** |
+| CoreProbe | FAIL (NPE `toCopy==null`, both modes) | FAIL (same pre-existing) |
+
+Design step 5 (**compiled Hello without forced `-Xint`**, still imageless) is **met** under opt-in quick invoke + switch interpreter.
+
+Still open (toward product default + Phase 5 JIT):
+
+- Flip product default: `ART_WIN64_QUICK_INVOKE` on by default / drop W-001 force (after broader green + host).  
+- Port **mterp** per **§15** (prefer N-1: rSELF=r15, rREFS=rbp) or keep N-0 switch-interp.  
+- JNI quick stubs (`art_jni_dlsym_lookup_*`) under rSELF when leaving InterpreterJni (W-012).  
+- CoreProbe NPE (libcore/reflect path; not specific to quick invoke).  
+- W-024 Critical/FastNative restore.  
+- Phase 5: JIT code cache + emitter on same self/ABI contracts.  
+- Host (real Win10) re-run.
+
+## 15. Nterp / mterp on WinNT x86_64 — analysis and design
+
+**Status:** DESIGN (research complete; implementation not started)  
+**Current product:** `IsNterpSupported()` returns **false** on `_WIN32` (§12b); switch interpreter only.  
+**Goal:** specify a correct, implementable port that fits the locked rSELF model without reintroducing GS Thread\*.
+
+### 15.1 What nterp is (in this tree)
+
+ART’s fast interpreter is **nterp** (templates under `vendor/art/runtime/interpreter/mterp/`, generators `gen_mterp.py`). For x86_64 the arch pack is **`x86_64ng/`**; codegen emits `mterp_x86_64.S` (in-tree gensrc: `build/*/gensrc/art/asm/mterp/mterp_x86_64.S`).
+
+Control model (README):
+
+- Handler table: entry ≈ `handler_base + opcode * NTERP_HANDLER_SIZE` (computed goto).  
+- **`rIBASE`** holds the active handler table base; refreshed on backward branches / throws / returns.  
+- Frame layout matches optimizing ABI (see `nterp_helpers.cc`): callee saves, dex regs, **reference regs**, caller fp, dex_pc_ptr, outs, `ArtMethod*`.  
+- No ManagedStack transitions between nterp and compiled frames.  
+- Entry points: `ExecuteNterpImpl` / `ExecuteNterpWithClinitImpl` (OAT-prefixed headers for stack walk).
+
+Gate today (`nterp.cc`):
+
+```text
+IsNterpSupported():
+  ART_USE_RESTRICTED_MODE → false
+  _WIN32                  → false   // multipath (2026-07-18)
+  else x86_64             → !kUseTableLookupReadBarrier
+
+CanRuntimeUseNterp():
+  IsNterpSupported()
+  && !InterpretOnly()     // -Xint forces switch
+  && !debuggable / stubs / async exception / jit-at-first-use …
+```
+
+That is why **`-Xint` Hello worked** with quick invoke, while **no-`-Xint` crashed** until nterp was disabled: without `-Xint`, methods get nterp entry points that still assume Linux GS Thread TLS.
+
+### 15.2 Linux x86_64 register map (oracle)
+
+From `x86_64ng/main.S` header (and generated `mterp_x86_64.S`):
+
+| Symbolic | Register / mechanism | Role |
+|----------|----------------------|------|
+| **rSELF** | **`%gs` (segment)** | Thread\* base: `rSELF:THREAD_*_OFFSET` → `%gs:offset` |
+| **rPC** | `%r12` | Dex PC pointer |
+| **rFP** | `%r13` | Dex register array base |
+| **rIBASE** | `%r14` | Handler table base |
+| **rREFS** | **`%r15`** | Reference-only reg array base (GC roots) |
+| **rINST** | `%rbx` / `%ebx` | Current instruction / temps |
+| **rNEW_FP / rNEW_REFS** | `%r8` / `%r9` | Frame setup temps (nterp→nterp) |
+| shorty / misc | **`%rbp`** | Entry shorty pointer; also arg-count temps in invoke paths |
+
+Callee-save spill (`SPILL_ALL_CALLEE_SAVES`): `r15,r14,r13,r12,rbp,rbx` + FP callee saves — aligned with “save all callee saves” thinking.
+
+**Thread field traffic in generated mterp** (counts from current gensrc, approximate):
+
+| Access | ~count | Notes |
+|--------|-------:|-------|
+| `THREAD_SELF_OFFSET` | 57 | Often materialize `Thread*` into `%rdi`/`%rax` for C++ helpers |
+| `THREAD_READ_BARRIER_MARK_REG00_OFFSET` | 15 | Marking check |
+| `THREAD_CARD_TABLE_OFFSET` | 4 | Write barrier |
+| exception / flags / tid / hotness / alloc entrypoints | few | trampolines + suspend |
+
+Plus **one bare** `cmpq …, %gs:THREAD_EXCEPTION_OFFSET` in `NTERP_TRAMPOLINE` (not via `rSELF` symbol).
+
+**Entry ABI (managed / ART, SysV-shaped):**
+
+```text
+ExecuteNterpImpl:
+  rdi = ArtMethod*
+  remaining args = method parameters (GPRs/XMMs / stack)
+  // Thread* is NOT an argument — Linux relies on GS already = Thread* (InitCpu)
+```
+
+`ExecuteNterpWithClinitImpl` reads **`rSELF:THREAD_TID_OFFSET` before spilling** — assumes GS is live on entry.
+
+**CFA / unwind:** after frame setup, CFA is often **based on rREFS** (`CFI_DEF_CFA_BREG_PLUS_UCONST CFI_REFS, -8, …`). `EXPORT_PC` stores dex PC at **`-16(rREFS)`**. Changing rREFS is a CFI + exception-landing change, not a local rewrite.
+
+### 15.3 Conflicts with locked WinNT design
+
+| Locked multipath choice (§6 / §12b) | Nterp Linux reality | Conflict |
+|-------------------------------------|---------------------|----------|
+| Never set GS = Thread\* (TEB owns GS) | rSELF = `%gs` | **Hard fail** if nterp enabled |
+| Managed self = **r15** | rREFS = **r15** | **Same physical register, two roles** |
+| Quick helpers SysV via `ART_QUICK_ENTRYPOINT_ABI` | Nterp calls C++ helpers with SysV ARG macros | Compatible **if** helpers stay sysv_abi |
+| Invoke stubs publish r15 at C++→managed edge | Nterp entry does not take Thread\*; expects GS | **Must materialize Thread\* on entry** |
+
+Empirical: wine AV without `-Xint` (pre-disable); fault pattern consistent with bad Thread-relative access. Disabling nterp restored Hello/Math/Io/Net without `-Xint`.
+
+**Register pressure (why this is hard):** SysV callee-saved cores are only `rbx,rbp,r12–r15`. Nterp already assigns **all six**:
+
+```text
+rbx=rINST  rbp=temps/shorty  r12=rPC  r13=rFP  r14=rIBASE  r15=rREFS
+```
+
+Making rSELF a **GPR** requires either:
+
+1. **Repurposing** one of those roles (almost certainly **rbp** or a redesign of rREFS), or  
+2. **Not** holding Thread\* in a dedicated reg (reload from C++ TLS / TEB slot — fights nterp’s density).
+
+Arm64 nterp is the cleaner oracle: **xSELF=x19** is a normal callee-saved pointer (same idea as quick), not a segment.
+
+### 15.4 Design options (Win x86_64)
+
+#### Option N-0 — Switch interpreter only (current product)
+
+- Keep `IsNterpSupported()==false` on `_WIN32`.  
+- Non-`-Xint` uses switch interpreter + existing quick invoke / entrypoints.  
+- **Pros:** already green for Hello/Math/Io/Net; no huge asm churn.  
+- **Cons:** slower than nterp; delays “interpreter quality” vs Linux; still need JIT for speed.  
+- **Verdict:** acceptable **v1 product** if Phase 5 JIT is the speed path; document as temporary or permanent.
+
+#### Option N-1 — rSELF=r15, move rREFS → rbp  **(recommended if porting)**
+
+Align nterp with quick/managed self:
+
+```text
+Win-x86_64 nterp:
+  rSELF  = %r15          // Thread*  (same as quick managed self)
+  rREFS  = %rbp          // reference array base
+  rPC/rFP/rIBASE/rINST unchanged (r12/r13/r14/rbx)
+```
+
+Work items:
+
+1. **Template header** (`x86_64ng/main.S`): `#if defined(_WIN32)` redefine rSELF/rREFS/CFI_REFS.  
+2. **Syntax:** keep `rSELF:OFF` only if rSELF is a segment; for GPR base switch to **`OFF(rSELF)`** (or introduce `THREAD_LOAD` style macros shared with `asm_support_x86_64.S`). Prefer **one** addressing style used by both quick and nterp.  
+3. **Audit every `%rbp`/`%ebp` temp** (shorty save, invoke arg counts, stack indices) → use `r10`/`r11`/`eax` instead so rREFS=rbp is never clobbered mid-handler.  
+4. **CFI:** rewrite CFA expressions that use CFI_REFS (was 15 → rbp’s DWARF number 6).  
+5. **`EXPORT_PC`:** `-16(rREFS)` becomes `-16(%rbp)` automatically if rREFS redefined — verify exception landing (`artNterpAsmInstructionEnd`).  
+6. **`NTERP_TRAMPOLINE`:** replace bare `%gs:THREAD_EXCEPTION_OFFSET` with Thread field via rSELF.  
+7. **Entry materialization** (mandatory on Win — no GS):
+
+```text
+ExecuteNterpImpl (Win):
+  SPILL_ALL_CALLEE_SAVES     // includes old r15/rbp
+  call art_nterp_current_thread  // ART_QUICK_ENTRYPOINT_ABI Thread* ()
+  movq %rax, rSELF           // r15
+  // then SETUP_STACK_FRAME (defines rREFS=rbp, rFP, …)
+```
+
+   `ExecuteNterpWithClinitImpl` must **not** read TID via rSELF **before** that materialization (today it does). Order becomes: spill → load Thread → tid check → body, **or** call a tiny C++ helper that does the clinit gate.
+
+8. **nterp→nterp:** same OS thread → rSELF already valid; do not clobber r15.  
+9. **nterp→compiled / compiled→nterp:** compiled code must honor r15 as self when quick is enabled; invoke stubs already set r15 from C++.  
+10. **Regenerate** `mterp_x86_64.S` via existing bp2cmake/codegen path; PE + Linux smoke.
+
+**Pros:** one self story across quick + nterp + future JIT.  
+**Cons:** largest careful asm audit (rbp is busy); CFI risk.
+
+#### Option N-2 — rSELF=rbp, keep rREFS=r15
+
+```text
+rSELF = %rbp   // Thread*
+rREFS = %r15   // unchanged
+```
+
+- Slightly less churn on ref-array addressing and some CFI.  
+- **Breaks** locked “rSELF=r15” consistency with quick stubs unless quick is also redefined to rbp (not recommended — quick already shipping on r15).  
+- Still need entry materialization + rbp-temp audit.  
+- **Verdict:** inferior to N-1 once quick is r15-locked.
+
+#### Option N-3 — Thread\* via TEB TLS every access
+
+- Map ART Thread\* into a PE TLS slot; expand `rSELF:OFF` to load base from TEB then field.  
+- **Pros:** no extra dedicated GPR.  
+- **Cons:** code size / latency destroy nterp’s reason to exist; ugly macros; still need TEB layout constants.  
+- **Verdict:** research-only / reject for product nterp.
+
+#### Option N-4 — Dual generated files
+
+- `mterp_x86_64.S` (Linux GS) vs `mterp_x86_64_win.S` (GPR self).  
+- Build system selects by target.  
+- **Pros:** no `#ifdef` spaghetti inside every line.  
+- **Cons:** two artifacts to regen; still implement N-1 body once.  
+- **Verdict:** good **packaging** on top of N-1, not a separate ISA design.
+
+### 15.5 Recommended strategy (phased)
+
+```text
+Now (product):     N-0  switch only on Win
+Next nterp work:   N-1  rSELF=r15, rREFS=rbp  (+ optional N-4 dual gensrc)
+Not chosen:        N-2 / N-3
+JIT (Phase 5):     independent of nterp, but same r15 self contract
+```
+
+**Ordering relative to §12:**
+
+| Step | Work | Depends on |
+|------|------|------------|
+| 0 | Keep N-0; document | done |
+| 1 | Spec lock: N-1 register map + entry helper `art_nterp_current_thread` | this section |
+| 2 | Template + trampoline + CFI edits; regen mterp | 1 |
+| 3 | Wine: enable `IsNterpSupported` on Win under flag e.g. `ART_WIN64_NTERP=1` | 2 |
+| 4 | Hello/Math/Io/Net **no `-Xint`** with nterp on; compare to switch | 3 |
+| 5 | Default nterp on Win if green; else leave N-0 | 4 |
+| 6 | Only then treat nterp as prerequisite for “fast interpreter product”; JIT still separate | 5 |
+
+Do **not** re-enable nterp by default without step 3–4.
+
+### 15.6 Entry / exit protocol (N-1 detail)
+
+```text
+                    Linux nterp              Win nterp (N-1)
+                    ------------             ----------------
+Thread base         GS (InitCpu)             r15, set each ExecuteNterp* entry
+Refs base           r15                      rbp
+C++ Thread::Current thread_local             thread_local (unchanged)
+Quick managed self  GS                       r15 (already)
+Invoke stub         SysV + GS live           MS→SysV + r15 publish
+Nterp trampoline    %gs:exception            THREAD_* via r15
+Exception EXPORT_PC -16(r15)                 -16(rbp)
+```
+
+Helper sketch (C++):
+
+```cpp
+extern "C" ART_QUICK_ENTRYPOINT_ABI Thread* art_nterp_current_thread() {
+  return Thread::Current();  // self_tls_ on non-Bionic
+}
+```
+
+Must be safe when called with partial nterp frame (after callee spill, before SETUP_STACK_FRAME). Prefer no lock / no suspend.
+
+### 15.7 Interaction with `-Xint`, quick invoke, JIT
+
+| Mode | Nterp? | Path |
+|------|--------|------|
+| `-Xint` | never (`InterpretOnly`) | switch + (opt) quick invoke stubs |
+| no `-Xint`, N-0 Win | never | switch; methods may still point at switch entry |
+| no `-Xint`, N-1 Win | yes if `CanRuntimeUseNterp` | nterp hot loops; runtime via trampolines |
+| JIT on | nterp until compiled | same self contract; code cache W^X |
+
+Enabling nterp does **not** replace the need for correct **quick entrypoint** exception/alloc/JNI paths; nterp *calls* those (alloc entrypoint offsets on Thread, card table, etc.).
+
+### 15.8 Testing plan (when implementing)
+
+1. Unit: assemble `mterp_x86_64` for PE and Linux; size check `handler_size`.  
+2. Wine `ART_WIN64_NTERP=1 ART_WIN64_QUICK_INVOKE=1` Hello **without** `-Xint`.  
+3. Same matrix as §12b: Math / Io / Net; CoreProbe if fixed.  
+4. Exception path: throw/catch across nterp frames (ThrowProbe).  
+5. GC: allocation stress with nterp on (ref array walk via rREFS=rbp).  
+6. Differential: Linux nterp remains GS; no Linux reg map change.  
+7. Host Win10 smoke before default-on.
+
+### 15.9 Explicit non-goals for mterp port
+
+- Emulating Linux GS Thread\* on Windows.  
+- Keeping rSELF=%gs with a custom GS base.  
+- Porting x86 (32-bit) nterp.  
+- Arm64EC nterp before win-x86_64 nterp is done.  
+- Claiming Phase 5 JIT complete by finishing nterp.
+
+### 15.10 Decision summary
+
+| Question | Answer |
+|----------|--------|
+| Can we enable stock Linux nterp on Win? | **No** (GS + r15 dual use). |
+| Is switch-only viable? | **Yes** for current product (N-0). |
+| Preferred port if we want nterp speed? | **N-1:** rSELF=r15, rREFS=rbp + entry Thread materialization. |
+| First code touch? | `x86_64ng/main.S` map + `NTERP_TRAMPOLINE` + clinit entry order + regen. |
+| Gate to re-enable `IsNterpSupported` on Win? | Feature flag + wine matrix green, not compile success alone. |
+
 ## 13. Appendix — evidence anchors in tree
 
 | Claim | Anchor |
@@ -631,8 +949,10 @@ Quick entrypoint **asm prologues** are where these differences are centralized.
 | C++ Current = thread_local non-Bionic | `vendor/art/runtime/thread-current-inl.h` |
 | QuickEntryPoints in Thread | `quick_entrypoints.h`, `Thread::QuickEntryPointOffset` |
 | Win forces interpreter invoke | `vendor/art/runtime/art_method.cc` (`#if defined(_WIN32)`) |
-| Win SETUP frames still trap | `asm_support_x86_64.S` (`#if defined(__APPLE__) \|\| defined(_WIN32) int3`) |
+| Win SETUP frames (was int3) | Ported off Win `int3`; Apple still traps |
 | PE Runtime load helper | `LOAD_RUNTIME_INSTANCE` in `asm_support_x86_64.S` |
+| Nterp Win conflicts (GS + r15=rREFS) | `mterp/x86_64ng/main.S`; generated `mterp_x86_64.S`; §15 |
+| Nterp disabled on Win | `interpreter/mterp/nterp.cc` `IsNterpSupported` |
 
 ---
 
