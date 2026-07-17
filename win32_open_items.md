@@ -401,12 +401,27 @@ _(None yet in this tracker. When closing a W-/L-/H- item, move a one-line summar
 - **Opened:** 2026-07-17
 - **Progress:** 2026-07-17 — root cause + source fix; full art PE rebuild running
 
+## Design notes (not yet coded)
+
+### D-001 — Shared boot.jar via runtime OS selection
+- **State:** DESIGN LOCKED (name/values); implementation PENDING
+- **Doc:** `shared_bootjar_runtime_os_detection.md`
+- **Canonical property:** `dalvik.vm.multiplatform.internal.os` = `windows` | `unix`
+  - Long + `internal` intentional (not a public app API; not expected for external use)
+  - Reject short `dalvik.vm.mp.os` (`mp` ambiguous)
+  - Values: `windows`|`unix` (not `posix`, not `linux`) — aligns with `WinNTFileSystem` / `UnixFileSystem`
+- **Injection:** `libart` / `dalvikvm` multipath startup (`-D` / Runtime properties channel)
+- **Detection ladder:** native `_WIN32` → property → `os.name`/`uname` → default `unix`
+- **Also required:** stop unconditional Windows hardcodes of `file.separator` / `path.separator` / `line.separator` in `AndroidHardcodedSystemProperties`
+- **Exit criteria (when implementing):** one `boot.jar` bytes pass L-005 Linux Hello **and** Win Hello under wine
+
 ## Suggested next closures (priority)
 
-1. **W-001–W-003** — after TLS/entrypoint implementation (design draft ready).  
-2. **L-001** — deepen hybrid libcore surface (Memory/Expat/NativeBN/…); W-005/W-006 closed for ICU product PE.  
-3. **H-001** — host Phase-4 with multiplatform package.  
-4. ~~**L-005** — Linux Hello gate~~ **CLOSED**.
+1. **D-001** — implement shared-boot Phase 1 (property inject + `OsDetection` + dual FS classes + separator fix); design locked.  
+2. **W-001–W-003** — after TLS/entrypoint implementation (design draft ready).  
+3. **L-001** — deepen hybrid libcore surface (Memory/Expat/NativeBN/…); W-005/W-006 closed for ICU product PE.  
+4. **H-001** — host Phase-4 with multiplatform package.  
+5. ~~**L-005** — Linux Hello gate~~ **CLOSED**.
 
 ---
 
@@ -418,4 +433,4 @@ _(None yet in this tracker. When closing a W-/L-/H- item, move a one-line summar
 - [ ] Permanent design choice (e.g. VEH forever) → move from W- to documented architecture; close workaround  
 - [ ] CLOSED items: one line in §Closed, leave detail above with State CLOSED  
 
-*Last snapshot: 2026-07-17 — L-005 CLOSED (Linux imageless Hello gate PASS); W-019..W-023 CLOSED; HTTPS smoke green.*
+*Last snapshot: 2026-07-17 — D-001 property LOCKED (`dalvik.vm.multiplatform.internal.os`=windows|unix); L-005 CLOSED; W-019..W-023 CLOSED; HTTPS smoke green.*
