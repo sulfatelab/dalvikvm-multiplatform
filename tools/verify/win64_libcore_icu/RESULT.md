@@ -221,6 +221,18 @@ OK libjavacrypto.dll ... JNI_OnLoad=<non-null>
 
 ## Phase C2 — conscrypt Java on bootclasspath (L-002 partial, 2026-07-17)
 
+**Update:** With W-019 Math fix + Runtime.nativeLoad + jarjar prefix + JNI_OnLoad fixes,
+wine `LoadCryptoProbe` constructs `OpenSSLProvider` successfully:
+```
+map=libjavacrypto.dll
+System.load=ok
+System.loadLibrary=ok
+OpenSSLProvider.instance=AndroidOpenSSL version 1.0
+LoadCryptoProbe.done=ok
+```
+`SslProviderProbe` still crashes on `Security.getProviders()` (default provider list path) — C2+ residual.
+
+
 **Status:** **PACKAGED + partial runtime** (provider construction blocked by Math CriticalNative ABI)
 
 ### Packaging

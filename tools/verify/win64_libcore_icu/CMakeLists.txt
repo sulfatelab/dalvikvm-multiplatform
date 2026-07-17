@@ -412,7 +412,7 @@ if(MDVM_WIN64_BUILD_CRYPTO)
     )
     target_compile_definitions(javacrypto PRIVATE
       ${_WIN_DEFS}
-      JNI_JARJAR_PREFIX=\"com/android/\"
+      JNI_JARJAR_PREFIX=com/android/
       CONSCRYPT_OPENJDK
       OPENSSL_NO_ASM
     )

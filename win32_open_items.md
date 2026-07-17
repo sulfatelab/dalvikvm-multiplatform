@@ -255,14 +255,14 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Progress:** 2026-07-17 — AOSP `Memory` in javacore; Linux bridge mmap/… + Needed pipe/pread/readv/timeval/sendto/…; see win32_libcore_os_natives.md (Needed residual small)
 
 ### L-002 — boringssl / conscrypt / SSL PE
-- **State:** OPEN (partial — C0/C1 PE done; C2 Java packaged; provider init blocked by W-019)
+- **State:** OPEN (partial — C0/C1 PE + C2 OpenSSLProvider construct OK; default Security providers / HTTPS C3 open)
 - **Kind:** leftover (priority only if apps need TLS)
 - **Area:** crypto
 - **Gap:** ~~libcrypto/ssl/javacrypto PE~~ **C0+C1 done.** ~~conscrypt Java absent from boot.jar~~ **C2 packaged** (`build_conscrypt_win64.sh`). Still missing: win-x86_64 ASM; **OpenSSLProvider construction** (blocked by Math `@CriticalNative` crash W-019); BC optional; HTTPS golden C3.
 - **Exit criteria:** HTTPS/crypto golden **or** explicit non-goal. Crypto golden met; native TLS PE met; conscrypt Java on boot met; full provider/HTTPS still open.
 - **Code anchors:** hybrid CMake SSL/javacrypto; `tools/bootjar/build_conscrypt_win64.sh`; `libcore_hello3.c` mapLibraryName; boot.jar `com.android.org.conscrypt`
 - **Opened:** 2026-07-17
-- **Progress:** 2026-07-17 — C2 boot.jar has NativeCrypto/OpenSSLProvider; loadLibrary ok; provider ctor aborts in Math.ceil (W-019)
+- **Progress:** 2026-07-17 — W-019 Math.ceil fixed; Runtime.nativeLoad+JNI_OnLoad; jarjar prefix fix; LoadCryptoProbe OpenSSLProvider OK; SslProviderProbe still crashes on Security.getProviders
 - **Workaround note:** Do not claim HTTPS until W-019 fixed and SslProviderProbe green.
 
 ### L-003 — Process/exec, rich locale, zip edge, UDP/IPv6 matrix
@@ -346,7 +346,7 @@ _(None yet in this tracker. When closing a W-/L-/H- item, move a one-line summar
 ---
 
 ### W-019 — Math @CriticalNative / FastNative double ABI on Win64
-- **State:** OPEN (root cause identified; fix in tree, art.dll rebuild in progress)
+- **State:** CLOSED (2026-07-17) — Math.ceil/floor/sqrt + HashSet wine PASS after interpreter CriticalNative DD/DDD
 - **Kind:** workaround / runtime ABI
 - **Area:** libcore Math / ART interpreter JNI (Win64 -Xint)
 - **Root cause:** Official AOSP CriticalNative is fine on Linux quick/generic-JNI. Win64 multipath forces `ArtMethod::Invoke` through the interpreter; `InterpreterJniGeneric` only handled CriticalNative shorties `II`/`I`/`Z`/`ZI`. `Math.ceil` is shorty `DD` (`(D)D`), so dispatch fell through and crashed. Secondary: registering `Math_*_jni(JNIEnv*,jclass,jdouble)` under CriticalNative is the wrong ABI.
@@ -373,4 +373,4 @@ _(None yet in this tracker. When closing a W-/L-/H- item, move a one-line summar
 - [ ] Permanent design choice (e.g. VEH forever) → move from W- to documented architecture; close workaround  
 - [ ] CLOSED items: one line in §Closed, leave detail above with State CLOSED  
 
-*Last snapshot: 2026-07-17 — L-002 C2 conscrypt Java packaged + loadLibrary OK; provider init blocked by W-019 Math.ceil CriticalNative.*
+*Last snapshot: 2026-07-17 — W-019 CLOSED; L-002 OpenSSLProvider construct OK; Security.getProviders/HTTPS still open.*
