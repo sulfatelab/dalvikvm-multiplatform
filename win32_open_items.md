@@ -118,7 +118,7 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Opened:** 2026-07-16 (Phase 2; expanded Phase 3)
 
 ### W-006 — Minimal NativeConverter / ICU version shims (not full ICU4C)
-- **State:** OPEN (partially superseded 2026-07-17)
+- **State:** CLOSED (2026-07-17) — product uses real icu_jni NativeConverter + icuuc/icui18n + icudt; native_converter.c obsolete and removed from libcombined; charset stub no longer product path
 - **Kind:** workaround
 - **Area:** icu
 - **Current behavior:** Phase-3 package historically used `native_converter.c` stubs. **Phase A progress:** real PE `icuuc.dll` / `icui18n.dll` / `icu_jni.dll` now build from AOSP sources (`tools/verify/win64_libcore_icu/`) and can replace stub `libicu_jni` in `build/win64_phase1`. `libjavacore`/`libopenjdk` still combined stubs (may still register overlapping charset helpers until removed).
@@ -343,7 +343,7 @@ _(None yet in this tracker. When closing a W-/L-/H- item, move a one-line summar
 ## Suggested next closures (priority)
 
 1. **W-001–W-003** — after TLS/entrypoint implementation (design draft ready).  
-2. **W-005 / L-001 / W-006** — real PE libcore/ICU vs endless stub growth.  
+2. **L-001** — deepen hybrid libcore surface (Memory/Expat/NativeBN/…); W-005/W-006 closed for ICU product PE.  
 3. **H-001** — host Phase-4 with multiplatform package.  
 4. **L-005** — Linux Hello gate so host oracle stays green.
 
@@ -357,4 +357,4 @@ _(None yet in this tracker. When closing a W-/L-/H- item, move a one-line summar
 - [ ] Permanent design choice (e.g. VEH forever) → move from W- to documented architecture; close workaround  
 - [ ] CLOSED items: one line in §Closed, leave detail above with State CLOSED  
 
-*Last snapshot: 2026-07-17 — W-005 CLOSED (real PE modules product-default, no libcombined); W-016 CLOSED; NetProbe OK.*
+*Last snapshot: 2026-07-17 — W-005/W-006/W-016 CLOSED (real ICU PE + product packaging; no charset stubs); NetProbe OK.*

@@ -1,3 +1,9 @@
+/* OBSOLETE / NON-PRODUCT (W-006 CLOSED).
+ * Phase-2 minimal NativeConverter stub. Product uses real AOSP ICU:
+ *   vendor/icu/android_icu4j/.../com_android_icu_charset_NativeConverter.cpp
+ * in icu_jni.dll via tools/win64/stage_native_modules.sh.
+ * Kept only for historical reference; not linked into product PE.
+ */
 /* Minimal com.android.icu.charset.NativeConverter PE stub for Phase-2.
  * Supports UTF-8 / ISO-8859-1 / US-ASCII / UTF-16* enough for System/print/zip bootstrap.
  */

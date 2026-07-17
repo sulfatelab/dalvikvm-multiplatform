@@ -146,3 +146,14 @@ tools/win64/stage_native_modules.sh <dest> [build/win64_libcore_icu] [build/win6
 
 Stages real `icuuc`/`icui18n`/`openjdkjvm` + `icu_jni`/`javacore`/`openjdk`, then ART sonames `libicu_jni`/`libjavacore`/`libopenjdk` as copies of those real modules.  
 `tools/win64/jni_stubs/libcombined.dll` is **legacy / non-product**.
+
+
+## ICU charset path (W-006 CLOSED)
+
+Product charset natives come from real AOSP bridge:
+
+- `com_android_icu_charset_NativeConverter.cpp` in `icu_jni.dll`
+- ICU4C in `icuuc.dll` / `icui18n.dll`
+- Data: `run/icu/icudt72l.dat` (W-016)
+
+`tools/win64/jni_stubs/native_converter.c` is obsolete and is **not** linked into product PE or the legacy combined stub build.
