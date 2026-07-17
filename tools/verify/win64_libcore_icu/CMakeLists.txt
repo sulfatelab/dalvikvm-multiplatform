@@ -369,6 +369,64 @@ if(MDVM_WIN64_BUILD_CRYPTO)
   add_executable(crypto_sha_smoke "${CMAKE_CURRENT_SOURCE_DIR}/crypto_sha_smoke.c")
   target_link_libraries(crypto_sha_smoke PRIVATE crypto)
   target_include_directories(crypto_sha_smoke PRIVATE "${MDVM_ART_ROOT_DIR}/external/boringssl/src/include")
+
+  # --- boringssl libssl PE (L-002 Phase C1) ---
+  option(MDVM_WIN64_BUILD_SSL "Build boringssl ssl PE + conscrypt JNI" ON)
+  if(MDVM_WIN64_BUILD_SSL)
+    set(_SSL_SRCS ${ssl_sources})
+    add_library(ssl SHARED ${_SSL_SRCS})
+    set_target_properties(ssl PROPERTIES OUTPUT_NAME "libssl" WINDOWS_EXPORT_ALL_SYMBOLS ON)
+    target_include_directories(ssl PUBLIC
+      "${MDVM_ART_ROOT_DIR}/external/boringssl/src/include"
+    )
+    target_compile_definitions(ssl PRIVATE
+      ${_WIN_DEFS}
+      BORINGSSL_IMPLEMENTATION
+      BORINGSSL_SHARED_LIBRARY
+      OPENSSL_NO_ASM
+      OPENSSL_SMALL
+    )
+    target_compile_options(ssl PRIVATE ${_WIN_CFLAGS} -Wno-unused-parameter)
+    target_link_libraries(ssl PUBLIC crypto PRIVATE ws2_32 kernel32)
+
+    # --- conscrypt libjavacrypto PE ---
+    set(MDVM_CONSCRYPT_DIR "${_repo}/vendor/java-external/conscrypt")
+    set(_JC_CRYPTO_SRCS
+      "${MDVM_CONSCRYPT_DIR}/common/src/jni/main/cpp/conscrypt/compatibility_close_monitor.cc"
+      "${MDVM_CONSCRYPT_DIR}/common/src/jni/main/cpp/conscrypt/jniload.cc"
+      "${MDVM_CONSCRYPT_DIR}/common/src/jni/main/cpp/conscrypt/jniutil.cc"
+      "${MDVM_CONSCRYPT_DIR}/common/src/jni/main/cpp/conscrypt/native_crypto.cc"
+      "${MDVM_CONSCRYPT_DIR}/common/src/jni/main/cpp/conscrypt/netutil.cc"
+    )
+    add_library(javacrypto SHARED ${_JC_CRYPTO_SRCS})
+    set_target_properties(javacrypto PROPERTIES OUTPUT_NAME "libjavacrypto" WINDOWS_EXPORT_ALL_SYMBOLS ON)
+    target_include_directories(javacrypto PRIVATE
+      "${MDVM_CONSCRYPT_DIR}/common/src/jni/main/include"
+      "${MDVM_ART_ROOT_DIR}/external/boringssl/src/include"
+      "${MDVM_ART_ROOT_DIR}/libnativehelper/include_jni"
+      "${MDVM_ART_ROOT_DIR}/libnativehelper/header_only_include"
+      "${MDVM_ART_ROOT_DIR}/libnativehelper/include"
+      "${MDVM_ART_ROOT_DIR}/logging/liblog/include"
+      "${MDVM_ART_ROOT_DIR}/libbase/include"
+      "${MDVM_COMPAT_INCLUDE_DIR}"
+    )
+    target_compile_definitions(javacrypto PRIVATE
+      ${_WIN_DEFS}
+      JNI_JARJAR_PREFIX=\"com/android/\"
+      CONSCRYPT_OPENJDK
+      OPENSSL_NO_ASM
+    )
+    target_compile_options(javacrypto PRIVATE
+      ${_WIN_CFLAGS}
+      -Wno-unused-parameter
+      -Wno-sign-compare
+      -fvisibility=hidden
+      "SHELL:-D__INTRODUCED_IN(x)="
+    )
+    target_link_libraries(javacrypto PUBLIC ssl crypto log nativehelper
+      PRIVATE ws2_32 kernel32 advapi32)
+  endif()
+
 endif()
 
 message(STATUS "Win64 libcore/ICU: icu + optional javacore/openjdk hybrids + crypto")

@@ -255,14 +255,15 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Progress:** 2026-07-17 — AOSP `Memory` in javacore; Linux bridge mmap/… + Needed pipe/pread/readv/timeval/sendto/…; see win32_libcore_os_natives.md (Needed residual small)
 
 ### L-002 — boringssl / conscrypt / SSL PE
-- **State:** OPEN (partial — crypto PE landed 2026-07-17)
+- **State:** OPEN (partial — C0 crypto + C1 ssl/javacrypto PE; HTTPS Java still open)
 - **Kind:** leftover (priority only if apps need TLS)
 - **Area:** crypto
-- **Gap:** ~~No `libcrypto` PE~~ **Done (C0):** `crypto.dll`/`libcrypto.dll` from AOSP boringssl C sources (`OPENSSL_NO_ASM`) + wine `CryptoSmoke` SHA-256 golden. Still missing: win-x86_64 ASM path, `ssl` PE, conscrypt `libjavacrypto` + provider, HTTPS golden.
-- **Exit criteria:** HTTPS/crypto golden **or** explicit non-goal product statement. **Crypto golden met** (`CryptoSmoke.done=ok`); HTTPS/conscrypt still open.
-- **Code anchors:** `tools/verify/win64_libcore_icu/CMakeLists.txt` (`MDVM_WIN64_BUILD_CRYPTO`), `crypto_sha_smoke.c`, `vendor/external/boringssl/android-sources.cmake`
+- **Gap:** ~~No `libcrypto` PE~~ **C0 done.** ~~No `libssl` / `libjavacrypto` PE~~ **C1 done** (wine LoadLibrary + `JNI_OnLoad` export). Still missing: win-x86_64 ASM path; **conscrypt Java classes on bootclasspath** (boot.jar has provider *name* strings only, no `NativeCrypto`/conscrypt class bodies); HTTPS golden.
+- **Exit criteria:** HTTPS/crypto golden **or** explicit non-goal product statement. **Crypto golden met** (`CryptoSmoke.done=ok`); native TLS PE met for C1; full HTTPS still open (C2/C3).
+- **Code anchors:** `tools/verify/win64_libcore_icu/CMakeLists.txt` (`MDVM_WIN64_BUILD_CRYPTO` / `MDVM_WIN64_BUILD_SSL`), `crypto_sha_smoke.c`, `vendor/external/boringssl/android-sources.cmake`, conscrypt JNI under `vendor/java-external/conscrypt/`, `stage_native_modules.sh`
 - **Opened:** 2026-07-17
-- **Progress:** 2026-07-17 — Phase C0 real `crypto.dll` (~1.2M) wine PASS
+- **Progress:** 2026-07-17 — C0 `libcrypto` wine PASS; C1 `libssl`+`libjavacrypto` build/stage + wine LoadLibrary PASS; vendor patches for ART `AttachCurrentThread` + `ssize_t` guard
+- **Workaround note:** Until C2, product may ship native crypto PE without a working `SSLContext` provider; do not claim HTTPS support.
 
 ### L-003 — Process/exec, rich locale, zip edge, UDP/IPv6 matrix
 - **State:** OPEN
@@ -273,7 +274,7 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Opened:** 2026-07-17
 
 ### L-004 — Shrink or replace multi-name DLL staging
-- **State:** CLOSED (2026-07-17) — product ships one PE soname each: `libicu_jni`/`libjavacore`/`libopenjdk`/`libopenjdkjvm`/`libcrypto` (+ `icuuc`/`icui18n`); short-name twins removed from packaging
+- **State:** CLOSED (2026-07-17) — product ships one PE soname each: `libicu_jni`/`libjavacore`/`libopenjdk`/`libopenjdkjvm`/`libcrypto`/`libssl`/`libjavacrypto` (+ `icuuc`/`icui18n`); short-name twins removed from packaging
 - **Kind:** leftover / packaging debt
 - **Depends on:** L-001, W-005
 - **Fix:** CMake `OUTPUT_NAME` for hybrid targets; `stage_native_modules.sh` stages only product names and deletes short twins; install rejects short-name reappearance
@@ -361,4 +362,4 @@ _(None yet in this tracker. When closing a W-/L-/H- item, move a one-line summar
 - [ ] Permanent design choice (e.g. VEH forever) → move from W- to documented architecture; close workaround  
 - [ ] CLOSED items: one line in §Closed, leave detail above with State CLOSED  
 
-*Last snapshot: 2026-07-17 — L-001 deepen Os Needed (pipe/pread/readv/timeval/send*); GoldenApp wine OK; L-002 partial crypto.*
+*Last snapshot: 2026-07-17 — L-002 C1 libssl+libjavacrypto PE wine LoadLibrary OK; HTTPS blocked on conscrypt Java in boot.jar (C2).*

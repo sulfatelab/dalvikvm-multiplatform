@@ -4,7 +4,7 @@
 # ART InitNativeMethods loads (Windows):
 #   libicu_jni.dll, libjavacore.dll, libopenjdk.dll
 # Supporting PE (dependency / optional):
-#   icuuc.dll, icui18n.dll, libopenjdkjvm.dll, libcrypto.dll
+#   icuuc.dll, icui18n.dll, libopenjdkjvm.dll, libcrypto.dll, libssl.dll, libjavacrypto.dll
 #
 # Build artifacts may use the same OUTPUT_NAME. Product trees do NOT ship
 # short-name duplicates (icu_jni.dll / javacore.dll / openjdk.dll / crypto.dll).
@@ -86,7 +86,7 @@ require_copy_as libopenjdk.dll openjdk.dll
 
 # Remove any residual short duplicates explicitly
 rm -f "$DEST/icu_jni.dll" "$DEST/javacore.dll" "$DEST/openjdk.dll" \
-      "$DEST/openjdkjvm.dll" "$DEST/crypto.dll" 2>/dev/null || true
+      "$DEST/openjdkjvm.dll" "$DEST/crypto.dll" "$DEST/ssl.dll" "$DEST/javacrypto.dll" 2>/dev/null || true
 
 # Sanity vs legacy combined
 if [[ -f "$REPO/tools/win64/jni_stubs/libcombined.dll" ]]; then
@@ -100,13 +100,30 @@ if [[ -f "$REPO/tools/win64/jni_stubs/libcombined.dll" ]]; then
   done
 fi
 
-# Optional crypto PE (L-002): single product name libcrypto.dll
+# Optional crypto stack PE (L-002): single product names
+# libcrypto / libssl / libjavacrypto (conscrypt JNI; Java provider still separate)
 if src=$(pick_module libcrypto.dll crypto.dll); then
   cp -a "$src" "$DEST/libcrypto.dll"
   rm -f "$DEST/crypto.dll" 2>/dev/null || true
   echo "stage_native_modules: libcrypto.dll <- $src"
 else
   echo "stage_native_modules: libcrypto.dll not built (optional L-002); skip"
+fi
+
+if src=$(pick_module libssl.dll ssl.dll); then
+  cp -a "$src" "$DEST/libssl.dll"
+  rm -f "$DEST/ssl.dll" 2>/dev/null || true
+  echo "stage_native_modules: libssl.dll <- $src"
+else
+  echo "stage_native_modules: libssl.dll not built (optional L-002 C1); skip"
+fi
+
+if src=$(pick_module libjavacrypto.dll javacrypto.dll); then
+  cp -a "$src" "$DEST/libjavacrypto.dll"
+  rm -f "$DEST/javacrypto.dll" 2>/dev/null || true
+  echo "stage_native_modules: libjavacrypto.dll <- $src"
+else
+  echo "stage_native_modules: libjavacrypto.dll not built (optional L-002 C1); skip"
 fi
 
 # Distinctness check (three ART load modules must differ)
@@ -119,4 +136,4 @@ if [[ "$h1" == "$h2" || "$h2" == "$h3" || "$h1" == "$h3" ]]; then
 fi
 
 echo "stage_native_modules: OK single-name product PE under $DEST"
-echo "  (libicu_jni, libjavacore, libopenjdk + icuuc/icui18n/libopenjdkjvm [+libcrypto])"
+echo "  (libicu_jni, libjavacore, libopenjdk + icuuc/icui18n/libopenjdkjvm [+libcrypto/libssl/libjavacrypto])"

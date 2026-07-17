@@ -179,10 +179,45 @@ Configure flag: `-DMDVM_WIN64_BUILD_CRYPTO=ON` (default ON in harness).
 
 ### Not done (remaining L-002)
 - `win-x86_64` perlasm (llvm-ml) instead of OPENSSL_NO_ASM
-- `ssl.dll` / full TLS stack
-- conscrypt `libjavacrypto` PE + Java provider wiring
-- HTTPS golden app
+- ~~`ssl.dll` / full TLS stack~~ **C1 PE done** (see below)
+- ~~conscrypt `libjavacrypto` PE~~ **C1 PE done**; Java provider still missing from boot.jar
+- HTTPS golden app (needs conscrypt Java + provider init)
 
+## Phase C1 — `libssl` + conscrypt `libjavacrypto` PE (L-002 partial, 2026-07-17)
+
+**Status:** **BUILT + wine LoadLibrary smoke OK** (native PE only; not full HTTPS)
+
+| Artifact | Size | Notes |
+|----------|------|--------|
+| `libssl.dll` | ~475K | AOSP boringssl `ssl_sources`, OPENSSL_NO_ASM, links `libcrypto` |
+| `libjavacrypto.dll` | ~257K | conscrypt JNI (`native_crypto.cc` + jniutil/jniload/netutil/close_monitor) |
+| Export | — | `JNI_OnLoad` present on `libjavacrypto.dll` |
+
+Configure: `-DMDVM_WIN64_BUILD_CRYPTO=ON` + `-DMDVM_WIN64_BUILD_SSL=ON` (defaults ON).
+
+Win64 conscrypt header fixes (vendor nested):
+- `compat.h`: do not redefine `ssize_t` when project compat already defines it
+- `jniutil.h`: use ART `AttachCurrentThread(JNIEnv**, …)` form on `_WIN32`
+
+Product staging (`stage_native_modules.sh`): optional single names  
+`libcrypto.dll` / `libssl.dll` / `libjavacrypto.dll` (no short twins).
+
+Wine smoke (cwd `build/win64_phase1`):
+
+```
+OK libcrypto.dll ... JNI_OnLoad=null
+OK libssl.dll ... JNI_OnLoad=null
+OK libjavacrypto.dll ... JNI_OnLoad=<non-null>
+```
+
+### C2/C3 blockers (honest)
+- Current `run/boot.jar` has `javax/net/ssl/*` API types and **string** references to
+  `com.android.org.conscrypt.OpenSSLProvider` / `JSSEProvider` (security provider list),
+  but **no** `Lcom/android/org/conscrypt/` or `NativeCrypto` class bodies.
+- ART does not preload `libjavacrypto`; platform path is `System.loadLibrary("javacrypto")`
+  from conscrypt `NativeCryptoJni` when the Java provider initializes.
+- Full HTTPS golden requires packaging conscrypt Java (jarjar `com.android.org.conscrypt`)
+  onto bootclasspath (or extension jar) then a TLS golden (loopback or external).
 
 ## Single product DLL names (L-004 CLOSED)
 
@@ -195,6 +230,8 @@ Hybrid targets emit ART/product sonames directly:
 | `openjdk` | `libopenjdk` |
 | `openjdkjvm` | `libopenjdkjvm` |
 | `crypto` | `libcrypto` |
+| `ssl` | `libssl` |
+| `javacrypto` | `libjavacrypto` |
 
 `stage_native_modules.sh` stages only these (plus `icuuc`/`icui18n`) and removes short-name twins (`icu_jni.dll`, `javacore.dll`, …).
 
