@@ -115,8 +115,9 @@ __declspec(dllexport) jstring Java_libcore_io_Linux_getenv__Ljava_lang_String_2(
   return Java_libcore_io_Linux_getenv(env, thiz, jname);
 }
 
-__declspec(dllexport) void Java_android_system_OsConstantsHolder_initConstants(JNIEnv* env, jclass cls){(void)env;(void)cls;}
-__declspec(dllexport) void Java_android_system_OsConstantsHolder_initConstants__(JNIEnv* env, jclass cls){(void)env;(void)cls;}
+/* OsConstantsHolder.initConstants: real implementation registered via
+ * multiplatform/windows/native/android_system_OsConstantsHolder_win.cpp
+ * (RegisterNatives). Do not export empty Java_* stubs here. */
 
 __declspec(dllexport) jint Java_java_lang_Float_floatToRawIntBits(JNIEnv* e, jclass c, jfloat v){(void)e;(void)c;union{jfloat f;jint i;}u;u.f=v;return u.i;}
 __declspec(dllexport) jint Java_java_lang_Float_floatToRawIntBits__F(JNIEnv* e, jclass c, jfloat v){return Java_java_lang_Float_floatToRawIntBits(e,c,v);}

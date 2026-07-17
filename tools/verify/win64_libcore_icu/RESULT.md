@@ -52,7 +52,8 @@ cp build/win64_libcore_icu/icu_jni.dll build/win64_phase1/libicu_jni.dll
 | WinNT FS / sockets / OsConstants init | Same PE stub C sources linked into `javacore.dll` |
 | Memory, NetworkUtilities, NativeBN, ExpatParser | **In PE** (L-001 2026-07-17) |
 | AsynchronousCloseMonitor | **In PE** (Win monitor + JNI register; wine AsyncCloseProbe PASS) |
-| full OsConstantsHolder, full `libcore_io_Linux` | **Not yet** (empty register stubs / Win bridge) |
+| OsConstantsHolder | **In PE** (Win multipath initConstants; wine OsConstantsProbe PASS) |
+| full `libcore_io_Linux` | **Not yet** (Win bridge remains) |
 | `libopenjdk.dll` | Still pure `libcombined` alias |
 
 Artifact: `build/win64_libcore_icu/javacore.dll` (~92K)
@@ -362,7 +363,7 @@ Residual HTTPS: `HttpsURLConnection` needs `com.android.okhttp.HttpsHandler` (no
 | `libcore.math.NativeBN` | Real AOSP `libcore_math_NativeBN.cpp` linked against product `libcrypto` (boringssl) |
 | `org.apache.harmony.xml.ExpatParser` | Real AOSP ExpatParser + static vendored **libexpat 2.6.4** (`vendor/external/expat`) |
 | `NetworkUtilities` | Real AOSP helpers (sockaddr ↔ InetAddress, msghdr conversion); Winsock/msghdr CMSG macros fixed in `compat/include/sys/socket.h` |
-| Still empty registers | `OsConstantsHolder` (Win OsConstants init elsewhere) |
+| Still empty registers | *(none for L-001 core modules)* |
 | Still excluded | Full AOSP `libcore_io_Linux.cpp` (Win bridge remains), `cbigint` |
 
 ### Smoke (wine64, imageless `-Xint`)
@@ -392,6 +393,26 @@ Probes: `tools/verify/win64_phase3/src/{Bn,Xml}Probe.java` via `build_one.sh` / 
 
 ```
 AsyncCloseProbe.done=ok   # accept unblocked with SocketException; read EOF after peer close
+NetProbe.done=ok
+CoreProbe.done=ok
+```
+
+## L-001 OsConstantsHolder (2026-07-17)
+
+**Status:** **BUILT into product `libjavacore` + wine smoke OK**
+
+| Piece | Approach |
+|-------|----------|
+| JNI `android.system.OsConstantsHolder.initConstants` | Multipath `android_system_OsConstantsHolder_win.cpp` (all 121 holder fields) |
+| Value ABI | **Android/bionic** numbers (not raw Winsock `AI_*`/`EAI_*`) so `win_net` getaddrinfo flag mapping stays consistent |
+| Empty AOSP TU | Linux `android_system_OsConstantsHolder.cpp` still excluded (heavy Linux headers) |
+| hello3 | Removed empty `Java_android_system_OsConstantsHolder_initConstants` exports |
+
+### Smoke
+
+```
+OsConstantsProbe.done=ok  # AI_PASSIVE=1, AI_ADDRCONFIG=32, EAI_*, _SC_NPROCESSORS_*, …
+DnsProbe.done=ok
 NetProbe.done=ok
 CoreProbe.done=ok
 ```

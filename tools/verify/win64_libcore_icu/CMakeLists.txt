@@ -162,12 +162,13 @@ if(MDVM_WIN64_BUILD_JAVACORE)
   list(FILTER _JC_SRCS EXCLUDE REGEX "libcore_io_Linux[.]cpp$")
   list(FILTER _JC_SRCS EXCLUDE REGEX "cbigint[.]cpp$")
   list(FILTER _JC_SRCS EXCLUDE REGEX "android_system_OsConstantsHolder[.]cpp$")
-  # L-001: NetworkUtilities + NativeBN + ExpatParser + AsynchronousCloseMonitor.
-  # Still excluded: full AOSP libcore_io_Linux (Win bridge), cbigint, OsConstantsHolder.
+  # L-001: NetworkUtilities + NativeBN + Expat + AsyncClose + OsConstantsHolder (Win multipath).
+  # Still excluded: full AOSP libcore_io_Linux (Win bridge), cbigint.
 
   set(_JC_WIN_BRIDGE
     "${MDVM_LIBCORE_DIR}/multiplatform/windows/native/register_libcore_io_Linux_win.cpp"
     "${MDVM_LIBCORE_DIR}/multiplatform/windows/native/AsynchronousCloseMonitor_win.cpp"
+    "${MDVM_LIBCORE_DIR}/multiplatform/windows/native/android_system_OsConstantsHolder_win.cpp"
     "${_repo}/tools/win64/jni_stubs/win_path.c"
     "${_repo}/tools/win64/jni_stubs/win_fs_natives.c"
     "${_repo}/tools/win64/jni_stubs/win_net_natives.c"
@@ -177,12 +178,14 @@ if(MDVM_WIN64_BUILD_JAVACORE)
     PROPERTIES COMPILE_DEFINITIONS "JNI_OnLoad=javacore_stub_JNI_OnLoad_unused;JNI_OnUnload=javacore_stub_JNI_OnUnload_unused")
   # Empty registers only for modules still excluded
   set(_JC_WIN_STUB_REG "${CMAKE_CURRENT_BINARY_DIR}/javacore_excluded_registers.cpp")
-  file(WRITE "${_JC_WIN_STUB_REG}"
-"#include <jni.h>
-void register_android_system_OsConstantsHolder(JNIEnv*) {}
-")
+  # No empty register stubs remaining for core L-001 modules.
+  set(_JC_WIN_STUB_REG "")
 
-  add_library(javacore SHARED ${_JC_SRCS} ${_JC_WIN_BRIDGE} ${_JC_WIN_STUB_REG})
+  if(_JC_WIN_STUB_REG)
+    add_library(javacore SHARED ${_JC_SRCS} ${_JC_WIN_BRIDGE} ${_JC_WIN_STUB_REG})
+  else()
+    add_library(javacore SHARED ${_JC_SRCS} ${_JC_WIN_BRIDGE})
+  endif()
   set_target_properties(javacore PROPERTIES OUTPUT_NAME "libjavacore")
 
   target_include_directories(javacore
