@@ -429,3 +429,7 @@ CoreProbe.done=ok
 | `libopenjdkjvm.dll` | JVM_* helpers |
 
 **Intentional residual:** AOSP `libcore_io_Linux.cpp` not compiled on Win64; Os map uses Win bridges (needed=0). Crypto under L-002.
+
+## W-007 CLOSED — select-based classic sockets (2026-07-17)
+
+Permanent Win design: `Os.poll` / socket timeouts use Winsock **`select()`** (host Win10 `WSAPoll` EINVAL on CRT sockets). SocketAddress `bind`/`connect` overloads for InetSocketAddress registered. Wine `SocketAddressProbe` + net matrix PASS.

@@ -1,5 +1,9 @@
 /* Minimal classic sockets for Win64 ART Phase 3 (A7-oriented).
  * Maps Android/bionic OsConstants values to Winsock, dual-stack IPv6.
+ *
+ * W-007: classic Os socket poll/timeout uses Winsock select() — not WSAPoll on
+ * CRT _open_osfhandle sockets (real Win10 returned WSAEINVAL). Keep select as
+ * the product wait primitive; FD_SETSIZE bounds multi-fd poll.
  * NIO.2 is intentionally out of scope.
  */
 #include <jni.h>
@@ -42,7 +46,8 @@ enum {
   A_EADDRINUSE = 98,
   A_EINVAL = 22,
   A_EBADF = 9,
-  A_EACCES = 13
+  A_EACCES = 13,
+  A_EAFNOSUPPORT = 97
 };
 
 static int g_wsa_ready = 0;
@@ -102,6 +107,7 @@ static int map_wsa_to_android(int wsa) {
     case WSAEINVAL: return A_EINVAL;
     case WSAEBADF: return A_EBADF;
     case WSAEACCES: return A_EACCES;
+    case WSAEAFNOSUPPORT: return A_EAFNOSUPPORT;
     case WSAECONNRESET: return 104; /* ECONNRESET-ish */
     case WSAETIMEDOUT: return 110;
     case WSAENOTCONN: return 107;
@@ -315,10 +321,34 @@ __declspec(dllexport) void Java_libcore_io_Linux_bind__Ljava_io_FileDescriptor_2
     throw_errno(env, "bind", map_wsa_to_android(WSAGetLastError()));
   }
 }
-/* Overload used by some call sites: bind(fd, SocketAddress) — not implemented fully */
+/* ART short-name export for bind(InetAddress, port) */
 __declspec(dllexport) void Java_libcore_io_Linux_bind(JNIEnv* env, jobject thiz, jobject fdObj, jobject addrOrSa, jint port) {
-  /* If port looks like a real port method, treat as InetAddress overload */
   Java_libcore_io_Linux_bind__Ljava_io_FileDescriptor_2Ljava_net_InetAddress_2I(env, thiz, fdObj, addrOrSa, port);
+}
+
+/* bind(FileDescriptor, SocketAddress) — classic InetSocketAddress only (no AF_UNIX product path). */
+static int inet_socket_address_parts(JNIEnv* env, jobject sa, jobject* outAddr, jint* outPort) {
+  if (!sa || !outAddr || !outPort) return -1;
+  jclass isa = (*env)->FindClass(env, "java/net/InetSocketAddress");
+  if (!isa || !(*env)->IsInstanceOf(env, sa, isa)) return -1;
+  jmethodID getAddr = (*env)->GetMethodID(env, isa, "getAddress", "()Ljava/net/InetAddress;");
+  jmethodID getPort = (*env)->GetMethodID(env, isa, "getPort", "()I");
+  jmethodID isUnresolved = (*env)->GetMethodID(env, isa, "isUnresolved", "()Z");
+  if (!getAddr || !getPort) return -1;
+  if (isUnresolved && (*env)->CallBooleanMethod(env, sa, isUnresolved)) return -1;
+  *outAddr = (*env)->CallObjectMethod(env, sa, getAddr);
+  *outPort = (*env)->CallIntMethod(env, sa, getPort);
+  return (*outAddr) ? 0 : -1;
+}
+
+__declspec(dllexport) void Java_libcore_io_Linux_bind__Ljava_io_FileDescriptor_2Ljava_net_SocketAddress_2(
+    JNIEnv* env, jobject thiz, jobject fdObj, jobject sa) {
+  jobject addr = NULL; jint port = 0;
+  if (inet_socket_address_parts(env, sa, &addr, &port) != 0) {
+    throw_errno(env, "bind", A_EAFNOSUPPORT);
+    return;
+  }
+  Java_libcore_io_Linux_bind__Ljava_io_FileDescriptor_2Ljava_net_InetAddress_2I(env, thiz, fdObj, addr, port);
 }
 
 /* ===== connect(InetAddress, port) ===== */
@@ -343,6 +373,16 @@ __declspec(dllexport) void Java_libcore_io_Linux_connect__Ljava_io_FileDescripto
   }
 }
 __declspec(dllexport) void Java_libcore_io_Linux_connect(JNIEnv* env, jobject thiz, jobject fdObj, jobject addr, jint port) {
+  Java_libcore_io_Linux_connect__Ljava_io_FileDescriptor_2Ljava_net_InetAddress_2I(env, thiz, fdObj, addr, port);
+}
+
+__declspec(dllexport) void Java_libcore_io_Linux_connect__Ljava_io_FileDescriptor_2Ljava_net_SocketAddress_2(
+    JNIEnv* env, jobject thiz, jobject fdObj, jobject sa) {
+  jobject addr = NULL; jint port = 0;
+  if (inet_socket_address_parts(env, sa, &addr, &port) != 0) {
+    throw_errno(env, "connect", A_EAFNOSUPPORT);
+    return;
+  }
   Java_libcore_io_Linux_connect__Ljava_io_FileDescriptor_2Ljava_net_InetAddress_2I(env, thiz, fdObj, addr, port);
 }
 

@@ -162,14 +162,21 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Progress:** 2026-07-17 — real ICU PE + CoreProbe wine OK with hybrid package
 
 ### W-007 — Classic sockets / poll via Winsock `select` (not full Os/NIO)
-- **State:** OPEN (functional for GoldenApp; incomplete API surface)
-- **Kind:** workaround / incomplete port
+- **State:** CLOSED (2026-07-17) — permanent WinNT design: classic Os sockets use Winsock + **`select()`-based poll/timeouts** (not CRT-fd `WSAPoll`)
+- **Kind:** workaround → **permanent platform design**
 - **Area:** libcore-stub / net
-- **Symptom / why:** Full `libcore.io.Linux` PE not ported; Win10 rejected CRT-fd `WSAPoll` patterns.
-- **Current behavior:** Hand-written socket/bind/connect/accept/read/write + poll via `select()`; enough for A7/GoldenApp; overloads/options incomplete (notes in source).
-- **Proper fix:** Systematic Os natives PE port (or generate from AOSP with Win backends); keep select-based poll if correct.
-- **Code anchors:** `tools/win64/jni_stubs/win_net_natives.c`; host analysis under `tools/verify/win64_phase3/evidence/host/`
+- **Symptom / why:** Full AOSP `libcore.io.Linux` PE not used on Win64; real Win10 rejected CRT `_open_osfhandle` + `WSAPoll` (`WSAEINVAL` on accept poll).
+- **Fix / design:**
+  - Product `libjavacore` Win bridge (`win_net_natives.c`) implements classic socket surface with **`select()`** for `poll`, SO_TIMEOUT waits, and connect write-readiness.
+  - NIO epoll path similarly select-emulated in `compat/src/win64_socket_posix.c` (bounded `FD_SETSIZE`).
+  - 2026-07-17: registered `bind`/`connect` **`SocketAddress`** overloads for `InetSocketAddress` (AF_UNIX still out of product scope).
+- **Evidence:**
+  - Host G12 (2026-07-16): net/dns/goldenapp PASS after select poll fix (`tools/verify/win64_phase3/evidence/host/ANALYSIS_20260716T205926.md`).
+  - Wine (2026-07-17): NetProbe, DnsProbe, UdpProbe, AsyncCloseProbe, GoldenApp, **SocketAddressProbe** PASS.
+- **Non-goals residual:** AF_UNIX SocketAddress; full AOSP `libcore_io_Linux.cpp` (L-001 closed with Win bridge map); NIO.2.
+- **Code anchors:** `tools/win64/jni_stubs/win_net_natives.c`, `register_libcore_io_Linux_win.cpp`, `compat/src/win64_socket_posix.c`
 - **Opened:** 2026-07-16
+- **Closed:** 2026-07-17
 
 ### W-008 — Product smoke always passes `-Xint` / imageless / `-Xno-sig-chain`
 - **State:** OPEN
