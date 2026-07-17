@@ -11,7 +11,12 @@ typedef LONG pthread_once_t;
 typedef struct { int detachstate; void* stackaddr; size_t stacksize; size_t guardsize; } pthread_attr_t;
 typedef CONDITION_VARIABLE pthread_cond_t;
 typedef int pthread_condattr_t;
-typedef CRITICAL_SECTION pthread_rwlock_t;
+/* Real shared/exclusive locks via SRWLOCK (W-009). exclusive_owner tracks
+ * which unlock path to use (shared vs exclusive). */
+typedef struct {
+  SRWLOCK srw;
+  DWORD exclusive_owner; /* non-zero thread id when held exclusive */
+} pthread_rwlock_t;
 typedef int pthread_rwlockattr_t;
 /* Zero-init is not a valid CRITICAL_SECTION; ART paths that need static
  * mutexes should call pthread_mutex_init. Provide a sentinel for compile. */
@@ -26,6 +31,7 @@ typedef int pthread_rwlockattr_t;
 
 #define PTHREAD_STACK_MIN 65536
 #define PTHREAD_COND_INITIALIZER {0}
+#define PTHREAD_RWLOCK_INITIALIZER { SRWLOCK_INIT, 0 }
 #ifdef __cplusplus
 extern "C" {
 #endif

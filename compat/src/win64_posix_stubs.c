@@ -124,7 +124,33 @@ int nftw(const char* path, int (*fn)(const char*, const struct stat*, int, struc
 }
 
 int flock(int fd, int operation) { (void)fd; (void)operation; return 0; }
-int pthread_setname_np(unsigned long t, const char* name) { (void)t; (void)name; return 0; }
+/* Prefer SetThreadDescription (Win10 1607+); fall back to no-op success. */
+int pthread_setname_np(pthread_t t, const char* name) {
+  if (!name) return EINVAL;
+  typedef HRESULT (WINAPI *SetThreadDescriptionFn)(HANDLE, PCWSTR);
+  static SetThreadDescriptionFn pSet;
+  static int resolved;
+  if (!resolved) {
+    HMODULE k = GetModuleHandleW(L"kernel32.dll");
+    pSet = k ? (SetThreadDescriptionFn)GetProcAddress(k, "SetThreadDescription") : NULL;
+    resolved = 1;
+  }
+  if (!pSet) return 0;
+  HANDLE th = OpenThread(THREAD_SET_LIMITED_INFORMATION, FALSE, (DWORD)t);
+  if (!th && (DWORD)t == GetCurrentThreadId()) {
+    th = GetCurrentThread();
+  }
+  if (!th) return 0;
+  wchar_t wbuf[64];
+  size_t i = 0;
+  for (; name[i] && i + 1 < (sizeof(wbuf)/sizeof(wbuf[0])); i++) {
+    wbuf[i] = (unsigned char)name[i];
+  }
+  wbuf[i] = 0;
+  pSet(th, wbuf);
+  if (th != GetCurrentThread()) CloseHandle(th);
+  return 0;
+}
 
 #include <io.h>
 typedef long long off64_t;
@@ -223,15 +249,40 @@ char* __cxa_demangle(const char* mangled, char* buf, size_t* n, int* status) {
   return NULL;
 }
 
-/* SRWLOCK unlock needs knowledge of lock mode; track via TLS is heavy.
-   Phase 1: release exclusive if possible by using Try* is unavailable.
-   Use a simple CRITICAL_SECTION for rwlock on Windows Phase1. */
-
-int pthread_rwlock_init(CRITICAL_SECTION* l, const int* a){(void)a; InitializeCriticalSection(l); return 0;}
-int pthread_rwlock_destroy(CRITICAL_SECTION* l){ DeleteCriticalSection(l); return 0;}
-int pthread_rwlock_rdlock(CRITICAL_SECTION* l){ EnterCriticalSection(l); return 0;}
-int pthread_rwlock_wrlock(CRITICAL_SECTION* l){ EnterCriticalSection(l); return 0;}
-int pthread_rwlock_unlock(CRITICAL_SECTION* l){ LeaveCriticalSection(l); return 0;}
+/* W-009: real reader/writer locks via SRWLOCK (shared readers). */
+int pthread_rwlock_init(pthread_rwlock_t* l, const pthread_rwlockattr_t* a) {
+  (void)a;
+  if (!l) return EINVAL;
+  InitializeSRWLock(&l->srw);
+  l->exclusive_owner = 0;
+  return 0;
+}
+int pthread_rwlock_destroy(pthread_rwlock_t* l) {
+  if (!l) return EINVAL;
+  l->exclusive_owner = 0;
+  return 0; /* SRWLOCK has no destroy */
+}
+int pthread_rwlock_rdlock(pthread_rwlock_t* l) {
+  if (!l) return EINVAL;
+  AcquireSRWLockShared(&l->srw);
+  return 0;
+}
+int pthread_rwlock_wrlock(pthread_rwlock_t* l) {
+  if (!l) return EINVAL;
+  AcquireSRWLockExclusive(&l->srw);
+  l->exclusive_owner = GetCurrentThreadId();
+  return 0;
+}
+int pthread_rwlock_unlock(pthread_rwlock_t* l) {
+  if (!l) return EINVAL;
+  if (l->exclusive_owner == GetCurrentThreadId()) {
+    l->exclusive_owner = 0;
+    ReleaseSRWLockExclusive(&l->srw);
+  } else {
+    ReleaseSRWLockShared(&l->srw);
+  }
+  return 0;
+}
 
 /* iovec is in sys/uio.h; do not redefine. */
 ssize_t readv(int fd, const struct iovec* iov, int iovcnt) {
@@ -310,11 +361,15 @@ int usleep(useconds_t usec) {
 
 
 /* --- expanded pthread cond / timed rwlock / getuid (Phase 1) --- */
-int pthread_rwlock_tryrdlock(CRITICAL_SECTION* l) {
-  return TryEnterCriticalSection(l) ? 0 : EBUSY;
+int pthread_rwlock_tryrdlock(pthread_rwlock_t* l) {
+  if (!l) return EINVAL;
+  return TryAcquireSRWLockShared(&l->srw) ? 0 : EBUSY;
 }
-int pthread_rwlock_trywrlock(CRITICAL_SECTION* l) {
-  return TryEnterCriticalSection(l) ? 0 : EBUSY;
+int pthread_rwlock_trywrlock(pthread_rwlock_t* l) {
+  if (!l) return EINVAL;
+  if (!TryAcquireSRWLockExclusive(&l->srw)) return EBUSY;
+  l->exclusive_owner = GetCurrentThreadId();
+  return 0;
 }
 static DWORD mdvm_timespec_to_ms_from_now(const struct timespec* abs_ts) {
   if (!abs_ts) return INFINITE;
@@ -329,18 +384,30 @@ static DWORD mdvm_timespec_to_ms_from_now(const struct timespec* abs_ts) {
   if (delta_ms > 0xffffffffULL) return INFINITE;
   return (DWORD)delta_ms;
 }
-int pthread_rwlock_timedrdlock(CRITICAL_SECTION* l, const struct timespec* abs_ts) {
+int pthread_rwlock_timedrdlock(pthread_rwlock_t* l, const struct timespec* abs_ts) {
+  if (!l) return EINVAL;
   DWORD ms = mdvm_timespec_to_ms_from_now(abs_ts);
   DWORD start = GetTickCount();
   for (;;) {
-    if (TryEnterCriticalSection(l)) return 0;
+    if (TryAcquireSRWLockShared(&l->srw)) return 0;
     if (ms == 0) return ETIMEDOUT;
     if (ms != INFINITE && (GetTickCount() - start) >= ms) return ETIMEDOUT;
     Sleep(1);
   }
 }
-int pthread_rwlock_timedwrlock(CRITICAL_SECTION* l, const struct timespec* abs_ts) {
-  return pthread_rwlock_timedrdlock(l, abs_ts);
+int pthread_rwlock_timedwrlock(pthread_rwlock_t* l, const struct timespec* abs_ts) {
+  if (!l) return EINVAL;
+  DWORD ms = mdvm_timespec_to_ms_from_now(abs_ts);
+  DWORD start = GetTickCount();
+  for (;;) {
+    if (TryAcquireSRWLockExclusive(&l->srw)) {
+      l->exclusive_owner = GetCurrentThreadId();
+      return 0;
+    }
+    if (ms == 0) return ETIMEDOUT;
+    if (ms != INFINITE && (GetTickCount() - start) >= ms) return ETIMEDOUT;
+    Sleep(1);
+  }
 }
 int pthread_condattr_init(int* a) { if (a) *a = 0; return 0; }
 int pthread_condattr_destroy(int* a) { (void)a; return 0; }
@@ -540,10 +607,32 @@ int getrusage(int who, struct rusage* usage) {
 int uname(struct utsname* buf) {
   if (!buf) return -1;
   memset(buf, 0, sizeof(*buf));
-  strncpy(buf->sysname, "Windows", sizeof(buf->sysname)-1);
-  strncpy(buf->nodename, "localhost", sizeof(buf->nodename)-1);
-  strncpy(buf->release, "10.0", sizeof(buf->release)-1);
-  strncpy(buf->version, "Win64", sizeof(buf->version)-1);
+  strncpy(buf->sysname, "Windows_NT", sizeof(buf->sysname)-1);
+  char host[256];
+  DWORD n = (DWORD)sizeof(host);
+  if (GetComputerNameA(host, &n)) {
+    strncpy(buf->nodename, host, sizeof(buf->nodename)-1);
+  } else {
+    strncpy(buf->nodename, "localhost", sizeof(buf->nodename)-1);
+  }
+  /* RtlGetVersion avoids GetVersionEx deprecation / manifest lies. */
+  typedef LONG (WINAPI *RtlGetVersionFn)(OSVERSIONINFOW*);
+  OSVERSIONINFOW ovi;
+  memset(&ovi, 0, sizeof(ovi));
+  ovi.dwOSVersionInfoSize = sizeof(ovi);
+  HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
+  RtlGetVersionFn pRtl = ntdll
+      ? (RtlGetVersionFn)GetProcAddress(ntdll, "RtlGetVersion")
+      : NULL;
+  if (pRtl && pRtl(&ovi) == 0) {
+    snprintf(buf->release, sizeof(buf->release), "%lu.%lu.%lu",
+             (unsigned long)ovi.dwMajorVersion,
+             (unsigned long)ovi.dwMinorVersion,
+             (unsigned long)ovi.dwBuildNumber);
+  } else {
+    strncpy(buf->release, "10.0", sizeof(buf->release)-1);
+  }
+  strncpy(buf->version, "Win64 multipath", sizeof(buf->version)-1);
   strncpy(buf->machine, "x86_64", sizeof(buf->machine)-1);
   return 0;
 }
@@ -743,10 +832,36 @@ char* realpath(const char* path, char* resolved) {
 }
 
 int pthread_getname_np(pthread_t t, char* buf, size_t len) {
-  (void)t;
   if (!buf || len == 0) return EINVAL;
-  strncpy(buf, "thread", len - 1);
-  buf[len - 1] = 0;
+  typedef HRESULT (WINAPI *GetThreadDescriptionFn)(HANDLE, PWSTR*);
+  static GetThreadDescriptionFn pGet;
+  static int resolved;
+  if (!resolved) {
+    HMODULE k = GetModuleHandleW(L"kernel32.dll");
+    pGet = k ? (GetThreadDescriptionFn)GetProcAddress(k, "GetThreadDescription") : NULL;
+    resolved = 1;
+  }
+  buf[0] = 0;
+  if (pGet) {
+    HANDLE th = OpenThread(THREAD_QUERY_LIMITED_INFORMATION, FALSE, (DWORD)t);
+    if (!th && (DWORD)t == GetCurrentThreadId()) th = GetCurrentThread();
+    if (th) {
+      PWSTR wname = NULL;
+      if (SUCCEEDED(pGet(th, &wname)) && wname) {
+        size_t i = 0;
+        for (; wname[i] && i + 1 < len; i++) {
+          buf[i] = (char)(wname[i] < 128 ? wname[i] : '?');
+        }
+        buf[i] = 0;
+        LocalFree(wname);
+      }
+      if (th != GetCurrentThread()) CloseHandle(th);
+    }
+  }
+  if (buf[0] == 0) {
+    strncpy(buf, "thread", len - 1);
+    buf[len - 1] = 0;
+  }
   return 0;
 }
 
@@ -838,14 +953,29 @@ int pthread_mutexattr_destroy(int* a) { (void)a; return 0; }
 int pthread_mutexattr_settype(int* a, int t) { if (a) *a = t; return 0; }
 
 int clock_gettime(int clk_id, struct timespec* tp) {
-  (void)clk_id;
   if (!tp) return -1;
+  if (clk_id == CLOCK_MONOTONIC || clk_id == 1 /* CLOCK_MONOTONIC */) {
+    static LARGE_INTEGER freq;
+    static int freq_ok;
+    if (!freq_ok) {
+      freq_ok = QueryPerformanceFrequency(&freq) ? 1 : -1;
+    }
+    if (freq_ok > 0 && freq.QuadPart > 0) {
+      LARGE_INTEGER c;
+      QueryPerformanceCounter(&c);
+      tp->tv_sec = (time_t)(c.QuadPart / freq.QuadPart);
+      unsigned long long rem = (unsigned long long)(c.QuadPart % freq.QuadPart);
+      tp->tv_nsec = (long)((rem * 1000000000ULL) / (unsigned long long)freq.QuadPart);
+      return 0;
+    }
+  }
+  /* CLOCK_REALTIME and fallback */
   FILETIME ft; GetSystemTimeAsFileTime(&ft);
   ULARGE_INTEGER u; u.LowPart = ft.dwLowDateTime; u.HighPart = ft.dwHighDateTime;
   const unsigned long long EPOCH_DIFF = 116444736000000000ULL;
-  unsigned long long t = u.QuadPart - EPOCH_DIFF; /* 100ns */
-  tp->tv_sec = (time_t)(t / 10000000ULL);
-  tp->tv_nsec = (long)((t % 10000000ULL) * 100ULL);
+  unsigned long long ticks = u.QuadPart - EPOCH_DIFF; /* 100ns */
+  tp->tv_sec = (time_t)(ticks / 10000000ULL);
+  tp->tv_nsec = (long)((ticks % 10000000ULL) * 100ULL);
   return 0;
 }
 int nanosleep(const struct timespec* req, struct timespec* rem) {

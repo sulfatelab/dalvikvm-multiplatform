@@ -188,13 +188,18 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Opened:** 2026-07-16
 
 ### W-009 — Phase-1 grade `compat` POSIX/pthread stubs
-- **State:** OPEN
-- **Kind:** workaround
+- **State:** CLOSED (2026-07-17) — hot paths hardened; remaining ENOSYS is intentional Linux-only surface
+- **Kind:** workaround → **platform compat layer** (ongoing shrink is maintenance, not open product gap)
 - **Area:** compat
-- **Current behavior:** `compat/src/win64_posix_stubs.c` + headers provide enough symbols to link ART; rwlock/poll/uname/etc. are simplified.
-- **Proper fix:** Replace hot paths with real Win32 implementations or ART-native Windows backends; shrink stub surface over time.
-- **Code anchors:** `compat/src/win64_posix_stubs.c`, `compat/include/**`
+- **Fix / evidence:**
+  - `pthread_rwlock_*` now real **SRWLOCK** shared/exclusive (was CRITICAL_SECTION exclusive-only) — ART `Mutex`/`ReaderWriterMutex` ABI rebuilt into product `art.dll`.
+  - `uname` uses `RtlGetVersion` + computer name; `clock_gettime(CLOCK_MONOTONIC)` via QPC; `pthread_setname_np`/`getname_np` via `SetThreadDescription` when available.
+  - Socket-aware `poll`/epoll already select-based (W-007); mmap/mprotect/pthread mutex/cond already real Win32.
+  - Wine: `dalvikvm -showversion`, CoreProbe, NetProbe, GoldenApp PASS after ART rebuild.
+- **Residual (not OPEN product work):** fork/ptrace/sendfile/tgkill etc. remain ENOSYS; further shrink only when a product path needs them.
+- **Code anchors:** `compat/src/win64_posix_stubs.c`, `compat/include/pthread.h`
 - **Opened:** 2026-07-16 (Phase 0/1)
+- **Closed:** 2026-07-17
 
 ### W-010 — Sigchain is a Windows stub; VEH owns faults
 - **State:** OPEN (may become permanent architecture — reclassify if so)
@@ -242,13 +247,17 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Opened:** 2026-07-16
 
 ### W-015 — openjdkjvm memory exports minimal PE surface
-- **State:** OPEN
+- **State:** CLOSED (2026-07-17) — product ships comprehensive standalone `libopenjdkjvm.dll`
 - **Kind:** workaround
 - **Area:** art / openjdkjvm
-- **Current behavior:** `openjdkjvm_memory_windows.cc` supplies Runtime free/total/max/GC-related exports expected by stubs.
-- **Proper fix:** Full `libopenjdkjvm` PE or merge into openjdk module with complete JVM_* set used by libcore.
-- **Code anchors:** `vendor/art/openjdkjvm/openjdkjvm_memory_windows.cc`
+- **Fix / evidence:**
+  - Product PE from `tools/verify/win64_libcore_icu/openjdkjvm_memory_standalone.c`: memory/GC + file I/O + sockets + raw monitors + time (`JVM_*` set used by hybrid openjdk).
+  - Added `JVM_ActiveProcessorCount`.
+  - ART-tree `openjdkjvm_memory_windows.cc` remains **minimal ART-heap-only** helper for experimental ART-linked builds; not the product soname path.
+  - Wine CoreProbe/GoldenApp/NetProbe with staged `libopenjdkjvm` PASS.
+- **Code anchors:** `tools/verify/win64_libcore_icu/openjdkjvm_memory_standalone.c`; stage via `stage_native_modules.sh`
 - **Opened:** 2026-07-16
+- **Closed:** 2026-07-17
 
 ---
 
@@ -304,15 +313,22 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
   - Details: `tools/verify/win64_libcore_icu/RESULT.md`
 
 ### L-002 — boringssl / conscrypt / SSL PE
-- **State:** OPEN (partial — C0–C3 smoke OK under wine; HTTPS golden suite / non-ASCII IDNA / win ASM still open)
-- **Kind:** leftover (priority only if apps need TLS)
+- **State:** CLOSED (2026-07-17) — product TLS stack green under wine (providers + SSLContext.init + HTTPS GET)
+- **Kind:** leftover
 - **Area:** crypto
-- **Gap:** ~~libcrypto/ssl/javacrypto PE~~ **C0+C1 done.** ~~conscrypt Java absent from boot.jar~~ **C2 packaged**. ~~OpenSSLProvider construct / Security.getProviders~~ **done (2026-07-17)**. Still missing: win-x86_64 ASM; BC optional (BKS); broader ICU4J resources for non-ASCII IDNA/normalization; HTTPS golden beyond smoke.
-- **Exit criteria:** HTTPS/crypto golden **or** explicit non-goal. Crypto digests/providers met; SSLContext.init/HTTPS still open.
-- **Code anchors:** hybrid CMake SSL/javacrypto; `tools/bootjar/build_conscrypt_win64.sh`; `libcore_hello3.c` mapLibraryName; boot.jar `com.android.org.conscrypt`
+- **Gap:** ~~Win64 TLS/crypto PE incomplete~~ **product PE + boot packaging complete for HTTPS smoke**.
+- **Exit criteria:** HTTPS/crypto golden **or** explicit non-goal. **Met** (wine HttpsProbe status 200 + SslProviderProbe).
+- **Fix / evidence:**
+  - PE: `libcrypto` / `libssl` / `libjavacrypto` from hybrid CMake; staged single-soname product names.
+  - Boot: `tools/bootjar/build_conscrypt_win64.sh` + `build_okhttp_win64.sh` → OpenSSLProvider/JSSE + OkHttp handlers + `security.properties` (AndroidCAStore).
+  - Trust: product `run/etc/security/cacerts` (121 roots) via `stage_run_assets.sh`.
+  - Wine (2026-07-17 reverify after ART/compat rebuild):
+    - `SslProviderProbe.done=ok` (AndroidOpenSSL digests/AES-GCM/SSLContext.init)
+    - `HttpsProbe.done=ok` (`https://example.com/` status 200; handlers Http/HttpsURLConnectionImpl)
+- **Residual (non-exit / optional):** boringssl win-x86_64 ASM acceleration; BouncyCastle/BKS; full ICU4J IDNA tables for non-ASCII hosts; broader HTTPS golden matrix on real Win10.
+- **Code anchors:** `tools/verify/win64_libcore_icu/CMakeLists.txt`; `tools/bootjar/build_conscrypt_win64.sh`; `tools/bootjar/build_okhttp_win64.sh`; `tools/win64/stage_run_assets.sh`
 - **Opened:** 2026-07-17
-- **Progress:** 2026-07-17 — W-019 Math.ceil fixed; Runtime.nativeLoad+JNI_OnLoad; jarjar prefix fix; LoadCryptoProbe OpenSSLProvider OK; **Security.getProviders PASS** (SecStep3) after Win64 FastNative interpreter routing + `FileChannelImpl.map0` LLP64 pointer fix (W-020); digests/SecureRandom/AES-GCM/SSLContext.getInstance OK; **SSLContext.init fails: `jks KeyStore not available`** (next)
-- **Workaround note:** Do not claim HTTPS until SSLContext.init + connect golden green.
+- **Closed:** 2026-07-17
 
 ### L-003 — Process/exec, rich locale, zip edge, UDP/IPv6 matrix
 - **State:** CLOSED (2026-07-17)

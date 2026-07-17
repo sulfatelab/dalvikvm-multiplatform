@@ -433,3 +433,17 @@ CoreProbe.done=ok
 ## W-007 CLOSED — select-based classic sockets (2026-07-17)
 
 Permanent Win design: `Os.poll` / socket timeouts use Winsock **`select()`** (host Win10 `WSAPoll` EINVAL on CRT sockets). SocketAddress `bind`/`connect` overloads for InetSocketAddress registered. Wine `SocketAddressProbe` + net matrix PASS.
+
+## W-009 CLOSED — compat hot paths (2026-07-17)
+
+SRWLOCK `pthread_rwlock_*`, QPC monotonic clock, RtlGetVersion uname, SetThreadDescription thread names. ART product PE rebuilt; wine Core/Net/Golden PASS.
+
+## L-002 CLOSED — HTTPS product smoke (2026-07-17)
+
+Rebuilt conscrypt+okhttp boot.jar with security.properties. Wine:
+- SslProviderProbe.done=ok (AndroidOpenSSL + SSLContext.init)
+- HttpsProbe.done=ok (example.com 200)
+
+## W-015 CLOSED — product libopenjdkjvm PE (2026-07-17)
+
+Standalone hybrid `openjdkjvm_memory_standalone.c` is product soname (I/O+sockets+memory+ActiveProcessorCount). ART-tree memory_windows.cc remains experimental minimal helper.

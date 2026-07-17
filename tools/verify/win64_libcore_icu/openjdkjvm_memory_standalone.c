@@ -51,6 +51,13 @@ __declspec(dllexport) jlong JVM_MaxMemory(void) {
 
 __declspec(dllexport) void JVM_GC(void) {}
 
+/* W-015: Runtime.availableProcessors path used by some ojluni natives. */
+__declspec(dllexport) jint JVM_ActiveProcessorCount(void) {
+  SYSTEM_INFO si;
+  GetSystemInfo(&si);
+  return (jint)(si.dwNumberOfProcessors ? si.dwNumberOfProcessors : 1);
+}
+
 __declspec(dllexport) jint JVM_GetLastErrorString(char* buf, int len) {
   DWORD err = GetLastError();
   if (len <= 0 || buf == NULL) return 0;
