@@ -309,5 +309,47 @@ extern "C" void register_java_io_UnixFileSystem(JNIEnv*) {}
     PRIVATE kernel32 advapi32 ws2_32 win64_socket_posix)
 endif()
 
-message(STATUS "Win64 libcore/ICU: icu + optional javacore/openjdk hybrids")
+
+
+# --- boringssl libcrypto PE (L-002 Phase C0) ---
+# OPENSSL_NO_ASM first: pure C, reliable clang PE. win-x86_64 .asm can be enabled later via llvm-ml.
+option(MDVM_WIN64_BUILD_CRYPTO "Build real boringssl crypto PE" ON)
+if(MDVM_WIN64_BUILD_CRYPTO)
+  set(BORINGSSL_ROOT "${MDVM_ART_ROOT_DIR}/external/boringssl/")
+  include("${BORINGSSL_ROOT}android-sources.cmake")
+  # crypto_sources paths use ${BORINGSSL_ROOT} already expanded when include runs if set before include.
+  # Re-include with BORINGSSL_ROOT set above.
+  set(_CRYPTO_SRCS ${crypto_sources})
+  # Filter out trampoline tests asm if any snuck in — crypto_sources is C-only.
+  list(FILTER _CRYPTO_SRCS EXCLUDE REGEX "test/")
+
+  add_library(crypto SHARED ${_CRYPTO_SRCS})
+  set_target_properties(crypto PROPERTIES
+    OUTPUT_NAME "crypto"
+    WINDOWS_EXPORT_ALL_SYMBOLS ON
+  )
+  target_include_directories(crypto PUBLIC
+    "${MDVM_ART_ROOT_DIR}/external/boringssl/src/include"
+  )
+  target_compile_definitions(crypto PRIVATE
+    ${_WIN_DEFS}
+    BORINGSSL_IMPLEMENTATION
+    BORINGSSL_SHARED_LIBRARY
+    OPENSSL_NO_ASM
+    OPENSSL_SMALL
+  )
+  target_compile_options(crypto PRIVATE
+    ${_WIN_CFLAGS}
+    -Wno-unused-parameter
+    -Wno-bitwise-op-parentheses
+    -Wno-unknown-pragmas
+  )
+  target_link_libraries(crypto PRIVATE ws2_32 advapi32 bcrypt kernel32)
+  # Minimal smoke tool: SHA256 of fixed string via exported C API
+  add_executable(crypto_sha_smoke "${CMAKE_CURRENT_SOURCE_DIR}/crypto_sha_smoke.c")
+  target_link_libraries(crypto_sha_smoke PRIVATE crypto)
+  target_include_directories(crypto_sha_smoke PRIVATE "${MDVM_ART_ROOT_DIR}/external/boringssl/src/include")
+endif()
+
+message(STATUS "Win64 libcore/ICU: icu + optional javacore/openjdk hybrids + crypto")
 

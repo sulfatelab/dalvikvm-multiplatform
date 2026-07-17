@@ -253,12 +253,14 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Progress:** see `tools/verify/win64_libcore_icu/RESULT.md`
 
 ### L-002 — boringssl / conscrypt / SSL PE
-- **State:** OPEN
+- **State:** OPEN (partial — crypto PE landed 2026-07-17)
 - **Kind:** leftover (priority only if apps need TLS)
 - **Area:** crypto
-- **Gap:** No `libcrypto` PE; win32_port notes win-x86_64 perlasm or C paths.
-- **Exit criteria:** HTTPS/crypto golden or explicit non-goal product statement.
+- **Gap:** ~~No `libcrypto` PE~~ **Done (C0):** `crypto.dll`/`libcrypto.dll` from AOSP boringssl C sources (`OPENSSL_NO_ASM`) + wine `CryptoSmoke` SHA-256 golden. Still missing: win-x86_64 ASM path, `ssl` PE, conscrypt `libjavacrypto` + provider, HTTPS golden.
+- **Exit criteria:** HTTPS/crypto golden **or** explicit non-goal product statement. **Crypto golden met** (`CryptoSmoke.done=ok`); HTTPS/conscrypt still open.
+- **Code anchors:** `tools/verify/win64_libcore_icu/CMakeLists.txt` (`MDVM_WIN64_BUILD_CRYPTO`), `crypto_sha_smoke.c`, `vendor/external/boringssl/android-sources.cmake`
 - **Opened:** 2026-07-17
+- **Progress:** 2026-07-17 — Phase C0 real `crypto.dll` (~1.2M) wine PASS
 
 ### L-003 — Process/exec, rich locale, zip edge, UDP/IPv6 matrix
 - **State:** OPEN
@@ -357,4 +359,4 @@ _(None yet in this tracker. When closing a W-/L-/H- item, move a one-line summar
 - [ ] Permanent design choice (e.g. VEH forever) → move from W- to documented architecture; close workaround  
 - [ ] CLOSED items: one line in §Closed, leave detail above with State CLOSED  
 
-*Last snapshot: 2026-07-17 — W-005/W-006/W-016 CLOSED (real ICU PE + product packaging; no charset stubs); NetProbe OK.*
+*Last snapshot: 2026-07-17 — L-002 partial (crypto.dll PE + CryptoSmoke); W-005/W-006/W-016 CLOSED; NetProbe OK.*

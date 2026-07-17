@@ -157,3 +157,28 @@ Product charset natives come from real AOSP bridge:
 - Data: `run/icu/icudt72l.dat` (W-016)
 
 `tools/win64/jni_stubs/native_converter.c` is obsolete and is **not** linked into product PE or the legacy combined stub build.
+
+
+## Phase C0 — boringssl `crypto.dll` PE (L-002 partial, 2026-07-17)
+
+**Status:** **BUILT + wine smoke OK**
+
+| Artifact | Size | Notes |
+|----------|------|--------|
+| `crypto.dll` / `libcrypto.dll` | ~1.2M | AOSP boringssl `crypto_sources`, **OPENSSL_NO_ASM** (pure C) for reliable clang PE |
+| `crypto_sha_smoke.exe` | ~14K | SHA-256 of fixed string |
+
+```
+crypto.ok=true
+OPENSSL_VERSION=BoringSSL
+sha256=ade21f7edb252b8418547a54bde2c3f3c56242f3f0ecd4ebbf917c5096d2bcce
+CryptoSmoke.done=ok
+```
+
+Configure flag: `-DMDVM_WIN64_BUILD_CRYPTO=ON` (default ON in harness).
+
+### Not done (remaining L-002)
+- `win-x86_64` perlasm (llvm-ml) instead of OPENSSL_NO_ASM
+- `ssl.dll` / full TLS stack
+- conscrypt `libjavacrypto` PE + Java provider wiring
+- HTTPS golden app

@@ -76,4 +76,14 @@ if [[ -f "$REPO/tools/win64/jni_stubs/libcombined.dll" ]]; then
   done
 fi
 
+# Optional crypto PE (L-002): present when hybrid build enabled MDVM_WIN64_BUILD_CRYPTO
+if src=$(pick crypto.dll); then
+  cp -a "$src" "$DEST/crypto.dll"
+  # ART/conscrypt often look for libcrypto.so naming; provide libcrypto.dll alias
+  cp -a "$src" "$DEST/libcrypto.dll"
+  echo "stage_native_modules: crypto/libcrypto.dll <- $src"
+else
+  echo "stage_native_modules: crypto.dll not built (optional L-002); skip"
+fi
+
 echo "stage_native_modules: OK real ICU + javacore + openjdk PE under $DEST"
