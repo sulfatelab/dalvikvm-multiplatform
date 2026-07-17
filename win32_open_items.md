@@ -281,12 +281,14 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Opened:** 2026-07-17
 
 ### L-005 — Linux multiplatform imageless Hello / boot.jar CI gate
-- **State:** OPEN
+- **State:** CLOSED (2026-07-17)
 - **Kind:** leftover
 - **Area:** linux-host
-- **Gap:** After repo migration, host Linux verified `dalvikvm -showversion` only; bootjar+Hello not re-scripted as a required gate in this tree.
+- **Gap:** ~~After repo migration, host Linux verified `dalvikvm -showversion` only~~ **scripted gate landed**.
 - **Exit criteria:** One scripted imageless Hello (or RESULT) on multiplatform `main`.
+- **Fix:** `tools/verify/linux_hello/run_imageless_hello.sh` + `RESULT.md` PASS on `build/native/dalvikvm` imageless `-Xint` Hello. Requires **UnixFileSystem** boot.jar (rejects Win64 WinNT product boot).
 - **Opened:** 2026-07-17
+- **Closed:** 2026-07-17
 
 ### L-006 — phase1.cmake / generated Win graph pure-vendor consistency
 - **State:** OPEN
@@ -404,7 +406,7 @@ _(None yet in this tracker. When closing a W-/L-/H- item, move a one-line summar
 1. **W-001–W-003** — after TLS/entrypoint implementation (design draft ready).  
 2. **L-001** — deepen hybrid libcore surface (Memory/Expat/NativeBN/…); W-005/W-006 closed for ICU product PE.  
 3. **H-001** — host Phase-4 with multiplatform package.  
-4. **L-005** — Linux Hello gate so host oracle stays green.
+4. ~~**L-005** — Linux Hello gate~~ **CLOSED**.
 
 ---
 
@@ -416,4 +418,4 @@ _(None yet in this tracker. When closing a W-/L-/H- item, move a one-line summar
 - [ ] Permanent design choice (e.g. VEH forever) → move from W- to documented architecture; close workaround  
 - [ ] CLOSED items: one line in §Closed, leave detail above with State CLOSED  
 
-*Last snapshot: 2026-07-17 — W-019..W-023 CLOSED; OkHttp handlers + live HTTPS smoke (example.com 200) under wine.*
+*Last snapshot: 2026-07-17 — L-005 CLOSED (Linux imageless Hello gate PASS); W-019..W-023 CLOSED; HTTPS smoke green.*
