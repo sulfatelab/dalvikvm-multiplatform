@@ -10,6 +10,7 @@
 extern "C" {
 #endif
 int gettimeofday(struct timeval* tv, void* tz);
+int mingw_gettimeofday(struct timeval* tv, void* tz);
 #ifdef __cplusplus
 }
 #endif

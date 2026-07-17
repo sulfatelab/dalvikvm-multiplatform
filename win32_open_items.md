@@ -346,14 +346,15 @@ _(None yet in this tracker. When closing a W-/L-/H- item, move a one-line summar
 ---
 
 ### W-019 — Math @CriticalNative / FastNative double ABI on Win64
-- **State:** OPEN
+- **State:** OPEN (root cause identified; fix in tree, art.dll rebuild in progress)
 - **Kind:** workaround / runtime ABI
-- **Area:** libcore Math / ART JNI
-- **Gap:** `java.lang.Math` methods annotated `@CriticalNative` crash on Win64 PE (`Math.ceil` aborts with access violation / ART abort). Blocks `HashMap` sizing and conscrypt `OpenSSLProvider`/`NativeCrypto` clinit. Hybrid openjdk registers Math as ordinary JNI on Win, but Java annotations still select critical-native calling convention.
-- **Exit criteria:** `MathProbe` (ceil/floor/sqrt/HashSet) and `SslProviderProbe` pass under wine; then real Win critical-native ABI or pure-Java Math for Win boot.
-- **Code anchors:** `vendor/libcore/ojluni/src/main/native/Math.c` (Win JNI wrappers), `java/lang/Math.java`, ART critical native trampolines
+- **Area:** libcore Math / ART interpreter JNI (Win64 -Xint)
+- **Root cause:** Official AOSP CriticalNative is fine on Linux quick/generic-JNI. Win64 multipath forces `ArtMethod::Invoke` through the interpreter; `InterpreterJniGeneric` only handled CriticalNative shorties `II`/`I`/`Z`/`ZI`. `Math.ceil` is shorty `DD` (`(D)D`), so dispatch fell through and crashed. Secondary: registering `Math_*_jni(JNIEnv*,jclass,jdouble)` under CriticalNative is the wrong ABI.
+- **Fix (landed source):** interpreter CriticalNative `DD`/`DDD`/`FF`/`J`; Math.c gMethodsWin → `Math_ceil(jdouble)` etc.; posix stubs `localtime_r`/`mingw_gettimeofday` for art rebuild.
+- **Exit criteria:** `MathProbe` + `SslProviderProbe` wine PASS with rebuilt `art.dll`.
+- **Code anchors:** `vendor/art/runtime/interpreter/interpreter.cc`, `vendor/libcore/ojluni/src/main/native/Math.c`, `compat/src/win64_posix_stubs.c`
 - **Opened:** 2026-07-17
-- **Progress:** 2026-07-17 — reproduced; wrappers alone insufficient while `@CriticalNative` remains
+- **Progress:** 2026-07-17 — root cause + source fix; full art PE rebuild running
 
 ## Suggested next closures (priority)
 

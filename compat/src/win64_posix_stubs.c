@@ -816,6 +816,23 @@ int gettimeofday(struct timeval* tv, void* tz) {
   return 0;
 }
 
+/* ART time_utils.cc (mingw-era) expects these names on Windows. */
+int mingw_gettimeofday(struct timeval* tv, void* tz) {
+  return gettimeofday(tv, tz);
+}
+struct tm* localtime_r(const time_t* timep, struct tm* result) {
+  if (!timep || !result) {
+    errno = EINVAL;
+    return NULL;
+  }
+  /* MSVC: localtime_s(result, timep) */
+  if (localtime_s(result, timep) != 0) {
+    return NULL;
+  }
+  return result;
+}
+
+
 int pthread_mutexattr_init(int* a) { if (a) *a = 0; return 0; }
 int pthread_mutexattr_destroy(int* a) { (void)a; return 0; }
 int pthread_mutexattr_settype(int* a, int t) { if (a) *a = t; return 0; }
