@@ -309,3 +309,16 @@ Added Win hybrid implementations + RegisterNatives for:
 - `sendtoBytes` / `recvfromBytes`, simplified `sendmsg` / `recvmsg`
 
 Inventory: [win32_libcore_os_natives.md](../../../win32_libcore_os_natives.md).
+
+## L-002 Security.getProviders (2026-07-17 late)
+
+Wine PASS:
+- `SecStep17` BootClassLoader.loadClass(OpenSSLProvider)
+- `SecStep3` Security.getProviders → AndroidOpenSSL / CertPathProvider / HarmonyJSSE
+- digests/SecureRandom/AES-GCM/SSLContext.getInstance on AndroidOpenSSL
+
+Root causes closed:
+1. Win64 -Xint FastNative/native bridge routing (interpreter)
+2. `FileChannelImpl.map0` Win64 LLP64 pointer truncation (`unsigned long` cast)
+
+Residual: `SSLContext.init` needs `jks` KeyStore (SslProviderProbe exit 1).

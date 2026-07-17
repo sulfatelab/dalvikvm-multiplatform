@@ -255,15 +255,15 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Progress:** 2026-07-17 — AOSP `Memory` in javacore; Linux bridge mmap/… + Needed pipe/pread/readv/timeval/sendto/…; see win32_libcore_os_natives.md (Needed residual small)
 
 ### L-002 — boringssl / conscrypt / SSL PE
-- **State:** OPEN (partial — C0/C1 PE + C2 OpenSSLProvider construct OK; default Security providers / HTTPS C3 open)
+- **State:** OPEN (partial — C0–C2 + default JCA providers OK; SSLContext.init / HTTPS C3 open)
 - **Kind:** leftover (priority only if apps need TLS)
 - **Area:** crypto
-- **Gap:** ~~libcrypto/ssl/javacrypto PE~~ **C0+C1 done.** ~~conscrypt Java absent from boot.jar~~ **C2 packaged** (`build_conscrypt_win64.sh`). Still missing: win-x86_64 ASM; **OpenSSLProvider construction** (blocked by Math `@CriticalNative` crash W-019); BC optional; HTTPS golden C3.
-- **Exit criteria:** HTTPS/crypto golden **or** explicit non-goal. Crypto golden met; native TLS PE met; conscrypt Java on boot met; full provider/HTTPS still open.
+- **Gap:** ~~libcrypto/ssl/javacrypto PE~~ **C0+C1 done.** ~~conscrypt Java absent from boot.jar~~ **C2 packaged**. ~~OpenSSLProvider construct / Security.getProviders~~ **done (2026-07-17)**. Still missing: win-x86_64 ASM; BC optional; default `jks` KeyStore for SSLContext.init path; HTTPS golden C3.
+- **Exit criteria:** HTTPS/crypto golden **or** explicit non-goal. Crypto digests/providers met; SSLContext.init/HTTPS still open.
 - **Code anchors:** hybrid CMake SSL/javacrypto; `tools/bootjar/build_conscrypt_win64.sh`; `libcore_hello3.c` mapLibraryName; boot.jar `com.android.org.conscrypt`
 - **Opened:** 2026-07-17
-- **Progress:** 2026-07-17 — W-019 Math.ceil fixed; Runtime.nativeLoad+JNI_OnLoad; jarjar prefix fix; LoadCryptoProbe OpenSSLProvider OK; SslProviderProbe still crashes on Security.getProviders
-- **Workaround note:** Do not claim HTTPS until W-019 fixed and SslProviderProbe green.
+- **Progress:** 2026-07-17 — W-019 Math.ceil fixed; Runtime.nativeLoad+JNI_OnLoad; jarjar prefix fix; LoadCryptoProbe OpenSSLProvider OK; **Security.getProviders PASS** (SecStep3) after Win64 FastNative interpreter routing + `FileChannelImpl.map0` LLP64 pointer fix (W-020); digests/SecureRandom/AES-GCM/SSLContext.getInstance OK; **SSLContext.init fails: `jks KeyStore not available`** (next)
+- **Workaround note:** Do not claim HTTPS until SSLContext.init + connect golden green.
 
 ### L-003 — Process/exec, rich locale, zip edge, UDP/IPv6 matrix
 - **State:** OPEN
@@ -345,6 +345,19 @@ _(None yet in this tracker. When closing a W-/L-/H- item, move a one-line summar
 
 ---
 
+
+### W-020 — FileChannelImpl.map0 pointer truncation on Win64 (LLP64)
+- **State:** CLOSED (2026-07-17) — `ptr_to_jlong(mapAddress)` instead of `(jlong)(unsigned long)`
+- **Kind:** bug / ABI
+- **Area:** openjdk NIO / boot classpath ZIP mmap
+- **Root cause:** AOSP `FileChannelImpl_map0` returned `(jlong)(unsigned long)mapAddress`. On Win64 LLP64 `unsigned long` is 32-bit, so mapped addresses like `0x6ffff…` were truncated (high bits zeroed). `Memory.peekByteArray` then crashed in CRT (`fault_addr=0xff0e0eec` pattern) while `VMClassLoader` clinit mapped `boot.jar` for `ClassPathURLStreamHandler`.
+- **Symptom chain:** `Security.getProviders` → provider class load → `BootClassLoader.loadClass` → `findLoadedClass` path / resource handlers → ZIP mmap via NIO → AV. Earlier W-019-style AV signature was coincidental.
+- **Also fixed nearby (supporting):** Win64 `-Xint` keeps natives on interpreter bridge (`ShouldStayInSwitchInterpreter` + `ArtInterpreterToInterpreterBridge` → `InterpreterJni`); FastNative stays Runnable; specialized static `LLL` shorty.
+- **Exit criteria:** SecStep17 `BootClassLoader.loadClass` + SecStep3 `Security.getProviders` wine PASS.
+- **Code anchors:** `vendor/libcore/ojluni/src/main/native/FileChannelImpl.c`; `vendor/art/runtime/interpreter/interpreter.cc`; `interpreter_common.cc`
+- **Opened:** 2026-07-17
+- **Closed:** 2026-07-17
+
 ### W-019 — Math @CriticalNative / FastNative double ABI on Win64
 - **State:** CLOSED (2026-07-17) — Math.ceil/floor/sqrt + HashSet wine PASS after interpreter CriticalNative DD/DDD
 - **Kind:** workaround / runtime ABI
@@ -373,4 +386,4 @@ _(None yet in this tracker. When closing a W-/L-/H- item, move a one-line summar
 - [ ] Permanent design choice (e.g. VEH forever) → move from W- to documented architecture; close workaround  
 - [ ] CLOSED items: one line in §Closed, leave detail above with State CLOSED  
 
-*Last snapshot: 2026-07-17 — W-019 CLOSED; L-002 OpenSSLProvider construct OK; Security.getProviders/HTTPS still open.*
+*Last snapshot: 2026-07-17 — W-019/W-020 CLOSED; L-002 getProviders+digests OK; SSLContext.init needs jks / HTTPS still open.*
