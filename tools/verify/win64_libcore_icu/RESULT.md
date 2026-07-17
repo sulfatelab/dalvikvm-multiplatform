@@ -51,7 +51,8 @@ cp build/win64_libcore_icu/icu_jni.dll build/win64_phase1/libicu_jni.dll
 | `libcore.io.Linux` | **Excluded** AOSP `libcore_io_Linux.cpp`; Win bridge registers ~50 methods from `win_fs`/`win_net` stubs |
 | WinNT FS / sockets / OsConstants init | Same PE stub C sources linked into `javacore.dll` |
 | Memory, NetworkUtilities, NativeBN, ExpatParser | **In PE** (L-001 2026-07-17) |
-| AsyncClose, full OsConstantsHolder, full `libcore_io_Linux` | **Not yet** (empty register stubs / Win bridge) |
+| AsynchronousCloseMonitor | **In PE** (Win monitor + JNI register; wine AsyncCloseProbe PASS) |
+| full OsConstantsHolder, full `libcore_io_Linux` | **Not yet** (empty register stubs / Win bridge) |
 | `libopenjdk.dll` | Still pure `libcombined` alias |
 
 Artifact: `build/win64_libcore_icu/javacore.dll` (~92K)
@@ -361,7 +362,7 @@ Residual HTTPS: `HttpsURLConnection` needs `com.android.okhttp.HttpsHandler` (no
 | `libcore.math.NativeBN` | Real AOSP `libcore_math_NativeBN.cpp` linked against product `libcrypto` (boringssl) |
 | `org.apache.harmony.xml.ExpatParser` | Real AOSP ExpatParser + static vendored **libexpat 2.6.4** (`vendor/external/expat`) |
 | `NetworkUtilities` | Real AOSP helpers (sockaddr ↔ InetAddress, msghdr conversion); Winsock/msghdr CMSG macros fixed in `compat/include/sys/socket.h` |
-| Still empty registers | `AsynchronousCloseMonitor`, `OsConstantsHolder` (Win OsConstants init elsewhere) |
+| Still empty registers | `OsConstantsHolder` (Win OsConstants init elsewhere) |
 | Still excluded | Full AOSP `libcore_io_Linux.cpp` (Win bridge remains), `cbigint` |
 
 ### Smoke (wine64, imageless `-Xint`)
@@ -375,3 +376,22 @@ NetProbe.done=ok
 
 Probes: `tools/verify/win64_phase3/src/{Bn,Xml}Probe.java` via `build_one.sh` / `run_one.sh`.
 `libjavacore.dll` ~335K after L-001 (was ~92K at B0).
+
+## L-001 AsynchronousCloseMonitor (2026-07-17)
+
+**Status:** **BUILT into product `libjavacore` + `libopenjdk` + wine smoke OK**
+
+| Piece | Approach |
+|-------|----------|
+| JNI `libcore.io.AsynchronousCloseMonitor.signalBlockedThreads` | Real AOSP `libcore_io_AsynchronousCloseMonitor.cpp` (no longer empty register) |
+| Monitor implementation | `multiplatform/windows/native/AsynchronousCloseMonitor_win.cpp` — thread list + `shutdown(SD_BOTH)` + best-effort `CancelSynchronousIo` |
+| openjdk `NET_*` | `win_close.cpp` wraps blocking I/O with `AsynchronousCloseMonitor` (linux_close parity); `NET_SocketClose` signals then closes |
+| Wake semantics | No POSIX signals; socket shutdown is the primary unblock path on Winsock |
+
+### Smoke
+
+```
+AsyncCloseProbe.done=ok   # accept unblocked with SocketException; read EOF after peer close
+NetProbe.done=ok
+CoreProbe.done=ok
+```

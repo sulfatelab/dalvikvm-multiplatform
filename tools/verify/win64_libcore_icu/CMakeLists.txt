@@ -160,15 +160,14 @@ endif()
 if(MDVM_WIN64_BUILD_JAVACORE)
   set(_JC_SRCS ${JAVACORE_SRCS})
   list(FILTER _JC_SRCS EXCLUDE REGEX "libcore_io_Linux[.]cpp$")
-  list(FILTER _JC_SRCS EXCLUDE REGEX "libcore_io_AsynchronousCloseMonitor[.]cpp$")
   list(FILTER _JC_SRCS EXCLUDE REGEX "cbigint[.]cpp$")
   list(FILTER _JC_SRCS EXCLUDE REGEX "android_system_OsConstantsHolder[.]cpp$")
-  # L-001: keep NetworkUtilities + NativeBN + ExpatParser.
-  # Still excluded: full AOSP libcore_io_Linux (Win bridge), AsyncClose (signals),
-  # cbigint (unused by current graph), OsConstantsHolder (Win OsConstants init path).
+  # L-001: NetworkUtilities + NativeBN + ExpatParser + AsynchronousCloseMonitor.
+  # Still excluded: full AOSP libcore_io_Linux (Win bridge), cbigint, OsConstantsHolder.
 
   set(_JC_WIN_BRIDGE
     "${MDVM_LIBCORE_DIR}/multiplatform/windows/native/register_libcore_io_Linux_win.cpp"
+    "${MDVM_LIBCORE_DIR}/multiplatform/windows/native/AsynchronousCloseMonitor_win.cpp"
     "${_repo}/tools/win64/jni_stubs/win_path.c"
     "${_repo}/tools/win64/jni_stubs/win_fs_natives.c"
     "${_repo}/tools/win64/jni_stubs/win_net_natives.c"
@@ -180,7 +179,6 @@ if(MDVM_WIN64_BUILD_JAVACORE)
   set(_JC_WIN_STUB_REG "${CMAKE_CURRENT_BINARY_DIR}/javacore_excluded_registers.cpp")
   file(WRITE "${_JC_WIN_STUB_REG}"
 "#include <jni.h>
-void register_libcore_io_AsynchronousCloseMonitor(JNIEnv*) {}
 void register_android_system_OsConstantsHolder(JNIEnv*) {}
 ")
 
