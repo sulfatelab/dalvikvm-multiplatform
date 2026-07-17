@@ -17,7 +17,8 @@ if [[ -n "$BOOTCP" ]]; then
 else
   "$JAVAC" -d "$OUT/${CLS}_classes" "$SRC"
 fi
-"${D8[@]}" --release --min-api 31 --output "$OUT/${CLS}_dex" "$OUT/${CLS}_classes/${CLS}.class"
+mapfile -t _CLASSES < <(find "$OUT/${CLS}_classes" -name '*.class' | sort)
+"${D8[@]}" --release --min-api 31 --output "$OUT/${CLS}_dex" "${_CLASSES[@]}"
 python3 - <<PY
 import zipfile, os, sys
 repo=r'''$REPO'''

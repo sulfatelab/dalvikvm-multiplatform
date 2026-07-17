@@ -138,19 +138,34 @@ if(NOT TARGET win64_socket_posix)
   target_link_libraries(win64_socket_posix PUBLIC ws2_32)
 endif()
 
+# --- static libexpat (L-001: org.apache.harmony.xml.ExpatParser) ---
+set(MDVM_EXPAT_DIR "${_repo}/vendor/external/expat" CACHE PATH "Vendored libexpat sources")
+if(NOT TARGET mdvm_expat)
+  add_library(mdvm_expat STATIC
+    "${MDVM_EXPAT_DIR}/lib/xmlparse.c"
+    "${MDVM_EXPAT_DIR}/lib/xmlrole.c"
+    "${MDVM_EXPAT_DIR}/lib/xmltok.c"
+  )
+  target_include_directories(mdvm_expat PUBLIC "${MDVM_EXPAT_DIR}/lib")
+  target_compile_definitions(mdvm_expat PRIVATE
+    ${_WIN_DEFS}
+    HAVE_EXPAT_CONFIG_H
+    XML_STATIC
+  )
+  target_compile_options(mdvm_expat PRIVATE ${_WIN_CFLAGS} -Wno-unused-parameter)
+  set_target_properties(mdvm_expat PROPERTIES POSITION_INDEPENDENT_CODE ON)
+endif()
+
 # --- javacore (hybrid: AOSP sources + Win libcore_io stubs) ---
 if(MDVM_WIN64_BUILD_JAVACORE)
   set(_JC_SRCS ${JAVACORE_SRCS})
   list(FILTER _JC_SRCS EXCLUDE REGEX "libcore_io_Linux[.]cpp$")
-  list(FILTER _JC_SRCS EXCLUDE REGEX "NetworkUtilities[.]cpp$")
   list(FILTER _JC_SRCS EXCLUDE REGEX "libcore_io_AsynchronousCloseMonitor[.]cpp$")
-  list(FILTER _JC_SRCS EXCLUDE REGEX "ExpatParser[.]cpp$")
-  list(FILTER _JC_SRCS EXCLUDE REGEX "NativeBN[.]cpp$")
   list(FILTER _JC_SRCS EXCLUDE REGEX "cbigint[.]cpp$")
   list(FILTER _JC_SRCS EXCLUDE REGEX "android_system_OsConstantsHolder[.]cpp$")
-  # NetworkUtilities uses Linux sockaddr helpers heavily; keep out for Phase B0
-  # Async close monitor is Linux signal-based
-  # Expat + NativeBN need extra PE deps; exclude Phase B0
+  # L-001: keep NetworkUtilities + NativeBN + ExpatParser.
+  # Still excluded: full AOSP libcore_io_Linux (Win bridge), AsyncClose (signals),
+  # cbigint (unused by current graph), OsConstantsHolder (Win OsConstants init path).
 
   set(_JC_WIN_BRIDGE
     "${MDVM_LIBCORE_DIR}/multiplatform/windows/native/register_libcore_io_Linux_win.cpp"
@@ -161,13 +176,11 @@ if(MDVM_WIN64_BUILD_JAVACORE)
   )
   set_source_files_properties("${_repo}/tools/win64/jni_stubs/libcore_hello3.c"
     PROPERTIES COMPILE_DEFINITIONS "JNI_OnLoad=javacore_stub_JNI_OnLoad_unused;JNI_OnUnload=javacore_stub_JNI_OnUnload_unused")
-  # Provide empty registers for excluded modules to satisfy Register.cpp
+  # Empty registers only for modules still excluded
   set(_JC_WIN_STUB_REG "${CMAKE_CURRENT_BINARY_DIR}/javacore_excluded_registers.cpp")
   file(WRITE "${_JC_WIN_STUB_REG}"
 "#include <jni.h>
 void register_libcore_io_AsynchronousCloseMonitor(JNIEnv*) {}
-void register_libcore_math_NativeBN(JNIEnv*) {}
-void register_org_apache_harmony_xml_ExpatParser(JNIEnv*) {}
 void register_android_system_OsConstantsHolder(JNIEnv*) {}
 ")
 
@@ -181,6 +194,7 @@ void register_android_system_OsConstantsHolder(JNIEnv*) {}
     PUBLIC "${MDVM_ART_ROOT_DIR}/libziparchive/include"
     PUBLIC "${MDVM_LIBCORE_DIR}/luni/src/main/native"
     PUBLIC "${MDVM_LIBCORE_DIR}/multiplatform/windows/native"
+    PUBLIC "${MDVM_EXPAT_DIR}/lib"
     PRIVATE "${_repo}/tools/win64/jni_stubs"
   )
   # Prefer multipath Portability.h
@@ -190,11 +204,15 @@ void register_android_system_OsConstantsHolder(JNIEnv*) {}
     U_USING_ICU_NAMESPACE=0
     LIBICU_U_SHOW_CPLUSPLUS_API=1
     ANDROID_LINK_SHARED_ICU4C
+    XML_STATIC
   )
   target_compile_options(javacore PRIVATE ${_WIN_CFLAGS} -Wno-unused-parameter "SHELL:-D__INTRODUCED_IN(x)=")
-  # Import real ICU from this build; zip/base/log/nativehelper from phase1
+  # Import real ICU from this build; zip/base/log/nativehelper from phase1;
+  # static expat for ExpatParser. libcrypto linked later when crypto target is defined (NativeBN).
   target_link_libraries(javacore PUBLIC base log nativehelper ziparchive z icuuc icui18n
-    PRIVATE ws2_32 kernel32 advapi32 win64_socket_posix)
+    PRIVATE ws2_32 kernel32 advapi32 win64_socket_posix mdvm_expat)
+  target_include_directories(javacore PRIVATE
+    "${MDVM_ART_ROOT_DIR}/external/boringssl/src/include")
   # Also export WinNT FileSystem natives from same DLL (from win_fs)
 endif()
 
@@ -370,6 +388,12 @@ if(MDVM_WIN64_BUILD_CRYPTO)
   add_executable(crypto_sha_smoke "${CMAKE_CURRENT_SOURCE_DIR}/crypto_sha_smoke.c")
   target_link_libraries(crypto_sha_smoke PRIVATE crypto)
   target_include_directories(crypto_sha_smoke PRIVATE "${MDVM_ART_ROOT_DIR}/external/boringssl/src/include")
+
+  # L-001: prefer in-tree crypto over phase1 import for NativeBN
+  if(TARGET javacore)
+    target_link_libraries(javacore PRIVATE crypto)
+    add_dependencies(javacore crypto)
+  endif()
 
   # --- boringssl libssl PE (L-002 Phase C1) ---
   option(MDVM_WIN64_BUILD_SSL "Build boringssl ssl PE + conscrypt JNI" ON)

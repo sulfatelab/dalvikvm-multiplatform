@@ -278,14 +278,15 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 ## Product leftovers (not single-line workarounds)
 
 ### L-001 — Real PE libcore / openjdk / ICU module build
-- **State:** OPEN (ICU+javacore+openjdk PE staged for product; surface still hybrid)
+- **State:** OPEN (ICU+javacore+openjdk PE staged; hybrid surface deepened)
 - **Kind:** leftover
 - **Area:** build / libcore / icu
-- **Gap:** Linux has full `.so` graph from bp2cmake; Win64 has **real ICU** + **hybrid javacore** (`tools/verify/win64_libcore_icu`). ICU + hybrid javacore + **AOSP openjdk NIO PE** landed and are **product-default** via `stage_native_modules.sh` (W-005 closed). Memory enabled; Os bridge substantially expanded (see win32_libcore_os_natives.md). Still missing full AOSP `libcore_io_Linux` compile, Expat, NativeBN, NetworkUtilities; NIO.2 excluded; crypto PE under L-002.
-- **Exit criteria:** PE DLLs built from AOSP sources without `libcombined` aliasing; GoldenApp + charset/locale smoke still pass.
+- **Gap:** Linux has full `.so` graph from bp2cmake; Win64 has **real ICU** + **hybrid javacore** + **AOSP openjdk NIO PE** (product-default via `stage_native_modules.sh`, W-005 closed). **Expat + NativeBN + NetworkUtilities** now in `libjavacore` (2026-07-17). Still missing full AOSP `libcore_io_Linux` compile, AsyncClose, OsConstantsHolder register path; NIO.2 excluded; crypto PE under L-002.
+- **Exit criteria:** PE DLLs built from AOSP sources without `libcombined` aliasing; GoldenApp + charset/locale smoke still pass. (product PE criterion already met; residual is remaining hybrid exclusions.)
 - **Opened:** 2026-07-17
 - **Progress:** see `tools/verify/win64_libcore_icu/RESULT.md`; Os map [win32_libcore_os_natives.md](win32_libcore_os_natives.md)
 - **Progress:** 2026-07-17 — AOSP `Memory` in javacore; Linux bridge mmap/… + Needed pipe/pread/readv/timeval/sendto/…; see win32_libcore_os_natives.md (Needed residual small)
+- **Progress:** 2026-07-17 — **Expat** (static `vendor/external/expat` 2.6.4), **NativeBN** (link `libcrypto`), **NetworkUtilities** (POSIX msghdr CMSG shims) in product `libjavacore.dll`; wine `BnProbe`/`XmlProbe`/`CoreProbe`/`NetProbe` PASS
 
 ### L-002 — boringssl / conscrypt / SSL PE
 - **State:** OPEN (partial — C0–C3 smoke OK under wine; HTTPS golden suite / non-ASCII IDNA / win ASM still open)

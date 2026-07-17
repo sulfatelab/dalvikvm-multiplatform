@@ -42,7 +42,26 @@ typedef intptr_t ssize_t;
 #define SO_REUSEPORT 15
 #endif
 
-#ifndef CMSG_SPACE
+/* Winsock maps CMSG_* to WSA_CMSG_* that expect WSAMSG.Control; force POSIX
+ * msghdr-compatible macros for AOSP NetworkUtilities / sendmsg helpers. */
+#ifdef CMSG_SPACE
+#undef CMSG_SPACE
+#endif
+#ifdef CMSG_LEN
+#undef CMSG_LEN
+#endif
+#ifdef CMSG_DATA
+#undef CMSG_DATA
+#endif
+#ifdef CMSG_FIRSTHDR
+#undef CMSG_FIRSTHDR
+#endif
+#ifdef CMSG_NXTHDR
+#undef CMSG_NXTHDR
+#endif
+#ifdef CMSG_ALIGN
+#undef CMSG_ALIGN
+#endif
 /* Minimal cmsg macros for compile; real sendmsg/recvmsg are limited. */
 #define CMSG_ALIGN(len) (((len) + sizeof(size_t) - 1) & ~(sizeof(size_t) - 1))
 #define CMSG_SPACE(len) (CMSG_ALIGN(sizeof(struct cmsghdr)) + CMSG_ALIGN(len))
@@ -50,8 +69,10 @@ typedef intptr_t ssize_t;
 #define CMSG_DATA(cmsg) ((unsigned char*)(cmsg) + CMSG_ALIGN(sizeof(struct cmsghdr)))
 #define CMSG_FIRSTHDR(mhdr) \
   ((mhdr)->msg_controllen >= sizeof(struct cmsghdr) ? (struct cmsghdr*)(mhdr)->msg_control : (struct cmsghdr*)0)
+/* Single-header iteration is enough for current multipath use; full NXTHDR later. */
 #define CMSG_NXTHDR(mhdr, cmsg) (struct cmsghdr*)0
-#endif
+
+#include <sys/uio.h>
 
 /* Winsock (ws2def.h) may already typedef cmsghdr/WSAMSG. Provide msghdr only if needed. */
 #ifndef _MDVM_MSGHDR_DEFINED

@@ -50,7 +50,8 @@ cp build/win64_libcore_icu/icu_jni.dll build/win64_phase1/libicu_jni.dll
 | AOSP `Register.cpp`, ICU helpers, MethodHandle/VarHandle, NativeAllocationRegistry | Real sources |
 | `libcore.io.Linux` | **Excluded** AOSP `libcore_io_Linux.cpp`; Win bridge registers ~50 methods from `win_fs`/`win_net` stubs |
 | WinNT FS / sockets / OsConstants init | Same PE stub C sources linked into `javacore.dll` |
-| Expat, NativeBN, Memory, NetworkUtilities, AsyncClose, full OsConstantsHolder | **Not yet** (empty register stubs / deferred) |
+| Memory, NetworkUtilities, NativeBN, ExpatParser | **In PE** (L-001 2026-07-17) |
+| AsyncClose, full OsConstantsHolder, full `libcore_io_Linux` | **Not yet** (empty register stubs / Win bridge) |
 | `libopenjdk.dll` | Still pure `libcombined` alias |
 
 Artifact: `build/win64_libcore_icu/javacore.dll` (~92K)
@@ -350,3 +351,27 @@ Residual HTTPS: `HttpsURLConnection` needs `com.android.okhttp.HttpsHandler` (no
   - handler.https=`HttpsURLConnectionImpl`
   - `https://example.com/` → status 200
 - Multipath ASCII fallbacks: `java.net.IDN`, `java.text.Normalizer` (ICU4J tables still deferred)
+
+## L-001 Expat / NativeBN / NetworkUtilities (2026-07-17)
+
+**Status:** **BUILT into product `libjavacore.dll` + wine smoke OK**
+
+| Module | Approach |
+|--------|----------|
+| `libcore.math.NativeBN` | Real AOSP `libcore_math_NativeBN.cpp` linked against product `libcrypto` (boringssl) |
+| `org.apache.harmony.xml.ExpatParser` | Real AOSP ExpatParser + static vendored **libexpat 2.6.4** (`vendor/external/expat`) |
+| `NetworkUtilities` | Real AOSP helpers (sockaddr ↔ InetAddress, msghdr conversion); Winsock/msghdr CMSG macros fixed in `compat/include/sys/socket.h` |
+| Still empty registers | `AsynchronousCloseMonitor`, `OsConstantsHolder` (Win OsConstants init elsewhere) |
+| Still excluded | Full AOSP `libcore_io_Linux.cpp` (Win bridge remains), `cbigint` |
+
+### Smoke (wine64, imageless `-Xint`)
+
+```
+BnProbe.done=ok
+XmlProbe.done=ok elems=3 text=helloworld
+CoreProbe.done=ok
+NetProbe.done=ok
+```
+
+Probes: `tools/verify/win64_phase3/src/{Bn,Xml}Probe.java` via `build_one.sh` / `run_one.sh`.
+`libjavacore.dll` ~335K after L-001 (was ~92K at B0).
