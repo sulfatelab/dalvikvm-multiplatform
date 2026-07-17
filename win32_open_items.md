@@ -58,7 +58,7 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 |--------|---------|
 | Phases 0–3 | **Gate-complete** (P3 G12 real Win10 + wine) |
 | Phase 4 | **Wine complete**; host re-run still recommended |
-| PE libcore/ICU/openjdk | **ICU + hybrid javacore + AOSP openjdk NIO PE** (NIO.2 still non-goal; linger/NetProbe gap) |
+| PE libcore/ICU/openjdk | **ICU + hybrid javacore + AOSP openjdk NIO PE** (NIO.2 non-goal; NetProbe wine OK) |
 | Quick/JIT/TLS | **Designed** in draft doc; **not implemented**; invoke forced to interpreter |
 | Linux multiplatform | Native `dalvikvm -showversion` OK; imageless Hello e2e not re-gated here |
 
@@ -213,7 +213,7 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 
 
 ### W-016 — ICU needs external `ICU_DATA` / `icudt72l.dat` for wine smoke
-- **State:** OPEN
+- **State:** OPEN (runners defaulted 2026-07-17; still need data file present)
 - **Kind:** workaround
 - **Area:** icu / packaging
 - **Symptom / why:** Linked stubdata alone yields `u_init` `U_FILE_ACCESS_ERROR` under wine; full data file works.
@@ -221,6 +221,7 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Proper fix:** Package full ICU data by default in host package scripts; verify embedded data path or always set ICU_DATA in runners.
 - **Code anchors:** `vendor/icu/android_icu4j/libcore_bridge/src/native/Register.cpp`; `build/win64_phase1/run/icu/`
 - **Opened:** 2026-07-17
+- **Progress:** 2026-07-17 — `package_win64_phase3.sh` fails if `icudt72l.dat` missing; phase3/4 runners and install_into_phase1 default/export `ICU_DATA=run/icu`
 
 ### W-017 — openjdk hybrid excludes NIO.2 / async / UNIXProcess; epoll via select
 - **State:** OPEN
@@ -232,7 +233,7 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Opened:** 2026-07-17
 
 ### W-018 — NetProbe StructLinger NPE (getsockopt SO_LINGER incomplete in javacore Win bridge)
-- **State:** OPEN
+- **State:** CLOSED (2026-07-17) — implemented getsockoptLinger/setsockoptLinger in win_net_natives; NetProbe wine PASS
 - **Kind:** leftover / bug
 - **Area:** libcore-stub / net
 - **Symptom / why:** `NetProbe` fails: `StructLinger.isOn()` on null from linger get.
@@ -355,4 +356,4 @@ _(None yet in this tracker. When closing a W-/L-/H- item, move a one-line summar
 - [ ] Permanent design choice (e.g. VEH forever) → move from W- to documented architecture; close workaround  
 - [ ] CLOSED items: one line in §Closed, leave detail above with State CLOSED  
 
-*Last snapshot: 2026-07-17 — real ICU + hybrid javacore + AOSP openjdk Unix/NIO PE (B2); CoreProbe/IoProbe wine OK with ICU_DATA; NetProbe linger NPE OPEN; JIT/TLS design drafted.*
+*Last snapshot: 2026-07-17 — openjdk NIO B2 + linger fix; CoreProbe/IoProbe/NetProbe wine OK with ICU_DATA=run/icu; package enforces icudt72l.dat; JIT/TLS design drafted.*

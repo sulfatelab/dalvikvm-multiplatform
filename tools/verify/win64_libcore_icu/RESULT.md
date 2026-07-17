@@ -108,9 +108,15 @@ ICU_DATA=run/icu  # required: full icudt72l.dat under run/icu (stubdata alone â†
 showversion OK
 CoreProbe.done=ok
 IoProbe.done=ok
-NetProbe: FAIL (StructLinger NPE via javacore winsock bridge â€” not openjdk NIO register path)
+NetProbe.done=ok (after W-018 linger get/set in win_net_natives)
 ```
 
 ### ICU note
 
 `icu_jni` `Register.cpp` now calls `udata_setCommonData(&U_ICUDATA_ENTRY_POINT)` on Windows; product smoke still needs **`ICU_DATA=run/icu`** with real `icudt72l.dat` until full data is embedded or path is hard-wired.
+
+
+## Linger + ICU_DATA follow-up (2026-07-17)
+
+- **W-018 CLOSED:** `getsockoptLinger` / `setsockoptLinger` in `tools/win64/jni_stubs/win_net_natives.c` + register table; wine NetProbe PASS.
+- **ICU_DATA defaults:** phase3/phase4 runners already export `ICU_DATA=run/icu`; `package_win64_phase3.sh` now **requires** `run/icu/icudt72l.dat` (copies from build or vendor stubdata path fallback) and stages `icuuc`/`icui18n`/`openjdkjvm` when present.

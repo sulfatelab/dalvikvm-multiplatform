@@ -20,7 +20,34 @@ for j in hello.jar goldenapp.jar probe.jar ioprobe.jar coreprobe.jar netprobe.ja
          dnsprobe.jar propsprobe.jar oserrnoprobe.jar threadstressprobe.jar throwprobe.jar gcstressprobe.jar threadheavyprobe.jar handleleakprobe.jar perfsmokeprobe.jar crashabortprobe.jar crashnativeprobe.jar; do
   [[ -f "$BUILD/run/$j" ]] && cp -a "$BUILD/run/$j" "$OUT/run/" || true
 done
-if [[ -d "$BUILD/run/icu" ]]; then cp -a "$BUILD/run/icu/." "$OUT/run/icu/" 2>/dev/null || true; fi
+# ICU data (required for real icu_jni PE; stubdata alone is insufficient under wine/Win)
+if [[ -d "$BUILD/run/icu" ]]; then
+  cp -a "$BUILD/run/icu/." "$OUT/run/icu/" 2>/dev/null || true
+fi
+if [[ ! -f "$OUT/run/icu/icudt72l.dat" ]]; then
+  for cand in       "$BUILD/run/icu/icudt72l.dat"       "$REPO/vendor/icu/icu4c/source/stubdata/icudt72l.dat"       "$REPO/dist/win64_phase3_host/run/icu/icudt72l.dat"; do
+    if [[ -f "$cand" ]]; then
+      mkdir -p "$OUT/run/icu"
+      cp -a "$cand" "$OUT/run/icu/icudt72l.dat"
+      echo "Staged ICU_DATA file from $cand"
+      break
+    fi
+  done
+fi
+if [[ ! -f "$OUT/run/icu/icudt72l.dat" ]]; then
+  echo "ERROR: missing run/icu/icudt72l.dat — CoreProbe/locale will fail (W-016). Place full ICU data under $BUILD/run/icu/." >&2
+  exit 1
+fi
+# Prefer real hybrid PE modules when present (icu + javacore + openjdk)
+for f in icuuc.dll icui18n.dll openjdkjvm.dll; do
+  if [[ -f "$BUILD/$f" ]]; then cp -a "$BUILD/$f" "$OUT/"; fi
+done
+if [[ -f "$BUILD/icuuc.dll" ]]; then
+  # dual-name loaders
+  cp -a "$BUILD/icu_jni.dll" "$OUT/libicu_jni.dll" 2>/dev/null || true
+  cp -a "$BUILD/javacore.dll" "$OUT/libjavacore.dll" 2>/dev/null || true
+  cp -a "$BUILD/openjdk.dll" "$OUT/libopenjdk.dll" 2>/dev/null || true
+fi
 
 # Shared env fragment for cmd scripts
 write_runner() {

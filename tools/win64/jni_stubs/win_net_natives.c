@@ -26,6 +26,7 @@ enum {
   A_SOL_SOCKET = 1,
   A_SO_REUSEADDR = 2,
   A_SO_ERROR = 4,
+  A_SO_LINGER = 13,
   A_SO_DOMAIN = 39,
   A_SO_PROTOCOL = 38,
   A_IPV6_V6ONLY = 26,
@@ -477,6 +478,90 @@ __declspec(dllexport) jint Java_libcore_io_Linux_getsockoptInt__Ljava_io_FileDes
     JNIEnv* env, jobject thiz, jobject fdObj, jint level, jint option) {
   return Java_libcore_io_Linux_getsockoptInt(env, thiz, fdObj, level, option);
 }
+
+
+/* ===== SO_LINGER (StructLinger) — required by BlockGuardOs.isLingerSocket on close ===== */
+static jclass g_linger_class;
+static jmethodID g_linger_ctor;
+static jfieldID g_linger_onoff;
+static jfieldID g_linger_linger;
+
+static void ensure_linger(JNIEnv* env) {
+  if (g_linger_class) return;
+  jclass c = (*env)->FindClass(env, "android/system/StructLinger");
+  if (!c) return;
+  g_linger_class = (jclass)(*env)->NewGlobalRef(env, c);
+  g_linger_ctor = (*env)->GetMethodID(env, g_linger_class, "<init>", "(II)V");
+  g_linger_onoff = (*env)->GetFieldID(env, g_linger_class, "l_onoff", "I");
+  g_linger_linger = (*env)->GetFieldID(env, g_linger_class, "l_linger", "I");
+}
+
+__declspec(dllexport) jobject Java_libcore_io_Linux_getsockoptLinger(
+    JNIEnv* env, jobject thiz, jobject fdObj, jint level, jint option) {
+  (void)thiz; (void)level; (void)option;
+  ensure_wsa();
+  ensure_linger(env);
+  SOCKET s = socket_from_fd(fd_to_int(env, fdObj));
+  if (s == INVALID_SOCKET) {
+    throw_errno(env, "getsockopt", A_EBADF);
+    return NULL;
+  }
+  struct linger l;
+  memset(&l, 0, sizeof(l));
+  int len = (int)sizeof(l);
+  if (getsockopt(s, SOL_SOCKET, SO_LINGER, (char*)&l, &len) != 0) {
+    int werr = WSAGetLastError();
+    if (werr == WSAENOPROTOOPT) {
+      /* soft default: linger off */
+      l.l_onoff = 0;
+      l.l_linger = 0;
+    } else {
+      throw_errno(env, "getsockopt", map_wsa_to_android(werr));
+      return NULL;
+    }
+  }
+  if (!g_linger_class || !g_linger_ctor) {
+    throw_errno(env, "getsockopt", A_EINVAL);
+    return NULL;
+  }
+  return (*env)->NewObject(env, g_linger_class, g_linger_ctor, (jint)l.l_onoff, (jint)l.l_linger);
+}
+__declspec(dllexport) jobject Java_libcore_io_Linux_getsockoptLinger__Ljava_io_FileDescriptor_2II(
+    JNIEnv* env, jobject thiz, jobject fdObj, jint level, jint option) {
+  return Java_libcore_io_Linux_getsockoptLinger(env, thiz, fdObj, level, option);
+}
+
+__declspec(dllexport) void Java_libcore_io_Linux_setsockoptLinger(
+    JNIEnv* env, jobject thiz, jobject fdObj, jint level, jint option, jobject javaLinger) {
+  (void)thiz; (void)level; (void)option;
+  ensure_wsa();
+  ensure_linger(env);
+  if (!javaLinger) {
+    jclass npe = (*env)->FindClass(env, "java/lang/NullPointerException");
+    if (npe) (*env)->ThrowNew(env, npe, "null StructLinger");
+    return;
+  }
+  SOCKET s = socket_from_fd(fd_to_int(env, fdObj));
+  if (s == INVALID_SOCKET) {
+    throw_errno(env, "setsockopt", A_EBADF);
+    return;
+  }
+  struct linger l;
+  memset(&l, 0, sizeof(l));
+  if (g_linger_onoff && g_linger_linger) {
+    l.l_onoff = (*env)->GetIntField(env, javaLinger, g_linger_onoff);
+    l.l_linger = (*env)->GetIntField(env, javaLinger, g_linger_linger);
+  }
+  if (setsockopt(s, SOL_SOCKET, SO_LINGER, (const char*)&l, (int)sizeof(l)) != 0) {
+    int werr = WSAGetLastError();
+    if (werr != WSAENOPROTOOPT) throw_errno(env, "setsockopt", map_wsa_to_android(werr));
+  }
+}
+__declspec(dllexport) void Java_libcore_io_Linux_setsockoptLinger__Ljava_io_FileDescriptor_2IILandroid_system_StructLinger_2(
+    JNIEnv* env, jobject thiz, jobject fdObj, jint level, jint option, jobject javaLinger) {
+  Java_libcore_io_Linux_setsockoptLinger(env, thiz, fdObj, level, option, javaLinger);
+}
+
 
 
 /* Prefer select() over WSAPoll: real Win10 has produced WSAEINVAL from WSAPoll
