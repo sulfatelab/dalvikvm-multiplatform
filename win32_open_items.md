@@ -404,20 +404,23 @@ _(None yet in this tracker. When closing a W-/L-/H- item, move a one-line summar
 ## Design notes (not yet coded)
 
 ### D-001 — Shared boot.jar via runtime OS selection
-- **State:** DESIGN LOCKED (name/values); implementation PENDING
+- **State:** PHASE 1 IMPLEMENTED (2026-07-17) — property inject + `VMRuntime.isWindowsOs` + dual FS + separators; verify L-005 + wine Hello
 - **Doc:** `shared_bootjar_runtime_os_detection.md`
 - **Canonical property:** `dalvik.vm.multiplatform.internal.os` = `windows` | `unix`
   - Long + `internal` intentional (not a public app API; not expected for external use)
   - Reject short `dalvik.vm.mp.os` (`mp` ambiguous)
   - Values: `windows`|`unix` (not `posix`, not `linux`) — aligns with `WinNTFileSystem` / `UnixFileSystem`
-- **Injection:** `libart` / `dalvikvm` multipath startup (`-D` / Runtime properties channel)
-- **Detection ladder:** native `_WIN32` → property → `os.name`/`uname` → default `unix`
-- **Also required:** stop unconditional Windows hardcodes of `file.separator` / `path.separator` / `line.separator` in `AndroidHardcodedSystemProperties`
-- **Exit criteria (when implementing):** one `boot.jar` bytes pass L-005 Linux Hello **and** Win Hello under wine
+- **Injection:** `vendor/art/runtime/runtime.cc` after `PropertiesList` release (PE=`windows`, ELF=`unix` if unset)
+- **Detection ladder:** `VMRuntime.properties()` → System props / `os.name` → default `unix` (`VMRuntime.isWindowsOs`)
+- **Separators:** removed from `AndroidHardcodedSystemProperties`; set in `System.initUnchangeableSystemProperties`
+- **Boot:** `tools/bootjar/build_win64.sh` stages shared jar (no WinNT-only overlay)
+- **Exit criteria:** one `boot.jar` bytes pass L-005 Linux Hello **and** Win Hello under wine
+- **Follow-up during implement:** `Math.c` must not register natives for pure-Java `ceil`/`floor` (shared multipath Math.java)
+- **Code anchors:** `dalvik/system/VMRuntime.java` (`isWindowsOs*`), `DefaultFileSystem.java`, `System.java`, `runtime.cc`, `build_win64.sh`
 
 ## Suggested next closures (priority)
 
-1. **D-001** — implement shared-boot Phase 1 (property inject + `OsDetection` + dual FS classes + separator fix); design locked.  
+1. ~~**D-001** Phase 1~~ — implemented; finish dual-host verify then close.  
 2. **W-001–W-003** — after TLS/entrypoint implementation (design draft ready).  
 3. **L-001** — deepen hybrid libcore surface (Memory/Expat/NativeBN/…); W-005/W-006 closed for ICU product PE.  
 4. **H-001** — host Phase-4 with multiplatform package.  
@@ -433,4 +436,4 @@ _(None yet in this tracker. When closing a W-/L-/H- item, move a one-line summar
 - [ ] Permanent design choice (e.g. VEH forever) → move from W- to documented architecture; close workaround  
 - [ ] CLOSED items: one line in §Closed, leave detail above with State CLOSED  
 
-*Last snapshot: 2026-07-17 — D-001 property LOCKED (`dalvik.vm.multiplatform.internal.os`=windows|unix); L-005 CLOSED; W-019..W-023 CLOSED; HTTPS smoke green.*
+*Last snapshot: 2026-07-17 — D-001 Phase 1 implemented (shared boot runtime OS selection); verify pending; L-005 gate updated for shared jar.*

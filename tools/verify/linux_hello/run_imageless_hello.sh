@@ -4,8 +4,9 @@
 # Runs Hello.main against the converter-built host dalvikvm using imageless
 # boot.jar interpretation (-Ximage:/nonexistent-no-boot-image, -Xint).
 #
-# Important: Linux needs a boot.jar with UnixFileSystem. The Win64 product
-# boot.jar (WinNTFileSystem) is rejected automatically.
+# Important: Linux needs a boot.jar that can select UnixFileSystem.
+# Shared multipath boots (Unix+WinNT+VMRuntime.isWindowsOs) are accepted; legacy
+# WinNT-only product boots without multipath OS selection are rejected.
 #
 # Usage:
 #   tools/verify/linux_hello/run_imageless_hello.sh
@@ -42,10 +43,12 @@ import zipfile,sys
 path=sys.argv[1]
 z=zipfile.ZipFile(path)
 data=b"".join(z.read(n) for n in z.namelist() if n.endswith(".dex"))
-# Reject Win64 product boots that embed WinNTFileSystem.
-if b"WinNTFileSystem" in data:
-    sys.exit(1)
-if b"UnixFileSystem" in data:
+# Shared multipath boot may embed both UnixFileSystem and WinNTFileSystem;
+# require VMRuntime.isWindowsOs (runtime selection) when WinNT is present.
+has_unix = b"UnixFileSystem" in data
+has_winnt = b"WinNTFileSystem" in data
+has_osdet = b"isWindowsOs" in data or b"dalvik.vm.multiplatform.internal.os" in data
+if has_unix and (not has_winnt or has_osdet):
     sys.exit(0)
 sys.exit(1)
 PY2
@@ -54,7 +57,7 @@ PY2
 BOOT_JAR="${MDVM_BOOT_JAR:-}"
 if [[ -n "$BOOT_JAR" ]]; then
   if ! is_linux_boot_jar "$BOOT_JAR"; then
-    echo "ERROR: MDVM_BOOT_JAR is not Linux-compatible (WinNTFileSystem?): $BOOT_JAR" >&2
+    echo "ERROR: MDVM_BOOT_JAR is not Linux-compatible (need UnixFileSystem; WinNT-only without multipath OS selection rejected): $BOOT_JAR" >&2
     exit 2
   fi
 else
@@ -71,8 +74,8 @@ else
 fi
 if [[ -z "${BOOT_JAR:-}" ]]; then
   echo "ERROR: no Linux-compatible boot.jar found." >&2
-  echo "  Expected UnixFileSystem boot (e.g. /tmp/vm/run/boot.jar from prior host e2e)." >&2
-  echo "  Win64 product boot.jar is not usable on Linux for L-005." >&2
+  echo "  Expected shared multipath or Unix boot (e.g. /tmp/vm/run/boot.jar)." >&2
+  echo "  Legacy WinNT-only boots without multipath OS selection are not usable on Linux." >&2
   exit 2
 fi
 

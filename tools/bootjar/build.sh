@@ -5,7 +5,18 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 LC=$REPO/vendor/libcore
 # ICU Java sources: prefer nested vendor/icu if present, else MinDalvikVM-Archive layout.
 # Optional archive fallback for annotation stubs / older ICU layouts.
-ARCHIVE="${MDVM_ARCHIVE:-$REPO/../MinDalvikVM-Archive}"
+# Prefer renamed archive dir if present (trailing underscore on this host).
+if [ -z "${MDVM_ARCHIVE:-}" ]; then
+  if [ -d "$REPO/../MinDalvikVM-Archive" ]; then
+    ARCHIVE="$REPO/../MinDalvikVM-Archive"
+  elif [ -d "$REPO/../MinDalvikVM-Archive_" ]; then
+    ARCHIVE="$REPO/../MinDalvikVM-Archive_"
+  else
+    ARCHIVE="$REPO/../MinDalvikVM-Archive"
+  fi
+else
+  ARCHIVE="$MDVM_ARCHIVE"
+fi
 if [ -d "$REPO/vendor/icu/android_icu4j" ]; then
   ICU=$REPO/vendor/icu/android_icu4j
 elif [ -d "$ARCHIVE/javalib/external/icu/android_icu4j" ]; then
@@ -65,6 +76,10 @@ for d in \
     fi
 done
 grep -vE 'luni/src/main/java/libcore/net/http/(Dns|HttpURLConnectionFactory)\.java' \
+    "$OUT/srclist.txt" > "$OUT/srclist2.txt" && mv "$OUT/srclist2.txt" "$OUT/srclist.txt"
+# Prefer ojluni multipath AndroidHardcodedSystemProperties (JAVA_VERSION 1.8.0,
+# OS-neutral separators) over the libart copy (JAVA_VERSION "0").
+grep -vE 'libart/src/main/java/java/lang/AndroidHardcodedSystemProperties\.java' \
     "$OUT/srclist.txt" > "$OUT/srclist2.txt" && mv "$OUT/srclist2.txt" "$OUT/srclist.txt"
 echo "sources: $(wc -l < "$OUT/srclist.txt")"
 

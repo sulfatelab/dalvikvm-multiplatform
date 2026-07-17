@@ -1,6 +1,6 @@
 # Shared boot.jar: Runtime OS detection for FileSystem selection
 
-**Status:** design (research only); property name/values **LOCKED** (§11)  
+**Status:** Phase 1 **IMPLEMENTED** (property inject + `VMRuntime.isWindowsOs` + shared DefaultFileSystem + separators); name/values **LOCKED** (§11)  
 **Date:** 2026-07-17  
 **Decision context:** multipath will use **runtime selection** so Linux ART and Windows ART can share one `boot.jar` (instead of build-time WinNT overlay only).  
 **Related:** L-005 (Linux Hello rejects WinNT boot), Option H WinNT FS, `filesystem_win32.md`, `tools/bootjar/build_win64.sh`
@@ -558,10 +558,29 @@ Name:   dalvik.vm.multiplatform.internal.os
 Type:   system property (ART Runtime properties / -D channel)
 Values: "windows" | "unix"   (exact, lowercase)
 Setter: libart / dalvikvm multipath startup (host build)
-Getter: libcore OsDetection / DefaultFileSystem / System separator setup
+Getter: `VMRuntime.isWindowsOs` / DefaultFileSystem / System separator setup
 Default if unset: native probe, else "unix"
 Stability: internal multipath contract — not a public app API
 ```
 
 Reject abbreviated `dalvik.vm.mp.os` (`mp` is ambiguous). Prefer `…os` over `…ostype`. Values stay `windows`|`unix` (not `posix`/`linux`).
 
+
+
+---
+
+## 12. Implementation status (Phase 1)
+
+Landed 2026-07-17:
+
+| Piece | Location |
+|-------|----------|
+| Property inject | `vendor/art/runtime/runtime.cc` — if unset, push `dalvik.vm.multiplatform.internal.os=windows` on PE / `unix` on ELF |
+| OS helpers | `dalvik.system.VMRuntime` — `isWindowsOs()`, `multiplatformOs()`, `isWindowsOsFromProperties`, constants `MULTIPLATFORM_OS_PROP` / `OS_WINDOWS` / `OS_UNIX` (naked methods on VMRuntime; no `java.lang.OsDetection`) |
+| Detection ladder | `VMRuntime.properties()` → System props / `os.name` → default `unix` |
+| `DefaultFileSystem` | runtime branch via `VMRuntime.isWindowsOs()` |
+| Separators | removed from hardcodes; set in `System.initUnchangeableSystemProperties` via `VMRuntime.isWindowsOsFromProperties` |
+| Boot packaging | `tools/bootjar/build_win64.sh` no longer applies WinNT-only overlay; stages shared jar |
+| L-005 | accepts shared jar (Unix + optional WinNT with multipath helpers) |
+
+Still out of scope: NIO.2 `DefaultFileSystemProvider` Windows path.
