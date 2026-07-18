@@ -1128,10 +1128,43 @@ Fix:
    (`tools/bp2cmake/bp2cmake/codegen.py`).
 
 After PE offset install: switch Hello still green; nterp no longer storms AVs at
-instrumentation load — fails later with **`Unable to locate class 'Hello'`**
-(no `hello.jar` open / odex attempt). Control: same env + **`-Xint`** → Hello green
-(so `CanRuntimeUseNterp` false forces switch). Next debug: PathClassLoader /
-`java.class.path` / nterp entry during system ClassLoader clinit or app dex open.
+instrumentation load — fails later with **`Unable to locate class 'Hello'`**.
+
+### 17.6 Residual ClassNotFound under nterp (2026-07-18 debug)
+
+Evidence (wine, imageless Hello, `ART_WIN64_QUICK_INVOKE=1 ART_WIN64_NTERP=1`):
+
+| Step | Switch / `-Xint` | Nterp |
+|------|------------------|-------|
+| `Runtime.class_path_string_` | `run/hello.jar` | `run/hello.jar` |
+| `VMRuntime.classPath()` (System props init) | `run/hello.jar` | `run/hello.jar` |
+| `CreateSystemClassLoader` entry | to-interp bridge | **nterp** (`can_use_nterp=1`) |
+| `WinNTFileSystem.getBooleanAttributes0` | `path='run\hello.jar' rv=BA_EXISTS|REGULAR` | **`path=''` (empty)** ×2 |
+| `DexFile_openDexFileNative` | opens absolute `…\run\hello.jar` | **never called** |
+| `PathClassLoader.toString` | (dex elements present) | `DexPathList[[],nativeLibraryDirectories=[., .]]` |
+
+Conclusion: under nterp, `ClassLoader.createSystemClassLoader` builds a PathClassLoader
+with an **empty dex path** (as if `java.class.path` / constructor String were empty),
+so no app dex is opened → FindClass(Hello) fails. Native C++ classpath is correct;
+the bug is on the **nterp managed path** that materializes/uses that String (property
+read, `split`, `File` path, or generic-JNI string arg for `getBooleanAttributes0`).
+
+Controls: nterp env + **`-Xint`** → Hello green; switch (nterp off) → green.
+
+Next debug targets (ordered):
+
+1. String/object correctness across nterp → generic-JNI (MS packing already in place;
+   verify jobject arg for instance natives that take `String`).
+2. `iget-object` / `move-result-object` / ref-shadow (`rREFS=rbp`) around
+   `System.getProperty` and `File.<init>` under N-1.
+3. Temporary isolation: force switch interpreter only for
+   `ClassLoader.createSystemClassLoader` / PathClassLoader ctor while nterp flag on.
+
+Temporary diagnostics (to remove later): INFO logs in `runtime.cc`
+(`CreateSystemClassLoader`, loader.toString), `VMRuntime_classPath`,
+`DexFile_openDexFileNative`; stderr logs in `win_fs_natives.c`
+`getBooleanAttributes0`.
+
 
 ## 13. Appendix — evidence anchors in tree
 

@@ -62,7 +62,7 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 | Phases 0–3 | **Gate-complete** (P3 G12 real Win10 + wine) |
 | Phase 4 | **Wine complete**; host re-run still recommended |
 | PE libcore/ICU/openjdk | **Product-default real PE** (icu/javacore/openjdk); NIO.2 non-goal; NetProbe OK |
-| Quick/JIT/TLS | **Partial:** rSELF=r15; nterp N-1 + PE `asm_defines` (instr 0x328); `ART_WIN64_NTERP` residual ClassNotFound Hello (switch/`-Xint` green); opt-in quick; JIT not started; **W-024** after |
+| Quick/JIT/TLS | **Partial:** rSELF=r15; nterp N-1 + PE asm_defines 0x328; residual **empty PathClassLoader dex path under nterp** (File path '' / no openDex); switch/`-Xint` green; JIT not started |
 | Linux multiplatform | Native `dalvikvm -showversion` OK; imageless Hello e2e not re-gated here |
 
 ---
@@ -90,7 +90,7 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Proper fix:** Keep **rSELF=r15**; ensure every managed entry (JNI return, attach) publishes rSELF; port mterp as **N-1** (`rREFS=rbp`) or keep switch-interp (N-0); then close when product default uses rSELF path.
 - **Code anchors:** `thread_x86_64.cc`; `asm_support_x86_64.S` `THREAD_*`; `nterp.cc` (`IsNterpSupported` false on Win); design §6 / §12b / §15 / §16 / **§17**
 - **Opened:** 2026-07-16
-- **Updated:** 2026-07-18 — N-1 + PE `asm_defines` (0x328); nterp residual ClassNotFound Hello (no jar open); `-Xint` control green; FS reject; map lock §17
+- **Updated:** 2026-07-18 — PE offset 0x328 fixed; nterp residual empty DexPathList (java path empty under nterp); diagnostics in runtime/DexFile/win_fs; §17.6
 - **Design:** [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md) **§15 N-1 LOCKED**, **§17** register-map lock; FS-self **§16** reject
 
 ### W-003 — Quick entrypoint SETUP frames `int3` on Windows

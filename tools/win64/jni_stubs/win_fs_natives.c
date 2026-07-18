@@ -106,18 +106,37 @@ static int is_socket_fd(int fd) {
 /* ===== WinNTFileSystem natives ===== */
 __declspec(dllexport) jint Java_java_io_WinNTFileSystem_getBooleanAttributes0(JNIEnv* env, jclass cls, jstring jpath) {
   (void)cls;
-  if (!jpath) return 0;
+  if (!jpath) {
+    fprintf(stderr, "Win64 getBooleanAttributes0: null path\n");
+    fflush(stderr);
+    return 0;
+  }
+  jsize jlen = (*env)->GetStringUTFLength(env, jpath);
   const char* p = (*env)->GetStringUTFChars(env, jpath, 0);
+  if (!p) {
+    fprintf(stderr, "Win64 getBooleanAttributes0: GetStringUTFChars failed jlen=%d\n", (int)jlen);
+    fflush(stderr);
+    return 0;
+  }
+  fprintf(stderr, "Win64 getBooleanAttributes0 jlen=%d raw_first=%02x\n", (int)jlen, (unsigned char)p[0]);
+  fflush(stderr);
+
   wchar_t* w = win_path_to_wide(p);
+  DWORD attr = w ? GetFileAttributesW(w) : INVALID_FILE_ATTRIBUTES;
+  jint rv = 0;
+  if (attr == INVALID_FILE_ATTRIBUTES) {
+    rv = 0;
+  } else {
+    rv = BA_EXISTS;
+    if (attr & FILE_ATTRIBUTE_DIRECTORY) rv |= BA_DIRECTORY;
+    else rv |= BA_REGULAR;
+    if (attr & FILE_ATTRIBUTE_HIDDEN) rv |= BA_HIDDEN;
+  }
+  fprintf(stderr, "Win64 getBooleanAttributes0 path='%s' attr=0x%lx rv=0x%x\n",
+          p, (unsigned long)attr, (unsigned)rv);
+  fflush(stderr);
   (*env)->ReleaseStringUTFChars(env, jpath, p);
-  if (!w) return 0;
-  DWORD attr = GetFileAttributesW(w);
   free(w);
-  if (attr == INVALID_FILE_ATTRIBUTES) return 0;
-  jint rv = BA_EXISTS;
-  if (attr & FILE_ATTRIBUTE_DIRECTORY) rv |= BA_DIRECTORY;
-  else rv |= BA_REGULAR;
-  if (attr & FILE_ATTRIBUTE_HIDDEN) rv |= BA_HIDDEN;
   return rv;
 }
 
