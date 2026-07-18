@@ -70,28 +70,28 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 ## Temporary workarounds (must be removed later)
 
 ### W-001 — Force interpreter invoke (quick entrypoints effectively disabled)
-- **State:** OPEN (opt-in path exists)
-- **Kind:** workaround
+- **State:** CLOSED (product default uses quick invoke)
+- **Kind:** workaround (removed as product default)
 - **Area:** art / invoke
-- **Symptom / why:** Win64 product still defaults to interpreter invoke until quick path is smoke-validated.
-- **Current behavior:** On `_WIN32`, invokable non-proxy methods force `EnterInterpreterFromInvoke` **unless** `ART_WIN64_QUICK_INVOKE=1`. With the env set, `art_quick_invoke_*` (MS entry → SysV body, rSELF=r15) is used.
-- **Proper fix:** Expand wine matrix + host re-run; then default the env path on and delete the force (keep debugger/`-Xint` cases).
-- **Code anchors:** `vendor/art/runtime/art_method.cc`; `quick_entrypoints_x86_64.S` Win prologues; [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md) §12b
-- **Blocked on:** product default decision (Hello/Math/Io/Net no-`-Xint` green under opt-in; CoreProbe independent NPE)
+- **Symptom / why:** Win64 used to force interpreter invoke until quick path was smoke-validated.
+- **Current behavior:** On `_WIN32`, invokable non-proxy methods use `art_quick_invoke_*` (MS entry → SysV body, rSELF=r15) by default, matching Linux. Opt-out with `ART_WIN64_QUICK_INVOKE=0` forces `EnterInterpreterFromInvoke`. Debugger/`-Xint` still force interpreter via normal ART paths.
+- **Proper fix:** Done for product default. Residual: broader host re-run; optional delete of the env force path later.
+- **Code anchors:** `vendor/art/runtime/art_method.cc`; `quick_entrypoints_x86_64.S` Win prologues; [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md) §12b / §17.8
+- **Blocked on:** n/a (default ON as of 2026-07-19)
 - **Opened:** 2026-07-16 (Phase 2)
-- **Updated:** 2026-07-18 — wine Hello/Math/Io/Net PASS with quick invoke ± `-Xint`; force-interp remains product default
+- **Updated:** 2026-07-19 — product default ON (Linux-like); opt-out `ART_WIN64_QUICK_INVOKE=0`
 
 ### W-002 — No managed GS / Thread base on Windows (`InitCpu` no-op for GS)
-- **State:** OPEN (partial — macros landed; not product-default)
-- **Kind:** workaround
+- **State:** OPEN (partial — rSELF path is product default; residual JNI attach / non-invoke entries)
+- **Kind:** workaround / design debt
 - **Area:** art / TLS
 - **Symptom / why:** Linux x86_64 uses `ARCH_SET_GS` so quick/nterp use `%gs:OFFSET`. Windows GS is TEB.
-- **Current behavior:** `InitCpu` does **not** touch GS (correct). Asm uses `THREAD_*` macros: r15 base on `_WIN32`, GS on Linux. rSELF published in `art_quick_invoke_*` when quick invoke is enabled.
-- **Proper fix:** Keep **rSELF=r15**; ensure every managed entry (JNI return, attach) publishes rSELF; port mterp as **N-1** (`rREFS=rbp`) or keep switch-interp (N-0); then close when product default uses rSELF path.
-- **Code anchors:** `thread_x86_64.cc`; `asm_support_x86_64.S` `THREAD_*`; `nterp.cc` (`IsNterpSupported` false on Win); design §6 / §12b / §15 / §16 / **§17**
+- **Current behavior:** `InitCpu` does **not** touch GS (correct). Asm uses `THREAD_*` macros: r15 base on `_WIN32`, GS on Linux. rSELF published in `art_quick_invoke_*` (default ON). Nterp N-1 (`rREFS=rbp`) product default ON (§17.8).
+- **Proper fix:** Keep **rSELF=r15**; audit remaining managed entries (JNI return, attach, trampolines) publish rSELF; then close when full matrix is green without GS.
+- **Code anchors:** `thread_x86_64.cc`; `asm_support_x86_64.S` `THREAD_*`; `nterp.cc` (default ON; opt-out `ART_WIN64_NTERP=0`); design §6 / §12b / §15 / §16 / **§17** / **§17.8**
 - **Opened:** 2026-07-16
-- **Updated:** 2026-07-18 — ClassLoader empty path fixed via finished_starting gate; float shorty excluded; Hello nterp exit 0 but empty stdout residual; §17.6–17.7
-- **Design:** [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md) **§15 N-1 LOCKED**, **§17** register-map lock; FS-self **§16** reject
+- **Updated:** 2026-07-19 — product default rSELF + nterp ON; residual attach/publish audit
+- **Design:** [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md) **§15 N-1 LOCKED**, **§17** register-map lock; FS-self **§16** reject; **§17.8** defaults ON
 
 ### W-003 — Quick entrypoint SETUP frames `int3` on Windows
 - **State:** OPEN (partial — SETUP_SAVE_REFS_ONLY / ALL_CALLEE_SAVES un-int3'd on Win)
@@ -544,4 +544,16 @@ _No open design notes. Closed D- items live under §Closed._
 - [ ] Permanent design choice (e.g. VEH forever) → move from W- to documented architecture; close workaround  
 - [ ] CLOSED items: move full item into §Closed (sorted by ID); keep State CLOSED history  
 
-*Last snapshot: 2026-07-18 — next phase: nterp off on Win; wine Hello/Math/Io/Net PASS without -Xint under ART_WIN64_QUICK_INVOKE=1; CoreProbe pre-existing NPE both modes; W-001 default ON; W-024 OPEN.*
+
+### W-025 — JIT code cache + x86_64 codegen TLS (Windows)
+- **State:** OPEN (feasibility drafted)
+- **Kind:** feature gap
+- **Area:** art / jit / compiler
+- **Symptom / why:** `UseJitCompilation` defaults true but `JitCodeCache::Create` soft-fails (`RemapAtEnd`/`VirtualAlloc` MAP_FIXED). Separately, optimizing codegen still emits `%gs:` Thread TLS (Linux); Win needs rSELF=r15.
+- **Current behavior:** WARNING then continue; nterp executes. Separate-map experiment AV'd; reverted.
+- **Proper fix:** [win32_jit_memory.md](win32_jit_memory.md) J-1 memory + D-1 codegen.
+- **Code anchors:** `jit_memory_region.cc`; `mem_map_windows.cc`; `code_generator_x86_64.cc`
+- **Opened:** 2026-07-19
+- **Updated:** 2026-07-19 — feasibility analysis in win32_jit_memory.md
+
+*Last snapshot: 2026-07-19 — W-001 closed (quick invoke default ON); nterp product default ON (opt-out ART_WIN64_NTERP=0); JIT default remains ART UseJitCompilation=true.*

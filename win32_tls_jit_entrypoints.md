@@ -637,7 +637,7 @@ Locked for coding:
 3. **nterp map (when ported):** **N-1** — `rSELF=r15`, **`rREFS=rbp`**; **not** N-2 (`rSELF=rbp`). See §15 / §17.  
 4. **C++ quick helpers:** `ART_QUICK_ENTRYPOINT_ABI` = `sysv_abi` on Win64 so asm can keep SysV `call` sites.  
 5. **Invoke stubs:** Microsoft x64 entry at `art_quick_invoke_*`, then map to SysV body + publish r15.  
-6. **Force-interpreter (W-001):** still default ON; opt-in `ART_WIN64_QUICK_INVOKE=1`.
+6. **Force-interpreter (W-001):** **CLOSED** — quick invoke default ON; opt-out `ART_WIN64_QUICK_INVOKE=0`.
 
 Landed in tree:
 
@@ -662,7 +662,7 @@ Wine smoke (2026-07-18, `build/win64_phase1`):
 
 ### Next-phase progress (2026-07-18, design §12 steps 4–5)
 
-**Nterp disabled on Win32** (`IsNterpSupported() → false`): generated `mterp_x86_64` still uses `%gs` Thread TLS and occupies `r15` as `rREFS`, conflicting with managed rSELF. Switch interpreter is used instead until mterp is ported.
+**Nterp (historical 2026-07-18):** was disabled on Win32 until N-1 port. **Superseded by §17.8** — product default nterp ON.
 
 Wine matrix with `ART_WIN64_QUICK_INVOKE=1` (fresh PE, imageless):
 
@@ -678,8 +678,8 @@ Design step 5 (**compiled Hello without forced `-Xint`**, still imageless) is **
 
 Still open (toward product default + Phase 5 JIT):
 
-- Flip product default: `ART_WIN64_QUICK_INVOKE` on by default / drop W-001 force (after broader green + host).  
-- Port **mterp** per **§15 N-1 LOCKED** (rSELF=r15, rREFS=rbp) or keep N-0 switch-interp.  
+- ~~Flip product default: `ART_WIN64_QUICK_INVOKE` on by default~~ **DONE** §17.8.  
+- ~~Port mterp N-1~~ **DONE**; product nterp default ON §17.8.  
 - JNI quick stubs (`art_jni_dlsym_lookup_*`) under rSELF when leaving InterpreterJni (W-012).  
 - CoreProbe NPE (libcore/reflect path; not specific to quick invoke).  
 - W-024 Critical/FastNative restore.  
@@ -689,8 +689,8 @@ Still open (toward product default + Phase 5 JIT):
 ## 15. Nterp / mterp on WinNT x86_64 — analysis and design
 
 **Status:** DESIGN (research complete; implementation not started)  
-**Current product:** `IsNterpSupported()` returns **false** on `_WIN32` (§12b); switch interpreter only.  
-**Goal:** specify a correct, implementable port that fits the locked rSELF model without reintroducing GS Thread\*.
+**Current product (updated §17.8):** `IsNterpSupported()` **true** on `_WIN32` by default (opt-out `ART_WIN64_NTERP=0`).  
+**Goal (historical design):** specify a correct port that fits the locked rSELF model without reintroducing GS Thread\* — **met**.
 
 ### 15.1 What nterp is (in this tree)
 
@@ -1098,10 +1098,10 @@ Quick path already implements rSELF=r15; no ABI change required for this lock.
 
 | Item | State |
 |------|--------|
-| rSELF=r15 | **LOCKED** + **implemented** for quick invoke (opt-in env) |
+| rSELF=r15 | **LOCKED** + **implemented**; quick invoke **default ON** |
 | rREFS=rbp | **LOCKED** + **templates/entry implemented** (2026-07-18); regen mterp_x86_64.S |
 | N-2 rSELF=rbp | **REJECTED** |
-| Product nterp default | still **N-0**; opt-in `ART_WIN64_NTERP=1` — MS generic-JNI ABI + PE FindLibartCode + **PE `asm_defines`** (`RUNTIME_INSTRUMENTATION_OFFSET=0x328`) landed; residual: system ClassLoader / app dex open under nterp (`Unable to locate class Hello`; switch/`-Xint` OK) |
+| Product nterp default | **ON** (2026-07-19); opt-out `ART_WIN64_NTERP=0` — N-1 map + MS generic-JNI + PE `asm_defines` + boot gate + CE packing fix landed |
 | Helper | `art_nterp_current_thread` in `nterp.cc` |
 
 ### 17.5 PE asm_defines / instrumentation offset (2026-07-18)
@@ -1174,7 +1174,7 @@ Workarounds while nterp remains incomplete on Win:
    `ClassLoader.createSystemClassLoader` / PathClassLoader construction use the
    switch interpreter (fixes empty `DexPathList[[]]` / empty File path under nterp).
 2. **`CanMethodUseNterp()` F/D exclude removed** (goal). Residual CharsetEncoder path
-   under full nterp still IAE — see §17.7.2; product default remains nterp off.
+   under full nterp still IAE — see §17.7.2 (**FIXED**). Product default is nterp **ON** as of §17.8.
 
 ### 17.7.1 Float packing progress (2026-07-18)
 
@@ -1220,6 +1220,41 @@ Native `getAve`/`getMax` were correct; app VLFF probes that stayed nterp→nterp
 | CEnc | PASS (exception=0) |
 | switch CEnc | PASS |
 | NFlow / VLj / I2F / FRet / CEBoot / CELike | PASS |
+
+
+
+
+## 17.8 Product defaults ON (2026-07-19) — Linux-like nterp + quick invoke
+
+**Status:** IMPLEMENTED
+
+Win64 product now matches Linux ART for the normal execution path:
+
+| Knob | Previous | Now |
+|------|----------|-----|
+| Quick invoke (`ArtMethod::Invoke`) | Force interpreter unless `ART_WIN64_QUICK_INVOKE=1` (W-001) | **Default ON**; opt-out `ART_WIN64_QUICK_INVOKE=0` |
+| Nterp (`IsNterpSupported`) | Off unless `ART_WIN64_NTERP=1` | **Default ON** (N-1 rSELF=r15 / rREFS=rbp); opt-out `ART_WIN64_NTERP=0` |
+| JIT (`UseJitCompilation`) | Already default **true** in `runtime_options.def` | Unchanged (still disabled by `-Xint` / AOT compiler / debuggable paths) |
+| Boot gate | `CanRuntimeUseNterp()` false until `Runtime::IsFinishedStarting()` | Unchanged (switch for early ClassLoader) |
+
+Code:
+
+- `vendor/art/runtime/art_method.cc` — `kWin64QuickInvoke` default true unless env `=0`
+- `vendor/art/runtime/interpreter/mterp/nterp.cc` — `IsNterpSupported` default true unless env `=0`
+- Post-Start `UpgradeToNterpVisitor` still re-points imageless boot methods
+
+Smoke (wine, imageless, **no** `ART_WIN64_*` env):
+
+| Probe | Expectation |
+|-------|-------------|
+| Hello / CEnc / float probes | PASS without env opt-in |
+| `ART_WIN64_NTERP=0` | falls back to switch interpreter |
+| `ART_WIN64_QUICK_INVOKE=0` | force interpreter invoke (legacy W-001) |
+| `-Xint` | still interpret-only (no nterp/JIT compile path) |
+
+W-001 marked CLOSED in [win32_open_items.md](win32_open_items.md).
+
+**JIT memory / codegen:** see [win32_jit_memory.md](win32_jit_memory.md) — Create soft-fails (`RemapAtEnd`); end-to-end JIT also needs compiler GS→r15 (feasibility draft).
 
 
 ## 13. Appendix — evidence anchors in tree
