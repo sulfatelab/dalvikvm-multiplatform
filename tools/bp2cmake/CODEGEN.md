@@ -38,5 +38,12 @@ CMake custom commands (the asm_defines compile needs libart's full include/
 define context), so staging them with this driver before/at configure time is
 cleaner. The runtime harness will set `MDVM_GENSRC_DIR` to the driver's output.
 The asm_defines define-set here is the single source of truth for the runtime
-behavioral overlay (CMS GC, ART_TARGET_LINUX, base addresses) and must stay in
+behavioral overlay (CMS GC, ART_TARGET_LINUX or ART_TARGET_WINDOWS via --os, base addresses) and must stay in
+
+For PE (`--os windows` / `asm_target_os=windows`), codegen swaps
+`ART_TARGET_LINUX` for `ART_TARGET_WINDOWS` and prefers
+`--target=x86_64-pc-windows-msvc` so offsets match the PE Runtime layout.
+Notably `RUNTIME_INSTRUMENTATION_OFFSET` is **0x328** on PE vs **0x340** on
+Linux host; shipping the wrong header causes nterp/quick AVs on wine.
+
 sync with the libart overlay entry when that lands.

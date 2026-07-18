@@ -67,8 +67,14 @@ class CodegenConfig:
         "logging/liblog/include", "fmtlib/include", "external/tinyxml2",
         "libziparchive/include", "art/tools/cpp-define-generator",
     ])
+    # Target OS for asm_defines layout: linux (host) or windows (PE).
+    # Windows Runtime* has different sizeof/layout (e.g. unique_ptr padding),
+    # so ART_TARGET_WINDOWS must be used when generating PE asm_defines.h.
+    # Default remains Linux for host/native builds.
+    asm_target_os: str = "linux"
     # Defines for the asm_defines compile: the art.go-injected knobs (absent
     # from any .bp) plus the runtime behavioral overlay. Mirrors runtime.cmake.
+    # For windows, ART_TARGET_LINUX is replaced by ART_TARGET_WINDOWS (+ _WIN32).
     asm_defines_macros: list[str] = field(default_factory=lambda: [
         "ART_STACK_OVERFLOW_GAP_arm=8192", "ART_STACK_OVERFLOW_GAP_arm64=8192",
         "ART_STACK_OVERFLOW_GAP_riscv64=8192", "ART_STACK_OVERFLOW_GAP_x86=8192",
@@ -175,10 +181,26 @@ def gen_mterp(cfg: CodegenConfig, arch: str | None = None) -> str:
     return out_path
 
 
+def _asm_defines_macros_for(cfg: CodegenConfig) -> list[str]:
+    """Return asm_defines macros adjusted for cfg.asm_target_os."""
+    macros = list(cfg.asm_defines_macros)
+    os_name = (cfg.asm_target_os or "linux").lower()
+    if os_name in ("windows", "win32", "win64", "pe"):
+        # PE layout: drop ART_TARGET_LINUX, force ART_TARGET_WINDOWS/_WIN32.
+        macros = [m for m in macros if m != "ART_TARGET_LINUX" and not m.startswith("ART_TARGET_LINUX=")]
+        for extra in ("ART_TARGET_WINDOWS", "_WIN32", "WIN32", "WIN32_LEAN_AND_MEAN", "NOMINMAX", "NOGDI"):
+            if extra not in macros and not any(m == extra or m.startswith(extra + "=") for m in macros):
+                macros.append(extra)
+    return macros
+
+
 def gen_asm_defines(cfg: CodegenConfig) -> str:
     """TWO-STAGE: compile asm_defines.cc to assembly text, then make_header.py
     over it -> asm_defines.h. Mirrors generateArtAsmDefinitions +
-    generateArtAsmHeader (which the archive split between CMake and Gradle)."""
+    generateArtAsmHeader (which the archive split between CMake and Gradle).
+
+    For PE (asm_target_os=windows), uses ART_TARGET_WINDOWS so offsets match
+    the MSVC/PE Runtime layout (notably RUNTIME_INSTRUMENTATION_OFFSET)."""
     asm_cc = cfg.pa("art/tools/cpp-define-generator/asm_defines.cc")
     s_path = cfg.out("art/asm_defines.s")
     h_path = cfg.out("art/asm/include/asm_defines.h")
@@ -194,12 +216,17 @@ def gen_asm_defines(cfg: CodegenConfig) -> str:
     cmd += ["-I", cfg.out("art/aconfig/include")]
     # project-owned compat shims (android-base/stringify.h) the archive lacks.
     cmd += ["-I", cfg.compat_inc()]
-    for m in cfg.asm_defines_macros:
+    for m in _asm_defines_macros_for(cfg):
         cmd += ["-D" + m]
     for fi in cfg.asm_force_includes:
         cmd += ["-include", fi]
     cmd += ["-Wno-strict-primary-template-shadow", "-Wno-invalid-offsetof",
             "-Wno-attribute", "-Wno-deprecated-declarations", "-UDEBUG"]
+    # PE target: prefer windows-msvc triple when generating PE offsets so
+    # ABI/layout matches art.dll. Host linux builds keep default host triple.
+    os_name = (cfg.asm_target_os or "linux").lower()
+    if os_name in ("windows", "win32", "win64", "pe"):
+        cmd += ["--target=x86_64-pc-windows-msvc"]
     cmd += [asm_cc]
     _run(cmd, cwd=cfg._art_base())
 

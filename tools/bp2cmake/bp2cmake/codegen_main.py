@@ -21,13 +21,17 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--gensrc", required=True, help="output gensrc dir")
     ap.add_argument("--arch", default="x86_64")
     ap.add_argument("--clang", default="clang++")
+    ap.add_argument("--os", default="linux",
+                    help="Target OS for layout-sensitive codegen (linux|windows). "
+                         "windows selects ART_TARGET_WINDOWS for asm_defines.")
     ap.add_argument("--only", choices=["operator_out", "mterp", "asm_defines", "aconfig"],
                     help="run only one generation kind")
     args = ap.parse_args(argv)
 
     cfg = CodegenConfig(native_root=args.root, gensrc_dir=args.gensrc,
                         arch=args.arch, clang=args.clang, art_root=args.art_root,
-                        libcore_root=args.libcore_root)
+                        libcore_root=args.libcore_root,
+                        asm_target_os=args.os)
     try:
         if args.only == "mterp":
             print("mterp:", gen_mterp(cfg))

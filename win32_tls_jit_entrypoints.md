@@ -1101,8 +1101,37 @@ Quick path already implements rSELF=r15; no ABI change required for this lock.
 | rSELF=r15 | **LOCKED** + **implemented** for quick invoke (opt-in env) |
 | rREFS=rbp | **LOCKED** + **templates/entry implemented** (2026-07-18); regen mterp_x86_64.S |
 | N-2 rSELF=rbp | **REJECTED** |
-| Product nterp default | still **N-0**; opt-in `ART_WIN64_NTERP=1` — MS generic-JNI ABI + PE FindLibartCode landed; residual AVs remain (likely PE/host `asm_defines` offset skew + further JNI) |
+| Product nterp default | still **N-0**; opt-in `ART_WIN64_NTERP=1` — MS generic-JNI ABI + PE FindLibartCode + **PE `asm_defines`** (`RUNTIME_INSTRUMENTATION_OFFSET=0x328`) landed; residual: system ClassLoader / app dex open under nterp (`Unable to locate class Hello`; switch/`-Xint` OK) |
 | Helper | `art_nterp_current_thread` in `nterp.cc` |
+
+### 17.5 PE asm_defines / instrumentation offset (2026-07-18)
+
+Host/Linux codegen for `asm_defines.h` used `ART_TARGET_LINUX`, which mis-laid out
+`Runtime` for PE. Observed skew:
+
+| Symbol | Linux host header | PE-correct (`ART_TARGET_WINDOWS`) |
+|--------|-------------------|-----------------------------------|
+| `RUNTIME_INSTRUMENTATION_OFFSET` | **0x340** | **0x328** (−0x18) |
+| other `RUNTIME_*` / `THREAD_*` | same | same (in this tree) |
+
+Effect of wrong 0x340 under nterp: AV on exit-hook path
+(`mov 0x340(%rcx),%rcx` → non-pointer, then `cmpb $0,(%rcx)` with `rcx≈0x766`).
+
+Fix:
+
+1. Regenerate PE header with product defines (`ART_TARGET` + `ART_TARGET_WINDOWS`,
+   full art includes / compat shims), install into
+   `build/win64_phase1/gensrc/art/asm/include/asm_defines.h`.
+2. Codegen: `CodegenConfig.asm_target_os` + CLI `--os windows` swap
+   `ART_TARGET_LINUX`→`ART_TARGET_WINDOWS` and prefer
+   `--target=x86_64-pc-windows-msvc` for the `clang -S` stage
+   (`tools/bp2cmake/bp2cmake/codegen.py`).
+
+After PE offset install: switch Hello still green; nterp no longer storms AVs at
+instrumentation load — fails later with **`Unable to locate class 'Hello'`**
+(no `hello.jar` open / odex attempt). Control: same env + **`-Xint`** → Hello green
+(so `CanRuntimeUseNterp` false forces switch). Next debug: PathClassLoader /
+`java.class.path` / nterp entry during system ClassLoader clinit or app dex open.
 
 ## 13. Appendix — evidence anchors in tree
 
