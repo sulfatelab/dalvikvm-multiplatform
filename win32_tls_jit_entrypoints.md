@@ -1184,68 +1184,42 @@ Workarounds while nterp remains incomplete on Win:
 | MS x64 **generic-JNI** reserved-area packing: unified slots — integer/pointer args also advance FPR packing cursor (`PushFpr8(0)` skip) and float args advance GPR (`PushGpr(0)` skip) so xmmN matches parameter index N | Done — fixes `Float.intBitsToFloat` / `floatToRawIntBits` under nterp→generic JNI |
 | Managed nterp float arg store (`LOOP_OVER_SHORTY_STORING_XMMS`) / VLFFL(Z/J) ctors | OK in dedicated probes (`I2`, `RFloat`, `JLFloat`) |
 | ICU `getAveBytesPerChar`/`getMaxBytesPerChar` native values under nterp | Correct (2 and 3 for UTF-8) when logged |
-| **Residual:** `CharsetEncoderICU.newInstance` / Hello println under full nterp (no F/D exclude) still IAE in super ctor | Open — see §17.7.2 |
+| **Residual:** CharsetEncoderICU under full nterp | **FIXED** 2026-07-19 — see §17.7.2 (static-flag ZF clobber) |
 | Residual empty stdout with exclude | Open (exit 0, no exception; switch prints Hello) |
 
-### 17.7.2 Residual CharsetEncoder under nterp (updated 2026-07-19 02:35)
+### 17.7.2 CharsetEncoder under nterp — FIXED (2026-07-19 02:56)
 
-**Product goal:** `ART_WIN64_NTERP=1` without Win `CanMethodUseNterp` F/D shorty exclude.
-
-#### What is green
-
-| Probe / path | Nterp |
-|---|---|
-| `Float.intBitsToFloat` / `I2F` / `FRet` | PASS |
-| VLFFL(Z/J) managed packing (`VLz`/`VLj`) | PASS |
-| NFlow / CELike / CEBoot (app mimics of CEICU rearrange) | PASS |
-| Generic-JNI float returns (`getAveBytesPerChar` bits=`40000000`) | PASS |
-| Switch interpreter CEnc / Hello | PASS |
-
-#### Residual
-
-Full boot path `CEnc` → `CharsetEncoderICU.newInstance` → `super(cs, avg, max, repl, true)` under nterp **without** F/D exclude still:
+**Root cause:** In `ExecuteNterpImpl` slow-path arg setup (`x86_64ng/main.S`), the sequence was:
 
 ```
-IllegalArgumentException: averageBytesPerChar exceeds maxBytesPerChar
-aBits=40400000 mBits=40e3xxxx
+testl  IS_STATIC, flags(%rdi)
+movq   shorty+1, %r10
+addq   $1, %r10          # clobbers ZF
+leaq   ...               # also clobbers flags
+jne    .Lhandle_static   # branch used *stale/wrong* ZF
 ```
 
-- `aBits=40400000` = **3.0f** (the intended **max**) used as average  
-- `mBits=40e3xxxx` = high bits of a heap ref interpreted as float max  
+`addq $1, %r10` (shorty always non-null) left ZF clear, so **every method took the static store path**. Instance methods then:
 
-Native ICU values remain correct (`getAve`→2.0f, `getMax`→3). Failure is **after** natives, on the managed super ctor edge.
+1. Stored `rsi` as first shorty arg (should skip `this` already in place),  
+2. Skipped float slots against a shifted shorty,  
+3. Left `L F F L …` ctor args misaligned.
 
-#### Isolated packing dump (nterp→switch bridge)
+Observed symptom: `CharsetEncoderICU` / `super(cs, avg, max, repl, true)` IAE  
+`aBits=40400000` (3.0f as average) / `mBits=40e3xxxx` (object bits as max).  
+Native `getAve`/`getMax` were correct; app VLFF probes that stayed nterp→nterp often hid the bug.
 
-With `CharsetEncoder` forced to switch and `CharsetEncoderICU` on nterp, `artQuickToInterpreterBridge` for
+**Fix:** Branch on static immediately after `testl` (`jnz .Lsetup_static_bases`), then set shorty/base pointers on each side. Instance path skips `this` before `LOOP_OVER_SHORTY_STORING_GPRS`.
 
-`void CharsetEncoder.<init>(Charset,float,float,byte[],boolean)` (`VLFFLZ`)
+**Also kept (supporting):** post-Start UpgradeToNterp + force when imageless `!verified`; Win `CanUseNterp` clinit fallback; generic-JNI / nterp F-return xmm0 re-materialize after PE helper clobber; **no F/D exclude**.
 
-from caller `CharsetEncoderICU.<init>(…,long)` shows **two** entries:
+**Verification (wine, imageless, `ART_WIN64_QUICK_INVOKE=1 ART_WIN64_NTERP=1`):**
 
-| Call | xmm0 | xmm1 | g1 (RDX) | Result |
-|---|---|---|---|---|
-| 1st (class first use) | `40400000` (3.0) | `040e3xxx` (ref high) | `40000000` (2.0 bits as “ref”) | IAE |
-| 2nd (retry / later) | `40000000` (2.0) | `40400000` (3.0) | real Charset* | OK pattern |
-
-So the **first** nterp→switch range packing of `L F F L Z` after a `L F F L J` rearrange misplaces avg/max: avg bits land in a GPR ref slot; max lands in xmm0.
-
-App VLFFLZ probes that stay nterp→nterp never hit this path and pass.
-
-#### Fixes landed this session (still leave residual)
-
-1. **UpgradeToNterp** after `Runtime::Start`: re-point boot methods; **force** nterp when `ReinitializeMethodsCode` leaves switch bridge despite `CanMethodUseNterp` (imageless `!IsDeclaringClassVerifiedMayBeDead` with `!StillNeedsClinitCheckMayBeDead`).  
-2. **`CanUseNterp` (Win):** allow nterp when verified check fails but clinit is done.  
-3. **Generic JNI:** re-`movq %rax,%xmm0` after Win `LOAD_RUNTIME_INSTANCE` (PE helper call clobbers xmm0).  
-4. **Nterp float return (Win):** prefer `%eax`/`%rax` over clobberable xmm0 when materializing F/D results.  
-5. **No global F/D exclude** in `CanMethodUseNterp` (goal). Residual remains CE boot path.
-
-#### Next debug targets
-
-1. Why first CEICU→CharsetEncoder range pack shifts F args vs second call (resolution / clinit / entrypoint / first `NterpGetShorty`?).  
-2. Instrument nterp `COMMON_INVOKE_RANGE` after packing: dump xmm0/1 and rdx/rcx before the call.  
-3. Compare first-call CEICU vreg array (v0..v5) after rearrange vs VLj.  
-4. When green: strip CharsetEncoder `aBits`/`mBits` message if desired; keep opt-in `ART_WIN64_NTERP`.
+| Probe | Result |
+|-------|--------|
+| CEnc | PASS (exception=0) |
+| switch CEnc | PASS |
+| NFlow / VLj / I2F / FRet / CEBoot / CELike | PASS |
 
 
 ## 13. Appendix — evidence anchors in tree
