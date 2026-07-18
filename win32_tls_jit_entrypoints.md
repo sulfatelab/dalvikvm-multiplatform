@@ -1101,7 +1101,7 @@ Quick path already implements rSELF=r15; no ABI change required for this lock.
 | rSELF=r15 | **LOCKED** + **implemented** for quick invoke (opt-in env) |
 | rREFS=rbp | **LOCKED** + **templates/entry implemented** (2026-07-18); regen mterp_x86_64.S |
 | N-2 rSELF=rbp | **REJECTED** |
-| Product nterp default | still **N-0**; opt-in `ART_WIN64_NTERP=1` — residual AV in `Thread::DecodeGlobalJObject` (bad `this`/jni_env on JNI edge); JNI r15 + generic-JNI rematerialize landed |
+| Product nterp default | still **N-0**; opt-in `ART_WIN64_NTERP=1` — MS generic-JNI ABI + PE FindLibartCode landed; residual AVs remain (likely PE/host `asm_defines` offset skew + further JNI) |
 | Helper | `art_nterp_current_thread` in `nterp.cc` |
 
 ## 13. Appendix — evidence anchors in tree
