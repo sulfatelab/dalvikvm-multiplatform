@@ -1099,9 +1099,10 @@ Quick path already implements rSELF=r15; no ABI change required for this lock.
 | Item | State |
 |------|--------|
 | rSELF=r15 | **LOCKED** + **implemented** for quick invoke (opt-in env) |
-| rREFS=rbp | **LOCKED** design; **not implemented** (nterp still off) |
+| rREFS=rbp | **LOCKED** + **templates/entry implemented** (2026-07-18); regen mterp_x86_64.S |
 | N-2 rSELF=rbp | **REJECTED** |
-| Product nterp default | still **N-0** until N-1 lands and is validated |
+| Product nterp default | still **N-0**; opt-in `ART_WIN64_NTERP=1` — wine Hello still AV (residual debug) |
+| Helper | `art_nterp_current_thread` in `nterp.cc` |
 
 ## 13. Appendix — evidence anchors in tree
 
