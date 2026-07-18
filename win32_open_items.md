@@ -62,7 +62,7 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 | Phases 0–3 | **Gate-complete** (P3 G12 real Win10 + wine) |
 | Phase 4 | **Wine complete**; host re-run still recommended |
 | PE libcore/ICU/openjdk | **Product-default real PE** (icu/javacore/openjdk); NIO.2 non-goal; NetProbe OK |
-| Quick/JIT/TLS | **Partial:** rSELF/macros/invoke stubs + nterp off; opt-in `ART_WIN64_QUICK_INVOKE`; wine Hello/Math/Io/Net no-`-Xint` PASS; JIT not started; **W-024** after |
+| Quick/JIT/TLS | **Partial:** rSELF=r15 LOCKED (+ nterp rREFS=rbp LOCKED design); macros/invoke stubs + nterp off; opt-in `ART_WIN64_QUICK_INVOKE`; wine Hello/Math/Io/Net no-`-Xint` PASS; JIT not started; **W-024** after |
 | Linux multiplatform | Native `dalvikvm -showversion` OK; imageless Hello e2e not re-gated here |
 
 ---
@@ -87,11 +87,11 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Area:** art / TLS
 - **Symptom / why:** Linux x86_64 uses `ARCH_SET_GS` so quick/nterp use `%gs:OFFSET`. Windows GS is TEB.
 - **Current behavior:** `InitCpu` does **not** touch GS (correct). Asm uses `THREAD_*` macros: r15 base on `_WIN32`, GS on Linux. rSELF published in `art_quick_invoke_*` when quick invoke is enabled.
-- **Proper fix:** Keep r15 model; ensure every managed entry (JNI return, attach) publishes rSELF; port mterp off `%gs`/`rREFS=r15` conflict or keep permanent switch-interp; then close when product default uses rSELF path.
-- **Code anchors:** `thread_x86_64.cc`; `asm_support_x86_64.S` `THREAD_*`; `nterp.cc` (`IsNterpSupported` false on Win); design §6 / §12b / §15 / **§16**
+- **Proper fix:** Keep **rSELF=r15**; ensure every managed entry (JNI return, attach) publishes rSELF; port mterp as **N-1** (`rREFS=rbp`) or keep switch-interp (N-0); then close when product default uses rSELF path.
+- **Code anchors:** `thread_x86_64.cc`; `asm_support_x86_64.S` `THREAD_*`; `nterp.cc` (`IsNterpSupported` false on Win); design §6 / §12b / §15 / §16 / **§17**
 - **Opened:** 2026-07-16
-- **Updated:** 2026-07-18 — THREAD macros + r15; nterp disabled on Win (switch interp) so no-`-Xint` Hello works; **FS.base=Thread\* rejected** (design §16) — not an alternative free-reg path
-- **Design:** mterp port options/register map in [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md) **§15** (prefer N-1); FS-self feasibility **§16** (reject)
+- **Updated:** 2026-07-18 — THREAD macros + r15; nterp off; FS.base reject (§16); **LOCKED rSELF=r15 / rREFS=rbp** (§17); N-2 rejected
+- **Design:** [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md) **§15 N-1 LOCKED**, **§17** register-map lock; FS-self **§16** reject
 
 ### W-003 — Quick entrypoint SETUP frames `int3` on Windows
 - **State:** OPEN (partial — SETUP_SAVE_REFS_ONLY / ALL_CALLEE_SAVES un-int3'd on Win)

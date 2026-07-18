@@ -335,7 +335,9 @@ Optional hardening:
 | **`FS.base = Thread*`** (`%fs:off`) | Would free r15 for nterp rREFS without moving rREFS→rbp | **Rejected (2026-07-18):** see **§16** — not a portable product self base |
 | Load from TEB TLS every time | Simple | Too slow / clunky for every entrypoint |
 
-**Draft default: `r15` = Thread\*** on win-x86_64 managed code.
+**LOCKED (2026-07-18): `r15` = Thread\*** (`rSELF`) on win-x86_64 managed / quick / JIT / nterp.
+
+Companion nterp lock: **`rREFS = %rbp`** when nterp is ported (**N-1**, §15 / §17). Do **not** put Thread\* in `rbp`.
 
 Consequences:
 
@@ -393,14 +395,16 @@ AOSP managed code on amd64 is **not** “pure SysV C” either: it is an ART con
 | quick entrypoint asm ↔ C++ | **OS C++ ABI** (MS x64 / MS ARM64 / Arm64EC) |
 | JNI | JNIEnv* + Java args per JNI; underlying C++ is OS ABI |
 
-For **win-x86_64**, explicitly document a **Managed X64** convention (draft):
+For **win-x86_64**, **Managed X64** convention (**LOCKED** self / nterp bases / Linux-like args):
 
-| Role | Register (draft) |
-|------|------------------|
-| Thread\* (self) | **r15** |
-| ArtMethod\* (current / invoke) | **rdi** kept as managed method reg *or* remapped to **rax/rcx** — **open decision** (§9) |
-| Managed integer args | Prefer **mirroring Linux ART** where possible to maximize assembler sharing **inside** managed code; only **bridges** convert to MS x64 |
-| Stack alignment | 16-byte at call boundaries; **no red zone** (Windows-safe, also fine on Linux) |
+| Role | Register | Status |
+|------|----------|--------|
+| Thread\* (self) | **r15** (`rSELF`) | **LOCKED** |
+| nterp ref-shadow base | **rbp** (`rREFS`) | **LOCKED** for nterp port (N-1) |
+| nterp dex vregs / PC / ibase / inst | r13 / r12 / r14 / rbx | **LOCKED** (same as Linux nterp) |
+| ArtMethod\* (current / invoke) | **rdi** | **LOCKED** Linux-like |
+| Managed integer args | **rsi, rdx, rcx, r8, r9** | **LOCKED** Linux-like; MS only at C++ edges |
+| Stack alignment | 16-byte at calls; **no red zone** | **LOCKED** |
 
 **Design preference:** maximize **shared managed-body** with Linux; isolate OS ABI differences in **macros + trampoline prologues/epilogues**. If that proves too fragile for arg regs (SysV rdi vs MS rcx), accept Windows-specific managed arg regs and dual JIT backends — costlier.
 
@@ -502,7 +506,7 @@ JIT deopt flags (`THREAD_DEOPT_CHECK_REQUIRED_OFFSET`) stay Thread fields access
 
 ```text
 C++ ABI:     rcx, rdx, r8, r9 + 32B shadow
-Managed self: r15
+Managed self: r15 (LOCKED); nterp rREFS: rbp (LOCKED)
 Thread base:  [r15 + THREAD_*_OFFSET]
 Entrypoint:   call [r15 + QUICK_ENTRYPOINT_OFFSET(pX)]  or load ptr then call
 Invoke stub:  MS x64 entry → set r15 → managed
@@ -557,7 +561,7 @@ Package:     separate artifact from win-x86_64; do not mix JIT ISAs in one art.d
 | Linux x86_64 | `thread_local` | **GS base = Thread\*** |
 | Linux arm64 | TLS / Bionic slot | **x19** |
 | Linux x86 | `thread_local` | **FS base = Thread\*** |
-| Win x86_64 | `thread_local` (+ optional TlsAlloc) | **r15 (draft)** |
+| Win x86_64 | `thread_local` (+ optional TlsAlloc) | **r15 LOCKED**; nterp **rREFS=rbp** |
 | Win x86 | Tls / thread_local | **rSELF32 (draft)** |
 | Win arm64 | thread_local / Tls | **x19** |
 | Win Arm64EC | thread_local / Tls | **x19** |
@@ -579,7 +583,7 @@ Quick entrypoint **asm prologues** are where these differences are centralized.
 
 1. **Managed method/arg registers on win-x86_64:** keep Linux-like `rdi/rsi/...` inside managed and only convert at C++ boundary, **or** redefine managed to MS-like `rcx/rdx/...`?  
    - *Lean toward:* Linux-like managed + convert at boundary (less dual backend).  
-2. **Exact rSELF register (r15 vs other):** needs full spill-bitmap / JNI macro assembler audit.  
+2. **Exact rSELF register:** **CLOSED — r15** (nterp **rREFS=rbp**). Spill-bitmap/JNI audit is implementation work, not an open design choice.  
 3. **Nterp priority vs optimizing JIT first.**  
 4. **CET / shadow stack / CFG policy** for JIT call sites.  
 5. **Whether wine64 is sufficient** to validate GS-free entrypoints (likely yes for ABI; host still required for TEB edge cases).  
@@ -626,13 +630,14 @@ Quick entrypoint **asm prologues** are where these differences are centralized.
 
 ## 12b. Implementation progress (2026-07-18)
 
-Locked for coding (from §9 lean recommendations):
+Locked for coding:
 
 1. **Managed arg regs:** Linux-like SysV shape inside managed/quick asm; convert only at edges.  
-2. **rSELF:** **r15** on win-x86_64.  
-3. **C++ quick helpers:** `ART_QUICK_ENTRYPOINT_ABI` = `sysv_abi` on Win64 so asm can keep SysV `call` sites.  
-4. **Invoke stubs:** Microsoft x64 entry at `art_quick_invoke_*`, then map to SysV body + publish r15.  
-5. **Force-interpreter (W-001):** still default ON; opt-in `ART_WIN64_QUICK_INVOKE=1`.
+2. **rSELF:** **r15** on win-x86_64 (quick / JIT / nterp).  
+3. **nterp map (when ported):** **N-1** — `rSELF=r15`, **`rREFS=rbp`**; **not** N-2 (`rSELF=rbp`). See §15 / §17.  
+4. **C++ quick helpers:** `ART_QUICK_ENTRYPOINT_ABI` = `sysv_abi` on Win64 so asm can keep SysV `call` sites.  
+5. **Invoke stubs:** Microsoft x64 entry at `art_quick_invoke_*`, then map to SysV body + publish r15.  
+6. **Force-interpreter (W-001):** still default ON; opt-in `ART_WIN64_QUICK_INVOKE=1`.
 
 Landed in tree:
 
@@ -674,7 +679,7 @@ Design step 5 (**compiled Hello without forced `-Xint`**, still imageless) is **
 Still open (toward product default + Phase 5 JIT):
 
 - Flip product default: `ART_WIN64_QUICK_INVOKE` on by default / drop W-001 force (after broader green + host).  
-- Port **mterp** per **§15** (prefer N-1: rSELF=r15, rREFS=rbp) or keep N-0 switch-interp.  
+- Port **mterp** per **§15 N-1 LOCKED** (rSELF=r15, rREFS=rbp) or keep N-0 switch-interp.  
 - JNI quick stubs (`art_jni_dlsym_lookup_*`) under rSELF when leaving InterpreterJni (W-012).  
 - CoreProbe NPE (libcore/reflect path; not specific to quick invoke).  
 - W-024 Critical/FastNative restore.  
@@ -790,9 +795,9 @@ Arm64 nterp is the cleaner oracle: **xSELF=x19** is a normal callee-saved pointe
 - **Cons:** slower than nterp; delays “interpreter quality” vs Linux; still need JIT for speed.  
 - **Verdict:** acceptable **v1 product** if Phase 5 JIT is the speed path; document as temporary or permanent.
 
-#### Option N-1 — rSELF=r15, move rREFS → rbp  **(recommended if porting)**
+#### Option N-1 — rSELF=r15, move rREFS → rbp  **(LOCKED for Win nterp port)**
 
-Align nterp with quick/managed self:
+**Selected 2026-07-18** (also the greenfield winner — §17). Align nterp with quick/managed self:
 
 ```text
 Win-x86_64 nterp:
@@ -828,17 +833,18 @@ ExecuteNterpImpl (Win):
 **Pros:** one self story across quick + nterp + future JIT.  
 **Cons:** largest careful asm audit (rbp is busy); CFI risk.
 
-#### Option N-2 — rSELF=rbp, keep rREFS=r15
+#### Option N-2 — rSELF=rbp, keep rREFS=r15  **(REJECTED)**
 
 ```text
 rSELF = %rbp   // Thread*
 rREFS = %r15   // unchanged
 ```
 
-- Slightly less churn on ref-array addressing and some CFI.  
-- **Breaks** locked “rSELF=r15” consistency with quick stubs unless quick is also redefined to rbp (not recommended — quick already shipping on r15).  
-- Still need entry materialization + rbp-temp audit.  
-- **Verdict:** inferior to N-1 once quick is r15-locked.
+- Slightly less churn on ref-array addressing and some CFI; closer to Linux `rREFS=r15`.  
+- Puts **Thread\*** in the traditional FP register for **all** managed code, or forces a dual-self split with quick.  
+- Still needs the full rbp-temp audit (cannot clobber self).  
+- Quick stubs that use `rbp` as a temporary CFA/SP anchor (invoke / OSR) fight immortal self-in-rbp.  
+- **Verdict: REJECTED** even from a greenfield analysis (§17). Not an alternative while self stays r15.
 
 #### Option N-3 — Thread\* via TEB TLS every access
 
@@ -859,8 +865,8 @@ rREFS = %r15   // unchanged
 
 ```text
 Now (product):     N-0  switch only on Win
-Next nterp work:   N-1  rSELF=r15, rREFS=rbp  (+ optional N-4 dual gensrc)
-Not chosen:        N-2 / N-3
+LOCKED nterp port: N-1  rSELF=r15, rREFS=rbp  (+ optional N-4 dual gensrc)
+REJECTED:          N-2 (rSELF=rbp) / N-3 (TLS every access)
 JIT (Phase 5):     independent of nterp, but same r15 self contract
 ```
 
@@ -938,7 +944,7 @@ Enabling nterp does **not** replace the need for correct **quick entrypoint** ex
 |----------|--------|
 | Can we enable stock Linux nterp on Win? | **No** (GS + r15 dual use). |
 | Is switch-only viable? | **Yes** for current product (N-0). |
-| Preferred port if we want nterp speed? | **N-1:** rSELF=r15, rREFS=rbp + entry Thread materialization. |
+| **LOCKED** nterp port map? | **N-1:** rSELF=r15, rREFS=rbp + entry Thread materialization. |
 | First code touch? | `x86_64ng/main.S` map + `NTERP_TRAMPOLINE` + clinit entry order + regen. |
 | Gate to re-enable `IsNterpSupported` on Win? | Feature flag + wine matrix green, not compile success alone. |
 
@@ -1032,6 +1038,71 @@ Even the theoretical +1 GPR is **not free**:
 - **Keep** nterp design **N-1** (rSELF=r15, rREFS=rbp) when that work starts; FS-self is **not** an alternative to N-1.  
 - Optional research-only: if Microsoft later documents a stable process-wide FSGSBASE policy + CONTEXT base fields, re-evaluate — not scheduled.
 
+
+## 17. Register-map lock: `rSELF=r15`, `rREFS=rbp` (2026-07-18)
+
+**Decision:** On win-x86_64, managed Thread\* is **`r15`**. When nterp is ported, the reference-shadow base is **`rbp`**. **`rSELF=rbp` (N-2) is rejected.**
+
+### 17.1 Locked map
+
+```text
+Win managed / quick / JIT / nterp:
+
+  rSELF  = r15     // Thread*  (cross-layer)
+  method = rdi
+  args   = rsi, rdx, rcx, r8, r9
+
+nterp-only (N-1):
+  rPC    = r12
+  rFP    = r13     // dex vregs
+  rIBASE = r14
+  rREFS  = rbp     // ref shadow array base (stack)
+  rINST  = rbx
+
+Linux unchanged:
+  rSELF  = %gs
+  rREFS  = r15
+```
+
+### 17.2 Why this pair (including greenfield)
+
+| Concern | Why r15 for self | Why rbp for rREFS |
+|---------|------------------|-------------------|
+| Cross-layer pin | Self is used by quick + nterp + JIT | Refs base is nterp-only |
+| Stack shape | Thread\* is not a frame cookie | rREFS points into the nterp stack frame (FP-ish) |
+| JIT allocatable pool | Burning r15 is the usual “last CS” pin; leave rbp free for compiled code | nterp reinterprets rbp only while running |
+| Quick stubs | Invoke/OSR often use rbp as temporary CFA/SP | Must not place immortal Thread\* there |
+| Linux sharing | Win self is always a new GPR vs Linux GS | rREFS physical reg may differ; share via macros |
+| Arm64 analogy | xSELF is a normal callee-save, not FP | — |
+
+Rejected alternatives (summary):
+
+- **N-2 rSELF=rbp:** worse global self home; same rbp-temp audit; dual-self risk.  
+- **FS.base=Thread\\*:** rejected §16.  
+- **Non-persistent rREFS:** density loss; not a substitute for N-1.  
+- **rSELF=r14 / steal rIBASE:** extra nterp churn for no gain over rbp-as-refs.
+
+### 17.3 Implementation implications (nterp)
+
+Before enabling nterp on Win:
+
+1. Evict Linux nterp **rbp temps** (range stack index, entry shorty\*, arg-count `%ebp`, opcode scratches, OSR CFA) to `r10`/`r11`/stack/`rINST` windows.  
+2. `#if defined(_WIN32)`: `rSELF=r15`, `rREFS=%rbp`, `CFI_REFS=6`.  
+3. GPR Thread addressing (`OFF(rSELF)` / shared `THREAD_*` macros); fix bare `%gs` in trampolines.  
+4. Materialize Thread\* at `ExecuteNterp*` entry after callee spill.  
+5. Feature-flag (`ART_WIN64_NTERP=1`) until wine matrix green.
+
+Quick path already implements rSELF=r15; no ABI change required for this lock.
+
+### 17.4 Status
+
+| Item | State |
+|------|--------|
+| rSELF=r15 | **LOCKED** + **implemented** for quick invoke (opt-in env) |
+| rREFS=rbp | **LOCKED** design; **not implemented** (nterp still off) |
+| N-2 rSELF=rbp | **REJECTED** |
+| Product nterp default | still **N-0** until N-1 lands and is validated |
+
 ## 13. Appendix — evidence anchors in tree
 
 | Claim | Anchor |
@@ -1047,9 +1118,10 @@ Even the theoretical +1 GPR is **not free**:
 | Nterp Win conflicts (GS + r15=rREFS) | `mterp/x86_64ng/main.S`; generated `mterp_x86_64.S`; §15 |
 | Nterp disabled on Win | `interpreter/mterp/nterp.cc` `IsNterpSupported` |
 | FS.base=Thread* rejected | §16; wine `PF_RDWRFSGSBASE_AVAILABLE`; public `CONTEXT` has no FsBase |
+| rSELF=r15, rREFS=rbp locked | §17; §15 N-1; asm_support `rSELF r15` |
 
 ---
 
 ## 14. One-paragraph executive summary
 
-On Linux amd64, ART’s managed world is **GS-relative Thread TLS** layered on top of normal C++ `thread_local`, with quick entrypoints and JIT assuming SysV bridges; on Linux arm64, managed world is **x19 = Thread\***. Windows **cannot** reuse GS for Thread\* (TEB owns GS); **FS.base=Thread\*** is also **rejected** (§16: FSGSBASE/wine/CONTEXT portability), so managed self is a GPR. The WinNT design therefore adopts the **arm64-style explicit self register** on all Windows ISAs (draft: **r15** on x86_64, **x19** on ARM64/Arm64EC), keeps C++ `Thread::Current()` on `thread_local`/`TlsAlloc`, and isolates **Microsoft / Arm64EC C++ calling conventions** at quick-entrypoint and invoke bridges. JIT is “just” machine code that obeys the same self + entrypoint contracts with a W^X `VirtualAlloc` cache. **x86_64 is the first implementation target**; x86, arm64, and Arm64EC are specified so the abstractions do not paint us into a GS-shaped corner.
+On Linux amd64, ART’s managed world is **GS-relative Thread TLS** layered on top of normal C++ `thread_local`, with quick entrypoints and JIT assuming SysV bridges; on Linux arm64, managed world is **x19 = Thread\***. Windows **cannot** reuse GS for Thread\* (TEB owns GS); **FS.base=Thread\*** is also **rejected** (§16: FSGSBASE/wine/CONTEXT portability), so managed self is a GPR. The WinNT design therefore adopts the **arm64-style explicit self register** on all Windows ISAs (**LOCKED: r15** on x86_64 with nterp **rREFS=rbp**; **x19** on ARM64/Arm64EC), keeps C++ `Thread::Current()` on `thread_local`/`TlsAlloc`, and isolates **Microsoft / Arm64EC C++ calling conventions** at quick-entrypoint and invoke bridges. JIT is “just” machine code that obeys the same self + entrypoint contracts with a W^X `VirtualAlloc` cache. **x86_64 is the first implementation target**; x86, arm64, and Arm64EC are specified so the abstractions do not paint us into a GS-shaped corner.
