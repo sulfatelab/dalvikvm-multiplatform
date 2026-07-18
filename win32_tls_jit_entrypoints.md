@@ -1166,6 +1166,24 @@ Temporary diagnostics (to remove later): INFO logs in `runtime.cc`
 `getBooleanAttributes0`.
 
 
+### 17.7 Boot gate + float exclusion (2026-07-18)
+
+Workarounds while nterp remains incomplete on Win:
+
+1. **`CanRuntimeUseNterp()`** returns false until `Runtime::IsFinishedStarting()` so
+   `ClassLoader.createSystemClassLoader` / PathClassLoader construction use the
+   switch interpreter (fixes empty `DexPathList[[]]` / empty File path under nterp).
+2. **`CanMethodUseNterp()`** rejects methods whose shorty contains `F`/`D` (Win only).
+   Symptom without this: `IllegalArgumentException: averageBytesPerChar exceeds
+   maxBytesPerChar` from `CharsetEncoder` ctors during `System.out` use under nterp.
+3. After (1)+(2): `ART_WIN64_NTERP=1` Hello reaches `CallStaticVoidMethod(main)` with
+   **no pending exception** and exit 0, but **stdout can still be empty** (switch
+   Hello prints `Hello from dalvikvm!`). Residual: non-float nterp path for
+   println / stream I/O still wrong.
+
+`HasSystemClassLoader()` is a non-CHECK accessor for early startup.
+
+
 ## 13. Appendix — evidence anchors in tree
 
 | Claim | Anchor |
