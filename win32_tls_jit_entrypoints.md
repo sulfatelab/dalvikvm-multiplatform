@@ -332,6 +332,7 @@ Optional hardening:
 | **`r15` as rSELF** | Callee-saved in MS x64 **and** SysV; free of TEB | AOSP quick code uses r15 in some spill sets; need bitmap/frame audit |
 | `r14` / `r13` | Same class | Same audit |
 | Keep `%gs` via custom GS base | Matches Linux asm literally | **Rejected:** fights TEB/GS, non-portable, CET risk |
+| **`FS.base = Thread*`** (`%fs:off`) | Would free r15 for nterp rREFS without moving rREFS→rbp | **Rejected (2026-07-18):** see **§16** — not a portable product self base |
 | Load from TEB TLS every time | Simple | Too slow / clunky for every entrypoint |
 
 **Draft default: `r15` = Thread\*** on win-x86_64 managed code.
@@ -592,7 +593,8 @@ Quick entrypoint **asm prologues** are where these differences are centralized.
 - Implementing stubs or JIT in this change.  
 - Claiming phase 5 complete.  
 - Supporting fibers, APC-heavy hosts, or non-ART thread attachment.  
-- Emulating Linux GS on Windows.  
+- Emulating Linux GS on Windows.
+- Win64 `FS.base = Thread*` as managed self (rejected §16).  
 - In-process concurrent x64 + Arm64EC JIT.
 
 ---
@@ -925,6 +927,7 @@ Enabling nterp does **not** replace the need for correct **quick entrypoint** ex
 
 - Emulating Linux GS Thread\* on Windows.  
 - Keeping rSELF=%gs with a custom GS base.  
+- Using **FS.base = Thread\*** to free r15 (rejected — §16); nterp still follows **N-1**.  
 - Porting x86 (32-bit) nterp.  
 - Arm64EC nterp before win-x86_64 nterp is done.  
 - Claiming Phase 5 JIT complete by finishing nterp.
@@ -938,6 +941,96 @@ Enabling nterp does **not** replace the need for correct **quick entrypoint** ex
 | Preferred port if we want nterp speed? | **N-1:** rSELF=r15, rREFS=rbp + entry Thread materialization. |
 | First code touch? | `x86_64ng/main.S` map + `NTERP_TRAMPOLINE` + clinit entry order + regen. |
 | Gate to re-enable `IsNterpSupported` on Win? | Feature flag + wine matrix green, not compile success alone. |
+
+
+## 16. Feasibility: Win64 amd64 `FS.base = Thread*` to free a register (2026-07-18)
+
+**Question:** On win-x86_64, can we set **FS.base = `Thread*`** and address managed TLS as `%fs:OFFSET`, so **r15 is free** (especially to keep nterp’s Linux `rREFS=r15` without N-1’s rREFS→rbp move)?
+
+**Short verdict: REJECT for product.** Keep locked **rSELF = r15**; nterp remains **N-1** if/when ported. FS-as-self is not a reliable free-register win.
+
+### 16.1 Why the idea is tempting
+
+| Fact | Implication |
+|------|-------------|
+| On **native** Windows x64, **TEB is GS**, not FS | Unlike win-x86 (FS→TEB) or Linux amd64 (FS→libc TLS), FS looks “unused” for TEB |
+| Linux ART already uses a **segment base** for Thread\* (GS) | `%fs:OFF` would let Windows share more of the segment addressing shape |
+| Nterp register pressure | SysV callee-saves are only `rbx,rbp,r12–r15`; nterp uses all six. If rSELF is **not** a GPR, **r15 stays rREFS** and N-1’s rbp audit shrinks |
+| Intel **FSGSBASE** (`RDFSBASE`/`WRFSBASE`/`RDGSBASE`/`WRGSBASE`) | Usermode can read/write bases **only if** the OS enables CR4.FSGSBASE and advertises it |
+
+So: **if** Windows guaranteed a sticky, context-switched, app-owned FS base for every ART thread, FS-self would be an elegant way to free r15.
+
+### 16.2 OS / CPU / ABI constraints
+
+1. **GS is off-limits** (already locked): TEB lives in GS. Wine actively **fixes GS back to TEB** when user code corrupts it (`check_invalid_gsbase` in wine `ntdll` signal path). Product must never `WRGSBASE`/custom GS.
+
+2. **FSGSBASE is OS-gated, not “CPUID implies free use”.**  
+   - CPUID leaf 7 EBX.0 = FSGSBASE hardware.  
+   - Windows exposes usermode enablement via **`IsProcessorFeaturePresent(PF_RDWRFSGSBASE_AVAILABLE)`** (feature index **22**).  
+   - Intel’s enabling guidance: only use `RD/WR*FS/GSBASE` when the OS has turned the feature on for usermode; otherwise instructions **#UD/#GP**.  
+   - Wine (10.x on agent01) sets the feature bit from CPUID **and** requires Linux **`AT_HWCAP2` bit for FSGSBASE** (`ntdll/unix/system.c`). On this VM: **CPU has fsgsbase, but wine reports `PF_RDWRFSGSBASE_AVAILABLE = 0`**.
+
+3. **Public Win64 `CONTEXT` has no `FsBase`/`GsBase` fields** (SDK `winnt.h` AMD64 `CONTEXT`: segment **selectors** `SegFs`/`SegGs` only). VEH/exception restore paths do **not** give applications a documented way to save/restore a custom FS base the way integer regs are restored. Any self base that is not a callee-saved GPR is therefore outside the normal exception/unwind contract ART already depends on.
+
+4. **Wine’s use of FS is the opposite of “free for apps”.** On Linux hosts, wine keeps **host pthread TLS in FS** and TEB in GS. Entering wine’s “kernel” / syscall paths rewrites FS with `wrfsbase`/`ARCH_SET_FS` back to `pthread_teb`. An ART policy of “FS always = Thread\*” would **fight wine’s host ABI** even if a bare `WRFSBASE` appeared to work in a toy probe.
+
+5. **Real Windows is not “FS is always free.”** Even when FS is not TEB, the OS owns segment base lifetime across attach, `CreateThread`, APC/callback edges, and any future FSGSBASE policy. There is **no** documented ART-grade API of the form “pin FS.base = this pointer for this thread for the process lifetime” analogous to Linux `arch_prctl(ARCH_SET_GS)` used by AOSP. Depending on `WRFSBASE` when feature bit 22 is set would also **hard-require** new enough CPU+OS combinations and exclude older product SKUs.
+
+6. **CET / CFG / shared code.** Segment-self is a global thread state. Third-party native code, sanitizers, or runtime helpers that assume default FS (or zero base) become latent AVs. Callee-saved **r15** is local to the managed ABI and already the arm64-style model we chose for all Windows targets.
+
+### 16.3 Empirical probes (agent01, 2026-07-18)
+
+Environment: `agent01`, wine-10.0, CPU flags include `fsgsbase`, PE built with project clang / xwin.
+
+| Probe | Result |
+|-------|--------|
+| Linux host `rdfsbase` / `rdgsbase` | FS = pthread TLS; GS = 0 (Linux ART would use GS via arch_prctl, not shown here) |
+| Wine PE: `IsProcessorFeaturePresent(22)` | **0** (feature not advertised to apps) |
+| Wine PE: `NtCurrentTeb()` | non-null TEB |
+| Wine PE: forced `rdgsbase` (ignore feature bit) | equals TEB (GS base = TEB) |
+| Wine PE: forced `rdfsbase` | non-null host pthread-ish base (**not** TEB) — FS is **in use by wine**, not free |
+| Wine PE: `WRFSBASE` experiment | process-level fault / unstable under wine (not productizable) |
+
+Conclusion from probes: **on the product’s wine oracle, FS is neither free nor OS-advertised for app base writes.** Host Win10/11 may differ on feature bit 22, but that does not remove CONTEXT/exception and portability problems.
+
+### 16.4 Free-register math (nterp / quick)
+
+| Self model | r15 role | Nterp path | Free-reg gain vs locked design |
+|------------|----------|------------|--------------------------------|
+| **rSELF = r15** (locked) | Thread\* | **N-1:** rREFS→rbp; audit `%rbp` temps | Baseline |
+| FS.base = Thread\* | free for rREFS | Could keep Linux rREFS=r15 map | **+1 GPR** in theory |
+| GS.base = Thread\* | free | Linux-like | **Rejected** (TEB) |
+| TEB TLS reload every access | free | Possible | **−density** (reject for nterp) |
+
+Even the theoretical +1 GPR is **not free**:
+
+- Every managed entry / attach / `CreateThread` must program FS (vs publishing r15 once in existing invoke stubs).  
+- Every exception / suspend / JIT deopt path must ensure FS still points at the right `Thread*` without CONTEXT support.  
+- Dual addressing modes (`%fs:OFF` vs `OFF(%r15)`) **or** a full Windows-only segment flavor of quick+nterp+JIT — more code than N-1’s register rename.  
+- Wine validation of the product path becomes invalid or requires wine-specific FS hacks.
+
+**Net:** free-reg benefit is real only on paper; engineering + portability cost exceeds N-1.
+
+### 16.5 Decision matrix
+
+| Criterion | FS.base = Thread\* | rSELF = r15 (current) |
+|-----------|--------------------|------------------------|
+| Possible on some CPUs? | Conditionally (FSGSBASE + OS enable) | **Yes** |
+| Portable Win10/11 product SKU? | **No** (feature + policy skew) | **Yes** |
+| Safe vs TEB? | FS yes / GS no | Yes |
+| Works under wine-10 agent01 oracle? | **No** (PF bit 0; wine owns FS) | **Yes** (already smoking) |
+| CONTEXT / VEH friendly? | **No** (no FsBase in public CONTEXT) | **Yes** (callee-saved) |
+| Frees r15 for nterp rREFS? | Theoretically yes | No — use N-1 |
+| Aligns with win-arm64 x19 model? | No (x86-only trick) | **Yes** |
+| **Product recommendation** | **Reject** | **Keep** |
+
+### 16.6 Locked outcome
+
+- **Do not** implement `WRFSBASE` / `%fs:THREAD_*` as managed self on win-x86_64.  
+- **Do not** re-open GS-as-Thread on Windows.  
+- **Keep** rSELF=r15 for quick / invoke / future JIT.  
+- **Keep** nterp design **N-1** (rSELF=r15, rREFS=rbp) when that work starts; FS-self is **not** an alternative to N-1.  
+- Optional research-only: if Microsoft later documents a stable process-wide FSGSBASE policy + CONTEXT base fields, re-evaluate — not scheduled.
 
 ## 13. Appendix — evidence anchors in tree
 
@@ -953,9 +1046,10 @@ Enabling nterp does **not** replace the need for correct **quick entrypoint** ex
 | PE Runtime load helper | `LOAD_RUNTIME_INSTANCE` in `asm_support_x86_64.S` |
 | Nterp Win conflicts (GS + r15=rREFS) | `mterp/x86_64ng/main.S`; generated `mterp_x86_64.S`; §15 |
 | Nterp disabled on Win | `interpreter/mterp/nterp.cc` `IsNterpSupported` |
+| FS.base=Thread* rejected | §16; wine `PF_RDWRFSGSBASE_AVAILABLE`; public `CONTEXT` has no FsBase |
 
 ---
 
 ## 14. One-paragraph executive summary
 
-On Linux amd64, ART’s managed world is **GS-relative Thread TLS** layered on top of normal C++ `thread_local`, with quick entrypoints and JIT assuming SysV bridges; on Linux arm64, managed world is **x19 = Thread\***. Windows **cannot** reuse GS/FS for Thread\* because those segments point at the **TEB**. The WinNT design therefore adopts the **arm64-style explicit self register** on all Windows ISAs (draft: **r15** on x86_64, **x19** on ARM64/Arm64EC), keeps C++ `Thread::Current()` on `thread_local`/`TlsAlloc`, and isolates **Microsoft / Arm64EC C++ calling conventions** at quick-entrypoint and invoke bridges. JIT is “just” machine code that obeys the same self + entrypoint contracts with a W^X `VirtualAlloc` cache. **x86_64 is the first implementation target**; x86, arm64, and Arm64EC are specified so the abstractions do not paint us into a GS-shaped corner.
+On Linux amd64, ART’s managed world is **GS-relative Thread TLS** layered on top of normal C++ `thread_local`, with quick entrypoints and JIT assuming SysV bridges; on Linux arm64, managed world is **x19 = Thread\***. Windows **cannot** reuse GS for Thread\* (TEB owns GS); **FS.base=Thread\*** is also **rejected** (§16: FSGSBASE/wine/CONTEXT portability), so managed self is a GPR. The WinNT design therefore adopts the **arm64-style explicit self register** on all Windows ISAs (draft: **r15** on x86_64, **x19** on ARM64/Arm64EC), keeps C++ `Thread::Current()` on `thread_local`/`TlsAlloc`, and isolates **Microsoft / Arm64EC C++ calling conventions** at quick-entrypoint and invoke bridges. JIT is “just” machine code that obeys the same self + entrypoint contracts with a W^X `VirtualAlloc` cache. **x86_64 is the first implementation target**; x86, arm64, and Arm64EC are specified so the abstractions do not paint us into a GS-shaped corner.
