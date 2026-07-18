@@ -1185,8 +1185,18 @@ Workarounds while nterp remains incomplete on Win:
 | MS x64 **generic-JNI** reserved-area packing: unified slots — integer/pointer args also advance FPR packing cursor (`PushFpr8(0)` skip) and float args advance GPR (`PushGpr(0)` skip) so xmmN matches parameter index N | Done — fixes `Float.intBitsToFloat` / `floatToRawIntBits` under nterp→generic JNI |
 | Managed nterp float arg store (`LOOP_OVER_SHORTY_STORING_XMMS`) / VLFFL(Z/J) ctors | OK in dedicated probes (`I2`, `RFloat`, `JLFloat`) |
 | ICU `getAveBytesPerChar`/`getMaxBytesPerChar` native values under nterp | Correct (2 and 3 for UTF-8) when logged |
-| **Residual:** `CharsetEncoderICU.newInstance` / Hello println under full nterp (no F/D exclude) still IAE in super ctor | Open — not pure arg packing; keep F/D exclude |
+| **Residual:** `CharsetEncoderICU.newInstance` / Hello println under full nterp (no F/D exclude) still IAE in super ctor | Open — see §17.7.2 |
 | Residual empty stdout with exclude | Open (exit 0, no exception; switch prints Hello) |
+
+### 17.7.2 Residual CharsetEncoder under nterp (2026-07-18 22:55)
+
+Evidence that this is **not** simple float packing:
+
+- Generic JNI returns correct `getAveBytesPerChar` (`result_f` low = `0x40000000` = 2.0f) and `getMaxBytesPerChar` (= 3).
+- Dedicated probes: `Float.intBitsToFloat` (FI/IF), VLFFL/Z/J managed packing (`I2`/`RFloat`/`JLFloat`), and **NFlow** (same rearrange as `CharsetEncoderICU` + `intBitsToFloat`/`i2f`/range ctor) **PASS** under nterp.
+- Full `CEnc` / Hello still IAE without F/D exclude.
+
+Likely remaining area: interaction unique to boot/`CharsetEncoderICU` path (not pure VLFF), possibly after `makeReplacement` / trusted super, or a nterp path that NFlow does not exercise (e.g. class init / clinit / different invoke edge). Keep **F/D exclude** for product `ART_WIN64_NTERP=1` Hello exit 0.
 
 `HasSystemClassLoader()` is a non-CHECK accessor for early startup.
 
