@@ -1166,20 +1166,27 @@ Temporary diagnostics (to remove later): INFO logs in `runtime.cc`
 `getBooleanAttributes0`.
 
 
-### 17.7 Boot gate + float exclusion (2026-07-18)
+### 17.7 Boot gate + float exclusion (2026-07-18; packing notes 2026-07-18 21:25)
 
 Workarounds while nterp remains incomplete on Win:
 
 1. **`CanRuntimeUseNterp()`** returns false until `Runtime::IsFinishedStarting()` so
    `ClassLoader.createSystemClassLoader` / PathClassLoader construction use the
    switch interpreter (fixes empty `DexPathList[[]]` / empty File path under nterp).
-2. **`CanMethodUseNterp()`** rejects methods whose shorty contains `F`/`D` (Win only).
-   Symptom without this: `IllegalArgumentException: averageBytesPerChar exceeds
-   maxBytesPerChar` from `CharsetEncoder` ctors during `System.out` use under nterp.
-3. After (1)+(2): `ART_WIN64_NTERP=1` Hello reaches `CallStaticVoidMethod(main)` with
-   **no pending exception** and exit 0, but **stdout can still be empty** (switch
-   Hello prints `Hello from dalvikvm!`). Residual: non-float nterp path for
-   println / stream I/O still wrong.
+2. **`CanMethodUseNterp()`** still rejects methods whose shorty contains `F`/`D` (Win only).
+   Product symptom without this: `IllegalArgumentException: averageBytesPerChar exceeds
+   maxBytesPerChar` on Hello `System.out` under nterp.
+
+### 17.7.1 Float packing progress (2026-07-18)
+
+| Item | Status |
+|------|--------|
+| Nterp entry `NTERP_MATERIALIZE_RSELF_WIN` spills **xmm0–7** + GPs; spill base in **rbx** (not r11) | Done |
+| MS x64 **generic-JNI** reserved-area packing: unified slots — integer/pointer args also advance FPR packing cursor (`PushFpr8(0)` skip) and float args advance GPR (`PushGpr(0)` skip) so xmmN matches parameter index N | Done — fixes `Float.intBitsToFloat` / `floatToRawIntBits` under nterp→generic JNI |
+| Managed nterp float arg store (`LOOP_OVER_SHORTY_STORING_XMMS`) / VLFFL(Z/J) ctors | OK in dedicated probes (`I2`, `RFloat`, `JLFloat`) |
+| ICU `getAveBytesPerChar`/`getMaxBytesPerChar` native values under nterp | Correct (2 and 3 for UTF-8) when logged |
+| **Residual:** `CharsetEncoderICU.newInstance` / Hello println under full nterp (no F/D exclude) still IAE in super ctor | Open — not pure arg packing; keep F/D exclude |
+| Residual empty stdout with exclude | Open (exit 0, no exception; switch prints Hello) |
 
 `HasSystemClassLoader()` is a non-CHECK accessor for early startup.
 
