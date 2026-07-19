@@ -420,3 +420,17 @@ Tried / rejected for now:
 
 Hypothesis still open: MS x64 vs SysV mismatch on **compiled FastNative** stubs for multi-arg natives, or `toString` returning a value that the factory call site mis-marshals when both are JIT. Product keeps **default compile ON, exclude StringFactory** until a safe ABI-wide fix lands.
 
+### Win FastNative MS ABI (2026-07-19)
+
+Compiled FastNative stubs previously used **SysV** argument registers (`RDI/RSI/...`)
+while Win C++ natives use **MS x64** (`RCX/RDX/R8/R9` + 32B shadow). Generic JNI already
+used MS packing; compiled stubs did not.
+
+**Landed:**
+
+- `vendor/art/runtime/arch/x86_64/jni_frame_x86_64.h` — Win max 4 int/float slots + 32B shadow
+- `vendor/art/compiler/jni/quick/x86_64/calling_convention_x86_64.cc` — MS register order for JNI params
+
+**Still residual:** even with MS ABI, JIT of both `StringBuilder.toString` and
+`StringFactory.newStringFromBytes` can still NPE (`data==null`). Product continues to
+skip JIT of `StringFactory*` unless `ART_WIN64_JIT_ALLOW_STRINGFACTORY=1`.
