@@ -546,14 +546,14 @@ _No open design notes. Closed D- items live under §Closed._
 
 
 ### W-025 — JIT code cache + x86_64 codegen TLS (Windows)
-- **State:** OPEN (feasibility drafted)
+- **State:** OPEN (J-1 Create green; D-1 partial; compile gated)
 - **Kind:** feature gap
 - **Area:** art / jit / compiler
-- **Symptom / why:** `UseJitCompilation` defaults true but `JitCodeCache::Create` soft-fails (`RemapAtEnd`/`VirtualAlloc` MAP_FIXED). Separately, optimizing codegen still emits `%gs:` Thread TLS (Linux); Win needs rSELF=r15.
-- **Current behavior:** WARNING then continue; nterp executes. Separate-map experiment AV'd; reverted.
-- **Proper fix:** [win32_jit_memory.md](win32_jit_memory.md) J-1 memory + D-1 codegen.
-- **Code anchors:** `jit_memory_region.cc`; `mem_map_windows.cc`; `code_generator_x86_64.cc`
+- **Symptom / why:** Need Linux-like JIT. Create used to soft-fail on RemapAtEnd; compiled code still residual NPE on Hello string/print paths.
+- **Current behavior:** J-1: Win `RemapAtEnd` VirtualProtect + reuse view, exec starts RWX; Create OK. D-1: `ThreadOffsetAddr`/r15 + gs no-op on Win. **Compile** gated: `ART_WIN64_JIT=1` only; default nterp with live cache.
+- **Proper fix:** Close residual D-1 compile correctness; then drop gate ([win32_jit_memory.md](win32_jit_memory.md) §13).
+- **Code anchors:** `mem_map.cc` RemapAtEnd; `jit_code_cache.cc`; `jit.cc` gate; `assembler_x86_64.*`; `code_generator_x86_64.cc`
 - **Opened:** 2026-07-19
-- **Updated:** 2026-07-19 — feasibility analysis in win32_jit_memory.md
+- **Updated:** 2026-07-19 — J-1 landed; D-1 partial; ART_WIN64_JIT compile gate
 
 *Last snapshot: 2026-07-19 — W-001 closed (quick invoke default ON); nterp product default ON (opt-out ART_WIN64_NTERP=0); JIT default remains ART UseJitCompilation=true.*

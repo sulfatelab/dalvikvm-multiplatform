@@ -365,3 +365,37 @@ Imageless boot relies on nterp/switch heavily. JIT of boot classpath methods may
 5. Only then expand matrix and consider J-2.
 
 Until then: keep **J-4 soft-fail**, ship **nterp** as the default execution engine (already green).
+
+## 13. Implementation status (2026-07-19 J-1 + D-1)
+
+### J-1 — landed
+
+| Piece | Change |
+|-------|--------|
+| `MemMap::RemapAtEnd` (`mem_map.cc`) | Win anonymous tail: `VirtualProtect` in place + `reuse_` view (no MAP_FIXED `VirtualAlloc`) |
+| Exec initial prot | **RWX** when `PROT_EXEC` (mspace writes into exec half on single-view; pure RX AV'd) |
+| Evidence | `Win64 JitCodeCache::Create OK initial=64KB max=64MB` under wine |
+
+### D-1 — partially landed
+
+| Piece | Change |
+|-------|--------|
+| `Address::ThreadOffsetAddr` | Win: `Address(R15, offset)`; Linux: Absolute+GS |
+| `X86_64Assembler::gs()` | No-op on Win (no `0x65`); still emits GS on Linux |
+| Thread Absolute(true) sites | codegen / JNI macro / intrinsics / trampoline → `ThreadOffsetAddr` |
+| R15 | Removed from Win callee-saves; blocked in register allocator |
+
+### Residual (compile still unsafe by default)
+
+Background JIT worker still compiles hot methods (e.g. `String.equals`) when allowed; Hello then fails with `NPE dst/data == null` after create.  
+
+**Gate:** `CompileMethodInternal` returns false on Win unless `ART_WIN64_JIT=1`.
+
+| Mode | Create | Compile | Hello/Math/Io/CEnc |
+|------|--------|---------|--------------------|
+| Default | **OK** | gated off | **PASS** (nterp) |
+| `ART_WIN64_JIT=1` | OK | on | Hello residual NPE |
+| `-Xusejit:false` | no | no | PASS |
+
+Next residual work: finish D-1 validation of compiled string/print paths (likely more GS or ABI edges); then remove compile gate.
+

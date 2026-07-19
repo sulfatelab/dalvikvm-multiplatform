@@ -1254,7 +1254,7 @@ Smoke (wine, imageless, **no** `ART_WIN64_*` env):
 
 W-001 marked CLOSED in [win32_open_items.md](win32_open_items.md).
 
-**JIT memory / codegen:** see [win32_jit_memory.md](win32_jit_memory.md) — Create soft-fails (`RemapAtEnd`); end-to-end JIT also needs compiler GS→r15 (feasibility draft).
+**JIT memory / codegen:** see [win32_jit_memory.md](win32_jit_memory.md) §13 — **J-1 Create OK**; D-1 ThreadOffsetAddr/r15 partial; compile opt-in `ART_WIN64_JIT=1` until residual Hello NPE closed.
 
 
 ## 13. Appendix — evidence anchors in tree
