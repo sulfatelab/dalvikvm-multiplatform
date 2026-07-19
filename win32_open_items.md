@@ -554,7 +554,7 @@ _No open design notes. Closed D- items live under §Closed._
 - **Proper fix:** Fix StringFactory/toString pair ([win32_jit_memory.md](win32_jit_memory.md) §13); drop exclude.
 - **Code anchors:** `mem_map.cc` RemapAtEnd; `jit.cc` Win gate; `assembler_x86_64.*`; codegen x86_64
 - **Opened:** 2026-07-19
-- **Updated:** 2026-07-19 — default compile ON minus StringFactory; isolation evidence
+- **Updated:** 2026-07-19 — default compile ON minus StringFactory; pair isolation; SysV-wrapper attempt AV (reverted)
 
 
 *Last snapshot: 2026-07-19 — W-001 closed (quick invoke default ON); nterp product default ON (opt-out ART_WIN64_NTERP=0); JIT default remains ART UseJitCompilation=true.*

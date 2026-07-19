@@ -402,3 +402,21 @@ Debug knobs: `ART_WIN64_JIT_FILTER` / `ART_WIN64_JIT_EXCLUDE` (comma OR lists).
 
 Next: fix StringFactory↔toString interaction (likely optimized/baseline string data path / arraycopy `data==null`), then drop exclude.
 
+### Residual analysis notes (2026-07-19)
+
+`data == null` is thrown by `StringFactory_newStringFromBytes` when the `byte[]`
+argument is null (`java_lang_StringFactory.cc`). Isolation:
+
+- JIT **only** `StringFactory.newStringFromBytes` → Hello PASS
+- JIT **only** `StringBuilder.toString` → Hello PASS  
+- JIT **both** → FAIL after first `println` (second string path)
+- Other hot methods together without that pair → PASS
+
+Tried / rejected for now:
+
+1. Disable `StringNewStringFromBytes` intrinsic on Win — pair still fails (compiled FastNative path still broken).
+2. Mark StringFactory natives `sysv_abi` directly — breaks JNI signature metafunctions.
+3. SysV thin wrappers registered for StringFactory — early boot AV under wine (regressed); reverted.
+
+Hypothesis still open: MS x64 vs SysV mismatch on **compiled FastNative** stubs for multi-arg natives, or `toString` returning a value that the factory call site mis-marshals when both are JIT. Product keeps **default compile ON, exclude StringFactory** until a safe ABI-wide fix lands.
+
