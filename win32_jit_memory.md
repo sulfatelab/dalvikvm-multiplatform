@@ -385,17 +385,20 @@ Until then: keep **J-4 soft-fail**, ship **nterp** as the default execution engi
 | Thread Absolute(true) sites | codegen / JNI macro / intrinsics / trampoline → `ThreadOffsetAddr` |
 | R15 | Removed from Win callee-saves; blocked in register allocator |
 
-### Residual (compile still unsafe by default)
+### Residual (narrow) + product compile default
 
-Background JIT worker still compiles hot methods (e.g. `String.equals`) when allowed; Hello then fails with `NPE dst/data == null` after create.  
+Background JIT **compile is ON by default** after J-1/D-1, with one residual exclude:
 
-**Gate:** `CompileMethodInternal` returns false on Win unless `ART_WIN64_JIT=1`.
+**Bug:** compiling **both** `StringBuilder.toString` and `StringFactory.newStringFromBytes` breaks Hello's second `println` (`NPE data == null`). Each alone is fine; other hot methods (String.equals/length/indexOf, StringBuilder.append, Math, Unsafe, …) are fine together.
 
-| Mode | Create | Compile | Hello/Math/Io/CEnc |
-|------|--------|---------|--------------------|
-| Default | **OK** | gated off | **PASS** (nterp) |
-| `ART_WIN64_JIT=1` | OK | on | Hello residual NPE |
+| Mode | Create | Compile | Hello |
+|------|--------|---------|-------|
+| Default | **OK** | ON, **skip StringFactory** | **PASS** (ncomp≈19) |
+| `ART_WIN64_JIT=0` | OK | off | PASS (nterp only) |
+| `ART_WIN64_JIT_ALLOW_STRINGFACTORY=1` | OK | + StringFactory | **FAIL** residual pair |
 | `-Xusejit:false` | no | no | PASS |
 
-Next residual work: finish D-1 validation of compiled string/print paths (likely more GS or ABI edges); then remove compile gate.
+Debug knobs: `ART_WIN64_JIT_FILTER` / `ART_WIN64_JIT_EXCLUDE` (comma OR lists).
+
+Next: fix StringFactory↔toString interaction (likely optimized/baseline string data path / arraycopy `data==null`), then drop exclude.
 

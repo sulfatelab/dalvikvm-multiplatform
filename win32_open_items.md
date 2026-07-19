@@ -546,14 +546,15 @@ _No open design notes. Closed D- items live under §Closed._
 
 
 ### W-025 — JIT code cache + x86_64 codegen TLS (Windows)
-- **State:** OPEN (J-1 Create green; D-1 partial; compile gated)
+- **State:** OPEN (J-1 green; D-1 mostly on; residual StringFactory exclude)
 - **Kind:** feature gap
 - **Area:** art / jit / compiler
-- **Symptom / why:** Need Linux-like JIT. Create used to soft-fail on RemapAtEnd; compiled code still residual NPE on Hello string/print paths.
-- **Current behavior:** J-1: Win `RemapAtEnd` VirtualProtect + reuse view, exec starts RWX; Create OK. D-1: `ThreadOffsetAddr`/r15 + gs no-op on Win. **Compile** gated: `ART_WIN64_JIT=1` only; default nterp with live cache.
-- **Proper fix:** Close residual D-1 compile correctness; then drop gate ([win32_jit_memory.md](win32_jit_memory.md) §13).
-- **Code anchors:** `mem_map.cc` RemapAtEnd; `jit_code_cache.cc`; `jit.cc` gate; `assembler_x86_64.*`; `code_generator_x86_64.cc`
+- **Symptom / why:** Need Linux-like JIT. Create used to soft-fail; residual NPE when **both** `StringBuilder.toString` and `StringFactory.newStringFromBytes` are JIT'd.
+- **Current behavior:** J-1 Create OK; ThreadOffsetAddr/r15; compile **default ON** excluding StringFactory. `ART_WIN64_JIT=0` disables compile; `ART_WIN64_JIT_ALLOW_STRINGFACTORY=1` re-enables residual.
+- **Proper fix:** Fix StringFactory/toString pair ([win32_jit_memory.md](win32_jit_memory.md) §13); drop exclude.
+- **Code anchors:** `mem_map.cc` RemapAtEnd; `jit.cc` Win gate; `assembler_x86_64.*`; codegen x86_64
 - **Opened:** 2026-07-19
-- **Updated:** 2026-07-19 — J-1 landed; D-1 partial; ART_WIN64_JIT compile gate
+- **Updated:** 2026-07-19 — default compile ON minus StringFactory; isolation evidence
+
 
 *Last snapshot: 2026-07-19 — W-001 closed (quick invoke default ON); nterp product default ON (opt-out ART_WIN64_NTERP=0); JIT default remains ART UseJitCompilation=true.*
