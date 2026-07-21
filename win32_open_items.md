@@ -546,15 +546,15 @@ _No open design notes. Closed D- items live under §Closed._
 
 
 ### W-025 — JIT code cache + x86_64 codegen TLS (Windows)
-- **State:** OPEN (J-1 green; D-1 mostly on; residual StringFactory exclude)
+- **State:** OPEN (J-1 green; D-1 managed JIT on; native JIT off)
 - **Kind:** feature gap
 - **Area:** art / jit / compiler
 - **Symptom / why:** Need Linux-like JIT. Create used to soft-fail; residual NPE when **both** `StringBuilder.toString` and `StringFactory.newStringFromBytes` are JIT'd.
-- **Current behavior:** J-1 Create OK; ThreadOffsetAddr/r15; compile **default ON** excluding StringFactory. `ART_WIN64_JIT=0` disables compile; `ART_WIN64_JIT_ALLOW_STRINGFACTORY=1` re-enables residual.
+- **Current behavior:** J-1 Create OK; r15 TLS; managed JIT ON; **native JIT OFF** (generic JNI). MS FastNative layout landed; stubs still wrong for multi-arg. `ART_WIN64_JIT_NATIVE=1` repro; `ART_WIN64_JIT=0` disables all compile.
 - **Proper fix:** Fix StringFactory/toString pair ([win32_jit_memory.md](win32_jit_memory.md) §13); drop exclude.
 - **Code anchors:** `mem_map.cc` RemapAtEnd; `jit.cc` Win gate; `assembler_x86_64.*`; codegen x86_64
 - **Opened:** 2026-07-19
-- **Updated:** 2026-07-19 — default compile ON minus StringFactory; pair isolation; SysV-wrapper attempt AV (reverted)
+- **Updated:** 2026-07-19 — skip native JIT; MS ABI layout; residual FastNative stub args
 
 
 *Last snapshot: 2026-07-19 — W-001 closed (quick invoke default ON); nterp product default ON (opt-out ART_WIN64_NTERP=0); JIT default remains ART UseJitCompilation=true.*

@@ -431,6 +431,11 @@ used MS packing; compiled stubs did not.
 - `vendor/art/runtime/arch/x86_64/jni_frame_x86_64.h` — Win max 4 int/float slots + 32B shadow
 - `vendor/art/compiler/jni/quick/x86_64/calling_convention_x86_64.cc` — MS register order for JNI params
 
-**Still residual:** even with MS ABI, JIT of both `StringBuilder.toString` and
-`StringFactory.newStringFromBytes` can still NPE (`data==null`). Product continues to
-skip JIT of `StringFactory*` unless `ART_WIN64_JIT_ALLOW_STRINGFACTORY=1`.
+**Still residual:** JIT-compiled FastNative stubs still pass garbage multi-arg
+values into natives (observed `data==null high=18 offset=0x47d2f2e8...`) even with
+MS register layout (`OutFrameSize=48`, 4 regs + 2 stack for `LLIII`).
+
+**Product gate:** do not JIT **native** methods on Win (`CompileMethodInternal`
+returns false unless `ART_WIN64_JIT_NATIVE=1`). Managed JIT (including
+`StringBuilder.toString`) stays on; natives use generic JNI.
+
