@@ -291,11 +291,11 @@ Imageless boot relies on nterp/switch heavily. JIT of boot classpath methods may
 | Phase | Goal | Success metric | Depends |
 |-------|------|----------------|---------|
 | **P0** | Product defaults | nterp+quick ON; JIT option true; soft-fail OK | **Done** 2026-07-19 |
-| **P1** | Design lock | This doc reviewed; choose J-1 (+ D-1) | — |
-| **P2a** | MemMap J-1 | Log: JIT code cache created; no VEH at Create | P1 |
-| **P2b** | Codegen D-1 | No `gs` Thread access in JIT for Win; R15 = rSELF | P1 |
-| **P3** | First compiled method | `-Xjitthreshold:0` Hello prints; no AV | P2a+P2b |
-| **P4** | Matrix | CEnc, float, Math, Io under JIT | P3 |
+| **P1** | Design lock | This doc reviewed; choose J-1 (+ D-1) | **Done** 2026-07-19 |
+| **P2a** | MemMap J-1 | Log: JIT code cache created; no VEH at Create | **Done** 2026-07-19 |
+| **P2b** | Codegen D-1 | No `gs` Thread access in JIT for Win; R15 = rSELF | **Done** 2026-07-19 |
+| **P3** | First compiled method | Hello prints with managed JIT; no AV | **Done** 2026-07-21 |
+| **P4** | Matrix | CEnc, float, Math, Io, Net, GC under JIT | **Done** 2026-07-22 |
 | **P5** | Harden | J-2 optional; drop RWX; host Win10 | P4 |
 
 **Do not** claim “JIT enabled by default” as complete until **P3**.  
@@ -334,7 +334,9 @@ Imageless boot relies on nterp/switch heavily. JIT of boot classpath methods may
 | 2026-07-19 | Soft-fail Create acceptable interim (J-4) |
 | 2026-07-19 | Separate-map experiment **reverted**; AV not chased as memory-only bug |
 | 2026-07-19 | **Feasibility:** memory **yes (J-1)**; end-to-end JIT **yes only with codegen D-1** |
-| Pending | Lock J-1 + D-1 as Phase 5 implementation plan |
+| 2026-07-21 | P3 gate: JIT smoke test passes (24 compiles, Hello OK) |
+| 2026-07-22 | P4 gate: full probe matrix passes (14 probes, 0 failures) |
+| Pending | P5: J-2 pagefile section dual-view; drop RWX; host Win10 |
 
 ---
 

@@ -546,15 +546,16 @@ _No open design notes. Closed D- items live under §Closed._
 
 
 ### W-025 — JIT code cache + x86_64 codegen TLS (Windows)
-- **State:** OPEN (J-1 green; D-1 managed JIT on; native JIT off)
+- **State:** OPEN (P3+P4 green: managed JIT matrix passes; native JIT off)
 - **Kind:** feature gap
 - **Area:** art / jit / compiler
 - **Symptom / why:** Need Linux-like JIT. Create used to soft-fail; residual NPE when **both** `StringBuilder.toString` and `StringFactory.newStringFromBytes` are JIT'd.
-- **Current behavior:** J-1 Create OK; r15 TLS; managed JIT ON; **native JIT OFF** (generic JNI). MS FastNative layout landed; stubs still wrong for multi-arg. `ART_WIN64_JIT_NATIVE=1` repro; `ART_WIN64_JIT=0` disables all compile.
-- **Proper fix:** Fix StringFactory/toString pair ([win32_jit_memory.md](win32_jit_memory.md) §13); drop exclude.
+- **Current behavior:** J-1 Create OK; r15 TLS; **managed JIT ON** (24-compile Hello, 14-probe matrix green); **native JIT OFF** (generic JNI). MS FastNative layout landed; stubs still wrong for multi-arg. `ART_WIN64_JIT_NATIVE=1` repro; `ART_WIN64_JIT=0` disables all compile. Native gate broadened to all natives (not just StringFactory).
+- **Proper fix:** Fix FastNative stub ABI for Win; drop native-JIT gate.
 - **Code anchors:** `mem_map.cc` RemapAtEnd; `jit.cc` Win gate; `assembler_x86_64.*`; codegen x86_64
+- **Verified:** P3 (2026-07-21) JIT smoke 10/10; P4 (2026-07-22) JIT matrix 14/14
 - **Opened:** 2026-07-19
-- **Updated:** 2026-07-19 — skip native JIT; MS ABI layout; residual FastNative stub args
+- **Updated:** 2026-07-22 — P3+P4 green; native gate broadened
 
 
 *Last snapshot: 2026-07-19 — W-001 closed (quick invoke default ON); nterp product default ON (opt-out ART_WIN64_NTERP=0); JIT default remains ART UseJitCompilation=true.*
