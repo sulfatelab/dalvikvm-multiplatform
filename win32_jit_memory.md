@@ -1,6 +1,6 @@
 # Win64 JIT memory & codepath — feasibility analysis
 
-**Status:** FEASIBILITY DRAFT (active)  
+**Status:** P3+P4 DONE — J-2 design in §14; P5 pending implementation  
 **Date:** 2026-07-19  
 **Repo root doc:** `./win32_jit_memory.md`  
 **Related:** [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md) (§15–§17.8 nterp/rSELF), [win32_open_items.md](win32_open_items.md), Phase 5 JIT  
@@ -336,7 +336,8 @@ Imageless boot relies on nterp/switch heavily. JIT of boot classpath methods may
 | 2026-07-19 | **Feasibility:** memory **yes (J-1)**; end-to-end JIT **yes only with codegen D-1** |
 | 2026-07-21 | P3 gate: JIT smoke test passes (24 compiles, Hello OK) |
 | 2026-07-22 | P4 gate: full probe matrix passes (14 probes, 0 failures) |
-| Pending | P5: J-2 pagefile section dual-view; drop RWX; host Win10 |
+| 2026-07-22 | P5 started: J-2 design written (§14); CreateFileMapping + MapViewOfFileEx approach |
+| Pending | P5: implement J-2 (est. 3-4 days); remove RWX; host Win10 |
 
 ---
 
@@ -440,4 +441,143 @@ MS register layout (`OutFrameSize=48`, 4 regs + 2 stack for `LLIII`).
 **Product gate:** do not JIT **native** methods on Win (`CompileMethodInternal`
 returns false unless `ART_WIN64_JIT_NATIVE=1`). Managed JIT (including
 `StringBuilder.toString`) stays on; natives use generic JNI.
+
+
+---
+
+## 14. J-2 pagefile section dual-view — design (2026-07-22)
+
+### 14.1 Goal
+
+Replace J-1's single-reservation + RWX-toggle approach with a true dual-view
+mapping backed by a Windows pagefile section (`CreateFileMapping`), eliminating
+the RWX requirement and matching Linux's `memfd_create` dual-view security model.
+
+### 14.2 Why now
+
+J-1 works (P3+P4 green) but has two weaknesses:
+
+1. **RWX during writes:** `ScopedCodeCacheWrite` toggles exec pages to RWX,
+   writes code, then back to RX. A concurrent thread reading those pages sees
+   RWX — a window for W^X violation.
+2. **No zygote hardening path:** J-1 reuses the single VA region; can't seal
+   or protect the way Linux `memfd_create` + `MFD_ALLOW_SEALING` does.
+
+J-2 resolves both: writes go to a non-executable RW view; the executable view
+is always RX. No protection toggling, no RWX window.
+
+### 14.3 API mapping: Linux memfd → Windows section
+
+| Linux step | Windows equivalent |
+|------------|-------------------|
+| `memfd_create("jit-cache", 0)` | `CreateFileMappingW(INVALID_HANDLE_VALUE, NULL, PAGE_EXECUTE_READWRITE, hi, lo, NULL)` |
+| `ftruncate(fd, capacity)` | Implicit in `CreateFileMapping` size params |
+| `mmap(…, fd, offset)` non-exec view | `MapViewOfFileEx(hSection, FILE_MAP_WRITE, …, offset, …)` |
+| `mmap(…, fd, offset)` exec view | `MapViewOfFileEx(hSection, FILE_MAP_EXECUTE, …, offset, …)` |
+| `fcntl(F_ADD_SEALS)` | `NtSetInformationFile` or accept no-seal on desktop |
+
+### 14.4 Code changes required
+
+#### 14.4.1 New: `MemMap::MapFileSection` (mem_map_windows.cc)
+
+```cpp
+// Create a file mapping backed by the system paging file (no on-disk file).
+// Returns a section HANDLE. Caller owns the handle.
+static HANDLE CreatePageFileSection(size_t capacity, std::string* error_msg);
+
+// Map a view of a section HANDLE. Mirrors MapFile but takes HANDLE instead of fd.
+static MemMap MapFileSection(HANDLE hSection,
+                             size_t byte_count,
+                             int prot,
+                             uint32_t flags,    // low_4gb, etc
+                             size_t start_offset,
+                             const char* name,
+                             std::string* error_msg);
+```
+
+`CreatePageFileSection`:
+1. `CreateFileMappingW(INVALID_HANDLE_VALUE, NULL, PAGE_EXECUTE_READWRITE, hi32(capacity), lo32(capacity), NULL)`
+2. Return handle or NULL on failure.
+
+`MapFileSection`:
+1. Convert `prot` to Windows `PAGE_*` / `FILE_MAP_*` constants:
+   - `PROT_READ` → `FILE_MAP_READ` (view: `PAGE_READONLY`)
+   - `PROT_READ|PROT_WRITE` → `FILE_MAP_WRITE` (view: `PAGE_READWRITE`)
+   - `PROT_READ|PROT_EXEC` → `FILE_MAP_EXECUTE` (view: `PAGE_EXECUTE_READ`)
+2. If `low_4gb`, scan with `VirtualQuery` for free VA < 4 GB.
+3. `MapViewOfFileEx(hSection, access, 0, start_offset, byte_count, preferred)`
+4. Return MemMap wrapping the view base.
+
+#### 14.4.2 Changed: `JitMemoryRegion::Initialize` (jit_memory_region.cc)
+
+Add a `#if defined(_WIN32)` block in the fd-backed path:
+
+```cpp
+#if defined(_WIN32)
+  // J-2: pagefile section dual-view
+  HANDLE hSection = MemMap::CreatePageFileSection(capacity, error_msg);
+  if (hSection == NULL) {
+    // Fall through to single-view (J-1)
+  } else {
+    // Map non-executable code-updater view
+    non_exec_pages = MemMap::MapFileSection(hSection, exec_capacity,
+        kProtRW, /*flags=*/0, data_capacity, "jit-code-cache-rw", &error_str);
+    // Map writable data view
+    writable_data_pages = MemMap::MapFileSection(hSection, data_capacity,
+        kProtRW, /*flags=*/0, 0, "data-code-cache-rw", &error_str);
+    // Map primary R view in low 4 GB
+    data_pages = MemMap::MapFileSection(hSection, data_capacity + exec_capacity,
+        kProtR, /*flags=*/low_4gb, 0, "data-code-cache", &error_str);
+    CloseHandle(hSection);
+  }
+#endif
+```
+
+When J-2 succeeds, `HasDualCodeMapping() == true`, and `ScopedCodeCacheWrite`
+becomes a no-op (code already written to the RW non-exec view).
+
+#### 14.4.3 No change needed
+
+- `HasDualCodeMapping()` — already works when both `non_exec_pages_` and
+  `exec_pages_` are valid.
+- `ScopedCodeCacheWrite` — already no-ops when `HasDualCodeMapping()==true`.
+- All code commit/copy paths — write to `non_exec_pages_`, read from
+  `exec_pages_`; same as Linux dual-view.
+
+### 14.5 Risk analysis
+
+| Risk | Impact | Mitigation |
+|------|--------|------------|
+| Wine `CreateFileMapping` section protect matrix differs from real Windows | Maps fail or wrong access | Test both; gate J-2 behind `ART_WIN64_JIT_DUAL=1` env var initially |
+| Low-4G two `MapViewOfFileEx` calls fragment VA space | Second view can't find 2 GB free low VA | Map primary view first; if non-exec can't fit low-4G, use high VA (JIT code pointer math works with high VA, just costs a few bytes of REX prefix) |
+| `PAGE_EXECUTE_READWRITE` section protection may be denied by policy (AppContainer, WDAC) | Section creation fails | Fall back to J-1; J-2 is best-effort hardening |
+| Dual-view offset math (uint32 code_info_offset) | If data pages VA > exec pages VA, subtraction is negative | Same layout as Linux: data pages at offset 0 (lower VA), exec at offset data_capacity (higher VA) |
+| No `MFD_ALLOW_SEALING` equivalent on desktop Windows | Can't prevent new writable mappings post-zygote | Accept for desktop; zygote not used on Win64 desktop PE |
+
+### 14.6 Implementation plan
+
+| Step | Effort | Validation |
+|------|--------|------------|
+| 1. `CreatePageFileSection` + `MapFileSection` in mem_map_windows.cc | 1 day | Unit test: create 4 KB section, map RX view, verify read works, write AVs |
+| 2. Wire into `JitMemoryRegion::Initialize` behind `ART_WIN64_JIT_DUAL` gate | 0.5 day | Log: "JIT dual-view OK" or fallback message |
+| 3. Run full JIT matrix (run_jit_matrix.sh) with dual-view enabled | 0.5 day | All 14 probes pass; no RWX in exec view |
+| 4. Verify `HasDualCodeMapping()==true` → `ScopedCodeCacheWrite` no-ops | 0.5 day | Check log: no mprotect/VirtualProtect calls during JIT compile |
+| 5. Remove env gate, make J-2 the default | 0.5 day | Regression: JIT smoke + matrix still green |
+| 6. Remove J-1 single-view fallback code | 1 day | Clean removal; verify no dead code |
+
+**Total estimate:** ~3–4 days.
+
+### 14.7 Gate logic (boot order)
+
+```
+JitMemoryRegion::Initialize:
+  if ART_WIN64_JIT_DUAL == "1"  → try J-2
+    success → HasDualCodeMapping = true
+    fail    → LOG(WARNING) + fall through
+  if ART_WIN64_JIT_DUAL == "0"  → skip J-2
+  fallback → J-1 (current, works)
+```
+
+After validation (step 5), flip: try J-2 always, fall back to J-1 if
+`CreateFileMapping` fails.
 
