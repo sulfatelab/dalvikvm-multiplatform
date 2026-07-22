@@ -380,20 +380,30 @@ Until then: keep **J-4 soft-fail**, ship **nterp** as the default execution engi
 | Evidence | `Win64 JitCodeCache::Create OK initial=64KB max=64MB` under wine |
 | Verification | JIT smoke 10/10 (2026-07-21), JIT matrix 14/14 (2026-07-22) |
 
-### D-1 — partially landed (2026-07-19)
+### D-1 — complete for compiler backend (verified 2026-07-22)
 
 | Piece | Change |
 |-------|--------|
 | `Address::ThreadOffsetAddr` | Win: `Address(R15, offset)`; Linux: Absolute+GS |
 | `X86_64Assembler::gs()` | No-op on Win (no `0x65`); still emits GS on Linux |
-| Thread Absolute(true) sites | codegen / JNI macro / intrinsics / trampoline → `ThreadOffsetAddr` |
+| Thread Absolute(true) sites | All 37 `__ gs()` sites in codegen/intrinsics/JNI-macro/trampoline use `ThreadOffsetAddr` |
 | R15 | Removed from Win callee-saves; blocked in register allocator |
 
-**D-1 residual:** float-intensive JIT-compiled methods (FloatProbe) crash
-under J-2 dual-view with `fault_addr=0x8` (VEH loop in wine's ntdll).
-The compiler may still emit `gs:` access in certain float code paths
-not covered by the `ThreadOffsetAddr` conversion. Systematic audit of
-all GS sites needed (see §9 risk 2).
+**Verification:** Manual audit of all `__ gs()` call sites in
+`code_generator_x86_64.cc` (15 sites), `intrinsics_x86_64.cc` (4 sites),
+`jni_macro_assembler_x86_64.cc` (17 sites), `trampoline_compiler.cc` (1 site).
+All 37 sites use `Address::ThreadOffsetAddr(offset)` → `Address(R15, offset)`
+on Win. `gs()` is a no-op on Win (no 0x65 GS prefix emitted). The compiler
+backend correctly generates r15-relative Thread access for all paths.
+
+**FloatProbe crash under J-2 is NOT a D-1 gap:**
+- FloatProbe passes under J-2 with JIT disabled (`ART_WIN64_JIT=0`)
+- FloatProbe passes under J-1 with JIT enabled
+- FloatProbe crashes under J-2 with JIT enabled even with low-4GB exec pages
+- Root cause: likely RIP-relative addressing crossing the code-data VA gap
+  (>2GB between section exec views at high VA and data_pages_ at low 4GB),
+  or compiled code writing through the R-only `data_pages_` view. Tracked
+  as a J-2-specific issue in §16 BROKEN.
 
 ### Native JIT gate — widened 2026-07-21
 
@@ -675,7 +685,7 @@ which only occurs inside ART's dlmalloc integration.
 
 | Item | Symptom | Blocker |
 |------|---------|---------|
-| FloatProbe/MathProbe/NetProbe under J-2 | VEH loop `fault_addr=0x8` in wine ntdll | **D-1 incomplete** — float code paths in JIT compiler still emit `gs:` Thread access instead of r15-relative |
+| FloatProbe/MathProbe/NetProbe under J-2 | VEH loop `fault_addr=0x8` in wine ntdll; passes with `ART_WIN64_JIT=0` | **J-2-specific** — not a D-1 gap (all 37 GS sites use ThreadOffsetAddr). Likely RIP-relative crossing code-data VA gap (>2GB), or compiled code writing through R-only data_pages_ view |
 | FastNative stub ABI (native JIT) | Garbage multi-arg values, `data==null` | MS x64 vs SysV mismatch in compiled FastNative stubs; generic JNI works |
 | ART_WIN64_JIT_NATIVE=1 | Hello crash | Same FastNative ABI gap |
 
