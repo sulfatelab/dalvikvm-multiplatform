@@ -712,43 +712,98 @@ which only occurs inside ART's dlmalloc integration.
 | Drop RWX requirement | J-2 as default |
 | Host Win10 validation | Physical/virtual Win10 machine |
 
-### FloatProbe crash: root cause confirmed (2026-07-22)
+### FloatProbe crash: code_info_offset_ uint32 overflow (2026-07-22)
 
-**Root cause:** `OatQuickMethodHeader::code_info_offset_` is **uint32**
-(`vendor/art/runtime/oat/oat_quick_method_header.h:202`). It stores:
+#### Evidence
+
+FloatProbe under J-2 with `-Xjitthreshold:0` (force-compile all methods before
+first execution):
+
 ```
-code_info_offset_ = code_entry_point - stack_map_address
+ART Win64 VEH: exception 0xc0000005 at 0x7abe53ab03e0 access=0 fault_addr=0x7abe480303c0
 ```
 
-In J-1 (single-view, contiguous VirtualAlloc): both addresses are in low-4GB
-within 64MB of each other. The delta fits in uint32.
+- RIP = 0x7abe53ab03e0 (in exec_pages_ section view, high VA ~125 TB)
+- fault_addr = 0x7abe480303c0 (in unmapped wine address space)
+- Delta = 0xBA80020 ≈ 195 MB — far beyond the 32 MB exec region
 
-In J-2 hybrid (data=VirtualAlloc low-4GB, code=section views at high VA):
-`code_entry_point` = ~0x7c4e... (125 TB), `stack_map_address` = ~0x4803... (1.2 GB).
-Delta = ~125 TB — overflows uint32. The wrapped value produces a garbage
-stack_map pointer, crashing with fault_addr in unmapped wine VA.
+The compiled code computes an address relative to its entry point and accesses
+outside the mapped region. This is the `stack_map` lookup going through the
+overflowed `code_info_offset_`.
 
-**Why low-4GB exec pages didn't help:** Four 32MB section views (data, exec,
-non_exec, writable_data) compete with ART heap, card table, bitmaps, etc.
-in the crowded low-4GB space. `MapViewOfFileEx` with `low_4gb=true` fails
-to find contiguous free space and falls back to high VA.
+#### Root cause
 
-**Constraints:**
-1. ART JIT ABI requires `stack_map` address < `code_entry_point` and delta ≤ 2³²−1
-2. J-1 satisfies this naturally (single contiguous VirtualAlloc)
-3. J-2 section views are placed by the OS, not guaranteed to be near data_pages_
-4. Wine's low-4GB is too fragmented for 4×32MB section views
-5. Changing `code_info_offset_` to uint64 would break the ABI (requires coordinated art + oat file format change)
+[`OatQuickMethodHeader::code_info_offset_`](vendor/art/runtime/oat/oat_quick_method_header.h:202)
+is **uint32**. It is set in
+[`JitMemoryRegion::CommitCode`](vendor/art/runtime/jit/jit_memory_region.cc:465):
 
-**Possible paths forward:**
-- A. **Keep J-1 as default, J-2 as experimental.** Accept the uint32 constraint.
-- B. **Reserve low-4GB space with VirtualAlloc first, then place section views.**
-  Complex but feasible — reserve a contiguous 96MB (data+exec+non_exec) in low-4GB,
-  free the code portion, then MapViewOfFileEx into the hole.
-- C. **Extend `code_info_offset_` to 64-bit.** Large scope — changes oat file format,
-  QuickMethodHeader, and all consumers. May be worth it for long-term Win64 support.
-- D. **Place stack_map in the same VA region as code.** Store stack map data in
-  non_exec_pages_ instead of data_pages_. Avoids the cross-region offset entirely.
+```cpp
+new (method_header) OatQuickMethodHeader(
+    (stack_map != nullptr) ? result - stack_map : 0u);
+```
+
+Where:
+- `result` = `x_memory + header_size` (entry point in exec_pages_, high VA in J-2)
+- `stack_map` = pointer within data_pages_ (low 4GB in J-2)
+
+The runtime computes stack map addresses via
+[`OatQuickMethodHeader::FromCodePointer`](vendor/art/runtime/oat/oat_quick_method_header.h:56):
+
+```cpp
+static OatQuickMethodHeader* FromCodePointer(const void* code_ptr) {
+    return reinterpret_cast<OatQuickMethodHeader*>(
+        reinterpret_cast<uintptr_t>(code_ptr) - code_info_offset_);
+}
+```
+
+With uint32 semantics, `code_ptr - code_info_offset_` wraps when the true
+delta exceeds 2³²−1.
+
+| Layout | code_ptr (entry) | stack_map (data) | True delta | uint32 delta |
+|--------|-----------------|-------------------|------------|-------------|
+| J-1 contiguous | 0x4a03_03d0 | 0x4803_0000 | ~2 MB | 0x0200_03d0 ✓ |
+| J-2 separated | 0x7c4e_c6d5_03e0 | 0x4803_0000 | ~125 TB | wraps to garbage ✗ |
+
+#### Why low-4GB section views didn't help
+
+Four 32 MB section views (data R, exec RX, non-exec RW, writable_data RW)
+compete with ART heap (~512 MB), card table (~4 MB), bitmaps, linear alloc,
+and other allocations in the crowded low-4GB space. `MapViewOfFileEx` with
+`low_4gb=true` cannot find 4 contiguous free regions and silently falls back
+to high VA. Verified by logging: views land at 0x7c4e... (~125 TB).
+
+#### Why J-1 works
+
+J-1 uses a single `MemMap::MapAnonymous` → `VirtualAlloc(MEM_COMMIT,
+PAGE_READWRITE)` for data+exec in low-4GB. `RemapAtEnd` splits the tail as
+RX exec_pages_. Both views share the same base VA range — contiguous,
+within 64 MB. The `code_info_offset_` is always < 64 MB, fitting in uint32.
+
+#### Constraints (locked)
+
+1. `code_info_offset_` is uint32 in the oat file format — changing to uint64
+   requires coordinated art, oatdump, dex2oat, and all consumers. Large scope.
+2. ART JIT ABI: `stack_map = code_ptr - code_info_offset_`. Requires:
+   - `stack_map` address < `code_ptr` (unsigned subtraction)
+   - delta ≤ 2³²−1 ≈ 4 GB
+3. Win64 wine: low-4GB is fragmented by ART runtime allocations. Section
+   views must compete for space.
+
+#### Paths forward
+
+| Path | Description | Effort | Verdict |
+|------|-------------|--------|---------|
+| A | Keep J-1 default, J-2 experimental | None | **Current state** |
+| B | VirtualAlloc-reserve a contiguous 96 MB low-4GB hole, free the code portion, MapViewOfFileEx into the hole | 1-2 days | Viable, needs careful VA management |
+| C | Extend `code_info_offset_` to uint64 | Multi-week, ABI break | Only if Win64 becomes a first-class target |
+| D | Store stack maps in `non_exec_pages_` alongside code, not in `data_pages_` | 2-3 days | Changes JIT data layout; avoids cross-region offset |
+| E | Use `VirtualAlloc` for non_exec_pages_ (low-4GB), section RX only for exec_pages_ — accept that code_info_offset_ references non_exec (low-4GB) | 1 day | `GetExecutableAddress` still translates to high VA; stack_map stays in low-4GB data → same overflow |
+
+**Path D is the most promising:** store stack map data in the same section
+view as code (non_exec_pages_), eliminating the cross-region offset entirely.
+This requires changing where `CommitCode` allocates stack map memory — from
+the data mspace to the exec mspace (or a separate allocation within the code
+region).
 
 ### Decision log additions
 

@@ -548,20 +548,21 @@ _No open design notes. Closed D- items live under §Closed._
 
 
 ### W-025 — JIT code cache + x86_64 codegen TLS (Windows)
-- **State:** OPEN (P3+P4 green under J-1; J-2 partial: Hello works, float probes broken)
+- **State:** OPEN (P3+P4 green under J-1; J-2 Hello works, float probes blocked by uint32 code_info_offset_)
 - **Kind:** feature gap
 - **Area:** art / jit / compiler
-- **Symptom / why:** Need Linux-like JIT. Create used to soft-fail; now succeeds under both J-1 (VirtualAlloc) and J-2 (pagefile section dual-view, opt-in with `ART_WIN64_JIT_DUAL=1`).
+- **Symptom / why:** Need Linux-like JIT with section-backed dual-view (no RWX). Create succeeds under both J-1 (VirtualAlloc) and J-2 (pagefile section, opt-in with `ART_WIN64_JIT_DUAL=1`).
 - **Current behavior:**
-  - **J-1 (default):** Create OK; r15 TLS; managed JIT ON (24-compile Hello, 14-probe matrix green); native JIT OFF (generic JNI). Uses RWX toggle for code writes.
-  - **J-2 (opt-in):** CreateFileMapping section dual-view. Hello 21 compiles, no crash. FloatProbe/MathProbe/NetProbe crash with VEH loop (`fault_addr=0x8` in wine ntdll) — D-1 incomplete: float codegen paths still emit `gs:` instead of r15-relative Thread access.
+  - **J-1 (default):** Create OK; D-1 complete (all 37 GS→r15 sites verified); managed JIT ON (24-compile Hello, 14-probe matrix green); native JIT OFF (generic JNI). Uses RWX toggle for code writes.
+  - **J-2 (opt-in):** CreateFileMapping section dual-view. Hello 21 compiles, no crash. FloatProbe/MathProbe/NetProbe crash — **root cause confirmed**: `OatQuickMethodHeader::code_info_offset_` (uint32) overflows when code_entry_point at high VA (~125 TB) minus stack_map at low-4GB (~1.2 GB) exceeds 2³²−1 (see [win32_jit_memory.md](win32_jit_memory.md) §16 FloatProbe crash).
   - Native gate: all native methods excluded from JIT (`ART_WIN64_JIT_NATIVE=1` opt-in, known FastNative ABI gap).
-- **Proper fix:** (1) Complete D-1: audit and fix all `gs:` Thread access sites in x86_64 compiler backend for `ART_TARGET_WINDOWS`. (2) Fix FastNative stub ABI for Win; drop native-JIT gate. (3) After D-1: J-2 matrix pass → J-2 default → remove J-1 RWX fallback.
-- **Code anchors:** `mem_map.cc` RemapAtEnd (J-1); `mem_map_windows.cc` CreatePageFileSection/MapFileSection (J-2); `jit_memory_region.cc` j2_complete gate; `jit.cc` Win native gate; `assembler_x86_64.*`; codegen x86_64; `art-dlmalloc.cc` USE_LOCKS=0
-- **Verified:** P3 (2026-07-21) JIT smoke 10/10; P4 (2026-07-22) JIT matrix 14/14 under J-1; J-2 Hello 21 compiles (2026-07-22)
-- **Design:** [win32_jit_memory.md](win32_jit_memory.md) §14 (J-2), §15 (dlmalloc), §16 (status)
+- **Blocked on:** uint32 code_info_offset_ constraint between section-backed code views (high VA) and data_pages_ (low-4GB). Possible paths: (B) VirtualAlloc reserve for co-located section views, (D) store stack maps in non_exec_pages_ alongside code, (C) extend offset to uint64.
+- **Proper fix:** (1) Resolve code_info_offset_ overflow (path B or D). (2) Fix FastNative stub ABI for Win; drop native-JIT gate. (3) After matrix passes → J-2 default → remove J-1 RWX fallback.
+- **Code anchors:** `mem_map.cc` RemapAtEnd (J-1); `mem_map_windows.cc` CreatePageFileSection/MapFileSection (J-2); `jit_memory_region.cc` j2_complete gate + CommitCode:465; `oat_quick_method_header.h:202` code_info_offset_; `jit.cc` Win native gate; `assembler_x86_64.*`; codegen x86_64; `art-dlmalloc.cc` USE_LOCKS=0
+- **Verified:** P3 (2026-07-21) JIT smoke 10/10; P4 (2026-07-22) JIT matrix 14/14 under J-1; D-1 audit complete (37/37 GS sites); J-2 Hello 21 compiles (2026-07-22)
+- **Design:** [win32_jit_memory.md](win32_jit_memory.md) §14 (J-2), §15 (dlmalloc), §16 (status + FloatProbe root cause)
 - **Opened:** 2026-07-19
-- **Updated:** 2026-07-22 — J-1 P3+P4 green; J-2 Hello works opt-in; float codegen gap blocks J-2 default
+- **Updated:** 2026-07-22 — D-1 complete; code_info_offset_ overflow is the J-2 blocker (not D-1)
 
 
 *Last snapshot: 2026-07-22 — W-001 closed; nterp ON; managed JIT ON (J-1, 24 compiles); J-2 dual-view opt-in (Hello 21 compiles); D-1 float codegen gap blocks J-2 default; native JIT gated off; 12 OPEN workarounds remaining.*
