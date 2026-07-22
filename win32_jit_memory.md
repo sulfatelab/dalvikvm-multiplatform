@@ -712,6 +712,44 @@ which only occurs inside ART's dlmalloc integration.
 | Drop RWX requirement | J-2 as default |
 | Host Win10 validation | Physical/virtual Win10 machine |
 
+### FloatProbe crash: root cause confirmed (2026-07-22)
+
+**Root cause:** `OatQuickMethodHeader::code_info_offset_` is **uint32**
+(`vendor/art/runtime/oat/oat_quick_method_header.h:202`). It stores:
+```
+code_info_offset_ = code_entry_point - stack_map_address
+```
+
+In J-1 (single-view, contiguous VirtualAlloc): both addresses are in low-4GB
+within 64MB of each other. The delta fits in uint32.
+
+In J-2 hybrid (data=VirtualAlloc low-4GB, code=section views at high VA):
+`code_entry_point` = ~0x7c4e... (125 TB), `stack_map_address` = ~0x4803... (1.2 GB).
+Delta = ~125 TB — overflows uint32. The wrapped value produces a garbage
+stack_map pointer, crashing with fault_addr in unmapped wine VA.
+
+**Why low-4GB exec pages didn't help:** Four 32MB section views (data, exec,
+non_exec, writable_data) compete with ART heap, card table, bitmaps, etc.
+in the crowded low-4GB space. `MapViewOfFileEx` with `low_4gb=true` fails
+to find contiguous free space and falls back to high VA.
+
+**Constraints:**
+1. ART JIT ABI requires `stack_map` address < `code_entry_point` and delta ≤ 2³²−1
+2. J-1 satisfies this naturally (single contiguous VirtualAlloc)
+3. J-2 section views are placed by the OS, not guaranteed to be near data_pages_
+4. Wine's low-4GB is too fragmented for 4×32MB section views
+5. Changing `code_info_offset_` to uint64 would break the ABI (requires coordinated art + oat file format change)
+
+**Possible paths forward:**
+- A. **Keep J-1 as default, J-2 as experimental.** Accept the uint32 constraint.
+- B. **Reserve low-4GB space with VirtualAlloc first, then place section views.**
+  Complex but feasible — reserve a contiguous 96MB (data+exec+non_exec) in low-4GB,
+  free the code portion, then MapViewOfFileEx into the hole.
+- C. **Extend `code_info_offset_` to 64-bit.** Large scope — changes oat file format,
+  QuickMethodHeader, and all consumers. May be worth it for long-term Win64 support.
+- D. **Place stack_map in the same VA region as code.** Store stack map data in
+  non_exec_pages_ instead of data_pages_. Avoids the cross-region offset entirely.
+
 ### Decision log additions
 
 | When | Decision |
