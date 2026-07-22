@@ -685,7 +685,7 @@ which only occurs inside ART's dlmalloc integration.
 
 | Item | Symptom | Blocker |
 |------|---------|---------|
-| FloatProbe/MathProbe/NetProbe under J-2 | VEH loop `fault_addr=0x8` in wine ntdll; passes with `ART_WIN64_JIT=0` | **J-2-specific** — not a D-1 gap (all 37 GS sites use ThreadOffsetAddr). Likely RIP-relative crossing code-data VA gap (>2GB), or compiled code writing through R-only data_pages_ view |
+| FloatProbe/MathProbe/NetProbe under J-2 | VEH access violation; passes with `ART_WIN64_JIT=0` or under J-1 | **J-2-specific codegen-layout interaction**: compiled code generates absolute addresses 195MB beyond exec region base (unmapped wine VA). JIT compiler's address resolution for float operations produces wrong addresses under J-2 dual-view layout. Not a D-1 gap — all 37 GS→r15 sites verified. Needs JIT-specific debugging of address generation under dual-view. |
 | FastNative stub ABI (native JIT) | Garbage multi-arg values, `data==null` | MS x64 vs SysV mismatch in compiled FastNative stubs; generic JNI works |
 | ART_WIN64_JIT_NATIVE=1 | Hello crash | Same FastNative ABI gap |
 
@@ -719,7 +719,8 @@ which only occurs inside ART's dlmalloc integration.
 | 2026-07-22 | J-2 stays opt-in (ART_WIN64_JIT_DUAL=1) until D-1 float codegen gap closed |
 | 2026-07-22 | USE_LOCKS=0 confirmed correct; USE_SPIN_LOCKS=1 reverted (wine threading) |
 | 2026-07-22 | data_pages_ init fix is the actual J-2 blocker fix (not dlmalloc locks) |
-| 2026-07-22 | D-1 is the next major workstream: audit and fix all GS→r15 sites in compiler backend |
+| 2026-07-22 | D-1 complete: all 37 GS→r15 sites verified in compiler backend |
+| 2026-07-22 | J-2 FloatProbe crash: JIT codegen-layout interaction (wrong absolute addresses under dual-view). Needs JIT-specific debugging, not D-1. FloatProbe passes with low-4GB exec pages test (negative) — confirms not a RIP-relative gap. |
 
 ### Test summary
 
