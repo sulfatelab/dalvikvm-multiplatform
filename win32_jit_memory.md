@@ -581,3 +581,83 @@ JitMemoryRegion::Initialize:
 After validation (step 5), flip: try J-2 always, fall back to J-1 if
 `CreateFileMapping` fails.
 
+
+## 15. J-2 dlmalloc investigation (2026-07-22)
+
+### 15.1 `create_mspace_with_base` flow
+
+`create_mspace_with_base` in `vendor/external/dlmalloc/dlmalloc.c:5479`:
+1. `ensure_initialization()` → `init_mparams()` on first call; cached thereafter
+2. `pad_request(sizeof(struct malloc_state))` → chunk sizing math
+3. `init_user_mstate(base, capacity)` → writes struct to memory:
+   - `memset(m, 0, msize)`
+   - `INITIAL_LOCK(&m->mutex)` → lock initialization
+   - Struct field assignments (seg.base, footprint, magic, bins, top)
+4. `set_lock(m, locked)` → bitwise `m->mflags` update
+
+No explicit `VirtualAlloc` or syscalls during `create_mspace_with_base`.
+All operations are pure memory writes within the provided base region.
+
+### 15.2 Wine section view characteristics
+
+Standalone test (32 MB pagefile section, RW view):
+- ✅ `CreateFileMapping(INVALID_HANDLE_VALUE, PAGE_EXECUTE_READWRITE)`
+- ✅ `MapViewOfFile(FILE_MAP_WRITE)` — writable
+- ✅ Byte writes to all pages succeed
+- ✅ 4 KB memset succeeds
+- ✅ `VirtualProtect(PAGE_READWRITE)` succeeds
+- ✅ RW↔RX section coherency (writes via RW visible via RX)
+
+### 15.3 Root cause: pthread_mutex_init on section views
+
+ART's `art-dlmalloc.cc` **undefines `WIN32` and `_WIN32`** before including
+`dlmalloc.c` to force `HAVE_MORECORE=1` / `HAVE_MMAP=0`. This causes dlmalloc
+to fall through to the **pthreads-based lock path** instead of the native
+Win32 `InitializeCriticalSection` path.
+
+```
+INITIAL_LOCK(lk) → pthread_init_lock(lk)
+                 → pthread_mutexattr_init(&attr)
+                 → pthread_mutex_init(lk, &attr)    ← CRASHES
+                 → pthread_mutexattr_destroy(&attr)
+```
+
+`pthread_mutex_init(lk, &attr)` on wine internally calls
+`InitializeCriticalSection` or allocates kernel objects. When `lk` resides
+in a `MapViewOfFile` section view (pagefile-backed, not
+`VirtualAlloc`-committed memory), wine's pthread/winsock layer crashes.
+
+This is a wine compatibility issue: the same code path would likely work
+on real Windows where `InitializeCriticalSection` is agnostic to memory
+type.
+
+### 15.4 Why J-1 works
+
+J-1 uses `MemMap::MapAnonymous` → `VirtualAlloc(MEM_COMMIT, PAGE_READWRITE)`
+for all memory. dlmalloc's `pthread_mutex_init` works on `VirtualAlloc`-backed
+memory under wine.
+
+### 15.5 Possible fixes
+
+| Approach | Difficulty | Risk |
+|----------|-----------|------|
+| A. Use `VirtualAlloc` for mspace-backed regions, section only for exec | Medium | Loses dual-view code (exec mspace on VirtualAlloc, needs RWX toggle) |
+| B. Bypass dlmalloc locking: `#define USE_LOCKS 0` for JIT mspaces | Low | JIT mspaces only accessed under `jit_lock_` — safe to disable locks |
+| C. Force Win32 lock path: define `WIN32` in dlmalloc but with `HAVE_MMAP=0` | Medium | Requires modifying `art-dlmalloc.cc` lock-path selection |
+| D. Fix wine's `pthread_mutex_init` on section views | Out of scope | Wine upstream issue |
+
+**Recommended:** Approach B — JIT mspaces are accessed exclusively under
+`Locks::jit_lock_`. `USE_LOCKS 0` is safe for the JIT path while keeping
+ART's heap mspaces using the standard locking path.
+
+### 15.6 Standalone test results
+
+All standalone tests pass on wine:
+- `section_test.exe`: RW↔RX section coherency ✅
+- `page_touch_test.exe`: 32 MB section write/read/VirtualProtect ✅
+- `dl_test.exe`: Manual `init_user_mstate` replication on section ✅
+- `mspace_test.exe`: Write + readback on every page ✅
+
+The crash is specifically in `pthread_mutex_init` on section-backed views,
+which only occurs inside ART's dlmalloc integration.
+
