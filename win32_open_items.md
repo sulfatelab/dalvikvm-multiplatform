@@ -55,14 +55,15 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 
 ---
 
-## Snapshot (2026-07-17)
+## Snapshot (2026-07-22)
 
 | Bucket | Summary |
 |--------|---------|
 | Phases 0–3 | **Gate-complete** (P3 G12 real Win10 + wine) |
 | Phase 4 | **Wine complete**; host re-run still recommended |
 | PE libcore/ICU/openjdk | **Product-default real PE** (icu/javacore/openjdk); NIO.2 non-goal; NetProbe OK |
-| Quick/JIT/TLS | **Partial:** rSELF=r15; nterp N-1 + PE 0x328; ClassLoader empty-path fixed (defer nterp until finished_starting); float methods excluded; residual empty Hello stdout under nterp; switch/`-Xint` green |
+| Quick/JIT/TLS | **Managed JIT ON (J-1 default):** rSELF=r15; nterp N-1 default ON; D-1 partial (ThreadOffsetAddr, gs() no-op, R15 pinned); JIT smoke 10/10; JIT matrix 14/14; native JIT gated; J-2 dual-view opt-in (Hello 21 compiles, float codegen gap) |
+| Memory | J-1 VirtualAlloc (default, works); J-2 pagefile section dual-view (opt-in, Hello works, float probes broken — D-1 incomplete) |
 | Linux multiplatform | Native `dalvikvm -showversion` OK; imageless Hello e2e not re-gated here |
 
 ---
@@ -90,7 +91,7 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Proper fix:** Keep **rSELF=r15**; audit remaining managed entries (JNI return, attach, trampolines) publish rSELF; then close when full matrix is green without GS.
 - **Code anchors:** `thread_x86_64.cc`; `asm_support_x86_64.S` `THREAD_*`; `nterp.cc` (default ON; opt-out `ART_WIN64_NTERP=0`); design §6 / §12b / §15 / §16 / **§17** / **§17.8**
 - **Opened:** 2026-07-16
-- **Updated:** 2026-07-19 — product default rSELF + nterp ON; residual attach/publish audit
+- **Updated:** 2026-07-22 — D-1 partially landed (ThreadOffsetAddr, gs() no-op, R15 pinned). JIT compiler backend has float codegen gaps (FloatProbe crashes under J-2 dual-view with `fault_addr=0x8`). Managed JIT compiles ~24 methods on Hello. Residual: complete audit of all `gs:` sites in codegen backend (risk #2 in [win32_jit_memory.md](win32_jit_memory.md) §9).
 - **Design:** [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md) **§15 N-1 LOCKED**, **§17** register-map lock; FS-self **§16** reject; **§17.8** defaults ON
 
 ### W-003 — Quick entrypoint SETUP frames `int3` on Windows
@@ -115,13 +116,14 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Opened:** 2026-07-16
 
 ### W-008 — Product smoke always passes `-Xint` / imageless / `-Xno-sig-chain`
-- **State:** OPEN
+- **State:** OPEN (partial — managed JIT ON by default; probes still use `-Xint` for determinism)
 - **Kind:** workaround (policy flags)
 - **Area:** packaging / product CLI
-- **Current behavior:** Host package scripts and wine runners force interpreter + no boot image + no sigchain.
-- **Proper fix:** After W-001–W-003, drop forced `-Xint` for default product scripts (keep as opt-in debug). Imageless may remain until boot image (separate track).
+- **Current behavior:** Product default runs with managed JIT ON (24 compiles on Hello, 14-probe matrix green). Test runner scripts (`run_*.sh`) still force `-Xint` for deterministic probe output across J-1/J-2 configurations. Product CLI (`run/dalvikvm.exe` directly) does not need `-Xint`.
+- **Proper fix:** Update probe runners to test under JIT by default (opt-out `ART_WIN64_JIT=0` for interpreter-only); keep `-Xint` as opt-in debug. Imageless may remain until boot image (separate track).
 - **Code anchors:** `tools/win64/host_package/package_win64_phase3.sh`, `tools/verify/win64_phase*/run_*.sh`
 - **Opened:** 2026-07-16
+- **Updated:** 2026-07-22 — managed JIT ON by default; runner scripts still `-Xint`
 
 ### W-010 — Sigchain is a Windows stub; VEH owns faults
 - **State:** OPEN (may become permanent architecture — reclassify if so)
@@ -546,16 +548,20 @@ _No open design notes. Closed D- items live under §Closed._
 
 
 ### W-025 — JIT code cache + x86_64 codegen TLS (Windows)
-- **State:** OPEN (P3+P4 green: managed JIT matrix passes; native JIT off)
+- **State:** OPEN (P3+P4 green under J-1; J-2 partial: Hello works, float probes broken)
 - **Kind:** feature gap
 - **Area:** art / jit / compiler
-- **Symptom / why:** Need Linux-like JIT. Create used to soft-fail; residual NPE when **both** `StringBuilder.toString` and `StringFactory.newStringFromBytes` are JIT'd.
-- **Current behavior:** J-1 Create OK; r15 TLS; **managed JIT ON** (24-compile Hello, 14-probe matrix green); **native JIT OFF** (generic JNI). MS FastNative layout landed; stubs still wrong for multi-arg. `ART_WIN64_JIT_NATIVE=1` repro; `ART_WIN64_JIT=0` disables all compile. Native gate broadened to all natives (not just StringFactory).
-- **Proper fix:** Fix FastNative stub ABI for Win; drop native-JIT gate.
-- **Code anchors:** `mem_map.cc` RemapAtEnd; `jit.cc` Win gate; `assembler_x86_64.*`; codegen x86_64
-- **Verified:** P3 (2026-07-21) JIT smoke 10/10; P4 (2026-07-22) JIT matrix 14/14
+- **Symptom / why:** Need Linux-like JIT. Create used to soft-fail; now succeeds under both J-1 (VirtualAlloc) and J-2 (pagefile section dual-view, opt-in with `ART_WIN64_JIT_DUAL=1`).
+- **Current behavior:**
+  - **J-1 (default):** Create OK; r15 TLS; managed JIT ON (24-compile Hello, 14-probe matrix green); native JIT OFF (generic JNI). Uses RWX toggle for code writes.
+  - **J-2 (opt-in):** CreateFileMapping section dual-view. Hello 21 compiles, no crash. FloatProbe/MathProbe/NetProbe crash with VEH loop (`fault_addr=0x8` in wine ntdll) — D-1 incomplete: float codegen paths still emit `gs:` instead of r15-relative Thread access.
+  - Native gate: all native methods excluded from JIT (`ART_WIN64_JIT_NATIVE=1` opt-in, known FastNative ABI gap).
+- **Proper fix:** (1) Complete D-1: audit and fix all `gs:` Thread access sites in x86_64 compiler backend for `ART_TARGET_WINDOWS`. (2) Fix FastNative stub ABI for Win; drop native-JIT gate. (3) After D-1: J-2 matrix pass → J-2 default → remove J-1 RWX fallback.
+- **Code anchors:** `mem_map.cc` RemapAtEnd (J-1); `mem_map_windows.cc` CreatePageFileSection/MapFileSection (J-2); `jit_memory_region.cc` j2_complete gate; `jit.cc` Win native gate; `assembler_x86_64.*`; codegen x86_64; `art-dlmalloc.cc` USE_LOCKS=0
+- **Verified:** P3 (2026-07-21) JIT smoke 10/10; P4 (2026-07-22) JIT matrix 14/14 under J-1; J-2 Hello 21 compiles (2026-07-22)
+- **Design:** [win32_jit_memory.md](win32_jit_memory.md) §14 (J-2), §15 (dlmalloc), §16 (status)
 - **Opened:** 2026-07-19
-- **Updated:** 2026-07-22 — P3+P4 green; native gate broadened
+- **Updated:** 2026-07-22 — J-1 P3+P4 green; J-2 Hello works opt-in; float codegen gap blocks J-2 default
 
 
-*Last snapshot: 2026-07-19 — W-001 closed (quick invoke default ON); nterp product default ON (opt-out ART_WIN64_NTERP=0); JIT default remains ART UseJitCompilation=true.*
+*Last snapshot: 2026-07-22 — W-001 closed; nterp ON; managed JIT ON (J-1, 24 compiles); J-2 dual-view opt-in (Hello 21 compiles); D-1 float codegen gap blocks J-2 default; native JIT gated off; 12 OPEN workarounds remaining.*
