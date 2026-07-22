@@ -637,18 +637,26 @@ J-1 uses `MemMap::MapAnonymous` → `VirtualAlloc(MEM_COMMIT, PAGE_READWRITE)`
 for all memory. dlmalloc's `pthread_mutex_init` works on `VirtualAlloc`-backed
 memory under wine.
 
-### 15.5 Possible fixes
+### 15.5 Solution: USE_SPIN_LOCKS=1 (implemented 2026-07-22)
 
-| Approach | Difficulty | Risk |
-|----------|-----------|------|
-| A. Use `VirtualAlloc` for mspace-backed regions, section only for exec | Medium | Loses dual-view code (exec mspace on VirtualAlloc, needs RWX toggle) |
-| B. Bypass dlmalloc locking: `#define USE_LOCKS 0` for JIT mspaces | Low | JIT mspaces only accessed under `jit_lock_` — safe to disable locks |
-| C. Force Win32 lock path: define `WIN32` in dlmalloc but with `HAVE_MMAP=0` | Medium | Requires modifying `art-dlmalloc.cc` lock-path selection |
-| D. Fix wine's `pthread_mutex_init` on section views | Out of scope | Wine upstream issue |
+Applied fix: Force `USE_SPIN_LOCKS=1` and temporarily define `__GNUC__`
+before including `dlmalloc.c` in `art-dlmalloc.cc`. This makes dlmalloc
+use GCC atomic spin locks (`__sync_lock_test_and_set` /
+`__sync_lock_release`) — pure CPU instructions with no system calls.
 
-**Recommended:** Approach B — JIT mspaces are accessed exclusively under
-`Locks::jit_lock_`. `USE_LOCKS 0` is safe for the JIT path while keeping
-ART's heap mspaces using the standard locking path.
+clang `--target=x86_64-pc-windows-msvc` defines `_MSC_VER` but not
+`__GNUC__`, so dlmalloc's spin-lock `CAS_LOCK` would fall to the
+broken Win32 `interlockedexchange()` path. Temporarily defining
+`__GNUC__=4` before inclusion (and undefining after) redirects to
+the GCC builtin path which clang supports in all target modes.
+
+Additionally added missing `data_pages_ = std::move(data_pages)` in the
+J-2 block of `jit_memory_region.cc`. Without this, `TranslateAddress`
+would CHECK-fail on an uninitialized `data_pages_` member.
+
+**Result:** J-2 dual-view works under wine — 21 managed methods compiled,
+Hello prints, no crash. Both J-1 (default) and J-2 (opt-in with
+`ART_WIN64_JIT_DUAL=1`) pass the JIT smoke test.
 
 ### 15.6 Standalone test results
 
