@@ -34,19 +34,19 @@ Short answer:
 | Nterp (N-1 rSELF=r15, rREFS=rbp) | **ON** after `finished_starting_` | `ART_WIN64_NTERP=0` |
 | `UseJitCompilation` | **true** (`runtime_options.def`) | `-Xusejit:false` / `-Xint` |
 
-### 1.2 Wine imageless Hello (no `ART_WIN64_*` env)
+### 1.2 Wine imageless Hello (no `ART_WIN64_*` env) — updated 2026-07-22
 
 ```
 nterp_supported=1
 can_use_nterp=0   # during ClassLoader
 finished_starting_=true → can_use_nterp=1
-Failed to create JIT Code Cache: Failed to create read execute code cache:
-  map(0x4a030000, 32MiB, PROT_RX, MAP_FIXED|…, -1, 0) failed: Invalid argument
-  size=64MiB
+Win64 JitCodeCache::Create OK initial=64KB max=64MB
+Win64 CompileMethod done success=1 method=...  (×24 managed methods)
 Hello from dalvikvm!  exit 0
 ```
 
-So: **nterp product path is green**; JIT Create **soft-fails**; runtime continues without `jit_`.
+So: **nterp product path is green**; JIT Create **succeeds**; managed methods
+compile and execute. Native JIT gated off by default (FastNative stub ABI gap).
 
 ### 1.3 Capacities
 
@@ -369,17 +369,18 @@ Imageless boot relies on nterp/switch heavily. JIT of boot classpath methods may
 
 Until then: keep **J-4 soft-fail**, ship **nterp** as the default execution engine (already green).
 
-## 13. Implementation status (2026-07-19 J-1 + D-1)
+## 13. Implementation status — updated 2026-07-22
 
-### J-1 — landed
+### J-1 — landed (2026-07-19)
 
 | Piece | Change |
 |-------|--------|
-| `MemMap::RemapAtEnd` (`mem_map.cc`) | Win anonymous tail: `VirtualProtect` in place + `reuse_` view (no MAP_FIXED `VirtualAlloc`) |
-| Exec initial prot | **RWX** when `PROT_EXEC` (mspace writes into exec half on single-view; pure RX AV'd) |
+| `MemMap::RemapAtEnd` (`mem_map.cc`) | Win anonymous tail: `VirtualProtect` in place + `reuse_` view |
+| Exec initial prot | **RWX** when `PROT_EXEC` (mspace writes into exec half on single-view) |
 | Evidence | `Win64 JitCodeCache::Create OK initial=64KB max=64MB` under wine |
+| Verification | JIT smoke 10/10 (2026-07-21), JIT matrix 14/14 (2026-07-22) |
 
-### D-1 — partially landed
+### D-1 — partially landed (2026-07-19)
 
 | Piece | Change |
 |-------|--------|
@@ -388,59 +389,35 @@ Until then: keep **J-4 soft-fail**, ship **nterp** as the default execution engi
 | Thread Absolute(true) sites | codegen / JNI macro / intrinsics / trampoline → `ThreadOffsetAddr` |
 | R15 | Removed from Win callee-saves; blocked in register allocator |
 
-### Residual (narrow) + product compile default
+**D-1 residual:** float-intensive JIT-compiled methods (FloatProbe) crash
+under J-2 dual-view with `fault_addr=0x8` (VEH loop in wine's ntdll).
+The compiler may still emit `gs:` access in certain float code paths
+not covered by the `ThreadOffsetAddr` conversion. Systematic audit of
+all GS sites needed (see §9 risk 2).
 
-Background JIT **compile is ON by default** after J-1/D-1, with one residual exclude:
+### Native JIT gate — widened 2026-07-21
 
-**Bug:** compiling **both** `StringBuilder.toString` and `StringFactory.newStringFromBytes` breaks Hello's second `println` (`NPE data == null`). Each alone is fine; other hot methods (String.equals/length/indexOf, StringBuilder.append, Math, Unsafe, …) are fine together.
+Original narrow gate (skip StringFactory) replaced with broad gate:
+**skip JIT for all native methods** (`method->IsNative()` → return false).
 
-| Mode | Create | Compile | Hello |
-|------|--------|---------|-------|
-| Default | **OK** | ON, **skip StringFactory** | **PASS** (ncomp≈19) |
-| `ART_WIN64_JIT=0` | OK | off | PASS (nterp only) |
-| `ART_WIN64_JIT_ALLOW_STRINGFACTORY=1` | OK | + StringFactory | **FAIL** residual pair |
-| `-Xusejit:false` | no | no | PASS |
+| Mode | Create | Managed Compile | Native Compile | Hello |
+|------|--------|-----------------|----------------|-------|
+| Default | **OK** | **ON** (24 compiles) | **OFF** | **PASS** |
+| `ART_WIN64_JIT=0` | OK | off | off | PASS (nterp) |
+| `ART_WIN64_JIT_NATIVE=1` | OK | ON | ON | **crash** (FastNative ABI) |
+| `ART_WIN64_JIT_DUAL=1` | OK (J-2) | ON (21 compiles) | OFF | **PASS** |
 
 Debug knobs: `ART_WIN64_JIT_FILTER` / `ART_WIN64_JIT_EXCLUDE` (comma OR lists).
 
-Next: fix StringFactory↔toString interaction (likely optimized/baseline string data path / arraycopy `data==null`), then drop exclude.
-
-### Residual analysis notes (2026-07-19)
-
-`data == null` is thrown by `StringFactory_newStringFromBytes` when the `byte[]`
-argument is null (`java_lang_StringFactory.cc`). Isolation:
-
-- JIT **only** `StringFactory.newStringFromBytes` → Hello PASS
-- JIT **only** `StringBuilder.toString` → Hello PASS  
-- JIT **both** → FAIL after first `println` (second string path)
-- Other hot methods together without that pair → PASS
-
-Tried / rejected for now:
-
-1. Disable `StringNewStringFromBytes` intrinsic on Win — pair still fails (compiled FastNative path still broken).
-2. Mark StringFactory natives `sysv_abi` directly — breaks JNI signature metafunctions.
-3. SysV thin wrappers registered for StringFactory — early boot AV under wine (regressed); reverted.
-
-Hypothesis still open: MS x64 vs SysV mismatch on **compiled FastNative** stubs for multi-arg natives, or `toString` returning a value that the factory call site mis-marshals when both are JIT. Product keeps **default compile ON, exclude StringFactory** until a safe ABI-wide fix lands.
-
-### Win FastNative MS ABI (2026-07-19)
-
-Compiled FastNative stubs previously used **SysV** argument registers (`RDI/RSI/...`)
-while Win C++ natives use **MS x64** (`RCX/RDX/R8/R9` + 32B shadow). Generic JNI already
-used MS packing; compiled stubs did not.
+### FastNative MS ABI — partial (2026-07-19)
 
 **Landed:**
-
 - `vendor/art/runtime/arch/x86_64/jni_frame_x86_64.h` — Win max 4 int/float slots + 32B shadow
-- `vendor/art/compiler/jni/quick/x86_64/calling_convention_x86_64.cc` — MS register order for JNI params
+- `vendor/art/compiler/jni/quick/x86_64/calling_convention_x86_64.cc` — MS register order
 
-**Still residual:** JIT-compiled FastNative stubs still pass garbage multi-arg
-values into natives (observed `data==null high=18 offset=0x47d2f2e8...`) even with
-MS register layout (`OutFrameSize=48`, 4 regs + 2 stack for `LLIII`).
-
-**Product gate:** do not JIT **native** methods on Win (`CompileMethodInternal`
-returns false unless `ART_WIN64_JIT_NATIVE=1`). Managed JIT (including
-`StringBuilder.toString`) stays on; natives use generic JNI.
+**Still broken:** JIT-compiled FastNative stubs pass garbage multi-arg
+values (observed `data==null high=18 offset=0x47d2f2e8...`). Generic JNI
+trampoline is correct; native-JIT gate prevents this path in product.
 
 
 ---
@@ -637,26 +614,28 @@ J-1 uses `MemMap::MapAnonymous` → `VirtualAlloc(MEM_COMMIT, PAGE_READWRITE)`
 for all memory. dlmalloc's `pthread_mutex_init` works on `VirtualAlloc`-backed
 memory under wine.
 
-### 15.5 Solution: USE_SPIN_LOCKS=1 (implemented 2026-07-22)
+### 15.5 Solution: USE_LOCKS=0 (no dlmalloc locks) + data_pages_ init
 
-Applied fix: Force `USE_SPIN_LOCKS=1` and temporarily define `__GNUC__`
-before including `dlmalloc.c` in `art-dlmalloc.cc`. This makes dlmalloc
-use GCC atomic spin locks (`__sync_lock_test_and_set` /
-`__sync_lock_release`) — pure CPU instructions with no system calls.
+**Applied fix (2026-07-22):** ART's dlmalloc configuration already uses
+`USE_LOCKS=0` (no locks) because `art-dlmalloc.cc` undefines `WIN32`
+before including `dlmalloc.c` — this makes `USE_SPIN_LOCKS` default to 0
+and `USE_LOCKS` to 0. `INITIAL_LOCK` is `(0)` (no-op). This is the
+correct configuration: ART heap uses ART-level `Mutex` protection;
+JIT mspaces are accessed under `Locks::jit_lock_`. No dlmalloc-level
+locks are needed.
 
-clang `--target=x86_64-pc-windows-msvc` defines `_MSC_VER` but not
-`__GNUC__`, so dlmalloc's spin-lock `CAS_LOCK` would fall to the
-broken Win32 `interlockedexchange()` path. Temporarily defining
-`__GNUC__=4` before inclusion (and undefining after) redirects to
-the GCC builtin path which clang supports in all target modes.
+**Attempted alternative:** `USE_SPIN_LOCKS=1` with temporary `__GNUC__`
+define was tried but **reverted** — spin locks regress FloatProbe/MathProbe
+under wine (likely due to empty `SPIN_LOCK_YIELD` with `LACKS_SCHED_H`
+causing livelocks in wine's cooperative threading).
 
-Additionally added missing `data_pages_ = std::move(data_pages)` in the
-J-2 block of `jit_memory_region.cc`. Without this, `TranslateAddress`
-would CHECK-fail on an uninitialized `data_pages_` member.
+**Additional fix:** Missing `data_pages_ = std::move(data_pages)` added to
+J-2 block in `jit_memory_region.cc`. Without this, `TranslateAddress`
+CHECK-fails on `0x3c0` (null offset dereference in uninitialized MemMap).
 
-**Result:** J-2 dual-view works under wine — 21 managed methods compiled,
-Hello prints, no crash. Both J-1 (default) and J-2 (opt-in with
-`ART_WIN64_JIT_DUAL=1`) pass the JIT smoke test.
+**Result:** J-2 dual-view works under wine with `ART_WIN64_JIT_DUAL=1`:
+21 managed methods compiled, Hello prints, no crash. J-1 default path
+(24 compiles, all probes pass) unchanged.
 
 ### 15.6 Standalone test results
 
@@ -669,3 +648,84 @@ All standalone tests pass on wine:
 The crash is specifically in `pthread_mutex_init` on section-backed views,
 which only occurs inside ART's dlmalloc integration.
 
+
+
+---
+
+## 16. Current status — 2026-07-22
+
+### What's DONE
+
+| Item | Phase | Verified |
+|------|-------|----------|
+| J-1 single-view memory (VirtualProtect RemapAtEnd) | P2a | JIT smoke 10/10, matrix 14/14 |
+| D-1 partial codegen (ThreadOffsetAddr, gs() no-op, R15 pin) | P2b | Managed methods compile under J-1 |
+| Managed JIT Hello (24 compiles, no crash) | P3 | run_jit_smoke.sh 10/10 |
+| Probe matrix under J-1 (CEnc/float/Math/Io/Net/GC) | P4 | run_jit_matrix.sh 14/14 |
+| Native JIT gate (all natives) | — | Zero native compiles by default |
+| J-2 primitives (CreatePageFileSection, MapFileSection) | P5a | Builds, creates section+views |
+| J-2 wiring (j2_complete flag, mspace init) | P5a | Hello 21 compiles under J-2 |
+| J-2 dual-view code (RW↔RX coherency confirmed) | P5a | Standalone test passes |
+| dlmalloc analysis (§15) | — | Root cause identified |
+| dlmalloc fix (USE_LOCKS=0 + data_pages_ init) | — | J-1 + J-2 both work |
+| JIT filter/exclude env vars | — | ART_WIN64_JIT_FILTER/EXCLUDE |
+| nterp+quick defaults ON | P0 | Product default |
+
+### What's BROKEN
+
+| Item | Symptom | Blocker |
+|------|---------|---------|
+| FloatProbe/MathProbe/NetProbe under J-2 | VEH loop `fault_addr=0x8` in wine ntdll | **D-1 incomplete** — float code paths in JIT compiler still emit `gs:` Thread access instead of r15-relative |
+| FastNative stub ABI (native JIT) | Garbage multi-arg values, `data==null` | MS x64 vs SysV mismatch in compiled FastNative stubs; generic JNI works |
+| ART_WIN64_JIT_NATIVE=1 | Hello crash | Same FastNative ABI gap |
+
+### What's MISSING
+
+| Item | Priority | Effort |
+|------|----------|--------|
+| D-1 completion: audit all GS sites in x86_64 codegen | **High** — blocks J-2 default | Large (multi-week) |
+| J-2 float regression fix (likely same as D-1 completion) | **High** | Subsumed by D-1 |
+| J-2 step 3: run full matrix under J-2 | Medium | 0.5 day (after D-1 fix) |
+| J-2 step 4: verify ScopedCodeCacheWrite no-ops | Low | 0.5 day |
+| J-2 step 5: make J-2 default | Medium | After matrix passes |
+| J-2 step 6: remove J-1 fallback | Low | After J-2 default |
+| FastNative MS ABI fix | Medium | Unknown |
+| Host Win10 validation | Low | Needs Win10 machine |
+| ThreadMemOperand systematic helper | Medium | Subsumed by D-1 |
+
+### What's BLOCKED
+
+| Item | Blocked on |
+|------|------------|
+| J-2 as product default | D-1 completion (float codegen) |
+| Native JIT enablement | FastNative MS ABI fix |
+| Drop RWX requirement | J-2 as default |
+| Host Win10 validation | Physical/virtual Win10 machine |
+
+### Decision log additions
+
+| When | Decision |
+|------|----------|
+| 2026-07-22 | J-2 stays opt-in (ART_WIN64_JIT_DUAL=1) until D-1 float codegen gap closed |
+| 2026-07-22 | USE_LOCKS=0 confirmed correct; USE_SPIN_LOCKS=1 reverted (wine threading) |
+| 2026-07-22 | data_pages_ init fix is the actual J-2 blocker fix (not dlmalloc locks) |
+| 2026-07-22 | D-1 is the next major workstream: audit and fix all GS→r15 sites in compiler backend |
+
+### Test summary
+
+| Test | J-1 | J-2 | Notes |
+|------|-----|-----|-------|
+| run_jit_smoke.sh | 10/10 | 10/10¹ | ¹T5 (native JIT) excluded — known crash |
+| run_jit_matrix.sh | 14/14 | 10/14 | FloatProbe/MathProbe/NetProbe fail under J-2 |
+| Hello standalone | 24 compiles | 21 compiles | Both no crash |
+| FloatProbe standalone | OK | VEH crash loop | D-1 float codegen gap |
+
+### Next actions (priority order)
+
+1. **D-1 completion:** Systematic audit of `gs:` Thread access in
+   `code_generator_x86_64.cc`, `jni_macro_assembler_x86_64.cc`, and
+   trampoline compiler. Every `gs()` call site must route through
+   `ThreadOffsetAddr` on `ART_TARGET_WINDOWS`.
+2. **Re-test J-2 matrix** after D-1 fix — verify FloatProbe/MathProbe/NetProbe.
+3. **FastNative MS ABI fix** — fix compiled FastNative stub argument passing.
+4. **J-2 → default** after matrix passes.
