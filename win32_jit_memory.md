@@ -1,29 +1,41 @@
 # Win64 JIT memory and codepath — current design and implementation plan
 
-**Status:** P3+P4 complete under J-1; P5 design revised for Linux-parity dual mapping
+**Status:** P3+P4 complete under J-1; P5 redesigned around pagefile-backed dual mapping
 **Updated:** 2026-07-23
 **Target baseline:** Windows 10 version 1803 or later (NTDDI_WIN10_RS4)
 **Related:** [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md), [win32_open_items.md](win32_open_items.md), Phase 5 JIT
 
 ## 0. Executive decision
 
-The Win64 port shall keep ART behavior and shared ART source as close to Linux as
-practical. Windows-specific behavior belongs in the platform compatibility
-layer, especially `memfd` and `MemMap`, rather than in the JIT allocator or
-x86_64 compiler.
+The Win64 port shall keep ART's observable memory layout and shared JIT logic as
+close to Linux as practical. Windows-specific allocation belongs in one small,
+contained mapping helper rather than in the allocator, compiler, metadata
+format, or code-cache growth logic.
 
 The selected end state is:
 
-1. Implement Windows `art::memfd_create()` with delete-on-close temporary-file
-   semantics.
-2. Implement Windows 10 placeholder-backed shared mappings and fixed-address
-   remapping in `MemMap`.
-3. Make Windows follow ART's existing fd-backed dual-view path in
-   `JitMemoryRegion::Initialize`.
-4. Remove the experimental Win32 J-2 allocation branch after the common path is
-   verified.
-5. Keep ART's ordinary single-view RWX-toggle path only as the same fallback
+1. Create one unnamed pagefile-backed section with
+   `CreateFileMapping(INVALID_HANDLE_VALUE, PAGE_EXECUTE_READWRITE)`.
+2. Map that section twice: one complete primary view below 4 GiB and one
+   complete writable, non-executable alias at any address.
+3. Give the primary view final `[data R][code RX]` protection and expose both
+   complete views as ART's existing four logical `MemMap` ranges.
+4. Keep the Windows-specific branch to one mapping helper, then use the common
+   mspace, growth, translation, commit, collection, and cache-flush code.
+5. Remove the current separated-view J-2 implementation and its environment
+   gate after the corrected mapping passes the full matrix.
+6. Keep ART's ordinary single-view RWX-toggle path only as the same fallback
    that Linux ART permits when RWX memory is allowed.
+
+The selected design creates no filesystem file. A Windows pagefile-backed
+section can be paged by the operating system, just as anonymous Linux memory can
+be swapped, but it has no pathname and no delete-on-close file lifecycle.
+
+This replaces the temporary-file `memfd` compatibility plan. That plan reduced
+the visible JIT branch but added filesystem semantics, a full-view placeholder
+unmap/remap transaction, rollback requirements, and more `MemMap` ownership
+risk. A pagefile section reproduces the required memory topology with fewer
+failure states.
 
 This supersedes the earlier recommendation to move stack maps into the code
 arena. Moving stack maps alone cannot fix the observed J-2 crash because JIT
@@ -70,7 +82,30 @@ Important properties:
 - `HasDualCodeMapping()` makes `ScopedCodeCacheWrite` avoid RWX protection
   toggles in release builds.
 
-### 2.2 Single-view fallback
+### 2.2 How ART obtains contiguous low-4-GiB memory on Linux
+
+ART does not rely blindly on x86-64 `MAP_32BIT`. On LP64 platforms using
+`USE_ART_LOW_4G_ALLOCATOR`, `MemMap::MapInternalArtLow4GBAllocator`:
+
+1. starts from a low-address cursor; Android/Bionic randomizes the initial
+   position, while the non-Bionic host path starts at 64 KiB;
+2. holds the `MemMap` lock and uses `gMaps` to skip ranges already owned by ART;
+3. tries one complete mapping at a candidate address without `MAP_FIXED`;
+4. rejects and unmaps any result whose end is at or above 4 GiB;
+5. probes pages when needed to detect mappings not represented in `gMaps`;
+6. advances past occupied ranges, wraps once to 64 KiB, and finally fails with
+   `ENOMEM` if no complete gap exists.
+
+The important contract is one atomic, contiguous primary mapping wholly below
+4 GiB. `MAP_32BIT` alone is not an equivalent algorithm: on Linux x86-64 it is
+limited to the first 2 GiB and is only an address-placement hint outside fixed
+mappings.
+
+For the JIT, only the complete primary `[data][code]` view needs this constraint.
+The writable aliases can be above 4 GiB because generated code and CodeInfo
+metadata refer to the primary addresses, not the update aliases.
+
+### 2.3 Single-view fallback
 
 When shared dual mapping is unavailable and RWX memory is permitted, ART maps
 one anonymous data+code reservation and splits it:
@@ -205,117 +240,171 @@ and executable views are not contiguous, violating §3.
 J-2 remains diagnostic-only until replaced. `ART_WIN64_JIT_DUAL=1` is a
 temporary workaround, not the selected product architecture.
 
-## 6. Selected Windows 10 compatibility design
+## 6. Selected Windows 10 pagefile-section design
 
-### 6.1 Effective minimum version
+### 6.1 Effective minimum version and linkage
 
-The port no longer targets Windows 7. The mapping design uses:
+The port no longer targets Windows 7. The selected allocator uses
+`MapViewOfFile3` with `MEM_ADDRESS_REQUIREMENTS`, whose documented desktop
+minimum is Windows 10 version 1803. The build shall define:
 
-- `VirtualAlloc2`: Windows 10;
-- `UnmapViewOfFile2`: Windows 10 version 1703;
-- `MapViewOfFile3` placeholder replacement: Windows 10 version 1803.
+```text
+_WIN32_WINNT=0x0A00
+NTDDI_VERSION=NTDDI_WIN10_RS4
+```
 
-The effective minimum is therefore Windows 10 version 1803
-(`NTDDI_WIN10_RS4`). The build should define and document this baseline rather
-than carrying runtime branches for older Windows releases.
+The direct import also requires the Windows SDK `onecore.lib`. Wine 10 on
+agent01 exports the API, and a PE probe linked through `onecore.lib` passed.
+There is no older-Windows runtime branch.
 
-Wine 10 on agent01 exports all three APIs. Their placeholder behavior still
-requires focused tests before the common path is enabled.
+The selected path does not need placeholder replacement, `VirtualAlloc2`, or
+`UnmapViewOfFile2`. Removing those operations eliminates the most difficult
+rollback and ownership problem from the previous design.
 
-### 6.2 Windows `art::memfd_create`
+### 6.2 Anonymous shared backing
 
-Implement the Windows branch of `art::memfd_create` as a private,
-delete-on-close temporary file:
+Create one unnamed section:
 
-1. Generate a unique path in the Windows temporary directory.
-2. Open with `CreateFileW(CREATE_NEW)`.
-3. Request `GENERIC_READ | GENERIC_WRITE | GENERIC_EXECUTE` so the same backing
-   file can create RW and RX mapping objects.
-4. Use `FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE`.
-5. Convert the handle to a CRT fd with `_open_osfhandle`.
-6. Map `MFD_CLOEXEC` to a non-inheritable handle.
-7. Keep sealing unsupported; desktop Windows has no zygote requirement and
-   `IsSealFutureWriteSupported()` remains false.
+```text
+CreateFileMappingW(
+    INVALID_HANDLE_VALUE,
+    nullptr,
+    PAGE_EXECUTE_READWRITE,
+    capacity_high,
+    capacity_low,
+    nullptr)
+```
 
-This is intentionally an fd-compatible implementation. It lets existing ART
-code continue to use `ftruncate`, `MapFile`, `unique_fd`, and ordinary file
-lifetime rules.
+Properties:
 
-The file is a compatibility backing store rather than a persistent artifact:
-`FILE_ATTRIBUTE_TEMPORARY` encourages cache-backed operation, and
-`FILE_FLAG_DELETE_ON_CLOSE` removes it after the last handle closes, including
-normal crash cleanup.
+- `INVALID_HANDLE_VALUE` makes the object pagefile-backed rather than backed by
+  a filesystem file;
+- a null name avoids global namespace and collision concerns;
+- null security attributes make the handle non-inheritable;
+- `PAGE_EXECUTE_READWRITE` is the section's maximum permission, allowing
+  separate R, RX, and RW views; no mapped view is itself RWX;
+- closing the section handle after mapping is safe because mapped views retain
+  references to the section.
 
-### 6.3 Placeholder-backed `MapFile`
+The default `SEC_COMMIT` behavior reserves commit charge for the full maximum
+cache. This is acceptable for the 64 MiB default but must be tested at large
+configured capacities up to ART's 1 GiB limit. `SEC_RESERVE` is not selected
+initially because it would require Windows-only commit-on-growth logic in
+`MoreCore`, increasing divergence.
 
-For shared low-address file mappings:
+### 6.3 One contiguous low-4-GiB primary view
 
-1. Reserve the complete virtual range with:
+Map the entire section in one `MapViewOfFile3` call with
+`PAGE_EXECUTE_READ`. Supply one address-requirements extended parameter:
 
-   ```text
-   VirtualAlloc2(
-       MEM_RESERVE | MEM_RESERVE_PLACEHOLDER,
-       PAGE_NOACCESS,
-       address requirements below 4 GiB)
-   ```
+```text
+LowestStartingAddress = allocation_granularity
+HighestEndingAddress  = 0xffffffff
+Alignment             = 0
+```
 
-2. Replace the placeholder with the file mapping using `MapViewOfFile3` and
-   `MEM_REPLACE_PLACEHOLDER`.
-3. Treat failure to satisfy `low_4gb=true` as a mapping failure. Do not silently
-   place the view at a high address.
+`Alignment=0` requests normal system-allocation-granularity alignment. Mapping
+the full capacity in one call gives the same essential guarantee as Linux: the
+primary data and code address range is contiguous, and allocation either
+succeeds as a whole or fails.
 
-The Windows allocation granularity is normally 64 KiB. File offsets and view
-boundaries used by the JIT path must be checked or rounded consistently to that
-granularity.
+After mapping:
 
-### 6.4 Placeholder-backed `RemapAtEnd`
+1. reject and unmap the result if `base + capacity >= 4 GiB`, matching ART's
+   current Linux boundary check;
+2. change only the data prefix from RX to R with `VirtualProtect`;
+3. do this before creating the writable alias, so there is never a writable
+   alias while the data prefix is executable;
+4. never retry without the low-address constraint.
 
-To emulate Linux `mmap(MAP_FIXED)` over the tail:
+The primary mapping is therefore:
 
-1. Convert the complete mapped view back to a placeholder with:
+```text
+[ data R ][ code RX ]
+```
 
-   ```text
-   UnmapViewOfFile2(..., MEM_PRESERVE_PLACEHOLDER)
-   ```
+Only page alignment is required at the data/code divider. No 64 KiB divider
+rule is introduced.
 
-2. Split the placeholder at the data/code divider using:
+### 6.4 One complete writable alias
 
-   ```text
-   VirtualFree(..., MEM_RELEASE | MEM_PRESERVE_PLACEHOLDER)
-   ```
+Map the same complete section a second time with `PAGE_READWRITE` and no
+low-address requirement:
 
-3. Replace the prefix with the file's data range as read-only.
-4. Replace the tail with the file's code range as read/execute.
-5. Preserve one owner per real view and avoid double unmapping.
-6. On partial failure, restore or release all placeholders before returning.
+```text
+[ data RW ][ code RW, non-executable ]
+```
 
-The placeholder keeps the address range reserved throughout the operation, so
-another thread cannot claim the tail between unmap and replacement. This is the
-Windows 10 equivalent of the atomic-address property ART expects from
-`MAP_FIXED`.
+Using a complete offset-zero view is deliberate. Ordinary Windows file-view
+offsets are normally allocation-granularity aligned, but ART permits JIT cache
+sizes aligned only to `2 * gPageSize`. Mapping the whole section twice avoids a
+Windows-only capacity rounding rule and preserves Linux command-line behavior
+for non-64-KiB-aligned `-Xjitmaxsize` values.
 
-### 6.5 Other platform semantics
+Expose the two real views as four logical ART ranges:
 
-- `MemMap::MadviseDontFork()` returns success on Windows because there is no
-  `fork()` inheritance to suppress.
-- `MadviseDontNeedAndZero` remains a best-effort Windows operation.
-- `FlushInstructionCache` may be added as explicit hardening after code commit;
-  x86 instruction/data caches are coherent, so it is not the current blocker.
-- Windows desktop has no JIT zygote. Sealing remains out of scope.
+| ART range | Real view | Protection |
+|-----------|-----------|------------|
+| `data_pages_` | primary prefix | R |
+| `exec_pages_` | primary tail | RX |
+| `writable_data_pages_` | writable prefix | RW |
+| `non_exec_pages_` | writable tail | RW, non-executable |
 
-### 6.6 Resulting common ART flow
+The prefix `MemMap` owns each complete Windows view; the tail is a non-owning
+reuse view, following the ownership model already used by Windows J-1. A narrow
+Windows in-place split helper should update protections and `MemMap` metadata
+without pretending to remap a different fd or section offset.
 
-After the platform layer is complete:
+### 6.5 Failure and lifetime rules
 
-1. `art::memfd_create("jit-cache", 0)` succeeds.
-2. `JitMemoryRegion::Initialize` enters the existing fd-backed branch.
-3. ART creates the writable data and code aliases.
-4. ART maps one primary data+code range below 4 GiB.
-5. `RemapAtEnd` creates the contiguous RX code tail.
-6. `HasDualCodeMapping()` becomes true.
-7. JIT commits write through the non-executable alias and execute through RX.
+- Build all four logical ranges before publishing them to the mspaces.
+- Close the section handle only after both complete views are mapped.
+- On any construction failure, unmap every complete view already created and
+  close the section handle; the mappings are not yet visible to generated code.
+- Destroy or reset non-owning tail views before their owning prefix view.
+- Never call `UnmapViewOfFile` on an interior tail pointer.
+- Keep the owner at the actual base returned by `MapViewOfFile3`; Windows
+  `TargetMUnmap` may ignore the shortened logical size but must unmap by the
+  original view base.
 
-No Win32-specific JIT allocation algorithm is required.
+Unlike the placeholder transaction, this design never temporarily removes a
+published primary prefix and has no coalesce/remap rollback state.
+
+### 6.6 Divergence boundary
+
+Windows requires one platform mapping helper because a pagefile section handle
+cannot honestly masquerade as a POSIX fd. The helper should only create and
+split the four mappings. After that point, Windows shall use the existing common
+code for:
+
+- `create_mspace_with_base` and footprint growth;
+- address translation between primary and writable views;
+- code and metadata commit;
+- code-cache collection and reuse;
+- JIT-root and CodeInfo encoding;
+- debug/release write-protection policy.
+
+Linux's memfd path remains unchanged. Windows `art::memfd_create` remains
+`ENOSYS`; no temporary file, pseudo-fd table, or fd-specific `RemapAtEnd`
+emulation is added.
+
+### 6.7 Other problems that must be handled
+
+- Implement Windows `FlushCpuCaches` with `FlushInstructionCache` for the RX
+  address range. Microsoft explicitly requires this for generated executable
+  code even though x86 hardware is normally coherent.
+- Verify `VirtualProtect` on the logical code-updater tail in debug builds; it
+  must toggle only RW/R and never gain execute permission.
+- Treat low-address allocation failure as a real dual-view failure, not as
+  permission to place the primary view high.
+- Test repeated cold starts because Wine currently chooses the lowest available
+  address for the constrained view; real Windows ASLR behavior may differ.
+- Test process dynamic-code mitigations and CFG on real Windows. Creating an
+  executable section or calling generated code can be denied by host policy.
+- Add release checks for primary contiguity, protection roles, signed-int32 JIT
+  root reachability, and uint32 CodeInfo distance.
+- Keep native JIT gated independently until the FastNative MS x64 ABI problem is
+  fixed.
 
 ## 7. Implementation and commit plan
 
@@ -323,61 +412,63 @@ No Win32-specific JIT allocation algorithm is required.
 
 - Set `_WIN32_WINNT=0x0A00`.
 - Set `NTDDI_VERSION=NTDDI_WIN10_RS4`.
-- Document Windows 10 version 1803 as the minimum.
-- Add a small API-availability build test.
+- Link `onecore.lib` for `MapViewOfFile3`.
+- Add a build-and-run API probe under Wine.
 
 Planned commit:
 
 ```text
-win64: require Windows 10 RS4 for virtual-memory placeholders
+win64: require Windows 10 RS4 for constrained section views
 ```
 
-### Stage 2 — implement Windows memfd semantics
+### Stage 2 — harden section-view primitives
 
-- Implement `art::memfd_create`.
-- Add create, truncate, read/write, mapping, close, and delete-on-close tests.
-- Verify executable mapping creation from the returned fd.
+- Replace the current manual low-address `VirtualQuery` scan in the J-2 helper
+  with `MapViewOfFile3` plus `MEM_ADDRESS_REQUIREMENTS`.
+- Add a narrow Windows helper that logically splits one complete mapped view
+  into an owning prefix and non-owning tail with explicit protections.
+- Reject high results and remove the current high-address fallback.
+- Add cleanup, repeated split/unmap, and partial-failure tests.
 
 Planned commit:
 
 ```text
-win64: implement delete-on-close memfd backing
+win64: add constrained pagefile-section views
 ```
 
-### Stage 3 — implement placeholder-backed mappings
+### Stage 3 — replace J-2 with the corrected topology
 
-- Implement low-address placeholder reservation.
-- Implement `MapViewOfFile3` replacement.
-- Implement file-backed `RemapAtEnd` split and cleanup.
-- Make `MadviseDontFork` a successful no-op.
-- Add ownership, failure-injection, and repeated map/unmap tests.
+- Create one pagefile section and two complete offset-zero views.
+- Split them logically into primary R/RX and alias RW/RW ranges.
+- Keep all mspace initialization and later JIT logic on the common path.
+- Add `FlushInstructionCache` to the Windows cache-flush implementation.
+- Keep the corrected path opt-in until the full Wine matrix passes.
 
 Planned commit:
 
 ```text
-win64: emulate MAP_FIXED file remaps with placeholders
+win64: build contiguous JIT dual views from one section
 ```
 
-### Stage 4 — route JIT through the common path
+### Stage 4 — verify and make dual view the default
 
-- Remove or bypass the current J-2 initialization branch.
-- Verify Windows takes the same fd-backed `JitMemoryRegion` branch as Linux.
-- Add permanent address-range checks.
-- Keep J-1 as the normal ART fallback while validation is incomplete.
+- Run the complete acceptance matrix in §12 under Wine.
+- Include fragmented-low-space and non-64-KiB capacity cases.
+- Add permanent layout and displacement checks.
+- Make the corrected section path default; retain J-1 only as ART's fallback
+  when RWX transitions are allowed.
 
 Planned commit:
 
 ```text
-win64: use the common ART dual-view JIT memory path
+win64: enable contiguous dual-view JIT memory by default
 ```
 
-### Stage 5 — verification and cleanup
+### Stage 5 — real-Windows acceptance and cleanup
 
-- Run the full acceptance matrix in §12.
 - Validate on real Windows 10.
-- Remove unused `CreatePageFileSection`/`MapFileSection` helpers and the
-  `ART_WIN64_JIT_DUAL` gate.
-- Make dual view the default; retain only the common ART single-view fallback.
+- Remove the old separated-view logic and `ART_WIN64_JIT_DUAL` gate.
+- Confirm no temporary file is created and no view is RWX.
 - Update W-025 and test-result documents.
 
 Planned commits:
@@ -393,18 +484,19 @@ Each stage should be committed only after its focused tests pass cleanly.
 
 | Plan | Linux similarity | Risk | Verdict |
 |------|------------------|------|---------|
-| Common memfd + `MemMap` placeholders | Highest | Medium platform work | **Selected** |
-| Pagefile section + placeholders in a Win32 JIT branch | Same layout, different JIT source | Medium | Fallback prototype |
+| Pagefile section + two complete views | Same topology and JIT behavior; one mapping hook differs | Low-medium | **Selected** |
+| Pagefile section + four placeholder views | Exact independent OS views | Medium; 64 KiB split rules and more cleanup | Rejected as unnecessary |
+| Temporary-file memfd + placeholder remap | Reuses fd branch | High lifecycle and rollback complexity; creates a filesystem object | Rejected |
 | Keep J-1 as permanent default | Common fallback behavior, weaker W^X | Low | Interim only |
 | Far-address JIT roots + extended CodeInfo header | Low; Win-only compiler/runtime format | High | Rejected |
 | Move roots and stack maps into code arena | Low; allocator/GC divergence | High | Rejected |
 | Move stack maps only | Does not fix JIT-root displacement | Incorrect | Rejected |
 | Force every section view below 4 GiB | Wastes scarce low VA and still duplicates JIT logic | High fragmentation | Rejected |
 
-If the delete-on-close memfd backing proves unreliable, the fallback design is
-a pagefile-backed section using the same placeholder-created
-`[data R][code RX]` primary layout. That fallback must preserve the layout
-invariants; it must not return to arbitrary separated primary views.
+If direct constrained mapping proves unreliable on real Windows, the fallback
+design is a pagefile section plus a low-address placeholder for the one complete
+primary view, followed by the same in-place protection split. It must not return
+to separate low-data/high-code primary mappings.
 
 ## 9. Permanent safety checks
 
@@ -463,8 +555,10 @@ Two historical J-2 wiring bugs are recorded so they are not repeated:
 2. A later version failed to move the primary mapping into `data_pages_`,
    causing `TranslateAddress` checks to fail.
 
-These bugs are specific to the experimental branch and disappear when Windows
-uses the common fd-backed initialization flow.
+These bugs are specific to the experimental branch. The replacement helper must
+return all four mappings and then fall through to the unchanged common mspace
+initialization; it must not initialize or publish mspaces inside the Windows
+mapping branch.
 
 Verified section-view properties under Wine:
 
@@ -500,15 +594,20 @@ FastNative ABI design and test stage.
 
 ### 12.1 Platform-memory tests
 
-- Windows memfd create and automatic deletion.
-- `ftruncate` to 64 MiB.
-- Multiple coherent RW/R/RX mappings of one fd.
-- Placeholder reservation below 4 GiB.
-- Placeholder split and exact replacement.
-- Repeated map/remap/unmap without leaks or double unmaps.
-- Failure injection after each placeholder operation.
+- Unnamed pagefile section creation with no filesystem artifact.
+- One complete primary view below 4 GiB.
+- One complete writable alias at an unconstrained address.
+- Coherent RW/R/RX access across the two views.
+- Page-aligned but non-64-KiB-aligned capacity and divider.
+- Fragmented low-address space with the complete primary still placed in one
+  suitable gap.
+- Low-address exhaustion fails rather than falling back high.
+- Repeated map/split/unmap without leaks or double unmaps.
+- Failure injection after each section, view, and protection operation.
 - RW alias writes visible through the RX view.
 - Execute a small function written through the RW alias.
+- Explicit `FlushInstructionCache` succeeds for committed code.
+- Large maximum-capacity tests observe and document `SEC_COMMIT` pressure.
 
 ### 12.2 Protection checks
 
@@ -525,7 +624,7 @@ No primary mapping may be RWX.
 
 ### 12.3 ART integration
 
-- JIT code cache creation through the fd-backed path.
+- JIT code cache creation through the contained Windows section helper.
 - Hello under default managed JIT.
 - FloatProbe with `-Xjitthreshold:0`.
 - Full `run_jit_smoke.sh`.
@@ -534,6 +633,7 @@ No primary mapping may be RWX.
 - GcProbe to exercise JIT root updates.
 - Small-cache collection and code-reuse stress.
 - Repeated cold starts to vary ASLR placement.
+- Custom page-aligned JIT maximum sizes that are not 64 KiB aligned.
 - J-1 regression run while the fallback remains.
 - `ART_WIN64_JIT=0` interpreter/nterp regression.
 
@@ -559,16 +659,17 @@ Native-JIT tests remain excluded until the FastNative ABI item closes.
 | D-1 r15 compiler TLS | 37/37 GS sites audited |
 | Managed JIT default | Hello about 24 compilations |
 | J-2 section primitives | RW/RX coherence and Hello about 21 compilations |
+| Section-layout probe | 64 MiB and non-64-KiB capacity cases pass under Wine; low primary remains contiguous under forced low-space fragmentation |
 | dlmalloc configuration | `USE_LOCKS=0`; spin-lock experiment reverted |
 | Root-cause correction | JIT-root signed displacement plus latent CodeInfo overflow |
-| P5 architecture | Windows memfd + placeholder `MemMap` common path selected |
+| P5 architecture | Unnamed pagefile section with one low primary view and one RW alias selected |
 
 ### Open
 
 | Item | Blocker |
 |------|---------|
-| Common dual-view path | Windows memfd and placeholder remap implementation |
-| J-2/default W^X-safe JIT | Common path plus full matrix |
+| Corrected dual-view path | Section helper, in-place logical split, cache flush, and integration |
+| Default W^X-safe JIT | Corrected section path plus full matrix |
 | Real Windows acceptance | Host access and completed implementation |
 | Native JIT | FastNative MS x64 ABI |
 
@@ -592,8 +693,10 @@ Native-JIT tests remain excluded until the FastNative ABI item closes.
 | 2026-07-22 | Experimental J-2 stays opt-in after probe failures |
 | 2026-07-23 | Correct immediate J-2 cause to signed 32-bit JIT-root displacement; CodeInfo overflow remains a second defect |
 | 2026-07-23 | Reject stack-map-only relocation and far-address Win-only codegen as preferred fixes |
-| 2026-07-23 | Drop Windows 7 support; select Windows 10 RS4 placeholder APIs |
-| 2026-07-23 | Select Windows memfd + `MemMap` compatibility work so JIT uses the common Linux fd-backed path |
+| 2026-07-23 | Drop Windows 7 support; require Windows 10 RS4 mapping APIs |
+| 2026-07-23 | Temporary-file memfd plus placeholder remap considered, then superseded after lifecycle and rollback review |
+| 2026-07-23 | Reconsider backing store: reject temporary-file memfd and placeholder remap in favor of an unnamed pagefile section mapped twice |
+| 2026-07-23 | Wine probes verify constrained low mapping, R/RX plus RW coherence, execution, fragmented-low-space placement, and non-64-KiB capacity support |
 
 ## 15. Code anchors
 
@@ -604,10 +707,16 @@ Native-JIT tests remain excluded until the FastNative ABI item closes.
 | Code write protection | `vendor/art/runtime/jit/jit_scoped_code_cache_write.h` |
 | Windows mapping implementation | `vendor/art/libartbase/base/mem_map_windows.cc` |
 | Generic `RemapAtEnd` | `vendor/art/libartbase/base/mem_map.cc` |
-| Windows memfd implementation point | `vendor/art/libartbase/base/memfd.cc` |
-| Win POSIX `ftruncate` bridge | `compat/src/win64_posix_stubs.c` |
+| Windows CPU-cache flush | `vendor/art/libartbase/base/utils.cc` |
 | JIT root patching | `vendor/art/compiler/optimizing/code_generator_x86_64.cc` |
 | CodeInfo offset | `vendor/art/runtime/oat/oat_quick_method_header.h` |
 | D-1 Thread-address helper | `vendor/art/compiler/utils/x86_64/assembler_x86_64.*` |
 | Native JIT gate | `vendor/art/runtime/jit/jit.cc` |
 | dlmalloc configuration | `vendor/art/runtime/gc/allocator/art-dlmalloc.cc` |
+
+## 16. External API references
+
+- [CreateFileMappingW](https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-createfilemappingw): pagefile-backed sections, compatible view permissions, commit behavior, and coherent views.
+- [MapViewOfFile3](https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-mapviewoffile3): address requirements, page-size view sizing, and the Windows 10 version 1803 minimum.
+- [MEM_ADDRESS_REQUIREMENTS](https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-mem_address_requirements): inclusive high address and allocation-granularity rules.
+- [VirtualProtect](https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualprotect): mapped-view protection compatibility and the requirement to flush the instruction cache for generated code.
