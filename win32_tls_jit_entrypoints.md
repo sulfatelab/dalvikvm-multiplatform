@@ -1254,7 +1254,7 @@ Smoke (wine, imageless, **no** `ART_WIN64_*` env):
 
 W-001 marked CLOSED in [win32_open_items.md](win32_open_items.md).
 
-**JIT memory / codegen:** see [win32_jit_memory.md](win32_jit_memory.md) §13 — **J-1 Create OK**; D-1 r15 TLS; compile default ON excluding residual `StringFactory` (`ART_WIN64_JIT_ALLOW_STRINGFACTORY=1` to repro).
+**JIT memory / codegen:** see [win32_jit_memory.md](win32_jit_memory.md) §13 — **J-1 managed JIT green**; D-1 r15 TLS audit complete; native methods are gated as a class (`ART_WIN64_JIT_NATIVE=1` reproduces the separate FastNative MS ABI defect); P5 will move Windows to ART's common fd-backed dual-view path.
 
 
 ## 13. Appendix — evidence anchors in tree

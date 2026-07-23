@@ -21,6 +21,7 @@ Do **not** list permanent non-goals as OPEN workarounds—list them under §Non-
 | [win64_art_port.md](win64_art_port.md) | Product phases / feasibility |
 | [win32_filesystem.md](win32_filesystem.md) | Option H path model |
 | [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md) | TLS / managed ABI / quick / JIT design (draft) |
+| [win32_jit_memory.md](win32_jit_memory.md) | JIT memory contract, corrected J-2 diagnosis, Windows 10 common-path plan |
 | [win32_libcore_os_natives.md](win32_libcore_os_natives.md) | Os/`Linux` natives: Implemented / Needed / ENOSYS |
 | `tools/verify/win64_phase*/RESULT.md` | Gate evidence |
 
@@ -55,15 +56,15 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 
 ---
 
-## Snapshot (2026-07-22)
+## Snapshot (2026-07-23)
 
 | Bucket | Summary |
 |--------|---------|
 | Phases 0–3 | **Gate-complete** (P3 G12 real Win10 + wine) |
 | Phase 4 | **Wine complete**; host re-run still recommended |
 | PE libcore/ICU/openjdk | **Product-default real PE** (icu/javacore/openjdk); NIO.2 non-goal; NetProbe OK |
-| Quick/JIT/TLS | **Managed JIT ON (J-1 default):** rSELF=r15; nterp N-1 default ON; D-1 partial (ThreadOffsetAddr, gs() no-op, R15 pinned); JIT smoke 10/10; JIT matrix 14/14; native JIT gated; J-2 dual-view opt-in (Hello 21 compiles, float codegen gap) |
-| Memory | J-1 VirtualAlloc (default, works); J-2 pagefile section dual-view (opt-in, Hello works, float probes broken — D-1 incomplete) |
+| Quick/JIT/TLS | **Managed JIT ON (J-1 default):** rSELF=r15; nterp N-1 default ON; D-1 complete (37/37 Thread sites); JIT smoke 10/10; JIT matrix 14/14; native JIT gated |
+| Memory | J-1 VirtualAlloc fallback works; experimental J-2 is opt-in and layout-broken; P5 plan is Windows 10 memfd + placeholder `MemMap` so ART uses its common fd-backed dual-view path |
 | Linux multiplatform | Native `dalvikvm -showversion` OK; imageless Hello e2e not re-gated here |
 
 ---
@@ -91,7 +92,7 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Proper fix:** Keep **rSELF=r15**; audit remaining managed entries (JNI return, attach, trampolines) publish rSELF; then close when full matrix is green without GS.
 - **Code anchors:** `thread_x86_64.cc`; `asm_support_x86_64.S` `THREAD_*`; `nterp.cc` (default ON; opt-out `ART_WIN64_NTERP=0`); design §6 / §12b / §15 / §16 / **§17** / **§17.8**
 - **Opened:** 2026-07-16
-- **Updated:** 2026-07-22 — D-1 partially landed (ThreadOffsetAddr, gs() no-op, R15 pinned). JIT compiler backend has float codegen gaps (FloatProbe crashes under J-2 dual-view with `fault_addr=0x8`). Managed JIT compiles ~24 methods on Hello. Residual: complete audit of all `gs:` sites in codegen backend (risk #2 in [win32_jit_memory.md](win32_jit_memory.md) §9).
+- **Updated:** 2026-07-23 — D-1 complete: all 37 audited compiler/JNI/trampoline Thread sites route through `ThreadOffsetAddr` and r15 on Windows. The J-2 FloatProbe failure is a separated-memory-layout defect, not a residual GS/codegen audit item. Residual W-002 scope is JNI attach and other non-invoke entry publication of rSELF.
 - **Design:** [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md) **§15 N-1 LOCKED**, **§17** register-map lock; FS-self **§16** reject; **§17.8** defaults ON
 
 ### W-003 — Quick entrypoint SETUP frames `int3` on Windows
@@ -548,21 +549,31 @@ _No open design notes. Closed D- items live under §Closed._
 
 
 ### W-025 — JIT code cache + x86_64 codegen TLS (Windows)
-- **State:** OPEN (P3+P4 green under J-1; J-2 Hello works, float probes blocked by uint32 code_info_offset_)
-- **Kind:** feature gap
+- **State:** OPEN (P3+P4 green under J-1; W^X-safe common dual-view path not implemented)
+- **Kind:** feature gap / temporary memory workaround
 - **Area:** art / jit / compiler
-- **Symptom / why:** Need Linux-like JIT with section-backed dual-view (no RWX). Create succeeds under both J-1 (VirtualAlloc) and J-2 (pagefile section, opt-in with `ART_WIN64_JIT_DUAL=1`).
+- **Symptom / why:** Managed JIT works under J-1, but code updates temporarily use RWX. The experimental J-2 section branch does not reproduce ART's Linux `[data R][code RX]` contiguous primary view and therefore violates two address contracts.
 - **Current behavior:**
   - **J-1 (default):** Create OK; D-1 complete (all 37 GS→r15 sites verified); managed JIT ON (24-compile Hello, 14-probe matrix green); native JIT OFF (generic JNI). Uses RWX toggle for code writes.
-  - **J-2 (opt-in):** CreateFileMapping section dual-view. Hello 21 compiles, no crash. FloatProbe/MathProbe/NetProbe crash — **root cause confirmed**: `OatQuickMethodHeader::code_info_offset_` (uint32) overflows when code_entry_point at high VA (~125 TB) minus stack_map at low-4GB (~1.2 GB) exceeds 2³²−1 (see [win32_jit_memory.md](win32_jit_memory.md) §16 FloatProbe crash).
+  - **J-2 (opt-in workaround):** `CreateFileMapping` section views are coherent and Hello compiles about 21 methods, but executable code is at high VA while roots/stack maps are in the low-address primary data view.
+  - **Immediate J-2 failure:** x86_64 JIT root loads use signed 32-bit RIP-relative displacements. The recorded FloatProbe `fault_addr` exactly matches truncation of `root_address - code_address`.
+  - **Second J-2 failure:** `OatQuickMethodHeader::code_info_offset_` is uint32, so the high-code/low-stack-map distance also overflows during runtime metadata decoding.
   - Native gate: all native methods excluded from JIT (`ART_WIN64_JIT_NATIVE=1` opt-in, known FastNative ABI gap).
-- **Blocked on:** uint32 code_info_offset_ constraint between section-backed code views (high VA) and data_pages_ (low-4GB). Possible paths: (B) VirtualAlloc reserve for co-located section views, (D) store stack maps in non_exec_pages_ alongside code, (C) extend offset to uint64.
-- **Proper fix:** (1) Resolve code_info_offset_ overflow (path B or D). (2) Fix FastNative stub ABI for Win; drop native-JIT gate. (3) After matrix passes → J-2 default → remove J-1 RWX fallback.
-- **Code anchors:** `mem_map.cc` RemapAtEnd (J-1); `mem_map_windows.cc` CreatePageFileSection/MapFileSection (J-2); `jit_memory_region.cc` j2_complete gate + CommitCode:465; `oat_quick_method_header.h:202` code_info_offset_; `jit.cc` Win native gate; `assembler_x86_64.*`; codegen x86_64; `art-dlmalloc.cc` USE_LOCKS=0
+- **Selected proper fix:** Keep the shared ART JIT path Linux-like and place Windows differences in the compatibility layer:
+  1. Require Windows 10 version 1803 or later.
+  2. Implement Windows `art::memfd_create` with delete-on-close temporary-file semantics.
+  3. Implement low-address `MapFile` and fixed tail remapping with `VirtualAlloc2` placeholders, `MapViewOfFile3`, and `UnmapViewOfFile2`.
+  4. Make `MadviseDontFork` a successful no-op on Windows.
+  5. Route Windows through the existing fd-backed `JitMemoryRegion` branch, producing contiguous primary `[data R][code RX]` plus RW aliases.
+  6. Remove `ART_WIN64_JIT_DUAL` and the custom section branch after Wine and real-Windows verification.
+- **Rejected fixes:** moving stack maps alone (does not fix root loads); Win-only far-root codegen plus an extended header; moving all method metadata into the code arena; forcing every alias below 4 GiB.
+- **Safety checks required:** production checks for signed-int32 JIT-root displacement, data-before-code ordering, and uint32 CodeInfo distance.
+- **Separate residual:** Fix FastNative MS x64 ABI before removing the native-JIT gate.
+- **Code anchors:** `memfd.cc` Windows implementation point; `mem_map_windows.cc` placeholder mapping; `mem_map.cc` `RemapAtEnd`; `jit_memory_region.cc` experimental branch and common fd-backed path; `code_generator_x86_64.cc` `PatchJitRootUse`; `oat_quick_method_header.h` `code_info_offset_`; `jit.cc` native gate; `art-dlmalloc.cc` `USE_LOCKS=0`
 - **Verified:** P3 (2026-07-21) JIT smoke 10/10; P4 (2026-07-22) JIT matrix 14/14 under J-1; D-1 audit complete (37/37 GS sites); J-2 Hello 21 compiles (2026-07-22)
-- **Design:** [win32_jit_memory.md](win32_jit_memory.md) §14 (J-2), §15 (dlmalloc), §16 (status + FloatProbe root cause)
+- **Design:** [win32_jit_memory.md](win32_jit_memory.md) §3–§9 (constraints, corrected diagnosis, Windows 10 common-path design, implementation plan)
 - **Opened:** 2026-07-19
-- **Updated:** 2026-07-22 — D-1 complete; code_info_offset_ overflow is the J-2 blocker (not D-1)
+- **Updated:** 2026-07-23 — root cause corrected; Windows 7 support dropped; selected common `memfd` + placeholder `MemMap` plan
 
 
-*Last snapshot: 2026-07-22 — W-001 closed; nterp ON; managed JIT ON (J-1, 24 compiles); J-2 dual-view opt-in (Hello 21 compiles); D-1 float codegen gap blocks J-2 default; native JIT gated off; 12 OPEN workarounds remaining.*
+*Last snapshot: 2026-07-23 — W-001 closed; nterp ON; managed JIT ON under J-1 (24-compilation Hello, 14/14 matrix); D-1 complete; experimental J-2 blocked by separated root/CodeInfo layout; Windows 10 common dual-view plan selected; native JIT gated off; 12 OPEN workarounds remaining.*
