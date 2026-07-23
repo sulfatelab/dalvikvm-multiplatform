@@ -137,7 +137,8 @@ foreach(_t IN LISTS _all_targets)
     "${MDVM_GENSRC_DIR}/art/asm/include"
     "${MDVM_WIN64_ENV}/third_party/lz4/lib")
   target_compile_definitions(${_t} PRIVATE
-    _CRT_SECURE_NO_WARNINGS NOMINMAX WIN32_LEAN_AND_MEAN NOGDI)
+    _CRT_SECURE_NO_WARNINGS NOMINMAX WIN32_LEAN_AND_MEAN NOGDI
+    _WIN32_WINNT=0x0A00 NTDDI_VERSION=NTDDI_WIN10_RS4)
   target_compile_options(${_t} PRIVATE
     "$<$<COMPILE_LANGUAGE:C,CXX>:SHELL:-include ${_WIN_PRELUDE}>"
     "$<$<COMPILE_LANGUAGE:C,CXX>:-Wno-error>"
@@ -152,6 +153,11 @@ foreach(_t IN LISTS _all_targets)
   endif()
   target_link_libraries(${_t} ws2_32 synchronization)
 endforeach()
+
+# MapViewOfFile3 is a Windows 10 RS4 API imported through onecore.lib.
+if(TARGET artbase)
+  target_link_libraries(artbase onecore)
+endif()
 
 # Per-file shims
 if(TARGET base)

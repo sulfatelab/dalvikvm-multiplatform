@@ -93,7 +93,9 @@ foreach(_t IN LISTS _all_targets)
   target_compile_definitions(${_t} PRIVATE
     _CRT_SECURE_NO_WARNINGS
     NOMINMAX
-    WIN32_LEAN_AND_MEAN)
+    WIN32_LEAN_AND_MEAN
+    _WIN32_WINNT=0x0A00
+    NTDDI_VERSION=NTDDI_WIN10_RS4)
   target_compile_options(${_t} PRIVATE
     "$<$<COMPILE_LANGUAGE:C,CXX>:SHELL:-include ${_WIN_PRELUDE}>"
     "$<$<COMPILE_LANGUAGE:C,CXX>:-Wno-error>"
@@ -103,6 +105,11 @@ foreach(_t IN LISTS _all_targets)
     target_link_libraries(${_t} win64_posix_stubs)
   endif()
 endforeach()
+
+# MapViewOfFile3 is a Windows 10 RS4 API imported through onecore.lib.
+if(TARGET artbase)
+  target_link_libraries(artbase onecore)
+endif()
 
 # Per-file drift shims.
 if(TARGET base)
