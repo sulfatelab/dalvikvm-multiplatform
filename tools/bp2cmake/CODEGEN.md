@@ -43,6 +43,8 @@ behavioral overlay (CMS GC, ART_TARGET_LINUX or ART_TARGET_WINDOWS via --os, bas
 For PE (`--os windows` / `asm_target_os=windows`), codegen swaps
 `ART_TARGET_LINUX` for `ART_TARGET_WINDOWS` and prefers
 `--target=x86_64-pc-windows-msvc` so offsets match the PE Runtime layout.
+Cross-build callers pass their libc++, UCRT, SDK, and CRT include roots with
+repeatable `--target-include` arguments.
 Notably `RUNTIME_INSTRUMENTATION_OFFSET` is **0x328** on PE vs **0x340** on
 Linux host; shipping the wrong header causes nterp/quick AVs on wine.
 

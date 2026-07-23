@@ -72,6 +72,10 @@ class CodegenConfig:
     # so ART_TARGET_WINDOWS must be used when generating PE asm_defines.h.
     # Default remains Linux for host/native builds.
     asm_target_os: str = "linux"
+    # System include directories for a cross-target asm_defines compile.
+    # Win64 callers supply libc++, UCRT, SDK, and CRT headers from the selected
+    # toolchain so clang can use the Windows ABI while running on Linux.
+    asm_target_include_dirs: list[str] = field(default_factory=list)
     # Defines for the asm_defines compile: the art.go-injected knobs (absent
     # from any .bp) plus the runtime behavioral overlay. Mirrors runtime.cmake.
     # For windows, ART_TARGET_LINUX is replaced by ART_TARGET_WINDOWS (+ _WIN32).
@@ -216,17 +220,20 @@ def gen_asm_defines(cfg: CodegenConfig) -> str:
     cmd += ["-I", cfg.out("art/aconfig/include")]
     # project-owned compat shims (android-base/stringify.h) the archive lacks.
     cmd += ["-I", cfg.compat_inc()]
+    # PE target: use the Windows ABI and the same force-included compatibility
+    # prelude as the real ART build before standard-library headers are parsed.
+    os_name = (cfg.asm_target_os or "linux").lower()
+    if os_name in ("windows", "win32", "win64", "pe"):
+        cmd += ["--target=x86_64-pc-windows-msvc", "-nostdinc++"]
+        for inc in cfg.asm_target_include_dirs:
+            cmd += ["-isystem", inc]
+        cmd += ["-include", os.path.join(cfg.compat_inc(), "mdvm_win64_prelude.h")]
     for m in _asm_defines_macros_for(cfg):
         cmd += ["-D" + m]
     for fi in cfg.asm_force_includes:
         cmd += ["-include", fi]
     cmd += ["-Wno-strict-primary-template-shadow", "-Wno-invalid-offsetof",
             "-Wno-attribute", "-Wno-deprecated-declarations", "-UDEBUG"]
-    # PE target: prefer windows-msvc triple when generating PE offsets so
-    # ABI/layout matches art.dll. Host linux builds keep default host triple.
-    os_name = (cfg.asm_target_os or "linux").lower()
-    if os_name in ("windows", "win32", "win64", "pe"):
-        cmd += ["--target=x86_64-pc-windows-msvc"]
     cmd += [asm_cc]
     _run(cmd, cwd=cfg._art_base())
 

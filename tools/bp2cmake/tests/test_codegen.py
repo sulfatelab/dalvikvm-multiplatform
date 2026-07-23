@@ -6,13 +6,14 @@ are skipped if the archive is absent.
 
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from bp2cmake.codegen import (
-    CodegenConfig, gen_operator_out, gen_mterp, gen_asm_defines,
+    CodegenConfig, _asm_defines_macros_for, gen_operator_out, gen_mterp, gen_asm_defines,
 )
 
 # Pure multipath: foundational native sources live under nested vendor/.
@@ -87,3 +88,42 @@ def test_asm_defines():
         assert len(defines) > 100
         # spot-check a known constant is present
         assert any("ACCESS_FLAGS_CLASS_IS_INTERFACE" in d for d in defines)
+
+
+def test_windows_asm_defines_config():
+    cfg = _cfg("unused")
+    cfg.asm_target_os = "windows"
+    macros = _asm_defines_macros_for(cfg)
+    assert "ART_TARGET_WINDOWS" in macros
+    assert "_WIN32" in macros
+    assert "ART_TARGET_LINUX" not in macros
+
+
+def test_windows_asm_defines_runtime_layout():
+    win64_env = os.environ.get("WIN64_DEV_ENV")
+    if not (HAVE_ART and HAVE_CLANG and win64_env):
+        return
+    includes = [
+        os.path.join(win64_env, "lib/libcxx/include/c++/v1"),
+        os.path.join(
+            subprocess.check_output(
+                ["clang++", "-print-resource-dir"], text=True
+            ).strip(),
+            "include",
+        ),
+        os.path.join(win64_env, "xwin/sdk/include/ucrt"),
+        os.path.join(win64_env, "xwin/sdk/include/shared"),
+        os.path.join(win64_env, "xwin/sdk/include/um"),
+        os.path.join(win64_env, "xwin/crt/include"),
+    ]
+    if not all(os.path.isdir(path) for path in includes):
+        return
+    with tempfile.TemporaryDirectory() as tmp:
+        cfg = _cfg(tmp)
+        cfg.asm_target_os = "windows"
+        cfg.asm_target_include_dirs = includes
+        from bp2cmake.codegen import gen_aconfig
+        gen_aconfig(cfg)
+        out = gen_asm_defines(cfg)
+        text = open(out).read()
+        assert "#define RUNTIME_INSTRUMENTATION_OFFSET 0x328" in text

@@ -41,6 +41,11 @@ file(MAKE_DIRECTORY "${MDVM_GENSRC_DIR}")
 # Codegen runs on the *build* host. Prefer a native Linux clang++ even when
 # CMAKE_CXX_COMPILER is a Windows-target clang (cross builds).
 find_program(MDVM_HOST_CLANGXX NAMES clang++ REQUIRED)
+execute_process(
+  COMMAND ${MDVM_HOST_CLANGXX} -print-resource-dir
+  OUTPUT_VARIABLE MDVM_HOST_CLANG_RESOURCE_DIR
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+  COMMAND_ERROR_IS_FATAL ANY)
 foreach(_kind aconfig mterp asm_defines)
   execute_process(
     COMMAND ${CMAKE_COMMAND} -E env "PYTHONPATH=${_repo}/tools/bp2cmake"
@@ -48,12 +53,32 @@ foreach(_kind aconfig mterp asm_defines)
             --root ${MDVM_NATIVE_SRC_ROOT_DIR}
             --art-root ${MDVM_ART_ROOT_DIR}
             --gensrc ${MDVM_GENSRC_DIR}
-            --arch x86_64 --clang ${MDVM_HOST_CLANGXX} --only ${_kind}
+            --arch x86_64 --clang ${MDVM_HOST_CLANGXX} --os windows
+            --target-include ${MDVM_WIN64_ENV}/lib/libcxx/include/c++/v1
+            --target-include ${MDVM_HOST_CLANG_RESOURCE_DIR}/include
+            --target-include ${MDVM_WIN64_ENV}/xwin/sdk/include/ucrt
+            --target-include ${MDVM_WIN64_ENV}/xwin/sdk/include/shared
+            --target-include ${MDVM_WIN64_ENV}/xwin/sdk/include/um
+            --target-include ${MDVM_WIN64_ENV}/xwin/crt/include
+            --only ${_kind}
     RESULT_VARIABLE _rc)
   if(NOT _rc EQUAL 0)
     message(FATAL_ERROR "codegen ${_kind} failed (${_rc})")
   endif()
 endforeach()
+
+# Catch host-layout asm_defines regeneration before it reaches Win64 trampolines.
+# In this ART revision Runtime::instrumentation_ is at 0x328 for PE and 0x340
+# for Linux; using the latter crashes generic-JNI exit handling.
+set(_asm_defines_header "${MDVM_GENSRC_DIR}/art/asm/include/asm_defines.h")
+file(STRINGS "${_asm_defines_header}" _instrumentation_offset
+     REGEX "^#define RUNTIME_INSTRUMENTATION_OFFSET " LIMIT_COUNT 1)
+if(NOT _instrumentation_offset STREQUAL
+       "#define RUNTIME_INSTRUMENTATION_OFFSET 0x328")
+  message(FATAL_ERROR
+    "Win64 asm_defines has the wrong Runtime instrumentation offset: "
+    "${_instrumentation_offset}")
+endif()
 
 # zlib
 set(_ZLIB_ROOT "${MDVM_WIN64_ENV}/lib/zlib")
