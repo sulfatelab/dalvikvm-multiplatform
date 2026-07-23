@@ -21,7 +21,7 @@ Do **not** list permanent non-goals as OPEN workarounds—list them under §Non-
 | [win64_art_port.md](win64_art_port.md) | Product phases / feasibility |
 | [win32_filesystem.md](win32_filesystem.md) | Option H path model |
 | [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md) | TLS / managed ABI / quick / JIT design (draft) |
-| [win32_jit_memory.md](win32_jit_memory.md) | JIT memory contract, corrected J-2 diagnosis, Windows 10 pagefile-section plan |
+| [win32_jit_memory.md](win32_jit_memory.md) | JIT memory contract, historical separated-view diagnosis, and implemented Windows 10 pagefile-section design |
 | [win32_libcore_os_natives.md](win32_libcore_os_natives.md) | Os/`Linux` natives: Implemented / Needed / ENOSYS |
 | `tools/verify/win64_phase*/RESULT.md` | Gate evidence |
 
@@ -63,8 +63,8 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 | Phases 0–3 | **Gate-complete** (P3 G12 real Win10 + wine) |
 | Phase 4 | **Wine complete**; host re-run still recommended |
 | PE libcore/ICU/openjdk | **Product-default real PE** (icu/javacore/openjdk); NIO.2 non-goal; NetProbe OK |
-| Quick/JIT/TLS | **Managed JIT ON (J-1 default):** rSELF=r15; nterp N-1 default ON; D-1 complete (37/37 Thread sites); JIT smoke 10/10; JIT matrix 14/14; native JIT gated |
-| Memory | J-1 VirtualAlloc fallback works; experimental J-2 is opt-in and layout-broken; P5 plan is one unnamed pagefile section mapped as a contiguous low R/RX primary view plus a full RW alias |
+| Quick/JIT/TLS | **Managed JIT ON with the corrected dual view by default:** rSELF=r15; nterp N-1 default ON; D-1 complete (37/37 Thread sites); JIT smoke 10/10; JIT matrix 14/14; native JIT gated |
+| Memory | One unnamed pagefile section is mapped as a contiguous low R/RX primary view plus a full RW alias; J-1 remains only as the temporary `ART_WIN64_JIT_DUAL=0` diagnostic opt-out |
 | Linux multiplatform | Native `dalvikvm -showversion` OK; imageless Hello e2e not re-gated here |
 
 ---
@@ -92,7 +92,7 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Proper fix:** Keep **rSELF=r15**; audit remaining managed entries (JNI return, attach, trampolines) publish rSELF; then close when full matrix is green without GS.
 - **Code anchors:** `thread_x86_64.cc`; `asm_support_x86_64.S` `THREAD_*`; `nterp.cc` (default ON; opt-out `ART_WIN64_NTERP=0`); design §6 / §12b / §15 / §16 / **§17** / **§17.8**
 - **Opened:** 2026-07-16
-- **Updated:** 2026-07-23 — D-1 complete: all 37 audited compiler/JNI/trampoline Thread sites route through `ThreadOffsetAddr` and r15 on Windows. The J-2 FloatProbe failure is a separated-memory-layout defect, not a residual GS/codegen audit item. Residual W-002 scope is JNI attach and other non-invoke entry publication of rSELF.
+- **Updated:** 2026-07-23 — D-1 complete: all 37 audited compiler/JNI/trampoline Thread sites route through `ThreadOffsetAddr` and r15 on Windows. The historical separated-J-2 FloatProbe failure was a memory-layout defect, not a residual GS/codegen audit item. Residual W-002 scope is JNI attach and other non-invoke entry publication of rSELF.
 - **Design:** [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md) **§15 N-1 LOCKED**, **§17** register-map lock; FS-self **§16** reject; **§17.8** defaults ON
 
 ### W-003 — Quick entrypoint SETUP frames `int3` on Windows
@@ -116,15 +116,15 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Code anchors:** `LOAD_RUNTIME_INSTANCE` in `asm_support_x86_64.S`
 - **Opened:** 2026-07-16
 
-### W-008 — Product smoke always passes `-Xint` / imageless / `-Xno-sig-chain`
-- **State:** OPEN (partial — managed JIT ON by default; probes still use `-Xint` for determinism)
+### W-008 — Some product smoke still passes `-Xint` / imageless / `-Xno-sig-chain`
+- **State:** OPEN (partial — managed JIT suites run without `-Xint`; older product/diagnostic probes retain it)
 - **Kind:** workaround (policy flags)
 - **Area:** packaging / product CLI
-- **Current behavior:** Product default runs with managed JIT ON (24 compiles on Hello, 14-probe matrix green). Test runner scripts (`run_*.sh`) still force `-Xint` for deterministic probe output across J-1/J-2 configurations. Product CLI (`run/dalvikvm.exe` directly) does not need `-Xint`.
-- **Proper fix:** Update probe runners to test under JIT by default (opt-out `ART_WIN64_JIT=0` for interpreter-only); keep `-Xint` as opt-in debug. Imageless may remain until boot image (separate track).
+- **Current behavior:** Product default runs with managed JIT ON through the corrected dual view. `run_jit_smoke.sh` and `run_jit_matrix.sh` deliberately omit `-Xint` and pass 10/10 and 14/14. Older Phase 3, package, crash, and generic Phase 4 runners still force `-Xint` for deterministic or interpreter-specific coverage. Product CLI (`run/dalvikvm.exe` directly) does not need `-Xint`.
+- **Proper fix:** Classify each remaining `-Xint` use as intentional interpreter coverage or migrate it to the default JIT path, with `ART_WIN64_JIT=0`/`-Xint` retained only where the test specifically requires it. Imageless mode may remain until boot-image work (separate track).
 - **Code anchors:** `tools/win64/host_package/package_win64_phase3.sh`, `tools/verify/win64_phase*/run_*.sh`
 - **Opened:** 2026-07-16
-- **Updated:** 2026-07-22 — managed JIT ON by default; runner scripts still `-Xint`
+- **Updated:** 2026-07-23 — JIT smoke and matrix run without `-Xint`; older and interpreter-specific runners still require review
 
 ### W-010 — Sigchain is a Windows stub; VEH owns faults
 - **State:** OPEN (may become permanent architecture — reclassify if so)
@@ -549,35 +549,35 @@ _No open design notes. Closed D- items live under §Closed._
 
 
 ### W-025 — JIT code cache + x86_64 codegen TLS (Windows)
-- **State:** OPEN (P3+P4 green under J-1; corrected W^X-safe dual-view path not implemented)
-- **Kind:** feature gap / temporary memory workaround
+- **State:** OPEN (P5 implementation and Wine verification complete; real-Windows acceptance and residual hardening remain)
+- **Kind:** host-validation gap / temporary diagnostic workaround / hardening debt
 - **Area:** art / jit / compiler
-- **Symptom / why:** Managed JIT works under J-1, but code updates temporarily use RWX. The experimental J-2 section branch does not reproduce ART's Linux `[data R][code RX]` contiguous primary view and therefore violates two address contracts.
+- **Symptom / why:** The corrected default now reproduces ART's Linux-visible `[data R][code RX]` contiguous primary layout with a coherent RW updater alias. Remaining work is real-Windows acceptance, direct encoding-site checks, threshold-zero stress diagnosis, and the separate native FastNative ABI gap.
 - **Current behavior:**
-  - **J-1 (default):** Create OK; D-1 complete (all 37 GS→r15 sites verified); managed JIT ON (24-compile Hello, 14-probe matrix green); native JIT OFF (generic JNI). Uses RWX toggle for code writes.
-  - **J-2 (opt-in workaround):** `CreateFileMapping` section views are coherent and Hello compiles about 21 methods, but executable code is at high VA while roots/stack maps are in the low-address primary data view.
-  - **Immediate J-2 failure:** x86_64 JIT root loads use signed 32-bit RIP-relative displacements. The recorded FloatProbe `fault_addr` exactly matches truncation of `root_address - code_address`.
-  - **Second J-2 failure:** `OatQuickMethodHeader::code_info_offset_` is uint32, so the high-code/low-stack-map distance also overflows during runtime metadata decoding.
-  - **Redesign probe:** A standalone PE test under Wine maps one unnamed section as a complete low R/RX primary view plus a complete RW alias, verifies coherence and execution, and also passes with forced low-space fragmentation and a page-aligned capacity that is not 64 KiB aligned.
+  - **Default corrected dual view:** one unnamed `CreateFileMappingW(INVALID_HANDLE_VALUE, PAGE_EXECUTE_READWRITE)` section is mapped twice at offset zero. The complete primary view is below 4 GiB and split into data R plus code RX; the unrestricted alias is split into data RW plus code RW.
+  - **Shared ART path:** mspace initialization, growth, address translation, commit, collection, and metadata handling remain on ART's common Linux/Windows path after mapping construction.
+  - **Temporary J-1 diagnostic workaround:** `ART_WIN64_JIT_DUAL=0` selects the single-view `VirtualAlloc` path for comparison or emergency diagnosis. It writes code through an RX-to-RWX-to-RX transition and is not the product default.
+  - **No disk file:** the section is unnamed and backed by the Windows paging system; no temporary filesystem object, pseudo-fd, or Windows memfd emulation is created.
+  - **Historical separated-view defect:** the retired layout placed code far from roots and stack maps, overflowing signed 32-bit JIT-root displacements and uint32 CodeInfo distance. The corrected topology removes that layout.
+  - **Threshold-zero stress:** `FloatProbe -Xjitthreshold:0` fails at `ArtMethod::GetOatQuickMethodHeader()` with an invalid `ArtMethod*` on both J-1 and the corrected dual view. Normal FloatProbe and the full matrix pass, so this is tracked separately from memory topology.
   - Native gate: all native methods excluded from JIT (`ART_WIN64_JIT_NATIVE=1` opt-in, known FastNative ABI gap).
-- **Selected proper fix:** Keep ART's observable layout and post-mapping JIT logic Linux-like while containing the Windows allocation difference:
+- **Implemented proper fix:** Keep ART's observable layout and post-mapping JIT logic Linux-like while containing the Windows difference in the section-allocation helper:
   1. Require Windows 10 version 1803 or later and link `onecore.lib` for `MapViewOfFile3`.
-  2. Create one unnamed `CreateFileMapping(INVALID_HANDLE_VALUE, PAGE_EXECUTE_READWRITE)` section; no filesystem file or pseudo-fd.
-  3. Map the complete section once below 4 GiB as RX, then downgrade the data prefix to R.
-  4. Map the complete section again as RW at any address; logically split both complete views into ART's four existing ranges.
-  5. Keep mspace initialization, growth, address translation, commit, collection, and metadata encoding on the common code path.
-  6. Add explicit Windows `FlushInstructionCache`, strict layout checks, and cleanup/ownership tests.
-  7. Remove `ART_WIN64_JIT_DUAL` and the separated-view J-2 logic after Wine and real-Windows verification.
+  2. Create one unnamed pagefile-backed section and map the two complete views described above.
+  3. Split both views logically into ART's four existing ranges without a placeholder unmap/remap transaction or Windows-only 64 KiB capacity rule.
+  4. Use explicit Windows `FlushInstructionCache` and `VirtualQuery` layout/protection checks.
+  5. Keep the common ART mspace and JIT lifecycle code unchanged after mapping construction.
+  6. Remove the temporary `ART_WIN64_JIT_DUAL=0` opt-out after real-Windows acceptance.
 - **Why full views:** Both mappings start at section offset zero, so custom JIT maximum sizes need only ART's existing page alignment. This avoids a Windows-only 64 KiB divider rule and avoids placeholder split/remap rollback.
 - **Backing-store rule:** The selected section is backed by the Windows paging system, not by a named or temporary filesystem file. It can consume commit/pagefile backing, so large-capacity behavior up to 1 GiB remains an explicit test item.
 - **Rejected fixes:** moving stack maps alone (does not fix root loads); Win-only far-root codegen plus an extended header; moving all method metadata into the code arena; forcing every alias below 4 GiB.
-- **Safety checks required:** production checks for signed-int32 JIT-root displacement, data-before-code ordering, and uint32 CodeInfo distance.
+- **Safety checks:** mapping-time contiguity, low-4-GiB placement, logical sizes, and R/RX/RW protection roles are implemented. Direct signed-int32 JIT-root and uint32 CodeInfo construction checks remain open hardening.
 - **Separate residual:** Fix FastNative MS x64 ABI before removing the native-JIT gate.
-- **Code anchors:** `mem_map_windows.cc` section mapping; `mem_map.cc` Windows in-place split ownership; `jit_memory_region.cc` experimental branch and common post-mapping logic; `utils.cc` cache flush; `code_generator_x86_64.cc` `PatchJitRootUse`; `oat_quick_method_header.h` `code_info_offset_`; `jit.cc` native gate; `art-dlmalloc.cc` `USE_LOCKS=0`
-- **Verified:** P3 (2026-07-21) JIT smoke 10/10; P4 (2026-07-22) JIT matrix 14/14 under J-1; D-1 audit complete (37/37 GS sites); J-2 Hello 21 compiles (2026-07-22); standalone section-layout probes pass under Wine (2026-07-23)
-- **Design:** [win32_jit_memory.md](win32_jit_memory.md) §2–§9 (Linux low-4-GiB behavior, constraints, corrected diagnosis, Windows 10 section design, implementation plan)
+- **Code anchors:** `mem_map_windows.cc` constrained section mapping; `mem_map.cc` Windows in-place split ownership; `jit_memory_region.cc` corrected dual-view branch and common post-mapping logic; `utils.cc` cache flush; `code_generator_x86_64.cc` `PatchJitRootUse`; `oat_quick_method_header.h` `code_info_offset_`; `jit.cc` native gate; `art-dlmalloc.cc` `USE_LOCKS=0`
+- **Verified:** default corrected dual-view Hello passes with about 21–24 managed compiles; JIT smoke 10/10; JIT matrix 14/14; J-1 diagnostic Hello passes; D-1 audit complete (37/37 GS sites); standalone section-layout probe passes coherence, execution, protection, forced low-space fragmentation, and non-64-KiB capacity cases under Wine (2026-07-23)
+- **Design:** [win32_jit_memory.md](win32_jit_memory.md) §2–§13 (Linux low-4-GiB contract, historical diagnosis, implemented Windows 10 section design, verification, and residual work)
 - **Opened:** 2026-07-19
-- **Updated:** 2026-07-23 — root cause corrected; Windows 7 support dropped; selected unnamed pagefile section with complete low primary and RW alias views
+- **Updated:** 2026-07-23 — corrected pagefile-section dual view implemented, made default, and verified under Wine; temporary J-1 diagnostic opt-out and real-Windows acceptance remain
 
 
-*Last snapshot: 2026-07-23 — W-001 closed; nterp ON; managed JIT ON under J-1 (24-compilation Hello, 14/14 matrix); D-1 complete; experimental J-2 blocked by separated root/CodeInfo layout; Windows 10 pagefile-section dual-view plan selected and memory probes green; native JIT gated off; 12 OPEN workarounds remaining.*
+*Last snapshot: 2026-07-23 — W-001 closed; nterp ON; corrected pagefile-section dual view is the managed-JIT default (10/10 smoke, 14/14 matrix); D-1 complete; `ART_WIN64_JIT_DUAL=0` temporarily retains J-1 for diagnosis; real-Windows acceptance and native FastNative ABI work remain; 12 OPEN workarounds remaining.*
