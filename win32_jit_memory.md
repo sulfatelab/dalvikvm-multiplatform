@@ -613,8 +613,9 @@ and `RDX` contains `srcPos == 0`; the old compiled stub read a null `src`.
 The landed split makes both workloads pass. The `System.arraycopy` probe also
 exercises seven native arguments, including the shadow area and three stack
 arguments, so the tested outgoing core/reference packing is not the immediate
-failure. Mixed-FP, high managed-FP ordinals, unresolved app JNI, and broader
-normal/Fast/Critical transitions still require generated-code coverage.
+failure. Mixed-FP, high managed-FP ordinals, unresolved normal/Fast app JNI,
+and broader normal/Fast/Critical transitions still require generated-code
+coverage. Unresolved CriticalNative mixed signatures are covered separately.
 
 The separate optimizing-compiler direct CriticalNative convention is also
 fixed. Win64 direct calls now use unified Microsoft x64 argument ordinals,
@@ -622,6 +623,14 @@ reserve the 32-byte home area, and spill after it. The unresolved critical
 dlsym stub reloads its caller PC after the PE runtime-instance macro uses
 `r11` as scratch. The focused direct-signature probe covers zero, mixed
 integer/floating, FP-only, stack-spilled arguments, and scalar returns.
+
+Unresolved mixed-signature app JNI is now covered as well. The initial probe
+returned zeros because the previous Win64 `Runtime.nativeLoad` shortcut called
+`LoadLibraryA` and `JNI_OnLoad` without adding the DLL to
+`JavaVMExt::libraries_`. Product `JVM_NativeLoad` now delegates to
+`art.dll!ART_LoadNativeLibrary`, which follows AOSP ownership through
+`JavaVMExt::LoadNativeLibrary`. The host loader's only Windows path divergence
+is recognizing drive, root, and UNC absolute paths; Linux behavior is unchanged.
 
 The memory plan does not change the remaining blocker. The compiled-JNI split
 is landed; the current acceptance probe is
@@ -686,9 +695,10 @@ gate and declaring P5 complete:
 - run the smoke and probe matrices;
 - exercise code-cache collection under load.
 
-The focused compiled-JNI/FastNative native-JIT probe and direct CriticalNative
-probe are now covered and pass. Broader native-JIT tests remain excluded until
-the remaining W-024 ABI matrix is complete.
+The focused compiled-JNI/FastNative native-JIT probe and both registered and
+unresolved direct CriticalNative probes are now covered and pass. Broader
+native-JIT tests remain excluded until the remaining W-024 ABI matrix is
+complete.
 
 ### 12.5 Threshold-zero stress resolution
 
@@ -704,7 +714,7 @@ The historical controls and current result are:
 | Win64 J-1, threshold 0 | FAIL at the same path | PASS, 5/5 in the combined acceptance harness |
 | Win64 JIT disabled, threshold 0 | PASS | Not rerun in this stage; unaffected control |
 | Win64 dual view, threshold 1 | PASS | Superseded by the stricter threshold-zero pass |
-| Linux ART, threshold 0 | PASS | Linux control build passes; runtime behavior unchanged |
+| Linux ART, threshold 0 | PASS | Linux control build and shared-boot L-005 Hello pass; runtime behavior unchanged |
 
 The first real fault is a stack walk from the unresolved direct
 `System.currentTimeMillis()` call in
@@ -742,13 +752,19 @@ The landed fix covers both defects:
 3. The dlsym stub reloads its caller PC from the existing saved frame slot
    after `LOAD_RUNTIME_INSTANCE`. The common macro and Linux assembly remain
    unchanged.
-4. `run_critical_native_probe.sh` covers unresolved `()J` plus registered
-   zero, FP-only, mixed integer/FP, stack-spilled signatures, and scalar
-   returns. JIT dump inspection confirmed `rsp+0x20`/`rsp+0x28` stack slots.
+4. `run_critical_native_probe.sh` covers unresolved `()J`, registered zero,
+   FP-only, mixed integer/FP, stack-spilled signatures, scalar returns, and the
+   corresponding unresolved exported app-JNI dlsym shapes. JIT dump inspection
+   confirmed `rsp+0x20`/`rsp+0x28` stack slots.
+5. The harness alternates `System.loadLibrary` and absolute `System.load`.
+   Windows drive/root/UNC absolute paths bypass host library-path prefixing;
+   the internal `BaseDexClassLoader.getLdLibraryPath()` contract remains
+   colon-separated after it parses the public semicolon-separated property.
 
-Remaining direct-call work is mixed-signature unresolved app-JNI dlsym
-coverage and real Windows 10 acceptance. These do not justify retaining the
-RWX J-1 path as the product default.
+Remaining direct-call work is real Windows 10 acceptance. Broader W-024 work
+still covers compiled-JNI signatures, state transitions, native-JIT gate
+removal, and libcore demotions. None justifies retaining the RWX J-1 path as
+the product default.
 
 ## 13. Current status — 2026-07-24
 
@@ -765,6 +781,7 @@ RWX J-1 path as the product default.
 | Root-cause correction | JIT-root signed displacement plus latent CodeInfo overflow |
 | PE asm definitions | Windows-target generator test enforces `RUNTIME_INSTRUMENTATION_OFFSET=0x328` |
 | Threshold-zero CriticalNative | Direct visitor uses Win64 unified ordinals/home area; dlsym caller PC preserved; repeated J-1 and dual-view probes pass |
+| Unresolved CriticalNative dlsym | ART-owned `JVM_NativeLoad` bridge; mixed/spilled/scalar exported calls pass through both load APIs |
 
 ### Open
 
@@ -772,7 +789,7 @@ RWX J-1 path as the product default.
 |------|---------|
 | Real Windows acceptance | Host access; Wine implementation and matrix are complete |
 | Direct encoding checks | Add checks at JIT-root patch and CodeInfo construction sites |
-| Native JIT | Complete mixed/high-FP compiled-JNI signatures, unresolved app-JNI coverage, and state-transition matrix |
+| Native JIT | Complete mixed/high-FP compiled-JNI signatures, unresolved normal/Fast app JNI, and state-transition matrix |
 
 ### Current test summary
 
@@ -784,6 +801,7 @@ RWX J-1 path as the product default.
 | FloatProbe normal threshold | PASS | PASS |
 | FloatProbe `-Xjitthreshold:0` | PASS, 5/5 current harness | PASS, 5/5 current harness |
 | Direct registered CriticalNative signatures | PASS, 5/5 | PASS, 5/5 |
+| Direct unresolved CriticalNative signatures | PASS, 5/5 | PASS, 5/5 |
 | FastNative ABI probe, native gate closed | PASS | PASS |
 | FastNative ABI probe, native gate open | PASS after managed/native convention split | PASS after managed/native convention split |
 
@@ -808,6 +826,7 @@ RWX J-1 path as the product default.
 | 2026-07-24 | Threshold-zero root cause isolated to missing Win64 direct-CriticalNative shadow space plus dlsym-stub `r11` caller-PC clobber; a reverted research prototype passes 20/20 and is later superseded by the complete landed fix |
 | 2026-07-24 | Compiled-JNI/FastNative failure isolated to MS native register definitions leaking into the incoming ART managed convention; managed/native convention split landed and targeted System.arraycopy/StringFactory runs pass |
 | 2026-07-24 | Direct CriticalNative Win64 visitor and dlsym caller-PC fixes landed; threshold-zero and mixed registered signature probes pass in both J-1 and dual-view modes |
+| 2026-07-24 | Replaced direct `LoadLibraryA` native-load shortcut with an ART-owned `JavaVMExt::LoadNativeLibrary` bridge; unresolved mixed-signature dlsym and both Java load APIs pass |
 
 ## 15. Code anchors
 

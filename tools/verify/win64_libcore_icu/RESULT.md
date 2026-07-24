@@ -75,7 +75,7 @@ IoProbe.done=ok
 | Zip Inflater/Deflater/CRC/Adler | Real AOSP ojluni |
 | Float/Double, Object streams, Character, jdk.internal.misc.VM | Real AOSP |
 | System/Runtime/math/time | PE stubs (`libcore_hello3` + `win_runtime_natives`) |
-| `JVM_*` memory helpers | Standalone `openjdkjvm.dll` (process memory heuristics; not full ART heap yet) |
+| `JVM_*` helpers | Product standalone `openjdkjvm.dll`: process-memory heuristics, I/O/socket surface, and ART-owned native-load delegation |
 | NIO/EPoll/Unix FS/process | **Not included** (classic Socket via javacore Win bridge) |
 
 Artifact: `build/win64_libcore_icu/openjdk.dll` (~113K), `openjdkjvm.dll` (~13K)
@@ -180,7 +180,7 @@ CryptoSmoke.done=ok
 
 Configure flag: `-DMDVM_WIN64_BUILD_CRYPTO=ON` (default ON in harness).
 
-### Not done (remaining L-002)
+### Historical C0 remaining scope (completed later in this document)
 - `win-x86_64` perlasm (llvm-ml) instead of OPENSSL_NO_ASM
 - ~~`ssl.dll` / full TLS stack~~ **C1 PE done** (see below)
 - ~~conscrypt `libjavacrypto` PE~~ **C1 PE done**; Java provider still missing from boot.jar
@@ -213,8 +213,8 @@ OK libssl.dll ... JNI_OnLoad=null
 OK libjavacrypto.dll ... JNI_OnLoad=<non-null>
 ```
 
-### C2/C3 blockers (honest)
-- Current `run/boot.jar` has `javax/net/ssl/*` API types and **string** references to
+### Historical C1 blockers (resolved by C2/C3 below)
+- The C1-era `run/boot.jar` had `javax/net/ssl/*` API types and **string** references to
   `com.android.org.conscrypt.OpenSSLProvider` / `JSSEProvider` (security provider list),
   but **no** `Lcom/android/org/conscrypt/` or `NativeCrypto` class bodies.
 - ART does not preload `libjavacrypto`; platform path is `System.loadLibrary("javacrypto")`
@@ -222,9 +222,9 @@ OK libjavacrypto.dll ... JNI_OnLoad=<non-null>
 - Full HTTPS golden requires packaging conscrypt Java (jarjar `com.android.org.conscrypt`)
   onto bootclasspath (or extension jar) then a TLS golden (loopback or external).
 
-## Phase C2 — conscrypt Java on bootclasspath (L-002 partial, 2026-07-17)
+## Phase C2 — conscrypt Java on bootclasspath (historical checkpoint, 2026-07-17)
 
-**Update:** With W-019 Math fix + Runtime.nativeLoad + jarjar prefix + JNI_OnLoad fixes,
+**Historical update:** With W-019 Math fix + the then-current Runtime.nativeLoad shortcut + jarjar prefix + JNI_OnLoad fixes,
 wine `LoadCryptoProbe` constructs `OpenSSLProvider` successfully:
 ```
 map=libjavacrypto.dll
@@ -233,10 +233,12 @@ System.loadLibrary=ok
 OpenSSLProvider.instance=AndroidOpenSSL version 1.0
 LoadCryptoProbe.done=ok
 ```
-`SslProviderProbe` still crashes on `Security.getProviders()` (default provider list path) — C2+ residual.
+At this checkpoint, `SslProviderProbe` crashed on `Security.getProviders()`;
+the later L-002 close below supersedes that result.
 
 
-**Status:** **PACKAGED + partial runtime** (provider construction blocked by Math CriticalNative ABI)
+**Historical status:** **PACKAGED + partial runtime**. The Math/native and TLS
+blockers listed here were subsequently resolved; see the L-002 close below.
 
 ### Packaging
 - Script: `tools/bootjar/build_conscrypt_win64.sh`
@@ -252,13 +254,13 @@ LoadCryptoProbe.done=ok
 - Wine `System.load` / `System.loadLibrary("javacrypto")` **OK** (LoadCryptoProbe)
 - `Class.forName(OpenSSLProvider)` **OK**
 
-### Blockers remaining (not C2 packaging)
-- **W-019:** `java.lang.Math` `@CriticalNative` (and FastNative double ABI) crashes on Win64 PE
+### Blockers at this checkpoint (later resolved or superseded)
+- **W-019:** `java.lang.Math` `@CriticalNative` (and FastNative double ABI) crashed on Win64 PE
   (`Math.ceil` aborts; HashMap/`OpenSSLProvider.<init>`/`NativeCrypto.<clinit>` trip on it)
-- BootClassLoader resource `getResourceAsStream` still hits incomplete NIO.2 ZipFile path;
+- BootClassLoader resource `getResourceAsStream` hit the incomplete NIO.2 ZipFile path;
   Windows `Security` clinit **skips** resource load and uses `initializeStatic()`
 - BC provider deferred (not on bootclasspath)
-- Full HTTPS golden (C3) still open
+- Full HTTPS golden (C3) was still open at this checkpoint
 
 ### Wine evidence (LoadCryptoProbe)
 ```
@@ -446,4 +448,42 @@ Rebuilt conscrypt+okhttp boot.jar with security.properties. Wine:
 
 ## W-015 CLOSED — product libopenjdkjvm PE (2026-07-17)
 
-Standalone hybrid `openjdkjvm_memory_standalone.c` is product soname (I/O+sockets+memory+ActiveProcessorCount). ART-tree memory_windows.cc remains experimental minimal helper.
+Standalone hybrid `openjdkjvm_memory_standalone.c` is the product soname and
+broad `JVM_*` surface (I/O, sockets, memory heuristics, raw monitors, time, and
+`ActiveProcessorCount`). ART-tree `openjdkjvm_memory_windows.cc` supplies real
+ART heap/GC helpers plus the narrow `ART_LoadNativeLibrary` bridge used by the
+product DLL.
+
+## Native-load ownership correction (2026-07-24)
+
+The old Win64 `Runtime.nativeLoad` path directly called `LoadLibraryA` and
+`JNI_OnLoad`. That was sufficient for explicitly registered JNI methods and
+early provider smoke, but it bypassed `JavaVMExt::libraries_`. ART therefore
+could not resolve exported `Java_*` methods for unresolved app JNI; Win64 soft
+missing-native stubs returned zeros.
+
+The product path now matches AOSP ownership:
+
+```text
+java.lang.Runtime.nativeLoad
+  -> libopenjdkjvm.dll!JVM_NativeLoad
+  -> art.dll!ART_LoadNativeLibrary
+  -> JavaVMExt::LoadNativeLibrary
+```
+
+The host native loader recognizes Windows drive-qualified, root-qualified, and
+UNC absolute paths, so absolute `System.load` does not become `./Z:\...`.
+Libcore accepts the public semicolon-separated `java.library.path`, then
+`BaseDexClassLoader.getLdLibraryPath()` normalizes the internal ART search list
+to colon separators; `OpenNativeLibrary` intentionally retains that internal
+contract.
+
+Focused Wine verification covers both `System.loadLibrary` and absolute
+`System.load`, with unresolved mixed CriticalNative exports resolving through
+the ART registry in J-1 and corrected dual-view modes.
+
+When the plain shared core `boot.jar` is staged, conscrypt-only probes can still
+fail on missing classes such as
+`com/android/org/conscrypt/CryptoUpcalls`. That is a boot packaging selection:
+rerun `build_conscrypt_win64.sh` for the TLS product jar. It is not a reason to
+restore the direct `LoadLibraryA` shortcut.

@@ -9,7 +9,7 @@ Rebuilds the boot class library from nested **`vendor/libcore`** (android-16 /
 # from repo root (dalvikvm-multiplatform)
 bash tools/bootjar/build.sh       # javac -> /tmp/bootbuild/classes
 bash tools/bootjar/dex.sh         # vendor/r8 -> /tmp/bootbuild/boot.jar
-bash tools/bootjar/build_win64.sh # Option H: overlay WinNTFileSystem + re-dex
+bash tools/bootjar/build_win64.sh # recompile shared selectors, re-dex, stage for both hosts
 ```
 
 Requires:
@@ -24,12 +24,15 @@ Requires:
 `MDVM_ARCHIVE=/path/to/archive` may add extra annotation sources; it is not
 needed for product builds.
 
-## Win64 overlay
+## Shared multipath staging
 
-`build_win64.sh` recompiles WinNT path/properties sources from nested libcore:
+`build_win64.sh` does not create a Windows-only jar. It recompiles the shared
+runtime-OS selection anchors from nested libcore, then stages identical
+`boot.jar` bytes to the Win64 product run tree and the Linux L-005 run tree.
 
-- `vendor/libcore/multiplatform/windows/java/...` (mirrors), or
-- `vendor/libcore/ojluni/src/main/java/...` (folded ojluni sources)
+The jar contains both `UnixFileSystem` and `WinNTFileSystem`; native ART injects
+`dalvik.vm.multiplatform.internal.os`, and `VMRuntime.isWindowsOs()` selects the
+backend and separators at runtime.
 
 ## Why AOSP r8 + platform-build
 
@@ -37,15 +40,16 @@ Dex with AOSP r8 and
 `-Dcom.android.tools.r8.emitRecordAnnotationsInDex=1 --android-platform-build`
 so `java.lang.Record` remains in boot dex (ART WellKnownClasses).
 
-## Conscrypt on Win64 boot (L-002 C2)
+## Conscrypt/TLS product boot
 
 ```bash
 bash tools/bootjar/build.sh            # or reuse existing /tmp/bootbuild/classes
-bash tools/bootjar/build_win64.sh      # WinNT FileSystem overlay
+bash tools/bootjar/build_win64.sh      # stage the shared multipath jar
 bash tools/bootjar/build_conscrypt_win64.sh
 ```
 
 Merges jarjar `com.android.org.conscrypt` into boot classes, embeds
 `java/security/security.properties`, re-dexes, and stages
 `build/win64_phase1/run/boot.jar`. Requires host `g++` + boringssl headers for
-`NativeConstants`. Provider init at runtime still needs W-019 (Math CriticalNative).
+`NativeConstants`. The resulting jar remains the same shared multipath boot
+format; it adds the conscrypt classes and security resources used by TLS.

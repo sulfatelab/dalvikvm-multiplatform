@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Verify the Win64 optimizing-compiler direct @CriticalNative ABI and the
-# unresolved ()J dlsym path exercised by threshold-zero FloatProbe.
+# Verify the Win64 optimizing-compiler direct @CriticalNative ABI, including
+# threshold-zero ()J and unresolved exported mixed-signature dlsym paths.
 
 REPO="$(cd "$(dirname "$0")/../../.." && pwd)"
 BUILD="${BUILD:-$REPO/build/win64_phase1}"
@@ -29,22 +29,34 @@ cmake -S "$REPO/tools/verify/win64_phase4/critical_native" \
   -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build "$NATIVE_BUILD" -j"$(nproc)"
 
-if ! llvm-readobj --coff-exports "$NATIVE_BUILD/libcriticalnativeprobe.dll" |
-    grep -q "Name: JNI_OnLoad"; then
-  echo "critical native probe DLL does not export JNI_OnLoad" >&2
-  exit 1
-fi
+EXPORTS="$(llvm-readobj --coff-exports "$NATIVE_BUILD/libcriticalnativeprobe.dll")"
+for symbol in JNI_OnLoad \
+    Java_CriticalNativeDlsymProbe_zero \
+    Java_CriticalNativeDlsymProbe_sixLongs \
+    Java_CriticalNativeDlsymProbe_sixDoubles \
+    Java_CriticalNativeDlsymProbe_mixed \
+    Java_CriticalNativeDlsymProbe_mixed32 \
+    Java_CriticalNativeDlsymProbe_floatReturn \
+    Java_CriticalNativeDlsymProbe_callMask; do
+  if ! grep -qF "Name: $symbol" <<< "$EXPORTS"; then
+    echo "critical native probe DLL does not export $symbol" >&2
+    exit 1
+  fi
+done
 cp -f "$NATIVE_BUILD/libcriticalnativeprobe.dll" "$BUILD/"
+mkdir -p "$BUILD/empty-native-dir"
 
 JAVA_TMP="$(mktemp -d "${TMPDIR:-/tmp}/win64-critical-java.XXXXXX")"
 mkdir -p "$JAVA_TMP/classes" "$JAVA_TMP/dex"
 "$JAVAC" -d "$JAVA_TMP/classes" \
   "$REPO/vendor/libcore/dalvik/src/main/java/dalvik/annotation/optimization/CriticalNative.java" \
-  "$REPO/tools/verify/win64_phase4/src/CriticalNativeProbe.java"
+  "$REPO/tools/verify/win64_phase4/src/CriticalNativeProbe.java" \
+  "$REPO/tools/verify/win64_phase4/src/CriticalNativeDlsymProbe.java"
 java -Dcom.android.tools.r8.emitRecordAnnotationsInDex=1 \
   -cp "$R8JAR" com.android.tools.r8.D8 \
   --release --min-api 31 --output "$JAVA_TMP/dex" \
-  "$JAVA_TMP/classes/CriticalNativeProbe.class"
+  "$JAVA_TMP/classes/CriticalNativeProbe.class" \
+  "$JAVA_TMP/classes/CriticalNativeDlsymProbe.class"
 "$JAR" --create --file "$RUN/criticalnativeprobe.jar" \
   -C "$JAVA_TMP/dex" classes.dex
 
@@ -57,6 +69,7 @@ run_vm() {
   local marker="$6"
   local values_marker="$7"
   local iteration="$8"
+  local load_mode="${9:-library}"
   local log="${TMPDIR:-/tmp}/win64-critical-${mode}-${probe}-${iteration}.log"
 
   local rc
@@ -73,7 +86,8 @@ run_vm() {
       -XjdwpProvider:none \
       -Xms64m -Xmx512m \
       -Xjitthreshold:0 \
-      -Djava.library.path=. \
+      -Dcritical.load="$load_mode" \
+      '-Djava.library.path=empty-native-dir;.' \
       -cp "$jar" "$cls"
   ) > "$log" 2>&1; then
     rc=0
@@ -97,6 +111,7 @@ run_vm() {
 
 FLOAT_VALUES=""
 CRITICAL_VALUES="CriticalNativeProbe values longs=190 doubles=91.0 mixed=159.5 mixed32=87 floatReturn=15.25 calls=63 branchSeen=true"
+DLSYM_VALUES="CriticalNativeDlsymProbe values longs=190 doubles=91.0 mixed=159.5 mixed32=87 floatReturn=15.25 calls=63 branchSeen=true"
 
 for mode_and_dual in "dual:1" "j1:0"; do
   mode="${mode_and_dual%%:*}"
@@ -104,8 +119,25 @@ for mode_and_dual in "dual:1" "j1:0"; do
   for iteration in $(seq 1 "$REPEATS"); do
     run_vm "$mode" "$dual" float "$RUN/FloatProbe.jar" \
       FloatProbe "FloatProbe OK" "$FLOAT_VALUES" "$iteration"
+    if (( iteration % 2 == 0 )); then
+      load_mode="absolute"
+    else
+      load_mode="library"
+    fi
     run_vm "$mode" "$dual" signatures "$RUN/criticalnativeprobe.jar" \
-      CriticalNativeProbe "CriticalNativeProbe OK" "$CRITICAL_VALUES" "$iteration"
+      CriticalNativeProbe "CriticalNativeProbe OK" "$CRITICAL_VALUES" "$iteration" "$load_mode"
+    log="${TMPDIR:-/tmp}/win64-critical-${mode}-signatures-${iteration}.log"
+    if ! grep -qF "CriticalNativeProbe load=$load_mode" "$log"; then
+      echo "$mode signature load-mode verification failed: $log" >&2
+      tail -100 "$log" >&2
+      exit 1
+    fi
+    if ! grep -qF "CriticalNativeDlsymProbe OK" "$log" ||
+       ! grep -qF "$DLSYM_VALUES" "$log"; then
+      echo "$mode unresolved dlsym signature verification failed: $log" >&2
+      tail -100 "$log" >&2
+      exit 1
+    fi
   done
 done
 

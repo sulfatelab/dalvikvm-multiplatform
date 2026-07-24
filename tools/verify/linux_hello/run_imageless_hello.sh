@@ -4,9 +4,9 @@
 # Runs Hello.main against the converter-built host dalvikvm using imageless
 # boot.jar interpretation (-Ximage:/nonexistent-no-boot-image, -Xint).
 #
-# Important: Linux needs a boot.jar that can select UnixFileSystem.
-# Shared multipath boots (Unix+WinNT+VMRuntime.isWindowsOs) are accepted; legacy
-# WinNT-only product boots without multipath OS selection are rejected.
+# Linux and Win64 use the same shared multipath boot.jar bytes. The ELF runtime
+# must select UnixFileSystem from a jar that also carries WinNTFileSystem and
+# the VMRuntime runtime-OS selector.
 #
 # Usage:
 #   tools/verify/linux_hello/run_imageless_hello.sh
@@ -36,19 +36,18 @@ pick_first() {
   return 1
 }
 
-is_linux_boot_jar() {
+is_shared_boot_jar() {
   local jar="$1"
   python3 - "$jar" <<'PY2'
 import zipfile,sys
 path=sys.argv[1]
 z=zipfile.ZipFile(path)
 data=b"".join(z.read(n) for n in z.namelist() if n.endswith(".dex"))
-# Shared multipath boot may embed both UnixFileSystem and WinNTFileSystem;
-# require VMRuntime.isWindowsOs (runtime selection) when WinNT is present.
 has_unix = b"UnixFileSystem" in data
 has_winnt = b"WinNTFileSystem" in data
-has_osdet = b"isWindowsOs" in data or b"dalvik.vm.multiplatform.internal.os" in data
-if has_unix and (not has_winnt or has_osdet):
+has_osdet = b"isWindowsOs" in data
+has_osprop = b"dalvik.vm.multiplatform.internal.os" in data
+if has_unix and has_winnt and has_osdet and has_osprop:
     sys.exit(0)
 sys.exit(1)
 PY2
@@ -56,26 +55,26 @@ PY2
 
 BOOT_JAR="${MDVM_BOOT_JAR:-}"
 if [[ -n "$BOOT_JAR" ]]; then
-  if ! is_linux_boot_jar "$BOOT_JAR"; then
-    echo "ERROR: MDVM_BOOT_JAR is not Linux-compatible (need UnixFileSystem; WinNT-only without multipath OS selection rejected): $BOOT_JAR" >&2
+  if ! is_shared_boot_jar "$BOOT_JAR"; then
+    echo "ERROR: MDVM_BOOT_JAR is not the shared multipath product boot.jar: $BOOT_JAR" >&2
     exit 2
   fi
 else
   BOOT_JAR=""
   for cand in \
+      "$ROOT/build/win64_phase1/run/boot.jar" \
       /tmp/vm/run/boot.jar \
       "$OUT_DIR/boot.jar" \
       "$ROOT/dist/linux_hello/boot.jar"; do
-    if [[ -f "$cand" ]] && is_linux_boot_jar "$cand"; then
+    if [[ -f "$cand" ]] && is_shared_boot_jar "$cand"; then
       BOOT_JAR="$cand"
       break
     fi
   done
 fi
 if [[ -z "${BOOT_JAR:-}" ]]; then
-  echo "ERROR: no Linux-compatible boot.jar found." >&2
-  echo "  Expected shared multipath or Unix boot (e.g. /tmp/vm/run/boot.jar)." >&2
-  echo "  Legacy WinNT-only boots without multipath OS selection are not usable on Linux." >&2
+  echo "ERROR: no shared multipath product boot.jar found." >&2
+  echo "  Build/stage the single Linux+Win64 jar with tools/bootjar/build_win64.sh." >&2
   exit 2
 fi
 
@@ -129,7 +128,7 @@ export LD_LIBRARY_PATH="$NATIVE${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
 {
   echo "=== L-005 Linux imageless Hello gate ==="
-  echo "date: $(date -Is)"
+  echo "date: $(date '+%Y-%m-%d %H:%M:%S %z')"
   echo "dalvikvm: $DALVIKVM"
   echo "boot.jar: $BOOT_JAR -> $RUN_DIR/boot.jar ($(wc -c < "$RUN_DIR/boot.jar") bytes)"
   echo "hello.jar: $RUN_DIR/hello.jar ($(wc -c < "$RUN_DIR/hello.jar") bytes)"
@@ -161,7 +160,7 @@ if grep -q 'Hello from dalvikvm!' "$LOG" && grep -q '^exit=0$' "$LOG"; then
     echo "# L-005 Linux imageless Hello gate"
     echo
     echo "**Status:** PASS"
-    echo "**Date:** $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    echo "**Date:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
     echo "**Host:** $(hostname)"
     echo
     echo "## Command"
@@ -174,7 +173,7 @@ if grep -q 'Hello from dalvikvm!' "$LOG" && grep -q '^exit=0$' "$LOG"; then
     echo
     echo "- \`dalvikvm -showversion\` prints ART version"
     echo "- Imageless \`-Xint\` Hello.main prints \`Hello from dalvikvm!\` and exits 0"
-    echo "- boot.jar is Linux-compatible (UnixFileSystem; not WinNT product boot)"
+    echo "- boot.jar is the shared Linux+Win64 multipath artifact; ELF selected UnixFileSystem"
     echo
     echo "## Artifacts"
     echo

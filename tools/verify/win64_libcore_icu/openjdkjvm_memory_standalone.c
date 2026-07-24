@@ -1,6 +1,6 @@
-/* Standalone JVM_* exports for hybrid openjdk PE (no ART headers).
- * Memory helpers + POSIX/socket I/O used by ojluni natives.
- * Prefer real art openjdkjvm later (W-015).
+/* Product JVM_* exports for hybrid openjdk PE (no ART headers).
+ * Memory helpers + POSIX/socket I/O used by ojluni natives. Operations that
+ * require ART ownership are delegated to an explicit art.dll bridge.
  */
 #include <jni.h>
 #include <windows.h>
@@ -50,6 +50,22 @@ __declspec(dllexport) jlong JVM_MaxMemory(void) {
 }
 
 __declspec(dllexport) void JVM_GC(void) {}
+
+/* Do not replace this with LoadLibrary + JNI_OnLoad. That bypasses
+ * JavaVMExt::libraries_ and makes unresolved Java_* native lookup fail.
+ */
+__declspec(dllexport) jstring JVM_NativeLoad(
+    JNIEnv* env, jstring java_filename, jobject java_loader, jclass caller) {
+  typedef jstring (*art_load_native_library_fn)(JNIEnv*, jstring, jobject, jclass);
+  HMODULE art = GetModuleHandleA("art.dll");
+  art_load_native_library_fn load_native_library = art == NULL
+      ? NULL
+      : (art_load_native_library_fn)GetProcAddress(art, "ART_LoadNativeLibrary");
+  if (load_native_library == NULL) {
+    return (*env)->NewStringUTF(env, "ART_LoadNativeLibrary is unavailable");
+  }
+  return load_native_library(env, java_filename, java_loader, caller);
+}
 
 /* W-015: Runtime.availableProcessors path used by some ojluni natives. */
 __declspec(dllexport) jint JVM_ActiveProcessorCount(void) {

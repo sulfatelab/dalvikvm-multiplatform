@@ -111,10 +111,10 @@ they must not require a sibling MinDalvikVM-Archive tree.
 ## Quick product scripts
 
 ```bash
-# Linux boot.jar (needs nested vendor/libcore + ICU sources)
+# Build classes for the single shared Linux+Win64 multipath boot.jar
 tools/bootjar/build.sh
 
-# Win64 Option-H boot.jar overlay (WinNTFileSystem)
+# Recompile the shared OS-selection anchors, dex, and stage the same jar for both hosts
 tools/bootjar/build_win64.sh
 
 # Win64 phase1 CMake (cross from Linux; needs win64-dev-env)

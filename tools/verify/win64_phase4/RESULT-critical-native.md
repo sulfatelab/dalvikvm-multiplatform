@@ -10,8 +10,8 @@ the Microsoft x64 ABI while preserving the existing Linux/SysV path.
 
 The focused acceptance harness passed all repeated process runs:
 
-| Mode | Threshold-zero `FloatProbe` | Registered signature probe |
-|------|-----------------------------|----------------------------|
+| Mode | Threshold-zero `FloatProbe` | Registered + unresolved signature suite |
+|------|-----------------------------|-----------------------------------------|
 | Default corrected dual view | 5/5 | 5/5 |
 | J-1 diagnostic view | 5/5 | 5/5 |
 
@@ -30,7 +30,7 @@ CriticalNative acceptance: dual=10/10 float+signature runs; j1=10/10
 
 ## Root causes
 
-Two independent Win64 defects combined in the unresolved `()J` path:
+Two independent Win64 ABI defects combined in the unresolved `()J` path:
 
 1. `CriticalNativeCallingConventionVisitorX86_64` used the upstream SysV
    layout. A zero-argument call reserved no outgoing bytes even though
@@ -41,6 +41,13 @@ Two independent Win64 defects combined in the unresolved `()J` path:
    the PE form of `LOAD_RUNTIME_INSTANCE` also uses `r11` as scratch. After the
    stack-layout fix exposed this second defect, the stub attempted to return to
    `Runtime*`.
+
+The first mixed-signature unresolved probe then exposed a separate native-load
+plumbing defect. Win64 `Runtime.nativeLoad` used a direct
+`LoadLibraryA` + `JNI_OnLoad` shortcut. That loaded and initialized the DLL but
+did not add it to `JavaVMExt::libraries_`, so ART could not resolve exported
+`Java_*` names for the app class loader. The Win64 missing-native soft stubs
+returned zero, which initially looked like another calling-convention failure.
 
 ## Implementation
 
@@ -57,6 +64,17 @@ The optimizing visitor now has a narrow Windows-target branch:
 The unresolved critical dlsym stub reloads the saved caller PC from its existing
 frame slot immediately after the Windows `LOAD_RUNTIME_INSTANCE` expansion.
 This keeps the common macro and non-Windows assembly unchanged.
+
+Win64 `JVM_NativeLoad` now delegates through `art.dll!ART_LoadNativeLibrary`,
+which follows AOSP `OpenjdkJvm.cc` and calls `JavaVMExt::LoadNativeLibrary`.
+The host native loader also recognizes drive-qualified, root-qualified, and UNC
+Windows paths, so absolute `System.load` paths are not prefixed with `./`.
+Linux keeps the existing `/` absolute-path test and loader behavior unchanged.
+
+The public Windows `java.library.path` remains semicolon-separated. Libcore
+parses that form, while `BaseDexClassLoader.getLdLibraryPath()` deliberately
+normalizes the internal ART search list to colon separators on every host; the
+native loader therefore retains its existing `:` split.
 
 JIT dump disassembly confirmed that generated Win64 calls reserve the home
 area, use unified register ordinals, and place spilled arguments at
@@ -78,10 +96,18 @@ compiled code:
 - mixed 32-bit integer/float arguments;
 - integer, long, float, and double returns.
 
-The exact accepted value line is:
+`CriticalNativeDlsymProbe` executes the same mixed, floating, spilled, and
+scalar-return shapes without `RegisterNatives`. Every entrypoint is resolved by
+its exported `Java_CriticalNativeDlsymProbe_*` name through ART's library
+registry. The harness alternates `System.loadLibrary` and absolute
+`System.load`, and supplies a Windows semicolon-separated library path whose
+first existing directory is empty, verifying fallback to the second entry.
+
+The exact accepted value lines are:
 
 ```text
 CriticalNativeProbe values longs=190 doubles=91.0 mixed=159.5 mixed32=87 floatReturn=15.25 calls=63 branchSeen=true
+CriticalNativeDlsymProbe values longs=190 doubles=91.0 mixed=159.5 mixed32=87 floatReturn=15.25 calls=63 branchSeen=true
 ```
 
 The probe DLL uses CMake `WINDOWS_EXPORT_ALL_SYMBOLS` because Android's
@@ -90,9 +116,6 @@ The probe DLL uses CMake `WINDOWS_EXPORT_ALL_SYMBOLS` because Android's
 
 ## Remaining scope
 
-- Mixed-signature unresolved app-JNI dlsym calls are not yet covered. An
-  experimental unresolved mixed probe did not reach its exported functions and
-  was removed rather than retained as a misleading test.
 - Real Windows 10 acceptance is still required.
 - W-024 remains open for broader normal/Fast/Critical state transitions,
   removal of the native-JIT diagnostic gate, and restoration of the remaining
@@ -106,7 +129,9 @@ The same ART build also passed:
 - `run_native_abi_probe.sh`: gate-closed and gate-open FastNative checks;
 - `run_jit_smoke.sh`: 10/10;
 - `run_jit_matrix.sh`: 14/14;
-- native Linux `art` and `dalvikvm` build.
+- native Linux `nativeloader`, `art`, `openjdkjvm`, and `dalvikvm` build;
+- Linux L-005 imageless Hello on the same shared multipath `boot.jar` bytes
+  staged for Win64.
 
 The final repeated matrix initially exposed an unrelated pre-existing
 `pthread_once` early-return race in the parent compatibility layer. That race
@@ -117,5 +142,7 @@ Related files:
 
 - `run_critical_native_probe.sh`
 - `src/CriticalNativeProbe.java`
+- `src/CriticalNativeDlsymProbe.java`
 - `critical_native/critical_native_probe.c`
+- `../win64_libcore_icu/openjdkjvm_memory_standalone.c`
 - `../../../win32_open_items.md` W-024

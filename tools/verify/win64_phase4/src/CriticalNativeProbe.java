@@ -32,6 +32,14 @@ public final class CriticalNativeProbe {
 
     private static native int calls();
 
+    static long getSink() {
+        return sink;
+    }
+
+    static void setSink(long value) {
+        sink = value;
+    }
+
     private static void exercise(boolean callNatives) {
         long value = sink;
         for (int i = 0; i < 1000000; ++i) {
@@ -56,9 +64,18 @@ public final class CriticalNativeProbe {
         // main() runs after this class is visibly initialized, so RegisterNatives
         // can publish direct CriticalNative entrypoints instead of retaining the
         // class-initialization dlsym gate.
-        System.loadLibrary("criticalnativeprobe");
+        String loadMode = System.getProperty("critical.load");
+        if ("absolute".equals(loadMode)) {
+            System.load(new java.io.File("libcriticalnativeprobe.dll").getAbsolutePath());
+            System.out.println("CriticalNativeProbe load=absolute");
+        } else {
+            System.loadLibrary("criticalnativeprobe");
+            System.out.println("CriticalNativeProbe load=library");
+        }
         exercise(false);
         exercise(true);
+        CriticalNativeDlsymProbe.exercise(false);
+        CriticalNativeDlsymProbe.exercise(true);
 
         System.out.println("CriticalNativeProbe values longs=" + longsResult
                 + " doubles=" + doublesResult
@@ -90,5 +107,6 @@ public final class CriticalNativeProbe {
             throw new AssertionError("compiled CriticalNative branch was not executed");
         }
         System.out.println("CriticalNativeProbe OK");
+        CriticalNativeDlsymProbe.verify();
     }
 }
