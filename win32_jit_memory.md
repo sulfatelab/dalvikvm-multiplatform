@@ -53,7 +53,7 @@ Measured on agent01 under Wine:
 | Default Hello | About 21–24 managed compilations; PASS |
 | Default JIT smoke | 10/10 |
 | Default probe matrix | 14/14 |
-| Native JIT | Gated off; managed/native convention split landed, broader ABI matrix remains |
+| Native JIT | Gated off; managed/native split and direct CriticalNative ABI fixes landed, broader W-024 matrix remains |
 | J-1 fallback | Diagnostic opt-out with `ART_WIN64_JIT_DUAL=0`; Hello passes |
 | Code cache | 64 KiB initial release capacity; 64 MiB maximum |
 
@@ -412,9 +412,8 @@ emulation is added.
 - Remaining work is real-Windows repeated-start testing, dynamic-code/CFG
   policy testing, large `SEC_COMMIT` pressure measurement, and direct release
   checks at the JIT-root and CodeInfo encoding sites.
-- Native JIT remains gated independently until the compiled-JNI adapter keeps
-  ART-managed inputs separate from Microsoft x64 native outputs and the full
-  W-024 signature matrix passes.
+- Native JIT remains gated independently until the remaining W-024 compiled-JNI
+  signatures, state transitions, and unresolved app-JNI cases pass.
 
 ## 7. Implementation and commit status
 
@@ -611,12 +610,18 @@ For static
 throws `data == null`. For `System.arraycopy`, managed `RSI` contains `src`
 and `RDX` contains `srcPos == 0`; the old compiled stub read a null `src`.
 
-The landed split makes both workloads pass. The `System.arraycopy` probe also exercises seven native
-arguments, including the shadow area and three stack arguments, so the tested
-outgoing core/reference packing is not the immediate failure. The prototype
-has been promoted into the implementation. Mixed-FP, high managed-FP ordinals,
-unresolved app JNI, and normal/Fast/Critical variants still require generated-code
-coverage.
+The landed split makes both workloads pass. The `System.arraycopy` probe also
+exercises seven native arguments, including the shadow area and three stack
+arguments, so the tested outgoing core/reference packing is not the immediate
+failure. Mixed-FP, high managed-FP ordinals, unresolved app JNI, and broader
+normal/Fast/Critical transitions still require generated-code coverage.
+
+The separate optimizing-compiler direct CriticalNative convention is also
+fixed. Win64 direct calls now use unified Microsoft x64 argument ordinals,
+reserve the 32-byte home area, and spill after it. The unresolved critical
+dlsym stub reloads its caller PC after the PE runtime-instance macro uses
+`r11` as scratch. The focused direct-signature probe covers zero, mixed
+integer/floating, FP-only, stack-spilled arguments, and scalar returns.
 
 The memory plan does not change the remaining blocker. The compiled-JNI split
 is landed; the current acceptance probe is
@@ -681,25 +686,25 @@ gate and declaring P5 complete:
 - run the smoke and probe matrices;
 - exercise code-cache collection under load.
 
-The focused compiled-JNI/FastNative native-JIT probe is now covered and passes
-with the opt-in gate. Broader native-JIT tests remain excluded until the
-remaining W-024 ABI matrix and direct CriticalNative fixes are complete.
+The focused compiled-JNI/FastNative native-JIT probe and direct CriticalNative
+probe are now covered and pass. Broader native-JIT tests remain excluded until
+the remaining W-024 ABI matrix is complete.
 
-### 12.5 Threshold-zero stress finding
+### 12.5 Threshold-zero stress resolution
 
-`FloatProbe -Xjitthreshold:0` fails in both J-1 and the corrected dual-view
-path, but the failure is now isolated to the Win64 direct `@CriticalNative`
-first-use path rather than JIT memory topology.
+`FloatProbe -Xjitthreshold:0` now passes in both J-1 and the corrected dual-view
+path. The failure was in the Win64 direct `@CriticalNative` first-use path, not
+JIT memory topology.
 
-The control matrix is decisive:
+The historical controls and current result are:
 
-| Configuration | Result |
-|---------------|--------|
-| Win64 dual view, threshold 0 | FAIL |
-| Win64 J-1, threshold 0 | FAIL at the same path |
-| Win64 JIT disabled, threshold 0 | PASS |
-| Win64 dual view, threshold 1 | PASS |
-| Linux ART, threshold 0 | PASS |
+| Configuration | Historical baseline | Current result |
+|---------------|---------------------|----------------|
+| Win64 dual view, threshold 0 | FAIL | PASS, 5/5 in the combined acceptance harness |
+| Win64 J-1, threshold 0 | FAIL at the same path | PASS, 5/5 in the combined acceptance harness |
+| Win64 JIT disabled, threshold 0 | PASS | Not rerun in this stage; unaffected control |
+| Win64 dual view, threshold 1 | PASS | Superseded by the stricter threshold-zero pass |
+| Linux ART, threshold 0 | PASS | Linux control build passes; runtime behavior unchanged |
 
 The first real fault is a stack walk from the unresolved direct
 `System.currentTimeMillis()` call in
@@ -712,47 +717,38 @@ The exact mismatch is:
 
 1. The Win64 JNI-frame helper correctly reports a 32-byte Microsoft x64 shadow
    area for direct `@CriticalNative` shorty `J` (`()J`).
-2. `CriticalNativeCallingConventionVisitorX86_64` still has the upstream SysV
-   direct-call behavior: it reports zero outgoing bytes for `()J`, so the JIT
-   emits no `sub rsp, 32` before `call *ArtMethod::jni_entrypoint`.
+2. `CriticalNativeCallingConventionVisitorX86_64` had the upstream SysV
+   direct-call behavior: it reported zero outgoing bytes for `()J`, so the JIT
+   emitted no `sub rsp, 32` before `call *ArtMethod::jni_entrypoint`.
 3. `art_jni_dlsym_lookup_critical_stub` asks
    `artCriticalNativeFrameSize()` for the expected direct-call frame size and
    receives 32. It therefore positions its managed SaveRefsAndArgs frame as if
    the caller had reserved that area. The stack walker advances 208 bytes and
    lands at caller SP + 32 instead of the caller's method slot.
 
-A temporary experiment that made the optimizing visitor report the missing
-32-byte area corrected the stack walk and exposed a second independent Win64
-stub defect: `LOAD_RUNTIME_INSTANCE r10` uses `r11` as its PE scratch register,
-overwriting the caller PC that the dlsym stub keeps live in `r11`. The stub then
-installs `Runtime*` as the native return address. Reloading `r11` from the
-already-saved frame return-PC slot corrected that failure.
+Adding the missing 32-byte area corrected the stack walk and exposed a second
+independent Win64 stub defect: `LOAD_RUNTIME_INSTANCE r10` uses `r11` as its PE
+scratch register, overwriting the caller PC that the dlsym stub keeps live in
+`r11`. The stub then installed `Runtime*` as the native return address.
 
-With both experimental corrections, `FloatProbe -Xjitthreshold:0` passed 10/10
-times on the default dual view and 10/10 times on J-1. The prototype was
-reverted after the experiment; it is evidence for the fix, not a landed
-workaround.
+The landed fix covers both defects:
 
-The final fix must cover more than the no-argument probe:
-
-1. Give `CriticalNativeCallingConventionVisitorX86_64` a Windows branch using
-   the same Microsoft x64 contract already implemented by
-   `X86_64JniCallingConvention`: RCX/RDX/R8/R9 or XMM0-XMM3 selected by unified
+1. `CriticalNativeCallingConventionVisitorX86_64` has a Windows branch using
+   the Microsoft x64 contract: RCX/RDX/R8/R9 or XMM0-XMM3 selected by unified
    argument ordinal, followed by stack arguments.
-2. Start Win64 direct-call stack offsets after the 32-byte shadow area and
-   include that area in `GetStackOffset()`, so argument moves and
-   `GetCriticalNativeDirectCallFrameSize()` agree for zero, mixed, and spilled
-   arguments.
-3. Preserve the dlsym stub caller PC across `LOAD_RUNTIME_INSTANCE`, preferably
-   by reloading the value from the frame slot already used for stack walking.
-   This is local and leaves the common macro and Linux assembly unchanged.
-4. Add generated-code tests for `()J`, FP-only, mixed integer/FP, and more than
-   four native arguments, plus repeated threshold-zero Wine runs and a real
-   Windows 10 acceptance run.
+2. Win64 direct-call stack offsets start after the 32-byte shadow area, so
+   argument moves and `GetCriticalNativeDirectCallFrameSize()` agree for zero,
+   mixed, and spilled arguments.
+3. The dlsym stub reloads its caller PC from the existing saved frame slot
+   after `LOAD_RUNTIME_INSTANCE`. The common macro and Linux assembly remain
+   unchanged.
+4. `run_critical_native_probe.sh` covers unresolved `()J` plus registered
+   zero, FP-only, mixed integer/FP, stack-spilled signatures, and scalar
+   returns. JIT dump inspection confirmed `rsp+0x20`/`rsp+0x28` stack slots.
 
-Until that complete ABI fix lands, threshold zero remains an expected failure
-in the unmodified Win64 build. It does not justify retaining the RWX J-1 path
-as the product default.
+Remaining direct-call work is mixed-signature unresolved app-JNI dlsym
+coverage and real Windows 10 acceptance. These do not justify retaining the
+RWX J-1 path as the product default.
 
 ## 13. Current status — 2026-07-24
 
@@ -768,15 +764,15 @@ as the product default.
 | dlmalloc configuration | `USE_LOCKS=0`; spin-lock experiment reverted |
 | Root-cause correction | JIT-root signed displacement plus latent CodeInfo overflow |
 | PE asm definitions | Windows-target generator test enforces `RUNTIME_INSTRUMENTATION_OFFSET=0x328` |
+| Threshold-zero CriticalNative | Direct visitor uses Win64 unified ordinals/home area; dlsym caller PC preserved; repeated J-1 and dual-view probes pass |
 
 ### Open
 
 | Item | Blocker |
 |------|---------|
 | Real Windows acceptance | Host access; Wine implementation and matrix are complete |
-| Threshold-zero stress | Root cause confirmed in direct `@CriticalNative` Win64 ABI; complete fix not landed |
 | Direct encoding checks | Add checks at JIT-root patch and CodeInfo construction sites |
-| Native JIT | Split incoming ART-managed and outgoing MS x64 conventions; complete mixed-signature coverage |
+| Native JIT | Complete mixed/high-FP compiled-JNI signatures, unresolved app-JNI coverage, and state-transition matrix |
 
 ### Current test summary
 
@@ -786,7 +782,8 @@ as the product default.
 | JIT smoke | 10/10 | 10/10 |
 | JIT matrix | 14/14 | 14/14 |
 | FloatProbe normal threshold | PASS | PASS |
-| FloatProbe `-Xjitthreshold:0` | Baseline FAIL; two-fix research prototype 10/10 | Baseline FAIL; two-fix research prototype 10/10 |
+| FloatProbe `-Xjitthreshold:0` | PASS, 5/5 current harness | PASS, 5/5 current harness |
+| Direct registered CriticalNative signatures | PASS, 5/5 | PASS, 5/5 |
 | FastNative ABI probe, native gate closed | PASS | PASS |
 | FastNative ABI probe, native gate open | PASS after managed/native convention split | PASS after managed/native convention split |
 
@@ -808,8 +805,9 @@ as the product default.
 | 2026-07-23 | Corrected contiguous dual view passes Wine smoke 10/10 and matrix 14/14 and becomes the Windows default |
 | 2026-07-23 | Full rebuild exposed Linux-layout `asm_defines` regeneration; Windows-target codegen and a permanent 0x328 offset assertion fixed it |
 | 2026-07-23 | Threshold-zero FloatProbe fails identically in J-1 and dual view, separating it from the historical J-2 layout defect |
-| 2026-07-24 | Threshold-zero root cause isolated to missing Win64 direct-CriticalNative shadow space plus dlsym-stub `r11` caller-PC clobber; two-fix prototype passes 20/20 and is reverted pending the complete ABI patch |
+| 2026-07-24 | Threshold-zero root cause isolated to missing Win64 direct-CriticalNative shadow space plus dlsym-stub `r11` caller-PC clobber; a reverted research prototype passes 20/20 and is later superseded by the complete landed fix |
 | 2026-07-24 | Compiled-JNI/FastNative failure isolated to MS native register definitions leaking into the incoming ART managed convention; managed/native convention split landed and targeted System.arraycopy/StringFactory runs pass |
+| 2026-07-24 | Direct CriticalNative Win64 visitor and dlsym caller-PC fixes landed; threshold-zero and mixed registered signature probes pass in both J-1 and dual-view modes |
 
 ## 15. Code anchors
 

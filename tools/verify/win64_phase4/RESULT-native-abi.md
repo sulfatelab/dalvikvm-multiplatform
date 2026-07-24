@@ -68,6 +68,7 @@ override while mixed-FP, high managed-FP ordinal, unresolved app-JNI, and
 normal/Fast/Critical state-transition coverage are added.
 
 Direct optimizing-compiler CriticalNative calls are a separate W-024 path.
-Their confirmed defects are the SysV-shaped direct-call visitor and the
-unresolved critical dlsym stub's live-`r11` caller-PC clobber. See
-`win32_open_items.md` and `win32_jit_memory.md`.
+The Win64 visitor and unresolved critical dlsym `r11` defects are now fixed and
+covered by `RESULT-critical-native.md`. W-024 remains open for unresolved mixed
+dlsym coverage, broader state-transition tests, product demotions, and removal
+of the native-JIT diagnostic gate.

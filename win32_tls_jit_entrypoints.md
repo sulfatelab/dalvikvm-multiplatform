@@ -1254,7 +1254,7 @@ Smoke (wine, imageless, **no** `ART_WIN64_*` env):
 
 W-001 marked CLOSED in [win32_open_items.md](win32_open_items.md).
 
-**JIT memory / codegen:** see [win32_jit_memory.md](win32_jit_memory.md) §13 — managed JIT uses the corrected dual view; D-1 r15 TLS audit is complete; the compiled-JNI managed/native convention split passes the focused native probe, while native methods remain gated pending broader W-024 signature coverage; direct CriticalNative additionally needs the Win64 optimizing visitor and dlsym `r11` fixes.
+**JIT memory / codegen:** see [win32_jit_memory.md](win32_jit_memory.md) §13 — managed JIT uses the corrected dual view; D-1 r15 TLS audit is complete; the compiled-JNI managed/native convention split passes the focused native probe; and direct CriticalNative unified ordinals, shadow/stack layout, and dlsym caller-PC preservation pass threshold-zero and mixed registered-signature probes. Native methods remain gated pending the broader W-024 matrix and product cleanup.
 
 
 ## 13. Appendix — evidence anchors in tree
