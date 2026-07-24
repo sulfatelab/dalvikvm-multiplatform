@@ -151,24 +151,22 @@ build 19044, authorizing fallback cleanup. Detailed evidence and the cleanup
 sequence are in `RESULT-interpreter-jni-fallback.md`; accepted host artifacts
 are under `evidence/w024_host/`.
 
-## Remaining scope
+## Final W-024 status
 
-- Native Windows 10 acceptance is complete.
-- W-024 remains open for removal of the native-JIT diagnostic gate, defensive
-  interpreter-shorty cleanup, and post-change Linux/Win64 regressions.
-  Math.ceil/floor and the shared ELF/PE registration table are
-  restored; see `RESULT-math-critical.md`. Registered and unresolved
-  CriticalNative calls also pass the JVMTI forced-interpreter transition in
-  both memory modes; see `RESULT-jvmti-force.md`.
+Native Windows 10 acceptance, native-JIT gate removal, upstream interpreter
+fallback restoration, and post-change Linux/Win64 regressions are complete.
+Math.ceil/floor and the shared ELF/PE registration table are restored; see
+`RESULT-math-critical.md`. Registered and unresolved CriticalNative calls also
+pass the JVMTI forced-interpreter transition in both memory modes; see
+`RESULT-jvmti-force.md`.
 
 ## Regression verification
 
 The same ART build also passed:
 
 - Win64 `art` and `dalvikvm` build;
-- `run_native_abi_probe.sh`: gate-closed 0/7 and gate-open 7/7 mixed/high-FP
-  normal/FastNative checks across rebinding and method-tracing phases with no
-  extra target compilation;
+- `run_native_abi_probe.sh`: default 7/7 mixed/high-FP normal/FastNative checks
+  across rebinding and method-tracing phases with no extra target compilation;
 - `run_jvmti_force_probe.sh`: 3/3 dual-view and 3/3 J-1 forced-interpreter
   transitions over registered and unresolved normal, FastNative, and
   CriticalNative calls;

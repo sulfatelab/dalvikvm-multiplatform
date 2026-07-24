@@ -68,7 +68,6 @@ run_wine() {
   if ! (
     cd "$BUILD"
     ART_WIN64_JIT_DUAL="$dual" \
-    ART_WIN64_JIT_NATIVE=1 \
     ART_WIN64_JIT_FILTER=MathCriticalProbe \
     ANDROID_ROOT=run ANDROID_ART_ROOT=run ANDROID_I18N_ROOT=run \
     ANDROID_DATA=run/data ICU_DATA=run/icu WINEDEBUG="${WINEDEBUG:--all}" \

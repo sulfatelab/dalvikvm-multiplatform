@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# JIT smoke test — verify managed JIT compiles under wine with the native-JIT gate.
+# JIT smoke test — verify managed and native JIT compilation under Wine.
 #
 # Tests:
 #   T1 – JIT code cache created (no soft-fail)
 #   T2 – Managed methods get JIT-compiled
 #   T3 – Hello output is correct
-#   T4 – Native methods are NOT JIT-compiled by default (new gate)
-#   T5 – ART_WIN64_JIT_NATIVE=1 compiles and executes the native stub
+#   T4 – Native methods are JIT-compiled by default
+#   T5 – The default compiled native stub executes with the correct ABI
 #   T6 – ART_WIN64_JIT=0 disables all compile
 #   T7 – -Xusejit:false path still works (no crash)
 #   T8 – JIT filter/exclude env vars work
@@ -74,7 +74,8 @@ has_clean_hello() {
 
 has_clean_native_hello() {
   local output="$1"
-  grep -q "StringFactory.newStringFromBytes" <<< "$output" &&
+  grep -q "Win64 CompileMethod done success=1 method=.*StringFactory.newStringFromBytes" \
+    <<< "$output" &&
     has_clean_hello "$output"
 }
 
@@ -92,8 +93,9 @@ assert "JIT code cache created (JitCodeCache::Create OK)" \
 cyan "=== T2: Managed methods JIT-compiled ==="
 
 NCOMP=$(count_compiles "$OUT1")
-echo "  Managed methods JIT-compiled: $NCOMP"
-assert "At least one managed method JIT-compiled" [ "$NCOMP" -gt 0 ]
+echo "  Successful JIT compilation records: $NCOMP"
+assert "At least one managed method JIT-compiled" \
+  grep -q "Win64 CompileMethod done success=1 method=.*StringBuilder" <<< "$OUT1"
 
 # --------------------------------------------------------------------
 cyan "=== T3: Correct Hello output ==="
@@ -101,27 +103,22 @@ cyan "=== T3: Correct Hello output ==="
 assert "Prints Hello and ends without exception" has_clean_hello "$OUT1"
 
 # --------------------------------------------------------------------
-cyan "=== T4: Native methods NOT JIT-compiled by default ==="
+cyan "=== T4: Native methods JIT-compiled by default ==="
 
 NATIVE_COMPILE=$(grep "Win64 CompileMethod done success=1" <<< "$OUT1" 2>/dev/null | grep -i "StringFactory" || true)
-if [ -z "$NATIVE_COMPILE" ]; then
-  green "  PASS No native methods JIT-compiled (gate active)"
+if [ -n "$NATIVE_COMPILE" ]; then
+  green "  PASS Native method JIT-compiled by default"
   PASS=$((PASS + 1))
 else
-  echo "  Native compile detected:"
-  echo "$NATIVE_COMPILE"
-  red "  FAIL — native method JIT-compiled when it should be gated"
+  red "  FAIL — expected default native compilation record is missing"
   FAIL=$((FAIL + 1))
 fi
 
 # --------------------------------------------------------------------
-cyan "=== T5: ART_WIN64_JIT_NATIVE=1 gate override ==="
+cyan "=== T5: Default compiled native ABI ==="
 
-OUT5=$(ART_WIN64_JIT_NATIVE=1 ART_WIN64_JIT_LOG_COMPILES=1 \
-  run_dalvik "$RUN/hello.jar" "Hello")
-NCOMP5=$(count_compiles "$OUT5")
-echo "  Native-gate-open mode ncomp: $NCOMP5"
-assert "ART_WIN64_JIT_NATIVE=1 compiles and executes native ABI" has_clean_native_hello "$OUT5"
+assert "Default native compilation executes the StringFactory stub" \
+  has_clean_native_hello "$OUT1"
 
 # --------------------------------------------------------------------
 cyan "=== T6: ART_WIN64_JIT=0 disables all compile ==="

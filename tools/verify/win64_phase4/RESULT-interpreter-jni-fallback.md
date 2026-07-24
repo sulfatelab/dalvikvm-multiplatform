@@ -1,8 +1,8 @@
 # Win64 legacy InterpreterJni fallback reachability audit
 
-**Status:** PASS under Wine and native Windows 10; cleanup authorized
+**Status:** PASS under Wine and native Windows 10; cleanup complete
 **Date:** 2026-07-24 17:47:36 CST
-**Updated:** 2026-07-24 20:48:57 CST
+**Updated:** 2026-07-24 21:08:00 CST
 **Host:** agent01
 
 ## Question
@@ -34,10 +34,10 @@ platform differences are in native entrypoint selection and ABI handling.
 ## Source audit
 
 `InterpreterJni` itself is upstream ART testing/image-writing fallback code; it
-should not be deleted wholesale. Compared with the `android-16.0.0_r4` version,
-the current `runtime/interpreter/interpreter.cc` has 599 insertions and 28
-deletions. Most of that delta is the old expanded shorty and direct-resolution
-workaround.
+was not deleted wholesale. Before cleanup, comparison with
+`android-16.0.0_r4` showed 599 insertions and 28 deletions, mostly the expanded
+shorty and direct-resolution workaround. ART commit `42a03f2ea0` restores the
+file byte-for-byte to that upstream tag.
 
 There are exactly two calls to `InterpreterJni`:
 
@@ -53,12 +53,12 @@ methods keep their JNI compiler/generated entrypoints, matching Linux ART.
 
 ## Opt-in tripwire experiment
 
-Both runtime-started calls can be replaced with distinct `LOG(FATAL)`
-tripwires by configuring the Win64 build with
-`MDVM_WIN64_INTERPRETER_JNI_TRIPWIRE=ON`. The definition is source-scoped to
-`runtime/interpreter/interpreter.cc`; the product default is OFF. The package
-script always restores and rebuilds the shared tree in product mode before it
-exits.
+For the acceptance experiment, both runtime-started calls were replaced with
+distinct `LOG(FATAL)` tripwires through
+`MDVM_WIN64_INTERPRETER_JNI_TRIPWIRE=ON`. The definition was source-scoped to
+`runtime/interpreter/interpreter.cc`; the package script restored and rebuilt
+the shared tree in product mode before exit. The option and generator were
+retired after cleanup.
 
 The Win64 `art` and `dalvikvm` targets built successfully. With both calls
 disabled, Clang reported `InterpreterJni` as unused, confirming there was no
@@ -87,11 +87,11 @@ and Win64 `art.dll`, `dalvikvm.exe`, and `openjdkjvmti.dll` were rebuilt
 successfully. Final product-mode Math controls passed in dual-view, J-1,
 Win64 `-Xint`, Linux `-Xint`, and Linux threshold-zero JIT modes.
 
-`tools/win64/host_package/package_win64_w024_tripwire.sh` builds the opt-in
-binary, runs the complete Wine matrix, writes the native Windows command files,
-packages all dependencies, and restores product mode. Generated command files
-are checked for unresolved shell placeholders and use quoted package-relative
-paths. Native-host execution follows `W024_HOST_CHECKLIST.md`.
+The historical `tools/win64/host_package/package_win64_w024_tripwire.sh` built
+the opt-in binary, ran the complete Wine matrix, wrote the native Windows
+command files, packaged all dependencies, and restored product mode. It was
+deleted after the accepted evidence was archived. Native-host execution and
+package identity remain recorded in `W024_HOST_CHECKLIST.md`.
 
 The first package review found that the not-yet-run host command files contained
 literal `${name}` and `${jar}` fragments: in an unquoted shell heredoc, the
@@ -99,7 +99,7 @@ Windows path separator immediately before `$` suppressed parameter expansion.
 That defect did not affect the direct Wine harnesses listed above, but it would
 have made the native-host package unusable. Generation now uses a doubled
 backslash before expanded values, quotes `%~dp0\..` for paths containing spaces,
-and rejects any command file that retains an unresolved `${...}` placeholder.
+and rejected any command file that retained an unresolved `${...}` placeholder.
 
 The generated `scripts\run_all_w024.cmd` was then executed through Wine's
 `cmd.exe` from a package path containing spaces. All nine command-file cases
@@ -135,24 +135,19 @@ Accepted raw evidence and its independent review are stored under
 
 ## Conclusion
 
-The expanded PE `InterpreterJni` shorties and direct resolver are not product
-paths under either the Wine or native-Windows matrix. They are legacy defensive
-fallbacks from the pre-quick/JNI port and are candidates for restoring to the
-upstream `android-16.0.0_r4` implementation.
+The expanded PE `InterpreterJni` shorties and direct resolver were not product
+paths under either the Wine or native-Windows matrix. ART commit `42a03f2ea0`
+removed them by restoring `interpreter.cc` byte-for-byte to
+`android-16.0.0_r4`, including the upstream pre-start-only bridge invariant.
+The same commit removed the native-method JIT exclusion so Win64 follows the
+common ART native compilation policy by default.
 
-The native Windows pass closes the reachability gate. The cleanup stage should:
+The final Win64 build passed default native ABI 7/7, CriticalNative,
+method-tracing, JVMTI, Math, JIT smoke 12/12, JIT matrix 14/14, and all Phase 4
+Wine gates. The full Linux runtime rebuilt and passed L-005 shared-boot Hello
+and Math `-Xint`/JIT controls. W-011, W-012, and W-024 are closed.
 
-1. restore `ArtInterpreterToInterpreterBridge` to the upstream pre-start-only
-   invariant;
-2. reduce `InterpreterJni` and its resolver to upstream behavior, retaining
-   only independently demonstrated Windows requirements;
-3. remove the diagnostic native-JIT gate;
-4. rebuild Win64 and Linux, then rerun Math, direct/unresolved CriticalNative,
-   normal/FastNative, method tracing, JVMTI, JIT smoke, and the Linux shared-boot
-   gate;
-5. remove W-011/W-012 only after those checks pass.
-
-Native Windows instructions:
+Acceptance records:
 
 - `W024_HOST_CHECKLIST.md`
 - `evidence/w024_host/ACCEPTANCE.md`

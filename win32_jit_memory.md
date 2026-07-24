@@ -49,11 +49,11 @@ Measured on agent01 under Wine:
 |------|---------------|
 | Quick invoke | ON by default |
 | Nterp | ON after runtime startup; rSELF=r15 and rREFS=rbp |
-| Managed JIT | ON by default with the corrected section dual view |
-| Default Hello | About 21–24 managed compilations; PASS |
+| Managed and native JIT | ON by default with the corrected section dual view |
+| Default Hello | About 28–30 successful compilation records after native-JIT cleanup; PASS |
 | Default JIT smoke | 12/12, including default-silent compile diagnostics |
 | Default probe matrix | 14/14 |
-| Native JIT | Gated off pending W-024 cleanup; direct CriticalNative and 7/7 mixed/high-FP normal/FastNative matrices pass through binding, method-tracing, and JVMTI forced-interpreter transitions in both memory modes; Math native surfaces and native Windows 10 acceptance pass |
+| Native JIT | Common ART default policy; direct CriticalNative and 7/7 mixed/high-FP normal/FastNative matrices pass through binding, method-tracing, and JVMTI forced-interpreter transitions in both memory modes; Math native surfaces and native Windows 10 acceptance pass |
 | J-1 fallback | Diagnostic opt-out with `ART_WIN64_JIT_DUAL=0`; Hello passes |
 | Code cache | 64 KiB initial release capacity; 64 MiB maximum |
 
@@ -412,12 +412,12 @@ emulation is added.
 - Remaining work is real-Windows repeated-start testing, dynamic-code/CFG
   policy testing, large `SEC_COMMIT` pressure measurement, and direct release
   checks at the JIT-root and CodeInfo encoding sites.
-- Native JIT remains gated independently until W-024 defensive-fallback cleanup
-  and post-change regressions are complete. Native Windows 10 acceptance,
-  Math.ceil/floor, and the common ELF/PE registration table are complete.
-  Mixed/high-FP, unresolved app-JNI, unregister/re-register binding,
-  method-tracing, and JVMTI forced-interpreter transitions now pass for normal,
-  FastNative, and CriticalNative calls in both memory modes.
+- Native JIT follows the common ART policy by default after W-024 cleanup.
+  Native Windows 10 acceptance, Math.ceil/floor, and the common ELF/PE
+  registration table are complete. Mixed/high-FP, unresolved app-JNI,
+  unregister/re-register binding, method-tracing, and JVMTI forced-interpreter
+  transitions pass for normal, FastNative, and CriticalNative calls in both
+  memory modes.
 
 ## 7. Implementation and commit status
 
@@ -619,21 +619,20 @@ then exposed a missing XMM-to-XMM operation in
 `X86_64JNIMacroAssembler::Move()`: managed `XMM0` needed to become native
 unified-slot `XMM3`. The assembler now emits `movss`/`movsd` for those moves.
 
-The final matrix compiles 7/7 distinct native targets and covers registered
+The final default matrix compiles 7/7 distinct native targets and covers registered
 and unresolved normal/FastNative methods, static and instance calls,
 references, five managed core ordinals, six managed FP ordinals, Win64 home
-space and deep stack spills, boolean input, and double returns. The gate-closed
-control executes the same values with 0/7 native targets compiled. Five
-complete focused runs passed. Unresolved CriticalNative mixed signatures are
-covered separately.
+space and deep stack spills, boolean input, and double returns. Before gate
+removal, a 0/7 gate-closed control and repeated 7/7 gate-open runs qualified the
+transition. Unresolved CriticalNative mixed signatures are covered separately.
 
-The same gate now exercises native data-entrypoint changes after compilation.
+The same default probe exercises native data-entrypoint changes after compilation.
 It unregisters the probe class, verifies dlsym re-resolution with `+10000`
 values, installs a second `RegisterNatives` table, and verifies `+20000`
 alternate values. The verifier allows exactly seven target compile records for
 all three phases, so the transition cannot pass by recompiling the methods.
 
-A third gate-open process starts non-sampling method tracing, verifies tracing
+A second default process starts non-sampling method tracing, verifies tracing
 mode `0 -> 1 -> 0`, executes all alternate normal/FastNative bindings during
 and after tracing, and requires the same seven target compilation records.
 ART's tracing path changes runtime debug state, invalidates pre-tracing JIT
@@ -680,27 +679,27 @@ two compiled registered normal/FastNative targets and zero successful
 CriticalNative compilations while still checking all six native calls across
 the forced-interpreter transition.
 
-The diagnostic `ART_WIN64_JIT_NATIVE=1` override remains opt-in pending W-024
-fallback/gate cleanup and post-change regressions rather than an unresolved
-calling convention, native-binding, tracing, JVMTI transition,
-product-demotion, or native-host defect. Math.ceil/floor are native
-CriticalNative methods again and Math.c uses one common ELF/PE registration
-table.
+The `ART_WIN64_JIT_NATIVE` exclusion and override are removed. Native methods
+now follow the common ART JIT policy by default; the focused default matrix
+compiles 7/7 normal/FastNative targets with exact values. Math.ceil/floor are
+native CriticalNative methods again and Math.c uses one common ELF/PE
+registration table.
 
 Per-method `Win64 CompileMethod done` logging is no longer a product default.
 It is enabled only by `ART_WIN64_JIT_LOG_COMPILES=1`; the ABI/JVMTI acceptance
 harnesses set that flag when they need exact compilation records. JIT smoke
 verifies both the opt-in records and a normal quiet run.
 
-The remaining expanded `InterpreterJni` shorties are also not observed product
-paths. An opt-in fatal-tripwire build disabled both runtime-started fallback
+The expanded `InterpreterJni` shorties were not observed product paths. An
+opt-in fatal-tripwire build disabled both runtime-started fallback
 calls and still passed Win64 `-Xint`, direct/unresolved CriticalNative,
 normal/FastNative, method tracing, and JVMTI forced interpretation under Wine
 and native Windows 10. With both calls disabled, Clang reported
 `InterpreterJni` unused. The build was restored to the product-default
 tripwire-OFF mode and the final binaries rebuilt. Linux and Win64 use identical
 boot.jar dex and annotation bytes, so there is no Windows-only boot shorty set.
-Cleanup is now authorized; see
+ART commit `42a03f2ea0` restored exact upstream interpreter scope and removed
+the native-JIT gate; see
 `tools/verify/win64_phase4/RESULT-interpreter-jni-fallback.md` and
 `tools/verify/win64_phase4/evidence/w024_host/ACCEPTANCE.md`.
 
@@ -831,11 +830,10 @@ The landed fix covers both defects:
    colon-separated after it parses the public semicolon-separated property.
 
 Native Windows 10 direct-call and fallback-reachability acceptance is complete.
-Remaining W-024 work is native-JIT gate removal, defensive interpreter-fallback
-cleanup, and post-change regression. Math.ceil/floor and the common registration
-table are restored. The compiled-JNI signature, binding, method-tracing, and
-JVMTI forced-interpreter matrices pass. None justifies retaining the RWX J-1
-path as the product default.
+W-024 cleanup is also complete: native methods compile by default,
+`interpreter.cc` matches upstream, and the post-change Linux/Win64 regression
+matrix passes. Math.ceil/floor and the common registration table are restored.
+None of this justifies retaining the RWX J-1 path as the product default.
 
 ## 13. Current status — 2026-07-24
 
@@ -845,7 +843,7 @@ path as the product default.
 |------|----------|
 | J-1 single-view memory | JIT smoke 12/12; matrix 14/14 |
 | D-1 r15 compiler TLS | 37/37 GS sites audited |
-| Managed JIT default | Corrected pagefile-section dual view; Hello about 21–24 compilations |
+| Managed/native JIT default | Corrected pagefile-section dual view; Hello about 28–30 successful records after native-gate removal |
 | Corrected dual-view integration | JIT smoke 12/12; matrix 14/14; protections checked with `VirtualQuery` |
 | Section-layout probe | 64 MiB and non-64-KiB capacity cases pass under Wine; low primary remains contiguous under forced low-space fragmentation |
 | dlmalloc configuration | `USE_LOCKS=0`; spin-lock experiment reverted |
@@ -854,7 +852,7 @@ path as the product default.
 | Threshold-zero CriticalNative | Direct visitor uses Win64 unified ordinals/home area; dlsym caller PC preserved; repeated J-1 and dual-view probes pass |
 | Unresolved CriticalNative dlsym | ART-owned `JVM_NativeLoad` bridge; mixed/spilled/scalar exported calls pass through both load APIs |
 | CriticalNative method tracing | Registered and unresolved suites pass during/after tracing in J-1 and dual-view modes; mode restores to zero and trace output is deleted |
-| Compiled normal/FastNative | Gate-open 7/7 distinct targets; registered/unresolved, static/instance, mixed/high-FP, references, deep spills, returns, rebinding, and method tracing pass with exactly seven target compile records |
+| Compiled normal/FastNative | Default 7/7 distinct targets; registered/unresolved, static/instance, mixed/high-FP, references, deep spills, returns, rebinding, and method tracing pass with exactly seven target compile records |
 | JVMTI forced interpreter | Separate `openjdkjvmti.dll`; thread-scoped single-step; registered/unresolved normal, FastNative, and CriticalNative exact values pass 3/3 in each memory mode |
 | Math CriticalNative surface | ceil/floor native again; one ELF/PE table; dual/J-1/-Xint 3/3 plus Linux JIT/-Xint pass on identical boot.jar bytes |
 | W-024 native host | Windows 10 build 19044 tripwire matrix passes 9/9 with exact required native compilation records and no crash dump |
@@ -865,7 +863,6 @@ path as the product default.
 |------|---------|
 | P5 mapping real-Windows acceptance | Mapping protections, mitigations, repeated-start/load, and code-cache pressure remain; the focused W-024 native-host subset is complete |
 | Direct encoding checks | Add checks at JIT-root patch and CodeInfo construction sites |
-| Native JIT cleanup | Remove the diagnostic gate, clean defensive interpreter fallbacks, and run post-change regressions; native-host validation is complete |
 
 ### Current test summary
 
@@ -879,8 +876,7 @@ path as the product default.
 | Direct registered CriticalNative signatures | PASS, 3/3 current harness | PASS, 3/3 current harness |
 | Direct unresolved CriticalNative signatures | PASS, 3/3 current harness | PASS, 3/3 current harness |
 | CriticalNative method tracing | PASS, 3/3 current harness | PASS, 3/3 current harness |
-| FastNative ABI probe, native gate closed | PASS, three binding phases, 0/7 compiled | PASS, three binding phases, 0/7 compiled |
-| FastNative ABI probe, native gate open | PASS, three binding phases, 7/7 compiled once | PASS, three binding phases, 7/7 compiled once |
+| FastNative ABI probe, default native JIT | PASS, three binding phases, 7/7 compiled once | PASS, three binding phases, 7/7 compiled once |
 | FastNative method tracing | PASS, mode `0 -> 1 -> 0`, no trace file | PASS, mode `0 -> 1 -> 0`, no trace file |
 | JVMTI forced interpreter | PASS, 3/3; all six calls exact; two normal/FastNative compile records | PASS, 3/3; all six calls exact; two normal/FastNative compile records |
 | Restored Math ceil/floor | PASS, 3/3 threshold-zero and 3/3 `-Xint` | PASS, 3/3 threshold-zero and 3/3 `-Xint` |
@@ -916,6 +912,7 @@ path as the product default.
 | 2026-07-24 | Make per-method Win64 JIT compile records opt-in; smoke expands to 12/12 and verifies product-default silence |
 | 2026-07-24 | Wine fatal-tripwire audit shows legacy runtime-started InterpreterJni fallback is unreachable across `-Xint`, native ABI, tracing, and JVMTI suites, establishing the native-host test candidate |
 | 2026-07-24 | Native Windows 10 build 19044 tripwire matrix passes all nine cases with exact required native compile records and no crash dump; W-024 cleanup is authorized |
+| 2026-07-24 | ART `42a03f2ea0` restores exact upstream interpreter scope and common default native-JIT policy; final Win64 and Linux regressions pass and W-011/W-012/W-024 close |
 
 ## 15. Code anchors
 

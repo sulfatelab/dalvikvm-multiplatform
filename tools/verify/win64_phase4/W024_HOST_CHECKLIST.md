@@ -1,11 +1,12 @@
-# W-024 native Windows 10 acceptance checklist
+# W-024 native Windows 10 acceptance checklist (completed)
 
 **Latest result:** PASS on Windows 10 Enterprise LTSC 2021, build 19044, on
 2026-07-24. Accepted evidence is stored under `evidence/w024_host/`.
 
-This checklist records the native-host gate required before removing the
-native-JIT diagnostic gate or the legacy `InterpreterJni` fallbacks. Run it on
-a native x86-64 Windows installation, not Wine, WSL, or Windows 7.
+This checklist records the completed native-host gate that authorized removal
+of the native-JIT diagnostic gate and legacy `InterpreterJni` fallbacks. The
+tripwire generator was retired after cleanup; retained evidence is the
+authoritative record.
 
 ## 1. Host requirement
 
@@ -13,23 +14,13 @@ a native x86-64 Windows installation, not Wine, WSL, or Windows 7.
 - Run `winver` and record the reported version in the returned evidence.
 - Do not substitute a Wine result for this gate.
 
-## 2. Build and transfer
+## 2. Accepted package identity
 
-On `agent01`, from the repository root:
-
-```bash
-bash tools/win64/host_package/package_win64_w024_tripwire.sh
-```
-
-Transfer and unpack one of:
-
-```text
-dist/win64_w024_tripwire_host/
-dist/win64_w024_tripwire_host.zip
-```
-
-The package is path-space safe. A short path is still convenient, for example
-`C:\art_w024\win64_w024_tripwire_host`.
+The accepted package was built before cleanup from parent commit
+`e7f90935c7b1909fe528a8441fa5014bcd666b95` and ART commit
+`1a75ad10a3ee28910a7b46184a0a7628f96da72a`, with the tripwire enabled. Its
+complete 169-entry manifest and build information are retained under
+`evidence/w024_host/`.
 
 ## 3. Confirm the shared boot artifact
 
@@ -51,7 +42,7 @@ size   3436578 bytes
 
 There is no Windows-specific `boot.jar` in this test.
 
-## 4. Run the acceptance matrix
+## 4. Accepted matrix invocation
 
 From Command Prompt in the unpacked package:
 
@@ -114,13 +105,16 @@ Store accepted evidence under:
 tools/verify/win64_phase4/evidence/w024_host/
 ```
 
-## 7. What a pass authorizes
+## 7. Authorized cleanup result
 
-A native-host pass closes only the reachability gate. The next code stage must
-still restore the upstream pre-start-only bridge invariant, reduce
-`InterpreterJni` and `ResolveJniEntryPoint`, remove the native-JIT diagnostic
-gate, rebuild Linux and Win64, and rerun the full regression matrix before
-W-011, W-012, and W-024 can close.
+ART commit `42a03f2ea0` restored `runtime/interpreter/interpreter.cc`
+byte-for-byte to `android-16.0.0_r4`, including the pre-start-only bridge
+invariant, and removed the native-method JIT exclusion. The parent project
+retired the tripwire build option and package generator and changed the focused
+probes to require native compilation by default.
 
-The packaged tripwire `art.dll` is diagnostic-only and must not ship as a
-product binary.
+Post-change verification passed the Win64 build, JIT smoke 12/12, JIT matrix
+14/14, all Phase 4 Wine gates, default normal/FastNative 7/7, CriticalNative,
+JVMTI, Math, full Linux rebuild, L-005 shared-boot Hello, and Linux Math
+controls. W-011, W-012, and W-024 are closed. The packaged tripwire `art.dll`
+remains diagnostic-only historical evidence and is not a product binary.

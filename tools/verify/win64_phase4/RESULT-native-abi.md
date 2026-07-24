@@ -9,9 +9,8 @@ The focused compiled-JNI acceptance gate now passes the mixed/high-FP matrix:
 
 | Mode | Result |
 |------|--------|
-| Native-method JIT gate closed | PASS: exit 0, three exact binding phases, 0/7 native targets compiled |
-| `ART_WIN64_JIT_NATIVE=1` | PASS: exit 0, three exact binding phases, 7/7 targets and exactly 7 compile records |
-| Native gate open plus method tracing | PASS: tracing mode `0 -> 1 -> 0`, exact during/after values, exactly 7 target compile records |
+| Default native compilation | PASS: exit 0, three exact binding phases, 7/7 targets and exactly 7 compile records |
+| Default native compilation plus method tracing | PASS: tracing mode `0 -> 1 -> 0`, exact during/after values, exactly 7 target compile records |
 
 Command:
 
@@ -19,14 +18,15 @@ Command:
 bash tools/verify/win64_phase4/run_native_abi_probe.sh
 ```
 
-The final focused result was repeated for five complete process runs. Every
-run reported:
+The post-cleanup run reported:
 
 ```text
-gate_closed_exit=0 gate_closed_ok=true compiled_targets=0/7 compilation_records=0
-gate_open_exit=0 gate_open_ok=true compiled_targets=7/7 compilation_records=7 historical_failure=false
+default_exit=0 default_ok=true compiled_targets=7/7 compilation_records=7
 instrumentation_exit=0 instrumentation_ok=true compiled_targets=7/7 compilation_records=7
 ```
+
+Earlier gate-open qualification and the accepted native-Windows tripwire run
+produced the same 7/7 result before the diagnostic gate was removed.
 
 ## Root causes
 
@@ -89,7 +89,7 @@ binding transitions without recompiling any of the seven target methods:
 2. A second `RegisterNatives` installs alternate pointers for all six ABI
    methods. The already-compiled JNI thunks return the `+20000` phase values.
 
-The gate-open verifier requires exactly seven successful target compilation
+The default verifier requires exactly seven successful target compilation
 records across all three phases. This proves the transitions execute through
 the existing compiled-thunk set rather than passing because ART recompiled the
 methods after each binding change.
@@ -126,33 +126,33 @@ FastNativeAbiProbe tracingMode before=0 during=1 after=0 traceFileDeleted=true
 
 ## Regression verification
 
-The same ART build passed:
+The final cleanup build passed:
 
-- Win64 `art` and `dalvikvm` build;
+- Win64 `art`, `dalvikvm`, and `openjdkjvmti` build;
+- default compiled-JNI ABI and rebinding: 7/7 targets with exactly seven
+  records;
+- default compiled-JNI method tracing: 7/7 targets with exactly seven records;
 - CriticalNative dual-view and J-1 acceptance, 6/6 float/signature plus 3/3
   instrumentation runs per mode;
 - JVMTI forced-interpreter acceptance, 3/3 dual-view and 3/3 J-1 runs, covering
   registered and unresolved normal, FastNative, and CriticalNative calls;
-- pthread_once stress, 10/10;
 - JIT smoke, 12/12, including default-silent compile diagnostics;
 - JIT matrix, 14/14;
-- native Linux `nativeloader`, `art`, `openjdkjvm`, and `dalvikvm` build;
+- all Phase 4 Wine gates;
+- full native Linux `art` and `dalvikvm` rebuild;
 - Linux L-005 imageless Hello using the exact Win64-staged shared multipath
-  `boot.jar` bytes.
+  `boot.jar` bytes; and
+- Math CriticalNative dual/J-1/`-Xint` plus rebuilt Linux `-Xint` and JIT
+  controls.
 
-One regression attempt ended with a Wine client `recvmsg: Connection reset by
-peer` during a J-1 CriticalNative process. It produced no ART assertion or ABI
-failure; the immediate complete CriticalNative rerun passed 6/6 in both memory
-modes, and the remaining regressions passed.
-
-## Remaining scope
+## Final status
 
 The mixed/high-FP normal/FastNative ABI, unresolved app-JNI,
 register/unregister/re-register binding transitions, and method-tracing
-instrumentation and JVMTI forced-interpreter transitions are no longer W-024
-blockers. Per-method compile records are now opt-in. Native Windows 10
-acceptance passes; the native-JIT gate remains temporarily until W-024
-fallback cleanup and post-change regressions are complete.
+instrumentation and JVMTI forced-interpreter transitions pass with native
+methods compiled by default. Per-method compile records remain opt-in. Native
+Windows 10 acceptance, upstream interpreter fallback restoration, native-JIT
+gate removal, and post-change Linux/Win64 regressions are complete.
 The Math/libcore native demotion is restored in `RESULT-math-critical.md`.
 CriticalNative method tracing is covered by
 `run_critical_native_probe.sh`; JVMTI single-step/deoptimization coverage is

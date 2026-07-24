@@ -51,3 +51,11 @@ itself close W-011, W-012, or W-024. The authorized next stage is to restore
 the upstream pre-start-only interpreter bridge invariant, reduce the legacy
 InterpreterJni resolver/shorties, remove the diagnostic native-JIT gate, then
 rebuild Linux and Win64 and rerun the full regression matrix.
+
+## Subsequent cleanup
+
+ART commit `42a03f2ea0` completed the authorized stage by restoring
+`interpreter.cc` byte-for-byte to `android-16.0.0_r4` and removing the
+native-method JIT exclusion. The parent project retired the tripwire option and
+package generator. Final Win64 and Linux regression matrices passed on
+2026-07-24, closing W-011, W-012, and W-024.

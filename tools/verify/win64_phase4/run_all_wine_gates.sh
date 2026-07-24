@@ -12,6 +12,7 @@ run() {
 for cls in GcStressProbe ThreadHeavyProbe HandleLeakProbe PerfSmokeProbe CrashAbortProbe CrashNativeProbe; do
   bash "$ROOT/build_one.sh" "$cls"
 done
+run P4_W024_CLEANUP_SOURCE bash "$ROOT/run_w024_cleanup_check.sh"
 run P4_G1_GCSTRESS bash "$ROOT/run_gcstress.sh"
 run P4_G2_THREADHEAVY bash "$ROOT/run_threadheavy.sh"
 run P4_G3_HANDLELEAK bash "$ROOT/run_handleleak.sh"
