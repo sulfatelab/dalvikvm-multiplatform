@@ -39,7 +39,7 @@ dalvikvm-multiplatform/
     java-stubs/ openjdk_inc/ src/
   tools/                      # bp2cmake, bootjar, win64, verify gates
   overlay/                    # port policies
-  docs: win64_art_port.md, win32_filesystem.md, win32_tls_jit_entrypoints.md, win32_open_items.md, win32_libcore_os_natives.md, bp2cmake_linux_scope.md; archived/: git_repo_migrate.md, shared_bootjar_runtime_os_detection.md
+  docs: win64_art_port.md, win32_filesystem.md, win32_tls_jit_entrypoints.md, win32_jit_memory.md, win32_heap_memory.md, win32_open_items.md, win32_libcore_os_natives.md, bp2cmake_linux_scope.md; archived/: git_repo_migrate.md, shared_bootjar_runtime_os_detection.md
 ```
 
 ### Folded Windows sources (no main `compat/windows/{art,libcore}`)

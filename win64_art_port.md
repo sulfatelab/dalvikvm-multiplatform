@@ -4,8 +4,9 @@ Product tree: **dalvikvm-multiplatform** (nested vendor + artmp_*).
 
 > **Arch lock:** **64-bit only** (`x86_64-pc-windows-msvc`, PE32+). “Win32 API” below means the Windows platform API on x64, not a 32-bit product.
 
-Status: Phase 0–2 implementation gated (A2+A3 passed under wine64)  
-Date: 2026-07-16 (rev 37 — Phase 4 wine hardening COMPLETE: GC/thread/handle/crash-dump gates PASS)  
+Status: historical feasibility and phased-port record; Phases 0–3 gate-complete,
+Phase 4 Wine-complete, and corrected JIT dual view enabled by default
+Updated: 2026-07-24
 
 **Living tracker (leftovers + temporary workarounds):** [win32_open_items.md](win32_open_items.md)
 Product goal (owner requirement): **full native Windows NT support** for this repo’s ART runtime — a real `dalvikvm.exe` + DLLs + `boot.jar` that runs plain Java on Win32/Win64 **without** Android platform APIs and **without** WSL/VM indirection.
@@ -767,7 +768,9 @@ See `tools/verify/win64_phase2/RESULT.md` and `tools/verify/win64_phase1/hello_a
 ### Landed (runtime)
 - dlmalloc WIN32 mmap override fixed (MORECORE, low-4g non-moving).
 - MemMap `mprotect`/`msync`/`madvise` Win64 behavior.
-- LinearAlloc / arena pools forced **low 4GB** on Win64.
+- LinearAlloc / arena pools forced **low 4GB** on Win64 as a Phase-2
+  stabilization measure; W-013 now requires an encoding audit before retaining
+  that policy.
 - VEH register + stack dump; SignalCatcher skipped; `-Xno-sig-chain` allowed.
 - **SysV vs MSVC ABI:**
   - Win64 `ArtMethod::Invoke` → `EnterInterpreterFromInvoke` (skip quick invoke stubs).
@@ -784,26 +787,52 @@ See `tools/verify/win64_phase2/RESULT.md` and `tools/verify/win64_phase1/hello_a
 - JIT / quick entrypoints / GS TLS when leaving pure `-Xint`.
 
 
-## 9c. Phase 2 root cause — dlmalloc WIN32 mmap (2026-07-16)
+## 9c. Historical Phase-2 root cause — dlmalloc WIN32 mmap (2026-07-16)
 
-`dlmalloc.c` `#ifdef WIN32` forces `HAVE_MMAP=1` / `HAVE_MORECORE=0`, so non-moving mspaces grow via `VirtualAlloc` **outside** ART's low-4g `MemMap`. Objects at `0x7ffffe9c…` cannot live in compressed refs / card table.
+`dlmalloc.c`'s standalone `#ifdef WIN32` defaults force `HAVE_MMAP=1` and
+`HAVE_MORECORE=0`. The non-moving mspace therefore grew through dlmalloc-owned
+`VirtualAlloc` mappings outside ART's low-4-GiB `MemMap`. Objects observed near
+`0x7ffffe9c...` could not satisfy compressed-reference and heap-addressing
+contracts.
 
-**Fix:** suppress that configure block in `art-dlmalloc.cc` and keep ART MORECORE; register non-moving as `dlmalloc_space_`. Rebuild + Hello re-run pending.
+The Phase-2 recovery fix hid `_WIN32`/`WIN32` while including `dlmalloc.c`, kept
+ART MoreCore, and registered the non-moving space as `dlmalloc_space_`. The
+rebuild and imageless Hello rerun completed successfully; the old "pending"
+wording was historical and is removed here.
 
-## 10. Final answer
+That recovery fix is not the final allocator architecture. The accepted W-013
+design keeps Windows macros visible, makes dlmalloc respect embedding-provided
+configuration, attaches each mspace directly to its MoreCore owner, makes
+anywhere/low/exact address policy explicit, and uses `VirtualAlloc2` address
+requirements for constrained anonymous mappings. It also audits the Phase-2
+blanket low placement for LinearAlloc and metadata arenas instead of treating
+it as permanent. See [win32_heap_memory.md](win32_heap_memory.md) and
+[win32_open_items.md](win32_open_items.md) W-013.
 
-**Full native Win64 support for ART without Android platform APIs is feasible** as a deliberate second OS port of this project. It is **not** blocked by the “no platform API” rule. It **is** blocked today by missing runtime OS backends, exception model, Win64 ABI entrypoints, DLL productization, and libcore native Windows implementations.
+## 10. Conclusion and current position
 
-With WSL and MinGW ruled out, and MSVC **compiler** ruled out, the only honest path is:
+**Full native Win64 support for ART without Android platform APIs is feasible**
+as a deliberate second OS port. That conclusion is now backed by a real PE
+runtime, libcore/ICU/OpenJDK product DLLs, imageless execution, GC/thread/handle
+gates, and managed/native JIT operation with the corrected dual-view code
+cache. The remaining work is tracked as focused platform debt rather than the
+original missing runtime spine.
 
-1. Add `ART_TARGET_WINDOWS` + project-owned Windows runtime spine.  
-2. Lock **compiler** to **LLVM Clang** (`clang`/`clang++`, `lld`, `libc++`, `compiler-rt`) via `/home/agent/Projects/win64-dev-env`.  
-3. Lock **platform headers** to the **MSVC/Windows SDK** (um/shared/ucrt + import libs; `~/xwin` / env `xwin`).  
-4. Extend bp2cmake + a Windows port_policy.  
-5. Deliver by phases against the acceptance bar in §2.  
-6. Treat Linux as the reference implementation, not the only ship vehicle.
+The lasting architecture is still:
 
-**Feasibility rating:** **Go, with eyes open** — high engineering cost, clear architecture, no fundamental impossibility.
+1. use a project-owned Windows runtime/platform layer;
+2. use LLVM Clang, lld, libc++, and compiler-rt with Windows SDK/MSVC SDK
+   headers and import libraries;
+3. keep Linux as the behavioral reference while isolating unavoidable Windows
+   VM, exception, ABI, loader, and filesystem operations;
+4. close remaining items against native Windows evidence, not Wine alone; and
+5. keep platform differences at the OS boundary instead of forking ART's heap,
+   JIT, metadata formats, or managed runtime semantics.
+
+Current status and temporary workarounds live in
+[win32_open_items.md](win32_open_items.md). Heap/dlmalloc completion is W-013;
+JIT memory status is maintained in
+[win32_jit_memory.md](win32_jit_memory.md).
 
 ---
 

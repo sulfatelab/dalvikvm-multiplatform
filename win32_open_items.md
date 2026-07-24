@@ -22,6 +22,7 @@ Do **not** list permanent non-goals as OPEN workarounds—list them under §Non-
 | [win32_filesystem.md](win32_filesystem.md) | Option H path model |
 | [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md) | TLS / managed ABI / quick / JIT design (draft) |
 | [win32_jit_memory.md](win32_jit_memory.md) | JIT memory contract, historical separated-view diagnosis, and implemented Windows 10 pagefile-section design |
+| [win32_heap_memory.md](win32_heap_memory.md) | W-013 heap / embedded-dlmalloc ownership, low-address, and MoreCore target design |
 | [win32_libcore_os_natives.md](win32_libcore_os_natives.md) | Os/`Linux` natives: Implemented / Needed / ENOSYS |
 | `tools/verify/win64_phase*/RESULT.md` | Gate evidence |
 
@@ -65,6 +66,7 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 | PE libcore/ICU/openjdk | **Product-default real PE** (icu/javacore/openjdk); NIO.2 non-goal; NetProbe OK |
 | Quick/JIT/TLS | **Managed and native JIT ON with the corrected dual view by default:** rSELF=r15; nterp N-1 default ON; D-1 complete (37/37 Thread sites); JIT smoke 12/12; JIT matrix 14/14; compile records opt-in |
 | Memory | One unnamed pagefile section is mapped as a contiguous low R/RX primary view plus a full RW alias; J-1 remains only as the temporary `ART_WIN64_JIT_DUAL=0` diagnostic opt-out |
+| Heap memory | W-013 target design accepted; current macro masking, implicit low placement, global mspace-owner lookup, and Windows partial-release assumptions remain OPEN |
 | Linux multiplatform | Native build and L-005 imageless Hello PASS using the exact Win64-staged shared multipath `boot.jar` bytes |
 
 ---
@@ -159,13 +161,20 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Closed:** 2026-07-24 — upstream resolver behavior restored
 
 ### W-013 — dlmalloc WIN32 / low-4GB / MORECORE choices for imageless ART
-- **State:** OPEN (may stay as permanent Win allocator policy)
-- **Kind:** workaround / platform policy
+- **State:** OPEN (target design accepted; implementation and native stress remain)
+- **Kind:** workaround removal / platform-memory design
 - **Area:** art / heap
-- **Current behavior:** WIN32 mmap/MORECORE path + low-4g constraints for compressed refs / imageless bring-up (see Phase-2 root-cause notes).
-- **Proper fix:** Re-validate against real Win10 under load; document as permanent if correct; remove any Linux-only assumptions left in comments.
-- **Code anchors:** dlmalloc Win path / Phase-2 docs in `win64_art_port.md` §9c
+- **Symptom / why:** dlmalloc's standalone Win32 defaults force mmap-style `VirtualAlloc` growth outside ART's arena. That can place Java objects above 4 GiB, which is incompatible with compressed references and heap addressing. The Phase-2 workaround hides `_WIN32`/`WIN32` while including `dlmalloc.c`, preserving ART MoreCore but also changing unrelated platform defaults accidentally.
+- **Current behavior:** ART uses `HAVE_MMAP=0`, `HAVE_MORECORE=1`, and unlocked mspaces backed by ART-owned `MemMap` ranges. Heap mspaces use `DlMallocSpace::lock_`; JIT mspaces use `Locks::jit_lock_`. The MoreCore callback still discovers its owner through `Runtime::Current()` plus heap/JIT scans. Windows anonymous mapping still infers low placement from null/low hints, so even `low_4gb=false` maps may consume low VA. The manual `VirtualQuery` allocator and generic partial-unmap assumptions also remain.
+- **Accepted design:** ART owns virtual memory; dlmalloc manages chunks inside an owner-attached ART arena. Keep Windows macros visible, make dlmalloc defaults respect the embedder, attach an `MspaceMoreCoreProvider` through `malloc_state::extp/exts`, use explicit anywhere/low/exact address policies, allocate constrained anonymous ranges with `VirtualAlloc2` plus `MEM_ADDRESS_REQUIREMENTS`, and expose activate/deactivate/discard range operations through `MemMap`.
+- **Low-address policy:** Keep Java object spaces, non-moving/LOS, required image/heap ranges, and the JIT primary view below 4 GiB. Audit and normally remove forced-low placement for LinearAlloc, compiler/JIT metadata arenas, card tables/bitmaps, stacks, reference tables, and temporary mappings; fix actual pointer truncation at the encoding site.
+- **Commit policy:** Keep `MEM_RESERVE | MEM_COMMIT` for the first complete heap implementation. Measure large `-Xmx` commit pressure before considering reserve-only/lazy commitment, because later commit failure changes allocator failure propagation.
+- **Proper fix / closure:** Complete design stages A–E and pass configuration checks; low/exact/aligned/fragmented mapping tests; mspace create/grow/free/trim/regrow tests; dedicated non-moving pressure; `VirtualQuery` extent/protection checks; large-heap commit tests; GCStress/ThreadHeavy/HandleLeak; JIT and Linux regression; repeated native Windows 10 starts. `GcProbe` alone is insufficient.
+- **Code anchors:** `art-dlmalloc.{h,cc}`; `dlmalloc.c` Win32 defaults and `malloc_state::extp/exts`; `dlmalloc_space.cc`; `malloc_space.cc`; `jit_memory_region.cc`; `mem_map.{h,cc}`; `mem_map_windows.cc`; `runtime.cc`
+- **Design:** [win32_heap_memory.md](win32_heap_memory.md) — accepted architecture, staged implementation, rejected alternatives, and closure bar
+- **Historical root cause:** [win64_art_port.md](win64_art_port.md) §9c
 - **Opened:** 2026-07-16
+- **Updated:** 2026-07-24 — complete target design accepted; no implementation claimed
 
 ### W-014 — Stack bounds via VirtualQuery + clamp (Wine-safe estimates)
 - **State:** OPEN
