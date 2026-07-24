@@ -56,7 +56,7 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 
 ---
 
-## Snapshot (2026-07-23)
+## Snapshot (2026-07-24)
 
 | Bucket | Summary |
 |--------|---------|
@@ -185,32 +185,50 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Kind:** workaround / debt (must revert multipath demotions)
 - **Area:** art / libcore / JNI ABI
 - **Symptom / why:** Official AOSP libcore marks many natives `@CriticalNative` or `@FastNative` (Math/StrictMath were **@FastNative → @CriticalNative** in AOSP; see libcore `d021f1d8475c`). Win64 multipath cannot yet honor those ABIs because:
-  1. **W-001** forces interpreter invoke (no quick/managed entrypoints / TLS).
-  2. Interpreter JNI historically lacked full CriticalNative shorty coverage (partially papered by **W-019** for Math `DD`/`DDD`/…).
-  3. Product demotions for bring-up: **Math.ceil / Math.floor** are pure Java (`ART-WinNT` comments in `Math.java`; natives unregistered in `Math.c`) even though AOSP exposes them as `@CriticalNative` natives.
-  4. Win `Math.c` uses a PE-specific registration table (`gMethodsWin` CriticalNative-shaped pointers) vs Linux `FAST_NATIVE_METHOD` macro table — temporary dual path until PE trampolines match AOSP.
+  1. The compiled JNI-stub convention is Microsoft x64-aware, but the optimizing compiler's direct `CriticalNativeCallingConventionVisitorX86_64` remains SysV-shaped. It omits the mandatory 32-byte shadow area, uses separate GPR/FPR indices instead of unified argument ordinals, and places spilled arguments at SysV offsets.
+  2. The unresolved direct-call path has a PE-only `r11` lifetime bug: `art_jni_dlsym_lookup_critical_stub` keeps the caller PC in `r11`, while `LOAD_RUNTIME_INSTANCE` uses `r11` as scratch and replaces it with `Runtime*`.
+  3. Interpreter JNI historically lacked full CriticalNative shorty coverage (partially papered by **W-019** for Math `DD`/`DDD`/…).
+  4. Product demotions for bring-up: **Math.ceil / Math.floor** are pure Java (`ART-WinNT` comments in `Math.java`; natives unregistered in `Math.c`) even though AOSP exposes them as `@CriticalNative` natives.
+  5. Win `Math.c` uses a PE-specific registration table (`gMethodsWin` CriticalNative-shaped pointers) vs Linux `FAST_NATIVE_METHOD` macro table — temporary dual path until PE trampolines match AOSP.
 - **Current behavior:**
   - Annotations remain on most Math/StrictMath/etc. methods, but **ceil/floor are non-native pure Java**.
   - Win64 relies on interpreter CriticalNative shorty dispatch + correct CriticalNative binding (no `JNIEnv*`) rather than real quick CriticalNative stubs.
   - FastNative methods stay Runnable on the interpreter bridge (W-019 supporting fix) instead of true FastNative entrypoints.
-- **Proper fix (when JIT / TLS / quick entrypoints land — W-001–W-003 + [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md)):**
-  1. Restore **every** multipath demotion of methods that were originally `@CriticalNative` / `@FastNative` in AOSP (starting with **Math.ceil / Math.floor** → native + `@CriticalNative` again).
-  2. Re-register matching natives in `Math.c` (and any other demoted tables) on **both** PE and ELF with AOSP-correct CriticalNative/FastNative ABIs.
-  3. Prefer real ART CriticalNative/FastNative trampolines over InterpreterJni shorty expansion; then **trim** PE-only shorty explosion (**W-011**) and dual `gMethodsWin` paths where redundant.
-  4. Audit libcore for other `ART-WinNT` pure-Java / ABI demotions of Critical/Fast natives (not just Math) and revert once entrypoints are product-default.
+  - `FloatProbe -Xjitthreshold:0` deterministically reaches the unresolved direct `System.currentTimeMillis()` / `System.nanoTime()` path and fails before the ABI fix. This is independent of J-1 versus dual-view JIT memory.
+  - No threshold-zero workaround is landed. A temporary two-change prototype was reverted after proving the root cause.
+- **Threshold-zero research (2026-07-24):**
+  1. `GetCriticalNativeDirectCallFrameSize("J")` correctly returns 32 on Win64, while the optimizing direct-call visitor reports zero and emits no `sub rsp, 32`.
+  2. The dlsym stub therefore positions its 208-byte SaveRefsAndArgs frame 32 bytes too high; the walker reads caller spill data (`0x0000000100000001`) as the next `ArtMethod*`.
+  3. Adding the missing 32-byte outgoing area corrected the walk and exposed the `LOAD_RUNTIME_INSTANCE` `r11` clobber, which made native return execute `Runtime*`.
+  4. A local `r11` reload plus the shadow-area prototype passed threshold-zero FloatProbe 10/10 on dual view and 10/10 on J-1. Both prototype edits were reverted.
+- **Proper fix:**
+  1. Add a Win64 branch to `CriticalNativeCallingConventionVisitorX86_64` that shares the Microsoft x64 rules in `jni_frame_x86_64.h` / `X86_64JniCallingConvention`: unified four register slots, 32-byte shadow area, then stack arguments.
+  2. Make the visitor's stack offsets include the shadow area from construction time; do not merely add 32 in `GetStackOffset()`, because that would place spilled arguments inside the home area.
+  3. Preserve the unresolved-stub caller PC across `LOAD_RUNTIME_INSTANCE` by reloading it from the existing saved return-PC slot after the macro on Windows.
+  4. Add direct-call codegen tests for `()J`, FP-only, mixed integer/FP, and spilled-argument shorties, then add repeated threshold-zero Wine and real-Windows gates.
+  5. Restore **every** multipath demotion of methods that were originally `@CriticalNative` / `@FastNative` in AOSP (starting with **Math.ceil / Math.floor** → native + `@CriticalNative` again).
+  6. Re-register matching natives in `Math.c` (and any other demoted tables) on **both** PE and ELF with AOSP-correct CriticalNative/FastNative ABIs.
+  7. Prefer real ART CriticalNative/FastNative trampolines over InterpreterJni shorty expansion; then **trim** PE-only shorty explosion (**W-011**) and dual `gMethodsWin` paths where redundant.
+  8. Audit libcore for other `ART-WinNT` pure-Java / ABI demotions of Critical/Fast natives (not just Math) and revert once entrypoints are product-default.
 - **Exit criteria:**
+  - Threshold-zero FloatProbe passes repeated J-1 and dual-view runs without a diagnostic patch.
+  - Direct-call ABI tests cover zero, mixed, FP, and stack-spilled arguments.
   - No pure-Java stand-ins for AOSP `@CriticalNative`/`@FastNative` Math (ceil/floor native again).
   - Wine + Linux smokes for Math/HashMap/conscrypt without relying on pure-Java ceil or incomplete CriticalNative shorty lists.
   - Document that W-019 temporary ABI/shorty fixes are superseded (may remain as defensive fallback until deleted).
 - **Code anchors:**
+  - `vendor/art/compiler/optimizing/code_generator_x86_64.{h,cc}` (`CriticalNativeCallingConventionVisitorX86_64`, `PrepareCriticalNativeCall`)
+  - `vendor/art/runtime/arch/x86_64/jni_frame_x86_64.h` (Win64 shadow size and direct-call frame calculation)
+  - `vendor/art/runtime/arch/x86_64/jni_entrypoints_x86_64.S` (`art_jni_dlsym_lookup_critical_stub`)
+  - `vendor/art/runtime/arch/x86_64/asm_support_x86_64.S` (`LOAD_RUNTIME_INSTANCE`, Win64 `r11` scratch)
   - `vendor/libcore/ojluni/src/main/java/java/lang/Math.java` (`ART-WinNT` pure-Java ceil/floor)
   - `vendor/libcore/ojluni/src/main/native/Math.c` (`gMethodsWin` / no ceil|floor register; Linux `FAST_NATIVE_METHOD`)
   - `vendor/art/runtime/interpreter/interpreter.cc` (`InterpreterJniGeneric` CriticalNative shorties)
-  - `vendor/art/runtime/art_method.cc` (Win32 force interpreter invoke)
   - AOSP history: `d021f1d8475c` FastNative→CriticalNative Math; multipath `f16cd44db5fe` pure-Java ceil/floor; `b9265e7b5da6` CriticalNative register fix; art `7ea144b073` / `4c17423714` interpreter Critical/FastNative bridge
-- **Blocked on:** W-001–W-003 implementation (JIT/TLS/quick entrypoints)
-- **Related:** W-019 (CLOSED temporary Math ABI fix), W-011 (InterpreterJni shorty expansion)
+- **Blocked on:** no design blocker; implementation and real-Windows validation remain
+- **Related:** W-019 (CLOSED temporary Math ABI fix), W-011 (InterpreterJni shorty expansion), W-025 (JIT memory; threshold-zero proved unrelated)
 - **Opened:** 2026-07-17
+- **Updated:** 2026-07-24 — threshold-zero failure root-caused to missing direct-call MS x64 shadow/unified ABI plus dlsym-stub `r11` return-PC clobber; 20/20 prototype validation, prototype reverted
 
 ## Product leftovers (not single-line workarounds)
 
@@ -552,14 +570,14 @@ _No open design notes. Closed D- items live under §Closed._
 - **State:** OPEN (P5 implementation and Wine verification complete; real-Windows acceptance and residual hardening remain)
 - **Kind:** host-validation gap / temporary diagnostic workaround / hardening debt
 - **Area:** art / jit / compiler
-- **Symptom / why:** The corrected default now reproduces ART's Linux-visible `[data R][code RX]` contiguous primary layout with a coherent RW updater alias. Remaining work is real-Windows acceptance, direct encoding-site checks, threshold-zero stress diagnosis, and the separate native FastNative ABI gap.
+- **Symptom / why:** The corrected default now reproduces ART's Linux-visible `[data R][code RX]` contiguous primary layout with a coherent RW updater alias. Remaining W-025 work is real-Windows acceptance, direct encoding-site checks, and removal of the J-1 diagnostic fallback. Threshold zero is no longer a JIT-memory unknown; its implementation work is tracked under W-024.
 - **Current behavior:**
   - **Default corrected dual view:** one unnamed `CreateFileMappingW(INVALID_HANDLE_VALUE, PAGE_EXECUTE_READWRITE)` section is mapped twice at offset zero. The complete primary view is below 4 GiB and split into data R plus code RX; the unrestricted alias is split into data RW plus code RW.
   - **Shared ART path:** mspace initialization, growth, address translation, commit, collection, and metadata handling remain on ART's common Linux/Windows path after mapping construction.
   - **Temporary J-1 diagnostic workaround:** `ART_WIN64_JIT_DUAL=0` selects the single-view `VirtualAlloc` path for comparison or emergency diagnosis. It writes code through an RX-to-RWX-to-RX transition and is not the product default.
   - **No disk file:** the section is unnamed and backed by the Windows paging system; no temporary filesystem object, pseudo-fd, or Windows memfd emulation is created.
   - **Historical separated-view defect:** the retired layout placed code far from roots and stack maps, overflowing signed 32-bit JIT-root displacements and uint32 CodeInfo distance. The corrected topology removes that layout.
-  - **Threshold-zero stress:** `FloatProbe -Xjitthreshold:0` fails at `ArtMethod::GetOatQuickMethodHeader()` with an invalid `ArtMethod*` on both J-1 and the corrected dual view. Normal FloatProbe and the full matrix pass, so this is tracked separately from memory topology.
+  - **Threshold-zero stress:** root-caused outside memory topology. The unresolved direct `@CriticalNative` path lacks Win64 shadow/unified-argument handling and also loses its caller PC through the PE `LOAD_RUNTIME_INSTANCE` `r11` scratch. Track the fix under W-024; the unmodified build still fails, while a reverted two-change prototype passed 20/20.
   - Native gate: all native methods excluded from JIT (`ART_WIN64_JIT_NATIVE=1` opt-in, known FastNative ABI gap).
 - **Implemented proper fix:** Keep ART's observable layout and post-mapping JIT logic Linux-like while containing the Windows difference in the section-allocation helper:
   1. Require Windows 10 version 1803 or later and link `onecore.lib` for `MapViewOfFile3`.
@@ -577,7 +595,7 @@ _No open design notes. Closed D- items live under §Closed._
 - **Verified:** default corrected dual-view Hello passes with about 21–24 managed compiles; JIT smoke 10/10; JIT matrix 14/14; J-1 diagnostic Hello passes; D-1 audit complete (37/37 GS sites); standalone section-layout probe passes coherence, execution, protection, forced low-space fragmentation, and non-64-KiB capacity cases under Wine (2026-07-23)
 - **Design:** [win32_jit_memory.md](win32_jit_memory.md) §2–§13 (Linux low-4-GiB contract, historical diagnosis, implemented Windows 10 section design, verification, and residual work)
 - **Opened:** 2026-07-19
-- **Updated:** 2026-07-23 — corrected pagefile-section dual view implemented, made default, and verified under Wine; temporary J-1 diagnostic opt-out and real-Windows acceptance remain
+- **Updated:** 2026-07-24 — corrected pagefile-section dual view remains verified; threshold-zero was proved to be W-024 CriticalNative ABI/stub work rather than a JIT-memory defect; temporary J-1 diagnostic opt-out and real-Windows acceptance remain
 
 
-*Last snapshot: 2026-07-23 — W-001 closed; nterp ON; corrected pagefile-section dual view is the managed-JIT default (10/10 smoke, 14/14 matrix); D-1 complete; `ART_WIN64_JIT_DUAL=0` temporarily retains J-1 for diagnosis; real-Windows acceptance and native FastNative ABI work remain; 12 OPEN workarounds remaining.*
+*Last snapshot: 2026-07-24 — W-001 closed; nterp ON; corrected pagefile-section dual view is the managed-JIT default (10/10 smoke, 14/14 matrix); D-1 complete; threshold-zero is root-caused under W-024 with no workaround landed; `ART_WIN64_JIT_DUAL=0` temporarily retains J-1 for diagnosis; real-Windows acceptance and native Critical/FastNative ABI work remain; 12 OPEN workarounds remaining.*

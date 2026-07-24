@@ -1,7 +1,7 @@
 # Win64 JIT memory and codepath — current design and status
 
 **Status:** P5 Wine implementation complete; pagefile-backed dual mapping is the default
-**Updated:** 2026-07-23
+**Updated:** 2026-07-24
 **Target baseline:** Windows 10 version 1803 or later (NTDDI_WIN10_RS4)
 **Related:** [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md), [win32_open_items.md](win32_open_items.md), Phase 5 JIT
 
@@ -662,18 +662,74 @@ Native-JIT tests remain excluded until the FastNative ABI item closes.
 
 ### 12.5 Threshold-zero stress finding
 
-`FloatProbe -Xjitthreshold:0` currently fails in both J-1 and the corrected
-dual-view path at `ArtMethod::GetOatQuickMethodHeader()` with an invalid
-`ArtMethod*`. The dual-view run faults with `fault_addr=0x100000009`; the J-1
-control faults at the same instruction with `fault_addr=0x9`. This is a shared
-aggressive-compilation/runtime issue, not the old separated-view displacement
-or CodeInfo-layout defect. Standard FloatProbe and the full 14-probe matrix are
-green on both memory paths.
+`FloatProbe -Xjitthreshold:0` fails in both J-1 and the corrected dual-view
+path, but the failure is now isolated to the Win64 direct `@CriticalNative`
+first-use path rather than JIT memory topology.
 
-The threshold-zero stress case remains open, but it does not justify retaining
-the RWX J-1 path as the product default.
+The control matrix is decisive:
 
-## 13. Current status — 2026-07-23
+| Configuration | Result |
+|---------------|--------|
+| Win64 dual view, threshold 0 | FAIL |
+| Win64 J-1, threshold 0 | FAIL at the same path |
+| Win64 JIT disabled, threshold 0 | PASS |
+| Win64 dual view, threshold 1 | PASS |
+| Linux ART, threshold 0 | PASS |
+
+The first real fault is a stack walk from the unresolved direct
+`System.currentTimeMillis()` call in
+`Daemons$FinalizerWatchdogDaemon.waitForProgress()`. The runtime save frame is
+the normal 208-byte x86_64 SaveRefsAndArgs frame. The apparent invalid
+`ArtMethod*` (`0x0000000100000001`) is caller spill data reached because the
+frame was positioned 32 bytes too high.
+
+The exact mismatch is:
+
+1. The Win64 JNI-frame helper correctly reports a 32-byte Microsoft x64 shadow
+   area for direct `@CriticalNative` shorty `J` (`()J`).
+2. `CriticalNativeCallingConventionVisitorX86_64` still has the upstream SysV
+   direct-call behavior: it reports zero outgoing bytes for `()J`, so the JIT
+   emits no `sub rsp, 32` before `call *ArtMethod::jni_entrypoint`.
+3. `art_jni_dlsym_lookup_critical_stub` asks
+   `artCriticalNativeFrameSize()` for the expected direct-call frame size and
+   receives 32. It therefore positions its managed SaveRefsAndArgs frame as if
+   the caller had reserved that area. The stack walker advances 208 bytes and
+   lands at caller SP + 32 instead of the caller's method slot.
+
+A temporary experiment that made the optimizing visitor report the missing
+32-byte area corrected the stack walk and exposed a second independent Win64
+stub defect: `LOAD_RUNTIME_INSTANCE r10` uses `r11` as its PE scratch register,
+overwriting the caller PC that the dlsym stub keeps live in `r11`. The stub then
+installs `Runtime*` as the native return address. Reloading `r11` from the
+already-saved frame return-PC slot corrected that failure.
+
+With both experimental corrections, `FloatProbe -Xjitthreshold:0` passed 10/10
+times on the default dual view and 10/10 times on J-1. The prototype was
+reverted after the experiment; it is evidence for the fix, not a landed
+workaround.
+
+The final fix must cover more than the no-argument probe:
+
+1. Give `CriticalNativeCallingConventionVisitorX86_64` a Windows branch using
+   the same Microsoft x64 contract already implemented by
+   `X86_64JniCallingConvention`: RCX/RDX/R8/R9 or XMM0-XMM3 selected by unified
+   argument ordinal, followed by stack arguments.
+2. Start Win64 direct-call stack offsets after the 32-byte shadow area and
+   include that area in `GetStackOffset()`, so argument moves and
+   `GetCriticalNativeDirectCallFrameSize()` agree for zero, mixed, and spilled
+   arguments.
+3. Preserve the dlsym stub caller PC across `LOAD_RUNTIME_INSTANCE`, preferably
+   by reloading the value from the frame slot already used for stack walking.
+   This is local and leaves the common macro and Linux assembly unchanged.
+4. Add generated-code tests for `()J`, FP-only, mixed integer/FP, and more than
+   four native arguments, plus repeated threshold-zero Wine runs and a real
+   Windows 10 acceptance run.
+
+Until that complete ABI fix lands, threshold zero remains an expected failure
+in the unmodified Win64 build. It does not justify retaining the RWX J-1 path
+as the product default.
+
+## 13. Current status — 2026-07-24
 
 ### Done
 
@@ -693,7 +749,7 @@ the RWX J-1 path as the product default.
 | Item | Blocker |
 |------|---------|
 | Real Windows acceptance | Host access; Wine implementation and matrix are complete |
-| Threshold-zero stress | Invalid `ArtMethod*` in both J-1 and dual view |
+| Threshold-zero stress | Root cause confirmed in direct `@CriticalNative` Win64 ABI; complete fix not landed |
 | Direct encoding checks | Add checks at JIT-root patch and CodeInfo construction sites |
 | Native JIT | FastNative MS x64 ABI |
 
@@ -705,7 +761,7 @@ the RWX J-1 path as the product default.
 | JIT smoke | 10/10 | 10/10 |
 | JIT matrix | 14/14 | 14/14 |
 | FloatProbe normal threshold | PASS | PASS |
-| FloatProbe `-Xjitthreshold:0` | Shared `GetOatQuickMethodHeader` failure | Shared `GetOatQuickMethodHeader` failure |
+| FloatProbe `-Xjitthreshold:0` | Baseline FAIL; two-fix research prototype 10/10 | Baseline FAIL; two-fix research prototype 10/10 |
 
 ## 14. Decision log
 
@@ -725,6 +781,7 @@ the RWX J-1 path as the product default.
 | 2026-07-23 | Corrected contiguous dual view passes Wine smoke 10/10 and matrix 14/14 and becomes the Windows default |
 | 2026-07-23 | Full rebuild exposed Linux-layout `asm_defines` regeneration; Windows-target codegen and a permanent 0x328 offset assertion fixed it |
 | 2026-07-23 | Threshold-zero FloatProbe fails identically in J-1 and dual view, separating it from the historical J-2 layout defect |
+| 2026-07-24 | Threshold-zero root cause isolated to missing Win64 direct-CriticalNative shadow space plus dlsym-stub `r11` caller-PC clobber; two-fix prototype passes 20/20 and is reverted pending the complete ABI patch |
 
 ## 15. Code anchors
 
