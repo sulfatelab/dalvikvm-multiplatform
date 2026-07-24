@@ -150,8 +150,9 @@ modes, and the remaining regressions passed.
 The mixed/high-FP normal/FastNative ABI, unresolved app-JNI,
 register/unregister/re-register binding transitions, and method-tracing
 instrumentation and JVMTI forced-interpreter transitions are no longer W-024
-blockers. Per-method compile records are now opt-in. The native-JIT gate
-remains temporarily until W-024 obtains real Windows 10 acceptance.
+blockers. Per-method compile records are now opt-in. Native Windows 10
+acceptance passes; the native-JIT gate remains temporarily until W-024
+fallback cleanup and post-change regressions are complete.
 The Math/libcore native demotion is restored in `RESULT-math-critical.md`.
 CriticalNative method tracing is covered by
 `run_critical_native_probe.sh`; JVMTI single-step/deoptimization coverage is

@@ -1,8 +1,11 @@
 # W-024 native Windows 10 acceptance checklist
 
-W-024 cannot remove the native-JIT diagnostic gate or the legacy
-`InterpreterJni` fallbacks from Wine evidence alone. Run this checklist on a
-native x86-64 Windows installation, not Wine, WSL, or Windows 7.
+**Latest result:** PASS on Windows 10 Enterprise LTSC 2021, build 19044, on
+2026-07-24. Accepted evidence is stored under `evidence/w024_host/`.
+
+This checklist records the native-host gate required before removing the
+native-JIT diagnostic gate or the legacy `InterpreterJni` fallbacks. Run it on
+a native x86-64 Windows installation, not Wine, WSL, or Windows 7.
 
 ## 1. Host requirement
 

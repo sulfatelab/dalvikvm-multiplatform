@@ -1,0 +1,11 @@
+Win64 W-024 InterpreterJni tripwire 2026-07-24 20:27:51.70
+math_dual exit=0
+math_j1 exit=0
+math_xint exit=0
+critical_dual exit=0
+critical_j1 exit=0
+native_abi_dual exit=0
+native_abi_j1 exit=0
+jvmti_dual exit=0
+jvmti_j1 exit=0
+OVERALL PASS

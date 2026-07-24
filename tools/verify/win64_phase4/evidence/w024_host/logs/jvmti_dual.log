@@ -1,0 +1,673 @@
+=== jvmti_dual ===
+dalvikvm.exe I 07-24 20:28:07  7500  1700 parsed_options.cc:711] setting boot class path to run\boot.jar
+dalvikvm.exe W 07-24 20:28:07  7500  1700 runtime.cc:1727] Could not reserve sentinel fault page
+dalvikvm.exe I 07-24 20:28:07  7500  1700 heap.cc:445] Using CollectorTypeCMS GC.
+dalvikvm.exe E 07-24 20:28:07  7500  1700 image_space.cc:3367] Could not create image space with image file '/nonexistent-no-boot-image'. Attempting to fall back to imageless running. Error was: Invalid boot class path component: run\boot.jar
+dalvikvm.exe I 07-24 20:28:07  7500  1700 heap.cc:657] Heap non_moving space begin=0x10000 end=0x11000 limit=0x4010000 capacity=67108864 dlmalloc_space=0x1e57dd21a00
+dalvikvm.exe I 07-24 20:28:07  7500  1700 heap.cc:1008] Win64 CreateMainMallocSpace begin=0x4010000 limit=0x24010000 allocator=2 dlmalloc_space=0x1e57dd21a00 rosalloc_space=0x1e57dd2b990
+dalvikvm.exe I 07-24 20:28:07  7500  1700 card_table.cc:88] CardTable::Create heap_begin=0x1000 capacity=4294963200 map=[0x46290000,0x466900fc) biased_begin=0x46290070 offset=116
+dalvikvm.exe I 07-24 20:28:07  7500  1700 heap.cc:754] Win64 continuous space zygote / non moving space [0x10000,0x4010000) continuous=1
+dalvikvm.exe I 07-24 20:28:07  7500  1700 heap.cc:754] Win64 continuous space main rosalloc space [0x4010000,0x24010000) continuous=1
+dalvikvm.exe I 07-24 20:28:07  7500  1700 heap.cc:759] Win64 Heap this=0x1e57dd2d0d0 card_table_ptr=0x1e57dd20e60 biased=0x46290070 offsetof(card_table_) approx via ptr-diff: 112
+dalvikvm.exe I 07-24 20:28:07  7500  1700 runtime.cc:2000] Runtime::Init after Heap construction Runtime=0x1e57dd29c80 heap_=0x1e57dd2d0d0 offsetof(heap_)=512 sizeof(long)=4 sizeof(void*)=8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 runtime.cc:2042] Runtime::Init after JDWP setup
+dalvikvm.exe I 07-24 20:28:07  7500  1700 runtime.cc:2085] Runtime::Init linear_alloc low_4gb=1 win64_low_4gb=1 linear_pool=1 arena_pool=1
+dalvikvm.exe I 07-24 20:28:07  7500  1700 runtime.cc:2093] Runtime::Init after SmallLrtAllocator
+dalvikvm.exe I 07-24 20:28:07  7500  1700 runtime.cc:2097] Runtime::Init before arena pools
+dalvikvm.exe I 07-24 20:28:07  7500  1700 runtime.cc:2102] Runtime::Init after BlockSignals
+dalvikvm.exe I 07-24 20:28:07  7500  1700 runtime.cc:2106] Runtime::Init after InitPlatformSignalHandlers
+dalvikvm.exe I 07-24 20:28:07  7500  1700 runtime.cc:2141] Runtime::Init before fault_manager.Init no_sig_chain=1
+dalvikvm.exe I 07-24 20:28:07  7500  1700 runtime.cc:2145] Runtime::Init after fault_manager.Init
+dalvikvm.exe I 07-24 20:28:07  7500  1700 runtime.cc:2185] Runtime::Init before JavaVMExt::Create
+dalvikvm.exe I 07-24 20:28:07  7500  1700 runtime.cc:2189] Runtime::Init after JavaVMExt::Create vm=1
+dalvikvm.exe I 07-24 20:28:07  7500  1700 runtime.cc:2201] Runtime::Init before Thread::Startup
+dalvikvm.exe I 07-24 20:28:07  7500  1700 runtime.cc:2205] Runtime::Init after Thread::Startup
+dalvikvm.exe I 07-24 20:28:07  7500  1700 runtime.cc:2212] Runtime::Init before Thread::Attach(main)
+dalvikvm.exe I 07-24 20:28:07  7500  1700 runtime.cc:2216] Runtime::Init after Thread::Attach(main) self=0x1e57dd31250
+dalvikvm.exe E 07-24 20:28:07  7500  1700 zip_archive.cc:213] SetCloseOnExec is not supported on Windows.: No error
+dalvikvm.exe I 07-24 20:28:07  7500  1700 heap-inl.h:193] Win64 NonMoving WB obj=0x103c0 klass=0 in_card_table=1 allocator=4
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:714] InitWithoutImage java_lang_Class=0x103c0 size=896 non_moving=[0x10000,0x4010000) card_map=0x46290000 biased=0x46290070 runtime=0x1e57dd29c80 rt->heap=0x1e57dd2d0d0 heap_arg=0x1e57dd2d0d0 ct=0x1e57dd20e60
+dalvikvm.exe I 07-24 20:28:07  7500  1700 heap-inl.h:193] Win64 NonMoving WB obj=0x10750 klass=0x4010230 in_card_table=1 allocator=4
+dalvikvm.exe I 07-24 20:28:07  7500  1700 heap-inl.h:193] Win64 NonMoving WB obj=0x10770 klass=0x103c0 in_card_table=1 allocator=4
+dalvikvm.exe I 07-24 20:28:07  7500  1700 heap-inl.h:193] Win64 NonMoving WB obj=0x10a90 klass=0x103c0 in_card_table=1 allocator=4
+dalvikvm.exe I 07-24 20:28:07  7500  1700 heap-inl.h:193] Win64 NonMoving WB obj=0x10b70 klass=0x103c0 in_card_table=1 allocator=4
+dalvikvm.exe I 07-24 20:28:07  7500  1700 heap-inl.h:193] Win64 NonMoving WB obj=0x10c50 klass=0x103c0 in_card_table=1 allocator=4
+dalvikvm.exe I 07-24 20:28:07  7500  1700 heap-inl.h:193] Win64 NonMoving WB obj=0x10d30 klass=0x103c0 in_card_table=1 allocator=4
+dalvikvm.exe I 07-24 20:28:07  7500  1700 heap-inl.h:193] Win64 NonMoving WB obj=0x10e10 klass=0x103c0 in_card_table=1 allocator=4
+dalvikvm.exe I 07-24 20:28:07  7500  1700 heap-inl.h:193] Win64 NonMoving WB obj=0x11010 klass=0x103c0 in_card_table=1 allocator=4
+dalvikvm.exe I 07-24 20:28:07  7500  1700 heap-inl.h:193] Win64 NonMoving WB obj=0x110f0 klass=0x103c0 in_card_table=1 allocator=4
+dalvikvm.exe I 07-24 20:28:07  7500  1700 heap-inl.h:193] Win64 NonMoving WB obj=0x111d0 klass=0x103c0 in_card_table=1 allocator=4
+dalvikvm.exe W 07-24 20:28:07  7500  1700 hidden_api.cc:232] hiddenapi: DexFile run\boot.jar is in boot class path but is not in a known location
+dalvikvm.exe W 07-24 20:28:07  7500  1700 hidden_api.cc:232] hiddenapi: DexFile run\boot.jar!classes2.dex is in boot class path but is not in a known location
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:920] InitWithoutImage trampolines resolution=0x7ffc7eb82bd0 to_interp=0x7ffc7eb82f10 nterp=0x7ffc7eb8a2c0 generic_jni=0x7ffc7eb82d40
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:933] InitWithoutImage before CheckSystemClass Object
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:938] InitWithoutImage after CheckSystemClass Object
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:942] InitWithoutImage after IsFinalizable Object
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:947] InitWithoutImage before CheckSystemClass String
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:952] InitWithoutImage after CheckSystemClass String
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:955] InitWithoutImage before CheckSystemClass DexCache
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:960] InitWithoutImage after CheckSystemClass DexCache
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:964] InitWithoutImage before CheckSystemClass ClassExt
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:969] InitWithoutImage after CheckSystemClass ClassExt
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:976] InitWithoutImage before CheckSystemClass Class
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:980] InitWithoutImage after CheckSystemClass Class
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:986] InitWithoutImage before FinishCoreArrayClassSetup ObjectArray
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x4010300 descriptor=[Ljava/lang/Object; component=0x4010230 ptr_size=8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3185] FinishCoreArrayClassSetup InsertClass [Ljava/lang/Object; hash=2064239927 array=0x4010300
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3191] FinishCoreArrayClassSetup InsertClass done [Ljava/lang/Object;
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:990] InitWithoutImage after FinishCoreArrayClassSetup ObjectArray
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:993] InitWithoutImage before FinishCoreArrayClassSetup ClassArray
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x4010160 descriptor=[Ljava/lang/Class; component=0x103c0 ptr_size=8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3185] FinishCoreArrayClassSetup InsertClass [Ljava/lang/Class; hash=978945544 array=0x4010160
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3191] FinishCoreArrayClassSetup InsertClass done [Ljava/lang/Class;
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:997] InitWithoutImage after FinishCoreArrayClassSetup ClassArray
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x4010570 descriptor=[Ljava/lang/String; component=0x10770 ptr_size=8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3185] FinishCoreArrayClassSetup InsertClass [Ljava/lang/String; hash=1842129573 array=0x4010570
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3191] FinishCoreArrayClassSetup InsertClass done [Ljava/lang/String;
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x10a90 descriptor=[Z component=0x4011120 ptr_size=8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3185] FinishCoreArrayClassSetup InsertClass [Z hash=2911 array=0x10a90
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3191] FinishCoreArrayClassSetup InsertClass done [Z
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x10b70 descriptor=[B component=0x4011190 ptr_size=8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3185] FinishCoreArrayClassSetup InsertClass [B hash=2887 array=0x10b70
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3191] FinishCoreArrayClassSetup InsertClass done [B
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x10c50 descriptor=[C component=0x4011200 ptr_size=8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3185] FinishCoreArrayClassSetup InsertClass [C hash=2888 array=0x10c50
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3191] FinishCoreArrayClassSetup InsertClass done [C
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x10d30 descriptor=[S component=0x4011270 ptr_size=8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3185] FinishCoreArrayClassSetup InsertClass [S hash=2904 array=0x10d30
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3191] FinishCoreArrayClassSetup InsertClass done [S
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x10e10 descriptor=[I component=0x40112e0 ptr_size=8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3185] FinishCoreArrayClassSetup InsertClass [I hash=2894 array=0x10e10
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3191] FinishCoreArrayClassSetup InsertClass done [I
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x11010 descriptor=[J component=0x4011350 ptr_size=8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3185] FinishCoreArrayClassSetup InsertClass [J hash=2895 array=0x11010
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3191] FinishCoreArrayClassSetup InsertClass done [J
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x110f0 descriptor=[F component=0x40113c0 ptr_size=8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3185] FinishCoreArrayClassSetup InsertClass [F hash=2891 array=0x110f0
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3191] FinishCoreArrayClassSetup InsertClass done [F
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x111d0 descriptor=[D component=0x4011430 ptr_size=8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3185] FinishCoreArrayClassSetup InsertClass [D hash=2889 array=0x111d0
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3191] FinishCoreArrayClassSetup InsertClass done [D
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1009] InitWithoutImage after all FinishCoreArrayClassSetup; before Cloneable FindSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1015] InitWithoutImage after Cloneable FindSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1021] InitWithoutImage after Serializable FindSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1042] InitWithoutImage before Enum FindSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1046] InitWithoutImage after Enum FindSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1055] InitWithoutImage before Proxy FindSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1060] InitWithoutImage after Proxy FindSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1065] InitWithoutImage before Field FindSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1071] InitWithoutImage after Field FindSystemClass class=0x401ac00
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1076] InitWithoutImage before Field[] FindSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x4010640 descriptor=[Ljava/lang/reflect/Field; component=0x401ac00 ptr_size=8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1082] InitWithoutImage after Field[] FindSystemClass class=0x4010640
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1087] InitWithoutImage before Constructor FindSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1093] InitWithoutImage after Constructor FindSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x4010710 descriptor=[Ljava/lang/reflect/Constructor; component=0x401b000 ptr_size=8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1099] InitWithoutImage after Constructor[] FindSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1104] InitWithoutImage before Method FindSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1110] InitWithoutImage after Method FindSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40107e0 descriptor=[Ljava/lang/reflect/Method; component=0x401b800 ptr_size=8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1116] InitWithoutImage after Method[] FindSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1121] InitWithoutImage before CallSite FindSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1127] InitWithoutImage after CallSite FindSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1132] InitWithoutImage before MethodType FindSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1138] InitWithoutImage after MethodType FindSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1143] InitWithoutImage before MethodHandleImpl FindSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1150] InitWithoutImage after MethodHandleImpl FindSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1155] InitWithoutImage before MethodHandles$Lookup FindSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1161] InitWithoutImage after MethodHandles$Lookup FindSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1166] InitWithoutImage before VarHandle FindSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1172] InitWithoutImage after VarHandle FindSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1177] InitWithoutImage before FieldVarHandle FindSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1183] InitWithoutImage after FieldVarHandle FindSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1188] InitWithoutImage before StaticFieldVarHandle FindSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1194] InitWithoutImage after StaticFieldVarHandle FindSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1199] InitWithoutImage before ArrayElementVarHandle FindSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1205] InitWithoutImage after ArrayElementVarHandle FindSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1210] InitWithoutImage before ByteArrayViewVarHandle FindSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1216] InitWithoutImage after ByteArrayViewVarHandle FindSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1221] InitWithoutImage before ByteBufferViewVarHandle FindSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1227] InitWithoutImage after ByteBufferViewVarHandle FindSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1231] InitWithoutImage before EmulatedStackFrame FindSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1237] InitWithoutImage after EmulatedStackFrame FindSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1243] InitWithoutImage before Reference CheckSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1251] InitWithoutImage after Reference CheckSystemClass; before FinalizerReference
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1256] InitWithoutImage after FinalizerReference
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1265] InitWithoutImage after ref subclasses
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1270] InitWithoutImage before ClassLoader FindSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1277] InitWithoutImage after ClassLoader FindSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1283] InitWithoutImage before Throwable FindSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1287] InitWithoutImage after Throwable FindSystemClass
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x4010b20 descriptor=[Ljava/lang/StackTraceElement; component=0x402e300 ptr_size=8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x4010bf0 descriptor=[Ljava/lang/ClassLoader; component=0x402c270 ptr_size=8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1298] InitWithoutImage after convenience roots; before FixupConflictTables
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1304] InitWithoutImage after FixupConflictTables; before FinishInit
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:1309] InitWithoutImage after FinishInit
+dalvikvm.exe I 07-24 20:28:07  7500  1700 deopt_manager.cc:155] Openjdkjvmti plugin loaded on a non-debuggable runtime. Changing runtime to debuggable state. Please pass '--debuggable' to dex2oat and '-Xcompiler-option --debuggable' to dalvikvm in the future.
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x4032a50 descriptor=[Ljava/lang/annotation/Annotation; component=0x402c900 ptr_size=8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x4032e60 descriptor=[Ljava/lang/reflect/RecordComponent; component=0x402aec0 ptr_size=8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x4032f30 descriptor=[Ljava/lang/reflect/Type; component=0x4011900 ptr_size=8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x4042300 descriptor=[Ljava/lang/Enum; component=0x4011ac0 ptr_size=8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x4042570 descriptor=[Ljava/lang/reflect/TypeVariable; component=0x402cd60 ptr_size=8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40427e0 descriptor=[Ljava/io/ObjectStreamField; component=0x40287b0 ptr_size=8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x4042f30 descriptor=[Ljava/lang/CharSequence; component=0x40116d0 ptr_size=8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x404c3d0 descriptor=[Ljava/lang/reflect/AccessibleObject; component=0x4021160 ptr_size=8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x404c710 descriptor=[Ldalvik/system/VirtualThreadFrame; component=0x404c640 ptr_size=8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x404c7e0 descriptor=[Ljava/lang/reflect/Parameter; component=0x40303a0 ptr_size=8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x404c8b0 descriptor=[Llibcore/reflect/AnnotationMember; component=0x4050120 ptr_size=8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:07  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+Register I 07-24 20:28:08  7500  1700 Using product ICU data from ICU_DATA=run\icu (skip stub common data)
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x4060710 descriptor=[Ljava/lang/Package; component=0x402f5f0 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40607e0 descriptor=[Ljava/util/Enumeration; component=0x4069200 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40608b0 descriptor=[Ljava/util/Map$Entry; component=0x4069660 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x4060bf0 descriptor=[Ljava/util/HashMap$Node; component=0x4053b50 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40784a0 descriptor=[Ljava/lang/Thread; component=0x4037c00 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x4078cc0 descriptor=[Ljava/net/InetAddress; component=0x403a880 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x408f4a0 descriptor=[Ljava/lang/Integer; component=0x4030500 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x408f710 descriptor=[[Ljava/lang/String; component=0x4010570 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x408f980 descriptor=[Ljava/lang/invoke/MethodHandle; component=0x401d1a0 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x408fa50 descriptor=[Ljava/util/List; component=0x402cac0 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x408fb20 descriptor=[[Ljava/lang/invoke/MethodHandle; component=0x408f980 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x408fe60 descriptor=[[Ljava/lang/annotation/Annotation; component=0x4032a50 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40a5160 descriptor=[Ljava/lang/Comparable; component=0x4011660 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40a5230 descriptor=[Ljava/lang/Byte; component=0x40288e0 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40a5300 descriptor=[Ljava/lang/constant/ConstantDesc; component=0x40117b0 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40a54a0 descriptor=[Ljava/lang/Throwable; component=0x4030240 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40a5570 descriptor=[Ljava/lang/Short; component=0x4028a10 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40a5710 descriptor=[Ljava/lang/Character; component=0x402f760 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40a57e0 descriptor=[Ljava/util/Hashtable$HashtableEntry; component=0x409ea60 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40a5b20 descriptor=[Ljava/util/concurrent/ConcurrentHashMap$Segment; component=0x40b1480 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40a5cc0 descriptor=[Ljava/util/concurrent/ConcurrentHashMap$Node; component=0x409ed30 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40a5d90 descriptor=[Ljava/util/concurrent/ConcurrentHashMap$CounterCell; component=0x40a5bf0 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40ca3d0 descriptor=[Landroid/system/StructCapUserData; component=0x40ca300 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40ca4a0 descriptor=[Landroid/system/StructIfaddrs; component=0x4056a50 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40ca640 descriptor=[Ljava/io/FileDescriptor; component=0x4028c70 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40ca710 descriptor=[Landroid/system/StructPollfd; component=0x4056cc0 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 dalvik_system_VMRuntime.cc:217] Win64 VMRuntime_classPath -> 'run\jvmtiforceprobe.jar'
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40cab20 descriptor=[Ljava/util/Locale; component=0x404a400 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40d4160 descriptor=[Lsun/util/locale/BaseLocale; component=0x40a1dc0 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40d4980 descriptor=[Llibcore/io/IoTracker$Mode; component=0x4050ef0 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40d4b20 descriptor=[Ljava/lang/ClassValue$Entry; component=0x40a2ec0 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40df160 descriptor=[Ljava/lang/ThreadGroup; component=0x40443c0 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40df640 descriptor=[Ljava/lang/Thread$State; component=0x40d55e0 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe W 07-24 20:28:08  7500  1700 thread.cc:5074] Using default priority map due to SDK version
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40df710 descriptor=[Ljava/security/Permission; component=0x408cba0 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40df7e0 descriptor=[Ljava/security/ProtectionDomain; component=0x402ea00 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40df8b0 descriptor=[[Ljava/lang/Class; component=0x4010160 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40dfbf0 descriptor=[Ljava/lang/Long; component=0x4031820 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40dfcc0 descriptor=[Ljava/lang/invoke/MethodType; component=0x401bc00 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40dfe60 descriptor=[Ljava/lang/invoke/TypeDescriptor$OfField; component=0x4011970 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40dff30 descriptor=[Ljava/nio/ByteBuffer; component=0x4022e20 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40ea160 descriptor=[Ljava/lang/Daemons$Daemon; component=0x40e59e0 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40ea7e0 descriptor=[Ljava/util/WeakHashMap$Entry; component=0x40e4700 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40eab20 descriptor=[Llibcore/reflect/AnnotationMember$DefaultValues; component=0x40f7120 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40eabf0 descriptor=[Ldalvik/system/DexPathList$Element; component=0x4053100 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40ead90 descriptor=[[B component=0x10b70 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40eae60 descriptor=[Ldalvik/system/DexPathList$NativeLibraryElement; component=0x40e7f20 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40eaf30 descriptor=[Ljava/io/IOException; component=0x4043c40 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit_memory_region.cc:212] Win64 JIT dual-view (J-2) created: capacity=64MiB; falling through to mspace init
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit_code_cache.cc:257] Win64 JitCodeCache::Create OK initial=64KB max=64MB
+dalvikvm.exe I 07-24 20:28:08  7500  1700 runtime.cc:998] Win64 CreateSystemClassLoader before invoke class_path_string_='run\jvmtiforceprobe.jar' entry=0x7ffc7eb82f10 nterp_supported=1 can_use_nterp=0
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40fb570 descriptor=[Ljava/io/File; component=0x4088800 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40fb710 descriptor=[Ljava/io/File$PathStatus; component=0x40f7230 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+Win64 getBooleanAttributes0 jlen=23 raw_first=72
+Win64 getBooleanAttributes0 path='run\jvmtiforceprobe.jar' attr=0x80 rv=0x3
+Win64 getBooleanAttributes0 jlen=23 raw_first=72
+Win64 getBooleanAttributes0 path='run\jvmtiforceprobe.jar' attr=0x80 rv=0x3
+dalvikvm.exe I 07-24 20:28:08  7500  1700 dalvik_system_DexFile.cc:379] Win64 DexFile_openDexFileNative source='C:\Users\sulfate\Desktop\win64_w024_tripwire_host\run\jvmtiforceprobe.jar'
+dalvikvm.exe W 07-24 20:28:08  7500  1700 oat_file_assistant.cc:176] Failed to determine odex file name: Dex location C:\Users\sulfate\Desktop\win64_w024_tripwire_host\run\jvmtiforceprobe.jar has no directory.
+dalvikvm.exe E 07-24 20:28:08  7500  1700 zip_archive.cc:213] SetCloseOnExec is not supported on Windows.: No such file or directory
+dalvikvm.exe E 07-24 20:28:08  7500  1700 zip_archive.cc:213] SetCloseOnExec is not supported on Windows.: No such file or directory
+Win64 getBooleanAttributes0 jlen=23 raw_first=72
+Win64 getBooleanAttributes0 path='run\jvmtiforceprobe.jar' attr=0x80 rv=0x3
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40fb8b0 descriptor=[Ljava/lang/ThreadLocal$ThreadLocalMap$Entry; component=0x40aaa00 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+Win64 getBooleanAttributes0 jlen=1 raw_first=2e
+Win64 getBooleanAttributes0 path='.' attr=0x10 rv=0x5
+Win64 getBooleanAttributes0 jlen=1 raw_first=2e
+Win64 getBooleanAttributes0 path='.' attr=0x10 rv=0x5
+dalvikvm.exe I 07-24 20:28:08  7500  1700 runtime.cc:1008] Win64 CreateSystemClassLoader after invoke loader=0x4017f20
+dalvikvm.exe I 07-24 20:28:08  7500  1700 runtime.cc:1020] Win64 loader.toString=dalvik.system.PathClassLoader[DexPathList[[zip file "run\jvmtiforceprobe.jar"],nativeLibraryDirectories=[., .]]]
+dalvikvm.exe I 07-24 20:28:08  7500  1700 runtime.cc:1159] Win64 Runtime::Start after CreateSystemClassLoader can_use_nterp=0 finished=0
+dalvikvm.exe I 07-24 20:28:08  7500  1700 runtime.cc:1170] Win64 Runtime::Start before InitNonZygoteOrPostFork
+dalvikvm.exe I 07-24 20:28:08  7500  1700 runtime.cc:1176] Win64 Runtime::Start after InitNonZygoteOrPostFork
+dalvikvm.exe I 07-24 20:28:08  7500  1700 runtime.cc:1181] Win64 Runtime::Start before StartDaemonThreads
+dalvikvm.exe I 07-24 20:28:08  7500  1700 runtime.cc:1183] Win64 Runtime::Start after StartDaemonThreads
+dalvikvm.exe I 07-24 20:28:08  7500  1700 runtime.cc:1190] Win64 Runtime::Start after kInit phase
+dalvikvm.exe I 07-24 20:28:08  7500  1700 runtime.cc:1195] Win64 Runtime::Start finished_starting_=true can_use_nterp=0
+Win64 InvokeMain: FindClass('JvmtiForceProbe')
+Win64 InvokeMain: found class, GetStaticMethodID main
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit.cc:299] Win64 CompileMethod done success=0 method=void JvmtiForceProbe.<clinit>() kind=Fast entry=0x7ffc7eb82f10
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit.cc:299] Win64 CompileMethod done success=1 method=void JvmtiForceProbe.<clinit>() kind=Baseline entry=0x4a1103d0
+Win64 InvokeMain: CallStaticVoidMethod main begin
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit.cc:299] Win64 CompileMethod done success=0 method=void JvmtiForceProbe.main(java.lang.String[]) kind=Fast entry=0x7ffc7eb82f10
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit.cc:299] Win64 CompileMethod done success=1 method=void JvmtiForceProbe.main(java.lang.String[]) kind=Baseline entry=0x4a110510
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit.cc:299] Win64 CompileMethod done success=0 method=java.lang.String JvmtiForceProbe.phaseValues(java.lang.String) kind=Fast entry=0x7ffc7eb82f10
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit.cc:299] Win64 CompileMethod done success=1 method=java.lang.String JvmtiForceProbe.phaseValues(java.lang.String) kind=Baseline entry=0x4a110c30
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit.cc:299] Win64 CompileMethod done success=1 method=double JvmtiForceProbe.normalRegistered(long, double, int, float) kind=Fast entry=0x4a1112e0
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit.cc:299] Win64 CompileMethod done success=1 method=double JvmtiForceProbe.fastRegistered(long, double, int, float) kind=Fast entry=0x4a111460
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit.cc:299] Win64 CompileMethod done success=0 method=double JvmtiForceProbe.criticalRegistered(long, double, int, float) kind=Fast entry=0x7ffc7eb82d40
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit.cc:299] Win64 CompileMethod done success=0 method=double JvmtiForceProbe.criticalRegistered(long, double, int, float) kind=Baseline entry=0x7ffc7eb82d40
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit.cc:299] Win64 CompileMethod done success=0 method=double JvmtiForceProbe.criticalDlsym(long, double, int, float) kind=Fast entry=0x7ffc7eb82d40
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit.cc:299] Win64 CompileMethod done success=0 method=double JvmtiForceProbe.criticalDlsym(long, double, int, float) kind=Baseline entry=0x7ffc7eb82d40
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit.cc:299] Win64 CompileMethod done success=0 method=double JvmtiForceProbe.criticalRegistered(long, double, int, float) kind=Fast entry=0x7ffc7eb82d40
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit.cc:299] Win64 CompileMethod done success=0 method=double JvmtiForceProbe.criticalRegistered(long, double, int, float) kind=Baseline entry=0x7ffc7eb82d40
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit.cc:299] Win64 CompileMethod done success=0 method=double JvmtiForceProbe.criticalDlsym(long, double, int, float) kind=Fast entry=0x7ffc7eb82d40
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit.cc:299] Win64 CompileMethod done success=0 method=double JvmtiForceProbe.criticalDlsym(long, double, int, float) kind=Baseline entry=0x7ffc7eb82d40
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit.cc:299] Win64 CompileMethod done success=0 method=double JvmtiForceProbe.criticalRegistered(long, double, int, float) kind=Fast entry=0x7ffc7eb82d40
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit.cc:299] Win64 CompileMethod done success=0 method=double JvmtiForceProbe.criticalRegistered(long, double, int, float) kind=Baseline entry=0x7ffc7eb82d40
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit.cc:299] Win64 CompileMethod done success=0 method=double JvmtiForceProbe.criticalDlsym(long, double, int, float) kind=Fast entry=0x7ffc7eb82d40
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit.cc:299] Win64 CompileMethod done success=0 method=double JvmtiForceProbe.criticalDlsym(long, double, int, float) kind=Baseline entry=0x7ffc7eb82d40
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit.cc:299] Win64 CompileMethod done success=0 method=double JvmtiForceProbe.criticalRegistered(long, double, int, float) kind=Fast entry=0x7ffc7eb82d40
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit.cc:299] Win64 CompileMethod done success=0 method=double JvmtiForceProbe.criticalRegistered(long, double, int, float) kind=Baseline entry=0x7ffc7eb82d40
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit.cc:299] Win64 CompileMethod done success=0 method=double JvmtiForceProbe.criticalDlsym(long, double, int, float) kind=Fast entry=0x7ffc7eb82d40
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit.cc:299] Win64 CompileMethod done success=0 method=double JvmtiForceProbe.criticalDlsym(long, double, int, float) kind=Baseline entry=0x7ffc7eb82d40
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit.cc:299] Win64 CompileMethod done success=0 method=double JvmtiForceProbe.criticalRegistered(long, double, int, float) kind=Fast entry=0x7ffc7eb82d40
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit.cc:299] Win64 CompileMethod done success=0 method=double JvmtiForceProbe.criticalRegistered(long, double, int, float) kind=Baseline entry=0x7ffc7eb82d40
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit.cc:299] Win64 CompileMethod done success=0 method=double JvmtiForceProbe.criticalDlsym(long, double, int, float) kind=Fast entry=0x7ffc7eb82d40
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit.cc:299] Win64 CompileMethod done success=0 method=double JvmtiForceProbe.criticalDlsym(long, double, int, float) kind=Baseline entry=0x7ffc7eb82d40
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit.cc:299] Win64 CompileMethod done success=0 method=double JvmtiForceProbe.criticalRegistered(long, double, int, float) kind=Fast entry=0x7ffc7eb82d40
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit.cc:299] Win64 CompileMethod done success=0 method=double JvmtiForceProbe.criticalRegistered(long, double, int, float) kind=Baseline entry=0x7ffc7eb82d40
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit.cc:299] Win64 CompileMethod done success=0 method=double JvmtiForceProbe.criticalDlsym(long, double, int, float) kind=Fast entry=0x7ffc7eb82d40
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit.cc:299] Win64 CompileMethod done success=0 method=double JvmtiForceProbe.criticalDlsym(long, double, int, float) kind=Baseline entry=0x7ffc7eb82d40
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit.cc:299] Win64 CompileMethod done success=0 method=double JvmtiForceProbe.criticalRegistered(long, double, int, float) kind=Fast entry=0x7ffc7eb82d40
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit.cc:299] Win64 CompileMethod done success=0 method=double JvmtiForceProbe.criticalRegistered(long, double, int, float) kind=Baseline entry=0x7ffc7eb82d40
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit.cc:299] Win64 CompileMethod done success=0 method=double JvmtiForceProbe.criticalDlsym(long, double, int, float) kind=Fast entry=0x7ffc7eb82d40
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit.cc:299] Win64 CompileMethod done success=0 method=double JvmtiForceProbe.criticalDlsym(long, double, int, float) kind=Baseline entry=0x7ffc7eb82d40
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit.cc:299] Win64 CompileMethod done success=0 method=double JvmtiForceProbe.criticalRegistered(long, double, int, float) kind=Fast entry=0x7ffc7eb82d40
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit.cc:299] Win64 CompileMethod done success=0 method=double JvmtiForceProbe.criticalRegistered(long, double, int, float) kind=Baseline entry=0x7ffc7eb82d40
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit.cc:299] Win64 CompileMethod done success=0 method=double JvmtiForceProbe.criticalDlsym(long, double, int, float) kind=Fast entry=0x7ffc7eb82d40
+dalvikvm.exe I 07-24 20:28:08  7500  1700 jit.cc:299] Win64 CompileMethod done success=0 method=double JvmtiForceProbe.criticalDlsym(long, double, int, float) kind=Baseline entry=0x7ffc7eb82d40
+Win64 getAveBytesPerChar ENTER addr=1e57dd3de00 cnv=000001E57DD3DE00 max=3 min=1 -> 2 bits=40000000
+Win64 getMaxBytesPerChar ENTER addr=1e57dd3de00 cnv=000001E57DD3DE00 -> 3
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3100] FinishArrayClassSetup enter array=0x40fbe60 descriptor=[Ljava/nio/charset/CoderResult; component=0x4043b00 ptr_size=8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3120] FinishArrayClassSetup before PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3124] FinishArrayClassSetup after PopulateEmbeddedVTable
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3128] FinishArrayClassSetup Object IMT=0x47fd02b8
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3132] FinishArrayClassSetup after SetImt
+dalvikvm.exe I 07-24 20:28:08  7500  1700 class_linker.cc:3170] FinishArrayClassSetup done
+JvmtiForceProbe before normalRegistered=137.75 fastRegistered=237.75 criticalRegistered=337.75 normalDlsym=437.75 fastDlsym=537.75 criticalDlsym=637.75
+JvmtiForceProbe during normalRegistered=137.75 fastRegistered=237.75 criticalRegistered=337.75 normalDlsym=437.75 fastDlsym=537.75 criticalDlsym=637.75
+JvmtiForceProbe after normalRegistered=137.75 fastRegistered=237.75 criticalRegistered=337.75 normalDlsym=437.75 fastDlsym=537.75 criticalDlsym=637.75
+JvmtiForceProbe steps before=0 during=7988 disabled=7993 final=7993
+JvmtiForceProbe OK
+Win64 InvokeMain: CallStaticVoidMethod main end exception=0
+exit=0

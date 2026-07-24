@@ -1,8 +1,8 @@
 # Win64 legacy InterpreterJni fallback reachability audit
 
-**Status:** PASS under Wine; deletion remains gated on Windows 10
+**Status:** PASS under Wine and native Windows 10; cleanup authorized
 **Date:** 2026-07-24 17:47:36 CST
-**Updated:** 2026-07-24 18:21:01 CST
+**Updated:** 2026-07-24 20:48:57 CST
 **Host:** agent01
 
 ## Question
@@ -12,8 +12,9 @@ and a direct JNI resolver because Phase 2/3 did not yet have working quick/JNI
 entrypoints. Those entrypoints, compiled JNI, direct CriticalNative calls,
 method-tracing transitions, and JVMTI forced interpretation now work.
 
-This audit asks whether any current runtime-started Wine path still reaches the
-legacy fallback. It does not delete the fallback based only on Wine evidence.
+This audit asks whether any current runtime-started Win64 path still reaches
+the legacy fallback. Wine established the initial result; native Windows 10
+then closed the host-reachability gate before cleanup.
 
 ## Shared boot artifact
 
@@ -106,22 +107,46 @@ returned zero and the driver ended with `OVERALL PASS`, confirming the command
 syntax, marker checks, `%~dp0` path handling, and package-relative class/native
 paths before native Windows transfer.
 
+## Native Windows 10 acceptance
+
+The same packaged tripwire matrix ran on Windows 10 Enterprise LTSC 2021,
+version 2009, build 19044. All nine cases returned `exit=0` and the driver ended
+with `OVERALL PASS`:
+
+- Math CriticalNative in dual-view, J-1, and `-Xint` modes;
+- registered and unresolved CriticalNative plus method tracing in dual-view
+  and J-1 modes;
+- compiled normal/FastNative ABI, rebinding, and method tracing in dual-view
+  and J-1 modes; and
+- JVMTI single-step forced interpretation in dual-view and J-1 modes.
+
+Each normal/FastNative run compiled all seven required targets exactly once
+before execution. Each JVMTI run compiled the registered normal and FastNative
+targets exactly once and compiled no CriticalNative target, matching ART's
+debuggable-runtime rule. All transition values passed, every probe ended with
+`main end exception=0`, no tripwire fired, and the recursive dump scan returned
+`NO_DMP_FILES`.
+
+The returned build information and 169-entry manifest match the retained
+package exactly. The shared `boot.jar` is 3,436,578 bytes with SHA-256
+`3cbe9a7f0e4596229c0c5e229e6655463373b1445922b9557286313a28a35a2a`.
+Accepted raw evidence and its independent review are stored under
+`evidence/w024_host/`.
+
 ## Conclusion
 
 The expanded PE `InterpreterJni` shorties and direct resolver are not product
-paths under the current Wine matrix. They are legacy defensive fallbacks from
-the pre-quick/JNI port and are candidates for restoring to the upstream
-`android-16.0.0_r4` implementation.
+paths under either the Wine or native-Windows matrix. They are legacy defensive
+fallbacks from the pre-quick/JNI port and are candidates for restoring to the
+upstream `android-16.0.0_r4` implementation.
 
-Wine cannot close this item. A real Windows 10 run is still required because PE
-loader behavior, unwind metadata, system mitigations, and native scheduling can
-differ from Wine. The deletion stage should:
+The native Windows pass closes the reachability gate. The cleanup stage should:
 
-1. repeat the same tripwire matrix on Windows 10;
-2. restore `ArtInterpreterToInterpreterBridge` to the upstream pre-start-only
+1. restore `ArtInterpreterToInterpreterBridge` to the upstream pre-start-only
    invariant;
-3. reduce `InterpreterJni` and its resolver to upstream behavior, retaining
+2. reduce `InterpreterJni` and its resolver to upstream behavior, retaining
    only independently demonstrated Windows requirements;
+3. remove the diagnostic native-JIT gate;
 4. rebuild Win64 and Linux, then rerun Math, direct/unresolved CriticalNative,
    normal/FastNative, method tracing, JVMTI, JIT smoke, and the Linux shared-boot
    gate;
@@ -130,3 +155,4 @@ differ from Wine. The deletion stage should:
 Native Windows instructions:
 
 - `W024_HOST_CHECKLIST.md`
+- `evidence/w024_host/ACCEPTANCE.md`

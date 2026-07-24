@@ -146,16 +146,16 @@ Clang reported `InterpreterJni` unused when those two calls were disabled,
 confirming there was no hidden third call site. The build was then restored to
 the product-default tripwire-OFF mode and the final Win64 binaries were rebuilt.
 
-This proves the fallback is unused by the current Wine matrix, but does not
-authorize deletion without the same Windows 10 run. Detailed evidence and the
-cleanup sequence are in `RESULT-interpreter-jni-fallback.md`.
-Native Windows execution follows `W024_HOST_CHECKLIST.md`.
+The same packaged tripwire matrix subsequently passed on native Windows 10
+build 19044, authorizing fallback cleanup. Detailed evidence and the cleanup
+sequence are in `RESULT-interpreter-jni-fallback.md`; accepted host artifacts
+are under `evidence/w024_host/`.
 
 ## Remaining scope
 
-- Real Windows 10 acceptance is still required.
-- W-024 remains open for removal of the native-JIT diagnostic gate,
-  Windows 10 confirmation and then defensive interpreter-shorty cleanup.
+- Native Windows 10 acceptance is complete.
+- W-024 remains open for removal of the native-JIT diagnostic gate, defensive
+  interpreter-shorty cleanup, and post-change Linux/Win64 regressions.
   Math.ceil/floor and the shared ELF/PE registration table are
   restored; see `RESULT-math-critical.md`. Registered and unresolved
   CriticalNative calls also pass the JVMTI forced-interpreter transition in
