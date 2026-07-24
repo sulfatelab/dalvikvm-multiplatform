@@ -117,16 +117,17 @@ The probe DLL uses CMake `WINDOWS_EXPORT_ALL_SYMBOLS` because Android's
 ## Remaining scope
 
 - Real Windows 10 acceptance is still required.
-- W-024 remains open for broader normal/Fast/Critical state transitions,
-  removal of the native-JIT diagnostic gate, and restoration of the remaining
-  Math/libcore native demotions.
+- W-024 remains open for registration/unregistration and instrumentation
+  state transitions, removal of the native-JIT diagnostic gate, restoration
+  of the remaining Math/libcore native demotions, and real-Windows acceptance.
 
 ## Regression verification
 
 The same ART build also passed:
 
 - Win64 `art` and `dalvikvm` build;
-- `run_native_abi_probe.sh`: gate-closed and gate-open FastNative checks;
+- `run_native_abi_probe.sh`: gate-closed 0/7 and gate-open 7/7 mixed/high-FP
+  normal/FastNative checks;
 - `run_jit_smoke.sh`: 10/10;
 - `run_jit_matrix.sh`: 14/14;
 - native Linux `nativeloader`, `art`, `openjdkjvm`, and `dalvikvm` build;

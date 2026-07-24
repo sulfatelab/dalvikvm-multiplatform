@@ -53,7 +53,7 @@ Measured on agent01 under Wine:
 | Default Hello | About 21–24 managed compilations; PASS |
 | Default JIT smoke | 10/10 |
 | Default probe matrix | 14/14 |
-| Native JIT | Gated off; managed/native split and direct CriticalNative ABI fixes landed, broader W-024 matrix remains |
+| Native JIT | Gated off; direct CriticalNative and 7/7 mixed/high-FP normal/FastNative ABI matrices pass; W-024 state/product/host work remains |
 | J-1 fallback | Diagnostic opt-out with `ART_WIN64_JIT_DUAL=0`; Hello passes |
 | Code cache | 64 KiB initial release capacity; 64 MiB maximum |
 
@@ -412,8 +412,10 @@ emulation is added.
 - Remaining work is real-Windows repeated-start testing, dynamic-code/CFG
   policy testing, large `SEC_COMMIT` pressure measurement, and direct release
   checks at the JIT-root and CodeInfo encoding sites.
-- Native JIT remains gated independently until the remaining W-024 compiled-JNI
-  signatures, state transitions, and unresolved app-JNI cases pass.
+- Native JIT remains gated independently until the remaining W-024 state
+  transitions, product demotion restoration, diagnostic cleanup, and
+  real-Windows acceptance are complete. Mixed/high-FP and unresolved app-JNI
+  calling-convention coverage now pass.
 
 ## 7. Implementation and commit status
 
@@ -610,12 +612,18 @@ For static
 throws `data == null`. For `System.arraycopy`, managed `RSI` contains `src`
 and `RDX` contains `srcPos == 0`; the old compiled stub read a null `src`.
 
-The landed split makes both workloads pass. The `System.arraycopy` probe also
-exercises seven native arguments, including the shadow area and three stack
-arguments, so the tested outgoing core/reference packing is not the immediate
-failure. Mixed-FP, high managed-FP ordinals, unresolved normal/Fast app JNI,
-and broader normal/Fast/Critical transitions still require generated-code
-coverage. Unresolved CriticalNative mixed signatures are covered separately.
+The landed split makes both workloads pass. The expanded acceptance matrix
+then exposed a missing XMM-to-XMM operation in
+`X86_64JNIMacroAssembler::Move()`: managed `XMM0` needed to become native
+unified-slot `XMM3`. The assembler now emits `movss`/`movsd` for those moves.
+
+The final matrix compiles 7/7 distinct native targets and covers registered
+and unresolved normal/FastNative methods, static and instance calls,
+references, five managed core ordinals, six managed FP ordinals, Win64 home
+space and deep stack spills, boolean input, and double returns. The gate-closed
+control executes the same values with 0/7 native targets compiled. Five
+complete focused runs passed. Unresolved CriticalNative mixed signatures are
+covered separately.
 
 The separate optimizing-compiler direct CriticalNative convention is also
 fixed. Win64 direct calls now use unified Microsoft x64 argument ordinals,
@@ -632,11 +640,12 @@ returned zeros because the previous Win64 `Runtime.nativeLoad` shortcut called
 `JavaVMExt::LoadNativeLibrary`. The host loader's only Windows path divergence
 is recognizing drive, root, and UNC absolute paths; Linux behavior is unchanged.
 
-The memory plan does not change the remaining blocker. The compiled-JNI split
-is landed; the current acceptance probe is
+The memory plan does not change the remaining blocker. The compiled-JNI split,
+XMM moves, and mixed/high-FP matrix are landed; the current acceptance probe is
 `tools/verify/win64_phase4/run_native_abi_probe.sh`. The diagnostic
-`ART_WIN64_JIT_NATIVE=1` override remains opt-in until the broader signature
-matrix passes.
+`ART_WIN64_JIT_NATIVE=1` override remains opt-in for W-024 state-transition,
+product-demotion, diagnostic-cleanup, and real-Windows work rather than an
+unresolved calling-convention defect.
 
 ## 12. Verification and acceptance
 
@@ -695,10 +704,10 @@ gate and declaring P5 complete:
 - run the smoke and probe matrices;
 - exercise code-cache collection under load.
 
-The focused compiled-JNI/FastNative native-JIT probe and both registered and
-unresolved direct CriticalNative probes are now covered and pass. Broader
-native-JIT tests remain excluded until the remaining W-024 ABI matrix is
-complete.
+The focused compiled normal/FastNative native-JIT probe and both registered
+and unresolved direct CriticalNative probes are covered and pass. The native
+gate remains until the remaining W-024 state transitions and product/host
+cleanup are complete.
 
 ### 12.5 Threshold-zero stress resolution
 
@@ -762,9 +771,9 @@ The landed fix covers both defects:
    colon-separated after it parses the public semicolon-separated property.
 
 Remaining direct-call work is real Windows 10 acceptance. Broader W-024 work
-still covers compiled-JNI signatures, state transitions, native-JIT gate
-removal, and libcore demotions. None justifies retaining the RWX J-1 path as
-the product default.
+still covers state transitions, native-JIT gate removal, diagnostic cleanup,
+and libcore demotions; the compiled-JNI signature matrix itself now passes.
+None justifies retaining the RWX J-1 path as the product default.
 
 ## 13. Current status — 2026-07-24
 
@@ -782,6 +791,7 @@ the product default.
 | PE asm definitions | Windows-target generator test enforces `RUNTIME_INSTRUMENTATION_OFFSET=0x328` |
 | Threshold-zero CriticalNative | Direct visitor uses Win64 unified ordinals/home area; dlsym caller PC preserved; repeated J-1 and dual-view probes pass |
 | Unresolved CriticalNative dlsym | ART-owned `JVM_NativeLoad` bridge; mixed/spilled/scalar exported calls pass through both load APIs |
+| Compiled normal/FastNative | Gate-open 7/7 distinct targets; registered/unresolved, static/instance, mixed/high-FP, references, deep spills, and returns pass |
 
 ### Open
 
@@ -789,7 +799,7 @@ the product default.
 |------|---------|
 | Real Windows acceptance | Host access; Wine implementation and matrix are complete |
 | Direct encoding checks | Add checks at JIT-root patch and CodeInfo construction sites |
-| Native JIT | Complete mixed/high-FP compiled-JNI signatures, unresolved normal/Fast app JNI, and state-transition matrix |
+| Native JIT | Complete registration/unregistration and instrumentation/entrypoint state transitions, restore product demotions, remove the diagnostic gate, and validate on real Windows |
 
 ### Current test summary
 
@@ -802,8 +812,8 @@ the product default.
 | FloatProbe `-Xjitthreshold:0` | PASS, 5/5 current harness | PASS, 5/5 current harness |
 | Direct registered CriticalNative signatures | PASS, 5/5 | PASS, 5/5 |
 | Direct unresolved CriticalNative signatures | PASS, 5/5 | PASS, 5/5 |
-| FastNative ABI probe, native gate closed | PASS | PASS |
-| FastNative ABI probe, native gate open | PASS after managed/native convention split | PASS after managed/native convention split |
+| FastNative ABI probe, native gate closed | PASS, 0/7 compiled | PASS, 0/7 compiled |
+| FastNative ABI probe, native gate open | PASS, 7/7 compiled | PASS, 7/7 compiled |
 
 ## 14. Decision log
 
@@ -827,6 +837,7 @@ the product default.
 | 2026-07-24 | Compiled-JNI/FastNative failure isolated to MS native register definitions leaking into the incoming ART managed convention; managed/native convention split landed and targeted System.arraycopy/StringFactory runs pass |
 | 2026-07-24 | Direct CriticalNative Win64 visitor and dlsym caller-PC fixes landed; threshold-zero and mixed registered signature probes pass in both J-1 and dual-view modes |
 | 2026-07-24 | Replaced direct `LoadLibraryA` native-load shortcut with an ART-owned `JavaVMExt::LoadNativeLibrary` bridge; unresolved mixed-signature dlsym and both Java load APIs pass |
+| 2026-07-24 | Mixed/high-FP normal/FastNative matrix passes 7/7 after adding XMM-to-XMM JNI argument moves |
 
 ## 15. Code anchors
 
@@ -841,6 +852,7 @@ the product default.
 | JIT root patching | `vendor/art/compiler/optimizing/code_generator_x86_64.cc` |
 | CodeInfo offset | `vendor/art/runtime/oat/oat_quick_method_header.h` |
 | D-1 Thread-address helper | `vendor/art/compiler/utils/x86_64/assembler_x86_64.*` |
+| JNI XMM argument moves | `vendor/art/compiler/utils/x86_64/jni_macro_assembler_x86_64.cc`; `assembler_x86_64_test.cc` |
 | Native JIT gate | `vendor/art/runtime/jit/jit.cc` |
 | dlmalloc configuration | `vendor/art/runtime/gc/allocator/art-dlmalloc.cc` |
 | PE asm-defines generation | `tools/bp2cmake/bp2cmake/codegen.py`; `tools/verify/win64_phase1/CMakeLists.txt` |

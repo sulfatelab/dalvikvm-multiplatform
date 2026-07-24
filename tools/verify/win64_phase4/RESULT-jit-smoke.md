@@ -35,8 +35,9 @@ native-JIT gate and the managed-JIT control environment variables.
   `main end exception=0`. The previous check searched only for
   `Hello from dalvikvm!` and was a false-positive because that text can be
   printed before `main end exception=1`.
-- `run_native_abi_probe.sh` provides the focused acceptance control: both the
-  gate-closed and gate-open `System.arraycopy` runs pass.
+- `run_native_abi_probe.sh` provides the focused acceptance control: the
+  mixed/high-FP normal/FastNative matrix passes with 0/7 targets compiled when
+  the gate is closed and 7/7 when it is open.
 - `ART_WIN64_JIT=0` cleanly disables all JIT while keeping nterp.
 - `-Xusejit:false` may still create the JIT cache (ART init ordering on Win)
   but Hello passes without crash.
