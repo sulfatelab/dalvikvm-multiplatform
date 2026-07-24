@@ -692,14 +692,16 @@ harnesses set that flag when they need exact compilation records. JIT smoke
 verifies both the opt-in records and a normal quiet run.
 
 The remaining expanded `InterpreterJni` shorties are also not observed product
-paths. A temporary fatal-tripwire build disabled both runtime-started fallback
+paths. An opt-in fatal-tripwire build disabled both runtime-started fallback
 calls and still passed Win64 `-Xint`, direct/unresolved CriticalNative,
 normal/FastNative, method tracing, and JVMTI forced interpretation. With both
-calls disabled, Clang reported `InterpreterJni` unused. The source was restored
-and the final binaries rebuilt. Linux and Win64 use identical boot.jar dex and
+calls disabled, Clang reported `InterpreterJni` unused. The build was restored
+to the product-default tripwire-OFF mode and the final binaries rebuilt. Linux
+and Win64 use identical boot.jar dex and
 annotation bytes, so there is no Windows-only boot shorty set. Deletion remains
 gated on repeating this experiment on Windows 10; see
-`tools/verify/win64_phase4/RESULT-interpreter-jni-fallback.md`.
+`tools/verify/win64_phase4/RESULT-interpreter-jni-fallback.md` and
+`tools/verify/win64_phase4/W024_HOST_CHECKLIST.md`.
 
 ## 12. Verification and acceptance
 

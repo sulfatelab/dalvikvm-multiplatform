@@ -4,6 +4,10 @@
 cmake_minimum_required(VERSION 3.20)
 project(Win64Phase1 CXX C ASM)
 
+option(MDVM_WIN64_INTERPRETER_JNI_TRIPWIRE
+  "Abort if a runtime-started native reaches the legacy InterpreterJni fallback"
+  OFF)
+
 if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   message(FATAL_ERROR "Need LLVM clang (got ${CMAKE_CXX_COMPILER_ID})")
 endif()
@@ -286,4 +290,8 @@ if(TARGET art)
   target_sources(art PRIVATE
     "${MDVM_NATIVE_SRC_ROOT_DIR}/external/cpu_features/src/impl_x86_windows.c")
   target_compile_definitions(art PRIVATE CPU_FEATURES_OS_WINDOWS=1)
+  if(MDVM_WIN64_INTERPRETER_JNI_TRIPWIRE)
+    set_property(SOURCE "${MDVM_ART_DIR}/runtime/interpreter/interpreter.cc"
+      APPEND PROPERTY COMPILE_DEFINITIONS ART_WIN64_INTERPRETER_JNI_TRIPWIRE=1)
+  endif()
 endif()

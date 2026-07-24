@@ -13,7 +13,8 @@ import tempfile
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from bp2cmake.codegen import (
-    CodegenConfig, _asm_defines_macros_for, gen_operator_out, gen_mterp, gen_asm_defines,
+    CodegenConfig, _asm_defines_macros_for, _replace_if_changed,
+    gen_operator_out, gen_mterp, gen_asm_defines,
 )
 
 # Pure multipath: foundational native sources live under nested vendor/.
@@ -31,6 +32,21 @@ HAVE_CLANG = shutil.which("clang++") is not None
 def _cfg(tmp):
     return CodegenConfig(native_root=NATIVE, gensrc_dir=tmp, arch="x86_64",
                          art_root=ART_ROOT)
+
+
+def test_replace_if_changed_preserves_output_timestamp():
+    with tempfile.TemporaryDirectory() as tmp:
+        output = os.path.join(tmp, "generated")
+        staged = output + ".tmp"
+        with open(output, "wb") as fh:
+            fh.write(b"same contents")
+        fixed_ns = 1_700_000_000_000_000_000
+        os.utime(output, ns=(fixed_ns, fixed_ns))
+        with open(staged, "wb") as fh:
+            fh.write(b"same contents")
+        _replace_if_changed(staged, output)
+        assert not os.path.exists(staged)
+        assert os.stat(output).st_mtime_ns == fixed_ns
 
 
 def test_operator_out():

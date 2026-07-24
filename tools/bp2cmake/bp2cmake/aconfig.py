@@ -158,6 +158,20 @@ def render_java(pkg: AconfigPackage) -> str:
     return "\n".join(L)
 
 
+def _write_if_changed(path: str, content: str) -> None:
+    """Preserve the output timestamp when generated contents are identical."""
+    try:
+        with open(path) as existing:
+            if existing.read() == content:
+                return
+    except FileNotFoundError:
+        pass
+    staged_path = path + ".tmp"
+    with open(staged_path, "w") as staged:
+        staged.write(content)
+    os.replace(staged_path, path)
+
+
 def generate_java(aconfig_files: list[str], out_dir: str) -> list[str]:
     """Parse each .aconfig file and write its Java `Flags` class under
     out_dir/<package as dirs>/Flags.java. Returns written paths."""
@@ -168,8 +182,7 @@ def generate_java(aconfig_files: list[str], out_dir: str) -> list[str]:
         pkg_dir = os.path.join(out_dir, *pkg.package.split("."))
         os.makedirs(pkg_dir, exist_ok=True)
         out_path = os.path.join(pkg_dir, "Flags.java")
-        with open(out_path, "w") as fh:
-            fh.write(render_java(pkg))
+        _write_if_changed(out_path, render_java(pkg))
         written.append(out_path)
     return written
 
@@ -183,7 +196,6 @@ def generate(aconfig_files: list[str], out_dir: str) -> list[str]:
         with open(path) as fh:
             pkg = parse_aconfig(fh.read())
         out_path = os.path.join(out_dir, pkg.header_name)
-        with open(out_path, "w") as fh:
-            fh.write(render_header(pkg))
+        _write_if_changed(out_path, render_header(pkg))
         written.append(out_path)
     return written

@@ -1,7 +1,7 @@
 """Tests for the aconfig C++ header generator (android-16+ feature flags)."""
-import os, sys
+import os, sys, tempfile
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from bp2cmake.aconfig import parse_aconfig, render_header
+from bp2cmake.aconfig import generate, parse_aconfig, render_header
 
 _RO = '''
 package: "com.android.art.flags"
@@ -59,3 +59,16 @@ def test_render_readwrite_not_constexpr():
     # rw flags get no compile-time macro.
     assert "#define COM_ANDROID_ART_RW_FLAGS_TEST_RW_FLAG" not in h
     assert "bool com_android_art_rw_flags_test_rw_flag() { return false; }" in h
+
+
+def test_generate_preserves_unchanged_output_timestamp():
+    with tempfile.TemporaryDirectory() as tmp:
+        source = os.path.join(tmp, "flags.aconfig")
+        out_dir = os.path.join(tmp, "out")
+        with open(source, "w") as output:
+            output.write(_RO)
+        [header] = generate([source], out_dir)
+        fixed_ns = 1_700_000_000_000_000_000
+        os.utime(header, ns=(fixed_ns, fixed_ns))
+        generate([source], out_dir)
+        assert os.stat(header).st_mtime_ns == fixed_ns

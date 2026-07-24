@@ -128,10 +128,32 @@ class CodegenError(Exception):
     pass
 
 
+def _files_equal(first: str, second: str) -> bool:
+    if os.path.getsize(first) != os.path.getsize(second):
+        return False
+    with open(first, "rb") as left, open(second, "rb") as right:
+        while True:
+            left_chunk = left.read(1024 * 1024)
+            right_chunk = right.read(1024 * 1024)
+            if left_chunk != right_chunk:
+                return False
+            if not left_chunk:
+                return True
+
+
+def _replace_if_changed(staged_path: str, output_path: str) -> None:
+    """Install a generated file without invalidating dependents if unchanged."""
+    if os.path.exists(output_path) and _files_equal(staged_path, output_path):
+        os.remove(staged_path)
+    else:
+        os.replace(staged_path, output_path)
+
+
 def _run(cmd: list[str], cwd: str | None = None, capture_stdout_to: str | None = None) -> None:
     """Run a command; on failure raise with captured stderr. If
     capture_stdout_to is given, write stdout to that file."""
-    out_f = open(capture_stdout_to, "w") if capture_stdout_to else None
+    staged_path = capture_stdout_to + ".tmp" if capture_stdout_to else None
+    out_f = open(staged_path, "w") if staged_path else None
     try:
         proc = subprocess.run(
             cmd, cwd=cwd, stdout=(out_f or subprocess.PIPE),
@@ -142,11 +164,13 @@ def _run(cmd: list[str], cwd: str | None = None, capture_stdout_to: str | None =
             out_f.close()
     if proc.returncode != 0:
         # Clean up a partial output file so a failed step doesn't look done.
-        if capture_stdout_to and os.path.exists(capture_stdout_to):
-            os.remove(capture_stdout_to)
+        if staged_path and os.path.exists(staged_path):
+            os.remove(staged_path)
         raise CodegenError(
             f"command failed ({proc.returncode}): {' '.join(cmd)}\n{proc.stderr}"
         )
+    if staged_path:
+        _replace_if_changed(staged_path, capture_stdout_to)
 
 
 def gen_operator_out(cfg: CodegenConfig, module_reldir: str, headers: list[str]) -> list[str]:
@@ -180,8 +204,13 @@ def gen_mterp(cfg: CodegenConfig, arch: str | None = None) -> str:
         raise CodegenError(f"no .S inputs in {src_dir}")
     out_path = cfg.out("art/asm/mterp", f"mterp_{arch}.S")
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    staged_path = out_path + ".tmp"
     # gen_mterp.py writes the output file itself (arg1 = output, rest = inputs).
-    _run([sys.executable, tool, out_path] + asm_inputs, cwd=cfg._art_base())
+    _run([sys.executable, tool, staged_path] + asm_inputs, cwd=cfg._art_base())
+    _replace_if_changed(staged_path, out_path)
+    staged_script = staged_path + ".py"
+    if os.path.exists(staged_script):
+        _replace_if_changed(staged_script, out_path + ".py")
     return out_path
 
 
@@ -207,13 +236,14 @@ def gen_asm_defines(cfg: CodegenConfig) -> str:
     the MSVC/PE Runtime layout (notably RUNTIME_INSTRUMENTATION_OFFSET)."""
     asm_cc = cfg.pa("art/tools/cpp-define-generator/asm_defines.cc")
     s_path = cfg.out("art/asm_defines.s")
+    staged_s_path = s_path + ".tmp"
     h_path = cfg.out("art/asm/include/asm_defines.h")
     os.makedirs(os.path.dirname(s_path), exist_ok=True)
     os.makedirs(os.path.dirname(h_path), exist_ok=True)
 
     # Stage 1: clang -S to human-readable assembly carrying the >>NAME val neg<<
     # markers. Needs the runtime include + define context.
-    cmd = [cfg.clang, "-std=gnu++20", "-S", "-o", s_path]
+    cmd = [cfg.clang, "-std=gnu++20", "-S", "-o", staged_s_path]
     for inc in cfg.asm_includes:
         cmd += ["-I", cfg.inc(inc)]
     # aconfig-generated headers (com_android_art_flags.h etc.) staged in gensrc.
@@ -239,8 +269,9 @@ def gen_asm_defines(cfg: CodegenConfig) -> str:
 
     # Stage 2: make_header.py reads the .s and prints the #defines to stdout.
     make_header = cfg.pa("art/tools/cpp-define-generator/make_header.py")
-    _run([sys.executable, make_header, s_path],
+    _run([sys.executable, make_header, staged_s_path],
          cwd=cfg._art_base(), capture_stdout_to=h_path)
+    _replace_if_changed(staged_s_path, s_path)
     return h_path
 
 

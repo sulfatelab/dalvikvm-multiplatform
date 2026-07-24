@@ -2,6 +2,7 @@
 
 **Status:** PASS under Wine; deletion remains gated on Windows 10
 **Date:** 2026-07-24 17:47:36 CST
+**Updated:** 2026-07-24 18:21:01 CST
 **Host:** agent01
 
 ## Question
@@ -49,11 +50,14 @@ There are exactly two calls to `InterpreterJni`:
 Normal `-Xint` and JVMTI force only Java callers into the interpreter. Native
 methods keep their JNI compiler/generated entrypoints, matching Linux ART.
 
-## Temporary tripwire experiment
+## Opt-in tripwire experiment
 
-Both runtime-started calls were temporarily replaced with distinct `LOG(FATAL)`
-tripwires. The tripwire was research-only and was reverted before the final
-build.
+Both runtime-started calls can be replaced with distinct `LOG(FATAL)`
+tripwires by configuring the Win64 build with
+`MDVM_WIN64_INTERPRETER_JNI_TRIPWIRE=ON`. The definition is source-scoped to
+`runtime/interpreter/interpreter.cc`; the product default is OFF. The package
+script always restores and rebuilds the shared tree in product mode before it
+exits.
 
 The Win64 `art` and `dalvikvm` targets built successfully. With both calls
 disabled, Clang reported `InterpreterJni` as unused, confirming there was no
@@ -77,8 +81,30 @@ The tripwire build passed:
 No tripwire fired. In particular, Win64 `-Xint` and real JVMTI single-step
 transitions do not use the legacy native interpreter detour.
 
-The source was then restored exactly, `git diff --check` passed, and Win64
-`art.dll` plus `dalvikvm.exe` were rebuilt successfully.
+The build was then reconfigured with the option OFF, `git diff --check` passed,
+and Win64 `art.dll`, `dalvikvm.exe`, and `openjdkjvmti.dll` were rebuilt
+successfully. Final product-mode Math controls passed in dual-view, J-1,
+Win64 `-Xint`, Linux `-Xint`, and Linux threshold-zero JIT modes.
+
+`tools/win64/host_package/package_win64_w024_tripwire.sh` builds the opt-in
+binary, runs the complete Wine matrix, writes the native Windows command files,
+packages all dependencies, and restores product mode. Generated command files
+are checked for unresolved shell placeholders and use quoted package-relative
+paths. Native-host execution follows `W024_HOST_CHECKLIST.md`.
+
+The first package review found that the not-yet-run host command files contained
+literal `${name}` and `${jar}` fragments: in an unquoted shell heredoc, the
+Windows path separator immediately before `$` suppressed parameter expansion.
+That defect did not affect the direct Wine harnesses listed above, but it would
+have made the native-host package unusable. Generation now uses a doubled
+backslash before expanded values, quotes `%~dp0\..` for paths containing spaces,
+and rejects any command file that retains an unresolved `${...}` placeholder.
+
+The generated `scripts\run_all_w024.cmd` was then executed through Wine's
+`cmd.exe` from a package path containing spaces. All nine command-file cases
+returned zero and the driver ended with `OVERALL PASS`, confirming the command
+syntax, marker checks, `%~dp0` path handling, and package-relative class/native
+paths before native Windows transfer.
 
 ## Conclusion
 
@@ -100,3 +126,7 @@ differ from Wine. The deletion stage should:
    normal/FastNative, method tracing, JVMTI, JIT smoke, and the Linux shared-boot
    gate;
 5. remove W-011/W-012 only after those checks pass.
+
+Native Windows instructions:
+
+- `W024_HOST_CHECKLIST.md`

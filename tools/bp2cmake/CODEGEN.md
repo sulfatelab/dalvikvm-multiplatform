@@ -6,17 +6,24 @@ AOSP ART historically generated headers/sources from Gradle:
 reproduces those steps in pure Python — one driver, no JVM, runnable standalone
 or wired into CMake.
 
-## The three generation kinds
+## The four generation kinds
 
-1. **operator_out** — `art/tools/generate_operator_out.py <reldir> <header>`
+1. **aconfig** — parses ART/libcore `.aconfig` declarations and emits the C++
+   feature-flag headers required by android-16 ART.
+2. **operator_out** — `art/tools/generate_operator_out.py <reldir> <header>`
    per header → `<gensrc>/<reldir>/<header>.operator_out.cc`. Sets in
    `OPERATOR_OUT_SETS` (libartbase / libdexfile / runtime), mirroring the
    Gradle `genInfoList`.
-2. **mterp asm** — `gen_mterp.py <out> <inputs...>` over the 8 `*.S` files in
+3. **mterp asm** — `gen_mterp.py <out> <inputs...>` over the 8 `*.S` files in
    `art/runtime/interpreter/mterp/<arch>ng/` → `mterp_<arch>.S`.
-3. **asm_defines** — TWO-STAGE: `clang++ -S asm_defines.cc` (with the runtime's
+4. **asm_defines** — TWO-STAGE: `clang++ -S asm_defines.cc` (with the runtime's
    include + define context, incl. the art.go knobs) → assembly text carrying
    `>>NAME val neg<<` markers, then `make_header.py <s>` → `asm_defines.h`.
+
+Generated files are installed only when their content changes. Re-running
+configure therefore preserves timestamps for identical aconfig, operator-out,
+mterp, and asm-definition output and does not force unrelated ART objects to
+rebuild.
 
 ## Usage
 
@@ -25,9 +32,9 @@ PYTHONPATH=tools/bp2cmake python3 -m bp2cmake.codegen_main \
     --root <repo>/vendor --gensrc <out-dir> --arch x86_64 --clang clang++
 ```
 
-Validated output (2026-06-20, clang-21): 33 operator_out.cc, mterp_x86_64.S
-(8868 lines), asm_defines.h (188 #defines). `--only operator_out|mterp|
-asm_defines` runs a single kind.
+Validated output (2026-06-20, clang-21): two ART aconfig headers, 33
+operator_out.cc files, mterp_x86_64.S (8868 lines), and asm_defines.h (188
+#defines). `--only aconfig|operator_out|mterp|asm_defines` runs a single kind.
 
 ## How it relates to the emitter
 
@@ -38,7 +45,8 @@ CMake custom commands (the asm_defines compile needs libart's full include/
 define context), so staging them with this driver before/at configure time is
 cleaner. The runtime harness will set `MDVM_GENSRC_DIR` to the driver's output.
 The asm_defines define-set here is the single source of truth for the runtime
-behavioral overlay (CMS GC, ART_TARGET_LINUX or ART_TARGET_WINDOWS via --os, base addresses) and must stay in
+behavioral overlay (CMS GC, `ART_TARGET_LINUX` or `ART_TARGET_WINDOWS` via
+`--os`, base addresses) and must stay in sync with the libart overlay.
 
 For PE (`--os windows` / `asm_target_os=windows`), codegen swaps
 `ART_TARGET_LINUX` for `ART_TARGET_WINDOWS` and prefers
@@ -46,6 +54,4 @@ For PE (`--os windows` / `asm_target_os=windows`), codegen swaps
 Cross-build callers pass their libc++, UCRT, SDK, and CRT include roots with
 repeatable `--target-include` arguments.
 Notably `RUNTIME_INSTRUMENTATION_OFFSET` is **0x328** on PE vs **0x340** on
-Linux host; shipping the wrong header causes nterp/quick AVs on wine.
-
-sync with the libart overlay entry when that lands.
+Linux host; shipping the wrong header causes nterp/quick AVs on Wine.

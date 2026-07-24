@@ -138,17 +138,18 @@ Linux and Win64 consume identical boot.jar dex and annotation bytes, so a
 Windows-only boot-native shorty set cannot explain or justify the old expanded
 `InterpreterJni` table.
 
-A research-only build replaced both runtime-started calls to `InterpreterJni`
-with fatal tripwires. It passed Win64 `-Xint` Math, direct and unresolved
+An opt-in build replaced both runtime-started calls to `InterpreterJni` with
+fatal tripwires. It passed Win64 `-Xint` Math, direct and unresolved
 CriticalNative in both memory modes, method tracing, the 7/7 compiled
 normal/FastNative matrix, and the real JVMTI forced-interpreter transition.
 Clang reported `InterpreterJni` unused when those two calls were disabled,
-confirming there was no hidden third call site. The tripwires were reverted and
-the final Win64 binaries were rebuilt.
+confirming there was no hidden third call site. The build was then restored to
+the product-default tripwire-OFF mode and the final Win64 binaries were rebuilt.
 
 This proves the fallback is unused by the current Wine matrix, but does not
 authorize deletion without the same Windows 10 run. Detailed evidence and the
 cleanup sequence are in `RESULT-interpreter-jni-fallback.md`.
+Native Windows execution follows `W024_HOST_CHECKLIST.md`.
 
 ## Remaining scope
 
