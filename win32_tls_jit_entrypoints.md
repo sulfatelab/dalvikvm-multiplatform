@@ -1254,7 +1254,7 @@ Smoke (wine, imageless, **no** `ART_WIN64_*` env):
 
 W-001 marked CLOSED in [win32_open_items.md](win32_open_items.md).
 
-**JIT memory / codegen:** see [win32_jit_memory.md](win32_jit_memory.md) §13 — managed JIT uses the corrected dual view; D-1 r15 TLS audit is complete; the compiled-JNI managed/native split plus XMM-to-XMM moves pass a 7/7 registered/unresolved normal/FastNative mixed/high-FP matrix across rebinding and method-tracing transitions without extra target compilation; and direct CriticalNative unified ordinals, shadow/stack layout, dlsym caller-PC preservation, and unresolved mixed-signature lookup through the ART-owned native-load bridge pass in both memory modes. Native methods remain gated pending W-024 CriticalNative/debugger transitions, product/diagnostic cleanup, and real-Windows acceptance.
+**JIT memory / codegen:** see [win32_jit_memory.md](win32_jit_memory.md) §13 — managed JIT uses the corrected dual view; D-1 r15 TLS audit is complete; the compiled-JNI managed/native split plus XMM-to-XMM moves pass a 7/7 registered/unresolved normal/FastNative mixed/high-FP matrix across rebinding and method tracing without extra target compilation; and registered/unresolved CriticalNative unified ordinals, shadow/stack layout, dlsym lookup, and method tracing pass in both memory modes through the ART-owned native-load bridge. Native methods remain gated pending W-024 full debugger/JVMTI transitions, product/diagnostic cleanup, and real-Windows acceptance.
 
 
 ## 13. Appendix — evidence anchors in tree

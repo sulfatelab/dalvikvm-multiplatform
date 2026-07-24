@@ -51,7 +51,14 @@ public final class CriticalNativeDlsymProbe {
     }
 
     public static void verify() {
-        System.out.println("CriticalNativeDlsymProbe values longs=" + longsResult
+        verify("");
+    }
+
+    public static void verify(String phase) {
+        String label = phase.isEmpty()
+                ? "CriticalNativeDlsymProbe values"
+                : "CriticalNativeDlsymProbe " + phase + " values";
+        System.out.println(label + " longs=" + longsResult
                 + " doubles=" + doublesResult
                 + " mixed=" + mixedResult
                 + " mixed32=" + mixed32Result
@@ -80,6 +87,8 @@ public final class CriticalNativeDlsymProbe {
         if (!branchSeen) {
             throw new AssertionError("compiled dlsym CriticalNative branch was not executed");
         }
-        System.out.println("CriticalNativeDlsymProbe OK");
+        System.out.println(phase.isEmpty()
+                ? "CriticalNativeDlsymProbe OK"
+                : "CriticalNativeDlsymProbe " + phase + " OK");
     }
 }

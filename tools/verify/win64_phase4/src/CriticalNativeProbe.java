@@ -1,5 +1,8 @@
 import dalvik.annotation.optimization.CriticalNative;
 
+import java.io.File;
+import java.lang.reflect.Method;
+
 public final class CriticalNativeProbe {
     private static volatile long sink;
     private static long longsResult;
@@ -60,24 +63,11 @@ public final class CriticalNativeProbe {
         floatReturnResult = floatReturn(1.25f, 7);
     }
 
-    public static void main(String[] args) {
-        // main() runs after this class is visibly initialized, so RegisterNatives
-        // can publish direct CriticalNative entrypoints instead of retaining the
-        // class-initialization dlsym gate.
-        String loadMode = System.getProperty("critical.load");
-        if ("absolute".equals(loadMode)) {
-            System.load(new java.io.File("libcriticalnativeprobe.dll").getAbsolutePath());
-            System.out.println("CriticalNativeProbe load=absolute");
-        } else {
-            System.loadLibrary("criticalnativeprobe");
-            System.out.println("CriticalNativeProbe load=library");
-        }
-        exercise(false);
-        exercise(true);
-        CriticalNativeDlsymProbe.exercise(false);
-        CriticalNativeDlsymProbe.exercise(true);
-
-        System.out.println("CriticalNativeProbe values longs=" + longsResult
+    private static void verify(String phase) {
+        String label = phase.isEmpty()
+                ? "CriticalNativeProbe values"
+                : "CriticalNativeProbe " + phase + " values";
+        System.out.println(label + " longs=" + longsResult
                 + " doubles=" + doublesResult
                 + " mixed=" + mixedResult
                 + " mixed32=" + mixed32Result
@@ -106,7 +96,86 @@ public final class CriticalNativeProbe {
         if (!branchSeen) {
             throw new AssertionError("compiled CriticalNative branch was not executed");
         }
-        System.out.println("CriticalNativeProbe OK");
+        System.out.println(phase.isEmpty()
+                ? "CriticalNativeProbe OK"
+                : "CriticalNativeProbe " + phase + " OK");
+    }
+
+    private static void runInstrumentationTransition() throws Exception {
+        File traceFile = new File("critical-native-instrumentation.trace");
+        traceFile.delete();
+
+        Class<?> vmDebug = Class.forName("dalvik.system.VMDebug");
+        Method getMode = vmDebug.getMethod("getMethodTracingMode");
+        Method start = vmDebug.getMethod("startMethodTracing",
+                String.class, int.class, int.class, boolean.class, int.class);
+        Method stop = vmDebug.getMethod("stopMethodTracing");
+
+        int beforeMode = ((Integer) getMode.invoke(null)).intValue();
+        if (beforeMode != 0) {
+            throw new AssertionError("method tracing already active: " + beforeMode);
+        }
+
+        boolean tracingStarted = false;
+        int duringMode;
+        try {
+            start.invoke(null, traceFile.getPath(), 1024 * 1024, 0, false, 0);
+            tracingStarted = true;
+            duringMode = ((Integer) getMode.invoke(null)).intValue();
+            if (duringMode == 0) {
+                throw new AssertionError("method tracing did not become active");
+            }
+            exercise(true);
+            CriticalNativeDlsymProbe.exercise(true);
+            verify("tracing");
+            CriticalNativeDlsymProbe.verify("tracing");
+        } finally {
+            if (tracingStarted) {
+                stop.invoke(null);
+            }
+        }
+
+        int afterMode = ((Integer) getMode.invoke(null)).intValue();
+        if (afterMode != 0) {
+            throw new AssertionError("method tracing remained active: " + afterMode);
+        }
+        exercise(true);
+        CriticalNativeDlsymProbe.exercise(true);
+        verify("postTracing");
+        CriticalNativeDlsymProbe.verify("postTracing");
+
+        boolean traceFileDeleted = traceFile.delete() || !traceFile.exists();
+        if (!traceFileDeleted) {
+            throw new AssertionError("failed to delete trace file " + traceFile);
+        }
+        System.out.println("CriticalNativeProbe tracingMode before=" + beforeMode
+                + " during=" + duringMode
+                + " after=" + afterMode
+                + " traceFileDeleted=" + traceFileDeleted);
+        System.out.println("CriticalNativeProbe instrumentation OK");
+    }
+
+    public static void main(String[] args) throws Exception {
+        // main() runs after this class is visibly initialized, so RegisterNatives
+        // can publish direct CriticalNative entrypoints instead of retaining the
+        // class-initialization dlsym gate.
+        String loadMode = System.getProperty("critical.load");
+        if ("absolute".equals(loadMode)) {
+            System.load(new java.io.File("libcriticalnativeprobe.dll").getAbsolutePath());
+            System.out.println("CriticalNativeProbe load=absolute");
+        } else {
+            System.loadLibrary("criticalnativeprobe");
+            System.out.println("CriticalNativeProbe load=library");
+        }
+        exercise(false);
+        exercise(true);
+        CriticalNativeDlsymProbe.exercise(false);
+        CriticalNativeDlsymProbe.exercise(true);
+        verify("");
         CriticalNativeDlsymProbe.verify();
+
+        if ("1".equals(System.getProperty("critical.instrumentation"))) {
+            runInstrumentationTransition();
+        }
     }
 }

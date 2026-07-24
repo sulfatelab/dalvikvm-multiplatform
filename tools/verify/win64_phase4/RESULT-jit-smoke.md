@@ -40,6 +40,9 @@ native-JIT gate and the managed-JIT control environment variables.
   the gate is closed and 7/7 when it is open, across initial,
   unregister/dlsym, re-register, and method-tracing phases without extra
   target compilation or a leftover trace file.
+- `run_critical_native_probe.sh` separately verifies registered and unresolved
+  CriticalNative calls during and after method tracing in both J-1 and the
+  corrected dual-view mode.
 - `ART_WIN64_JIT=0` cleanly disables all JIT while keeping nterp.
 - `-Xusejit:false` may still create the JIT cache (ART init ordering on Win)
   but Hello passes without crash.

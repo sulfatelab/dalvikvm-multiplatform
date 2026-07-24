@@ -129,7 +129,8 @@ FastNativeAbiProbe tracingMode before=0 during=1 after=0 traceFileDeleted=true
 The same ART build passed:
 
 - Win64 `art` and `dalvikvm` build;
-- CriticalNative dual-view and J-1 acceptance, 6/6 each in this run;
+- CriticalNative dual-view and J-1 acceptance, 6/6 float/signature plus 3/3
+  instrumentation runs per mode;
 - pthread_once stress, 10/10;
 - JIT smoke, 10/10;
 - JIT matrix, 14/14;
@@ -147,7 +148,9 @@ modes, and the remaining regressions passed.
 The mixed/high-FP normal/FastNative ABI, unresolved app-JNI,
 register/unregister/re-register binding transitions, and method-tracing
 instrumentation transition are no longer W-024 blockers. The native-JIT gate
-remains temporarily because W-024 still includes CriticalNative tracing and
-full debugger/JVMTI forced-interpreter transitions, restoration of the
+remains temporarily because W-024 still includes full debugger/JVMTI
+forced-interpreter transitions, restoration of the
 Math/libcore native demotions, cleanup of diagnostic policy/logging, and real
-Windows 10 acceptance.
+Windows 10 acceptance. CriticalNative method tracing is now covered by
+`run_critical_native_probe.sh`; the remaining transition gap is the full
+debugger/JVMTI forced-interpreter path.

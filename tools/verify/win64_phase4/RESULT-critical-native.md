@@ -8,24 +8,25 @@ Date: 2026-07-24. VM: agent01. Runtime: Wine 10.0. Build:
 The Win64 optimizing-compiler direct `@CriticalNative` convention now matches
 the Microsoft x64 ABI while preserving the existing Linux/SysV path.
 
-The focused acceptance harness passed all repeated process runs:
+The focused acceptance harness passed all repeated process runs, including
+method-tracing transitions:
 
-| Mode | Threshold-zero `FloatProbe` | Registered + unresolved signature suite |
-|------|-----------------------------|-----------------------------------------|
-| Default corrected dual view | 5/5 | 5/5 |
-| J-1 diagnostic view | 5/5 | 5/5 |
+| Mode | Threshold-zero `FloatProbe` | Registered + unresolved signatures | Method tracing during/after |
+|------|-----------------------------|------------------------------------|-----------------------------|
+| Default corrected dual view | 3/3 | 3/3 | 3/3 |
+| J-1 diagnostic view | 3/3 | 3/3 | 3/3 |
 
 Command:
 
 ```sh
-REPEATS=5 bash tools/verify/win64_phase4/run_critical_native_probe.sh
+bash tools/verify/win64_phase4/run_critical_native_probe.sh
 ```
 
 The harness requires both the probe success marker and
 `main end exception=0`. Its final summary was:
 
 ```text
-CriticalNative acceptance: dual=10/10 float+signature runs; j1=10/10
+CriticalNative acceptance: dual=6/6 float+signature runs + 3/3 instrumentation; j1=6/6 float+signature runs + 3/3 instrumentation
 ```
 
 ## Root causes
@@ -103,11 +104,28 @@ registry. The harness alternates `System.loadLibrary` and absolute
 `System.load`, and supplies a Windows semicolon-separated library path whose
 first existing directory is empty, verifying fallback to the second entry.
 
+Each signature iteration also starts non-sampling method tracing after the
+initial direct and unresolved calls. The harness verifies tracing mode
+`0 -> 1 -> 0`, repeats both registered and unresolved CriticalNative suites
+while tracing is active, repeats them after tracing stops, and requires exact
+values in every phase in both memory modes. This covers ART's transition to a
+debuggable runtime, pre-tracing JIT invalidation, and entry/exit
+instrumentation installation around the CriticalNative callers.
+
+The trace file is relative to the Wine run directory, deleted by Java after
+tracing, and removed defensively by the harness on process exit. Acceptance
+verifies that no trace artifact remains.
+
 The exact accepted value lines are:
 
 ```text
 CriticalNativeProbe values longs=190 doubles=91.0 mixed=159.5 mixed32=87 floatReturn=15.25 calls=63 branchSeen=true
 CriticalNativeDlsymProbe values longs=190 doubles=91.0 mixed=159.5 mixed32=87 floatReturn=15.25 calls=63 branchSeen=true
+CriticalNativeProbe tracing values longs=190 doubles=91.0 mixed=159.5 mixed32=87 floatReturn=15.25 calls=63 branchSeen=true
+CriticalNativeDlsymProbe tracing values longs=190 doubles=91.0 mixed=159.5 mixed32=87 floatReturn=15.25 calls=63 branchSeen=true
+CriticalNativeProbe postTracing values longs=190 doubles=91.0 mixed=159.5 mixed32=87 floatReturn=15.25 calls=63 branchSeen=true
+CriticalNativeDlsymProbe postTracing values longs=190 doubles=91.0 mixed=159.5 mixed32=87 floatReturn=15.25 calls=63 branchSeen=true
+CriticalNativeProbe tracingMode before=0 during=1 after=0 traceFileDeleted=true
 ```
 
 The probe DLL uses CMake `WINDOWS_EXPORT_ALL_SYMBOLS` because Android's
@@ -117,11 +135,11 @@ The probe DLL uses CMake `WINDOWS_EXPORT_ALL_SYMBOLS` because Android's
 ## Remaining scope
 
 - Real Windows 10 acceptance is still required.
-- W-024 remains open for CriticalNative tracing and full debugger/JVMTI
-  forced-interpreter transitions, removal of the native-JIT diagnostic gate,
-  restoration of the remaining Math/libcore native demotions, and real-Windows
-  acceptance. Compiled normal/FastNative rebinding and method-tracing
-  transitions are now covered separately.
+- W-024 remains open for full debugger/JVMTI forced-interpreter transitions,
+  removal of the native-JIT diagnostic gate, restoration of the remaining
+  Math/libcore native demotions, and real-Windows acceptance. Registered and
+  unresolved CriticalNative method tracing now pass in both memory modes;
+  compiled normal/FastNative rebinding and tracing are covered separately.
 
 ## Regression verification
 
