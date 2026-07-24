@@ -131,6 +131,8 @@ The same ART build passed:
 - Win64 `art` and `dalvikvm` build;
 - CriticalNative dual-view and J-1 acceptance, 6/6 float/signature plus 3/3
   instrumentation runs per mode;
+- JVMTI forced-interpreter acceptance, 3/3 dual-view and 3/3 J-1 runs, covering
+  registered and unresolved normal, FastNative, and CriticalNative calls;
 - pthread_once stress, 10/10;
 - JIT smoke, 10/10;
 - JIT matrix, 14/14;
@@ -147,10 +149,9 @@ modes, and the remaining regressions passed.
 
 The mixed/high-FP normal/FastNative ABI, unresolved app-JNI,
 register/unregister/re-register binding transitions, and method-tracing
-instrumentation transition are no longer W-024 blockers. The native-JIT gate
-remains temporarily because W-024 still includes full debugger/JVMTI
-forced-interpreter transitions, restoration of the
-Math/libcore native demotions, cleanup of diagnostic policy/logging, and real
-Windows 10 acceptance. CriticalNative method tracing is now covered by
-`run_critical_native_probe.sh`; the remaining transition gap is the full
-debugger/JVMTI forced-interpreter path.
+instrumentation and JVMTI forced-interpreter transitions are no longer W-024
+blockers. The native-JIT gate remains temporarily while W-024 restores the
+Math/libcore native demotions, cleans up diagnostic policy/logging, and obtains
+real Windows 10 acceptance. CriticalNative method tracing is covered by
+`run_critical_native_probe.sh`; JVMTI single-step/deoptimization coverage is
+recorded in `RESULT-jvmti-force.md`.

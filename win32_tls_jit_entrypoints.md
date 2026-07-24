@@ -1254,7 +1254,7 @@ Smoke (wine, imageless, **no** `ART_WIN64_*` env):
 
 W-001 marked CLOSED in [win32_open_items.md](win32_open_items.md).
 
-**JIT memory / codegen:** see [win32_jit_memory.md](win32_jit_memory.md) §13 — managed JIT uses the corrected dual view; D-1 r15 TLS audit is complete; the compiled-JNI managed/native split plus XMM-to-XMM moves pass a 7/7 registered/unresolved normal/FastNative mixed/high-FP matrix across rebinding and method tracing without extra target compilation; and registered/unresolved CriticalNative unified ordinals, shadow/stack layout, dlsym lookup, and method tracing pass in both memory modes through the ART-owned native-load bridge. Native methods remain gated pending W-024 full debugger/JVMTI transitions, product/diagnostic cleanup, and real-Windows acceptance.
+**JIT memory / codegen:** see [win32_jit_memory.md](win32_jit_memory.md) §13 — managed JIT uses the corrected dual view; D-1 r15 TLS audit is complete; the compiled-JNI managed/native split plus XMM-to-XMM moves pass a 7/7 registered/unresolved normal/FastNative mixed/high-FP matrix across rebinding and method tracing without extra target compilation; and registered/unresolved CriticalNative unified ordinals, shadow/stack layout, dlsym lookup, and method tracing pass in both memory modes through the ART-owned native-load bridge. A separate Win64 `openjdkjvmti.dll` now passes the real forced-interpreter transition 3/3 in each memory mode over all three native kinds. Native JIT remains gated pending W-024 product/diagnostic cleanup and real-Windows acceptance.
 
 
 ## 13. Appendix — evidence anchors in tree
@@ -1266,7 +1266,7 @@ W-001 marked CLOSED in [win32_open_items.md](win32_open_items.md).
 | xSELF = x19 | `vendor/art/runtime/arch/arm64/asm_support_arm64.S` |
 | C++ Current = thread_local non-Bionic | `vendor/art/runtime/thread-current-inl.h` |
 | QuickEntryPoints in Thread | `quick_entrypoints.h`, `Thread::QuickEntryPointOffset` |
-| Win forces interpreter invoke | `vendor/art/runtime/art_method.cc` (`#if defined(_WIN32)`) |
+| Win quick-invoke policy | `vendor/art/runtime/art_method.cc` (default quick invoke with diagnostic opt-out) |
 | Win SETUP frames (was int3) | Ported off Win `int3`; Apple still traps |
 | PE Runtime load helper | `LOAD_RUNTIME_INSTANCE` in `asm_support_x86_64.S` |
 | Nterp Win conflicts (GS + r15=rREFS) | `mterp/x86_64ng/main.S`; generated `mterp_x86_64.S`; §15 |

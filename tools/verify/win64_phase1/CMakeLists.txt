@@ -109,6 +109,55 @@ add_executable(win64_pthread_once_probe EXCLUDE_FROM_ALL
 
 include(${CMAKE_CURRENT_SOURCE_DIR}/phase1.cmake)
 
+# ART's JVMTI implementation is a runtime plugin rather than part of art.dll.
+# Keep the target source list aligned with libopenjdkjvmti_defaults in
+# vendor/art/openjdkjvmti/Android.bp so Win64 can exercise the same debugger
+# and forced-interpreter transitions as Linux.
+add_library(openjdkjvmti SHARED EXCLUDE_FROM_ALL
+  "${MDVM_ART_DIR}/openjdkjvmti/alloc_manager.cc"
+  "${MDVM_ART_DIR}/openjdkjvmti/deopt_manager.cc"
+  "${MDVM_ART_DIR}/openjdkjvmti/events.cc"
+  "${MDVM_ART_DIR}/openjdkjvmti/object_tagging.cc"
+  "${MDVM_ART_DIR}/openjdkjvmti/OpenjdkJvmTi.cc"
+  "${MDVM_ART_DIR}/openjdkjvmti/ti_allocator.cc"
+  "${MDVM_ART_DIR}/openjdkjvmti/ti_breakpoint.cc"
+  "${MDVM_ART_DIR}/openjdkjvmti/ti_class.cc"
+  "${MDVM_ART_DIR}/openjdkjvmti/ti_class_definition.cc"
+  "${MDVM_ART_DIR}/openjdkjvmti/ti_class_loader.cc"
+  "${MDVM_ART_DIR}/openjdkjvmti/ti_ddms.cc"
+  "${MDVM_ART_DIR}/openjdkjvmti/ti_dump.cc"
+  "${MDVM_ART_DIR}/openjdkjvmti/ti_extension.cc"
+  "${MDVM_ART_DIR}/openjdkjvmti/ti_field.cc"
+  "${MDVM_ART_DIR}/openjdkjvmti/ti_heap.cc"
+  "${MDVM_ART_DIR}/openjdkjvmti/ti_jni.cc"
+  "${MDVM_ART_DIR}/openjdkjvmti/ti_logging.cc"
+  "${MDVM_ART_DIR}/openjdkjvmti/ti_method.cc"
+  "${MDVM_ART_DIR}/openjdkjvmti/ti_monitor.cc"
+  "${MDVM_ART_DIR}/openjdkjvmti/ti_object.cc"
+  "${MDVM_ART_DIR}/openjdkjvmti/ti_phase.cc"
+  "${MDVM_ART_DIR}/openjdkjvmti/ti_properties.cc"
+  "${MDVM_ART_DIR}/openjdkjvmti/ti_search.cc"
+  "${MDVM_ART_DIR}/openjdkjvmti/ti_stack.cc"
+  "${MDVM_ART_DIR}/openjdkjvmti/ti_redefine.cc"
+  "${MDVM_ART_DIR}/openjdkjvmti/ti_thread.cc"
+  "${MDVM_ART_DIR}/openjdkjvmti/ti_threadgroup.cc"
+  "${MDVM_ART_DIR}/openjdkjvmti/ti_timers.cc"
+  "${MDVM_ART_DIR}/openjdkjvmti/transform.cc")
+target_include_directories(openjdkjvmti PRIVATE
+  "${MDVM_ART_DIR}/openjdkjvmti"
+  "${MDVM_ART_DIR}/openjdkjvmti/include")
+target_compile_options(openjdkjvmti PRIVATE
+  -fno-rtti
+  -fno-omit-frame-pointer
+  -Wno-thread-safety
+  -Wno-unused-command-line-argument
+  -Wno-microsoft-cast)
+target_compile_definitions(openjdkjvmti PRIVATE ART_CONSUMING_LIBART)
+target_link_libraries(openjdkjvmti art dexfile artbase base)
+set_target_properties(openjdkjvmti PROPERTIES
+  OUTPUT_NAME openjdkjvmti
+  WINDOWS_EXPORT_ALL_SYMBOLS ON)
+
 # Ensure sigchain exists (not always emitted in dependency closure).
 if(NOT TARGET sigchain)
   add_library(sigchain SHARED "${MDVM_ART_WIN_RUNTIME}/sigchain_windows.cc")

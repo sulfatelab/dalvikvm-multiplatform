@@ -135,11 +135,11 @@ The probe DLL uses CMake `WINDOWS_EXPORT_ALL_SYMBOLS` because Android's
 ## Remaining scope
 
 - Real Windows 10 acceptance is still required.
-- W-024 remains open for full debugger/JVMTI forced-interpreter transitions,
-  removal of the native-JIT diagnostic gate, restoration of the remaining
-  Math/libcore native demotions, and real-Windows acceptance. Registered and
-  unresolved CriticalNative method tracing now pass in both memory modes;
-  compiled normal/FastNative rebinding and tracing are covered separately.
+- W-024 remains open for removal of the native-JIT diagnostic gate,
+  restoration of the remaining Math/libcore native demotions, diagnostic
+  cleanup, and real-Windows acceptance. Registered and unresolved
+  CriticalNative calls now also pass the JVMTI forced-interpreter transition
+  in both memory modes; see `RESULT-jvmti-force.md`.
 
 ## Regression verification
 
@@ -149,6 +149,9 @@ The same ART build also passed:
 - `run_native_abi_probe.sh`: gate-closed 0/7 and gate-open 7/7 mixed/high-FP
   normal/FastNative checks across rebinding and method-tracing phases with no
   extra target compilation;
+- `run_jvmti_force_probe.sh`: 3/3 dual-view and 3/3 J-1 forced-interpreter
+  transitions over registered and unresolved normal, FastNative, and
+  CriticalNative calls;
 - `run_jit_smoke.sh`: 10/10;
 - `run_jit_matrix.sh`: 14/14;
 - native Linux `nativeloader`, `art`, `openjdkjvm`, and `dalvikvm` build;
