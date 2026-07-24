@@ -104,6 +104,9 @@ target_compile_definitions(win64_posix_stubs PRIVATE
   _CRT_SECURE_NO_WARNINGS NOMINMAX WIN32_LEAN_AND_MEAN NOGDI)
 set_target_properties(win64_posix_stubs PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
+add_executable(win64_pthread_once_probe EXCLUDE_FROM_ALL
+  "${_repo}/tools/verify/win64_phase4/pthread_once_probe.c")
+
 include(${CMAKE_CURRENT_SOURCE_DIR}/phase1.cmake)
 
 # Ensure sigchain exists (not always emitted in dependency closure).

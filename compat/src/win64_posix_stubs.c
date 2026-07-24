@@ -79,7 +79,16 @@ int pthread_setspecific(pthread_key_t k, const void* v) {
 pthread_t pthread_self(void) { return GetCurrentThreadId(); }
 int pthread_equal(pthread_t a, pthread_t b) { return a == b; }
 int pthread_once(pthread_once_t* once, void (*init)(void)) {
-  if (InterlockedCompareExchange(once, 1, 0) == 0) init();
+  enum { kUninitialized = 0, kInitializing = 1, kInitialized = 2 };
+  LONG state = InterlockedCompareExchange(once, kInitializing, kUninitialized);
+  if (state == kUninitialized) {
+    init();
+    InterlockedExchange(once, kInitialized);
+    return 0;
+  }
+  while (InterlockedCompareExchange(once, kInitialized, kInitialized) != kInitialized) {
+    SwitchToThread();
+  }
   return 0;
 }
 
