@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Verify mixed/high-FP Win64 compiled-JNI normal/FastNative conventions.
+# Verify mixed/high-FP Win64 compiled-JNI normal/FastNative conventions and binding transitions.
 # Set EXPECT_FIXED=0 to reproduce the historical pre-split failure contract.
 
 REPO="$(cd "$(dirname "$0")/../../.." && pwd)"
@@ -28,9 +28,15 @@ cmake --build "$NATIVE_BUILD" -j"$(nproc)"
 
 EXPORTS="$(llvm-readobj --coff-exports "$NATIVE_BUILD/libnativeabiprobe.dll")"
 for symbol in JNI_OnLoad \
+    Java_FastNativeAbiProbe_normalRegistered \
+    Java_FastNativeAbiProbe_fastRegistered \
     Java_FastNativeAbiProbe_normalDlsym \
     Java_FastNativeAbiProbe_fastDlsym \
-    Java_FastNativeAbiProbe_callMask; do
+    Java_FastNativeAbiProbe_normalInstance \
+    Java_FastNativeAbiProbe_fastInstance \
+    Java_FastNativeAbiProbe_callMask \
+    Java_FastNativeAbiProbe_unregisterNatives \
+    Java_FastNativeAbiProbe_registerAlternateNatives; do
   if ! grep -qF "Name: $symbol" <<< "$EXPORTS"; then
     echo "native ABI probe DLL does not export $symbol" >&2
     exit 1
@@ -88,7 +94,11 @@ TARGET_METHODS=(
   "double FastNativeAbiProbe.fastInstance("
   "int FastNativeAbiProbe.callMask("
 )
-VALUES_MARKER="FastNativeAbiProbe values normalRegistered=743.75 fastRegistered=1743.75 normalDlsym=2755.75 fastDlsym=3755.75 normalInstance=4743.75 fastInstance=5743.75 calls=63"
+VALUE_MARKERS=(
+  "FastNativeAbiProbe initial normalRegistered=743.75 fastRegistered=1743.75 normalDlsym=2755.75 fastDlsym=3755.75 normalInstance=4743.75 fastInstance=5743.75 calls=63"
+  "FastNativeAbiProbe unregistered normalRegistered=10743.75 fastRegistered=11743.75 normalDlsym=12755.75 fastDlsym=13755.75 normalInstance=14743.75 fastInstance=15743.75 calls=63"
+  "FastNativeAbiProbe reregistered normalRegistered=20743.75 fastRegistered=21743.75 normalDlsym=22755.75 fastDlsym=23755.75 normalInstance=24743.75 fastInstance=25743.75 calls=63"
+)
 
 count_compiled_targets() {
   local log="$1"
@@ -102,6 +112,28 @@ count_compiled_targets() {
   printf '%s' "$count"
 }
 
+count_compilation_records() {
+  local log="$1"
+  local count=0
+  local matches
+  local method
+  for method in "${TARGET_METHODS[@]}"; do
+    matches="$(grep -cF "success=1 method=$method" "$log" || true)"
+    count=$((count + matches))
+  done
+  printf '%s' "$count"
+}
+
+has_value_markers() {
+  local log="$1"
+  local marker
+  for marker in "${VALUE_MARKERS[@]}"; do
+    if ! grep -qF "$marker" "$log"; then
+      return 1
+    fi
+  done
+}
+
 set +e
 run_probe "$CLOSED_LOG"
 closed_rc=$?
@@ -111,22 +143,35 @@ set -e
 
 closed_compiled="$(count_compiled_targets "$CLOSED_LOG")"
 open_compiled="$(count_compiled_targets "$OPEN_LOG")"
+closed_records="$(count_compilation_records "$CLOSED_LOG")"
+open_records="$(count_compilation_records "$OPEN_LOG")"
+
+closed_values=false
+if has_value_markers "$CLOSED_LOG"; then
+  closed_values=true
+fi
+open_values=false
+if has_value_markers "$OPEN_LOG"; then
+  open_values=true
+fi
 
 closed_ok=false
 if [[ $closed_rc -eq 0 ]] &&
-   grep -qF "$VALUES_MARKER" "$CLOSED_LOG" &&
+   [[ $closed_values == true ]] &&
    grep -qF "FastNativeAbiProbe OK" "$CLOSED_LOG" &&
    grep -qF "main end exception=0" "$CLOSED_LOG" &&
-   [[ $closed_compiled -eq 0 ]]; then
+   [[ $closed_compiled -eq 0 ]] &&
+   [[ $closed_records -eq 0 ]]; then
   closed_ok=true
 fi
 
 open_ok=false
 if [[ $open_rc -eq 0 ]] &&
-   grep -qF "$VALUES_MARKER" "$OPEN_LOG" &&
+   [[ $open_values == true ]] &&
    grep -qF "FastNativeAbiProbe OK" "$OPEN_LOG" &&
    grep -qF "main end exception=0" "$OPEN_LOG" &&
-   [[ $open_compiled -eq ${#TARGET_METHODS[@]} ]]; then
+   [[ $open_compiled -eq ${#TARGET_METHODS[@]} ]] &&
+   [[ $open_records -eq ${#TARGET_METHODS[@]} ]]; then
   open_ok=true
 fi
 
@@ -137,10 +182,11 @@ if [[ $open_rc -ne 0 ]] &&
   historical_failure=true
 fi
 
-printf 'gate_closed_exit=%s gate_closed_ok=%s compiled_targets=%s/%s\n' \
-  "$closed_rc" "$closed_ok" "$closed_compiled" "${#TARGET_METHODS[@]}"
-printf 'gate_open_exit=%s gate_open_ok=%s compiled_targets=%s/%s historical_failure=%s\n' \
-  "$open_rc" "$open_ok" "$open_compiled" "${#TARGET_METHODS[@]}" "$historical_failure"
+printf 'gate_closed_exit=%s gate_closed_ok=%s compiled_targets=%s/%s compilation_records=%s\n' \
+  "$closed_rc" "$closed_ok" "$closed_compiled" "${#TARGET_METHODS[@]}" "$closed_records"
+printf 'gate_open_exit=%s gate_open_ok=%s compiled_targets=%s/%s compilation_records=%s historical_failure=%s\n' \
+  "$open_rc" "$open_ok" "$open_compiled" "${#TARGET_METHODS[@]}" "$open_records" \
+  "$historical_failure"
 printf 'expected_mode=%s\n' "$([[ $EXPECT_FIXED == 1 ]] && echo fixed || echo historical-failure)"
 printf 'gate_closed_log=%s\n' "$CLOSED_LOG"
 printf 'gate_open_log=%s\n' "$OPEN_LOG"

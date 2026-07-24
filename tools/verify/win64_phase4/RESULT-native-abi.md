@@ -9,8 +9,8 @@ The focused compiled-JNI acceptance gate now passes the mixed/high-FP matrix:
 
 | Mode | Result |
 |------|--------|
-| Native-method JIT gate closed | PASS: exit 0, exact values, 0/7 native targets compiled |
-| `ART_WIN64_JIT_NATIVE=1` | PASS: exit 0, exact values, 7/7 native targets compiled |
+| Native-method JIT gate closed | PASS: exit 0, three exact binding phases, 0/7 native targets compiled |
+| `ART_WIN64_JIT_NATIVE=1` | PASS: exit 0, three exact binding phases, 7/7 targets and exactly 7 compile records |
 
 Command:
 
@@ -22,8 +22,8 @@ The final focused result was repeated for five complete process runs. Every
 run reported:
 
 ```text
-gate_closed_exit=0 gate_closed_ok=true compiled_targets=0/7
-gate_open_exit=0 gate_open_ok=true compiled_targets=7/7 historical_failure=false
+gate_closed_exit=0 gate_closed_ok=true compiled_targets=0/7 compilation_records=0
+gate_open_exit=0 gate_open_ok=true compiled_targets=7/7 compilation_records=7 historical_failure=false
 ```
 
 ## Root causes
@@ -77,15 +77,32 @@ The matrix covers:
   stack spills;
 - float and double inputs, integral inputs, boolean input, and double returns.
 
+After the initial warmup and compilation, the same process exercises two
+binding transitions without recompiling any of the seven target methods:
+
+1. `UnregisterNatives(FastNativeAbiProbe.class)` resets every native data
+   entrypoint. The four initially registered methods then resolve exported
+   `Java_*` functions through dlsym, while the two initially unresolved methods
+   are also reset and resolved again. All six return the `+10000` phase values.
+2. A second `RegisterNatives` installs alternate pointers for all six ABI
+   methods. The already-compiled JNI thunks return the `+20000` phase values.
+
+The gate-open verifier requires exactly seven successful target compilation
+records across all three phases. This proves the transitions execute through
+the existing compiled-thunk set rather than passing because ART recompiled the
+methods after each binding change.
+
 The registered static signature is `(JDIFJDIFDDI)D`. The unresolved signature
 adds a trailing boolean, `(JDIFJDIFDDIZ)D`, so it cannot reuse the registered
 JNI thunk and must compile independently. Instance methods use
 `(Ljava/lang/Object;JDIFJDIFDDI)D`.
 
-The exact accepted line is:
+The exact accepted lines are:
 
 ```text
-FastNativeAbiProbe values normalRegistered=743.75 fastRegistered=1743.75 normalDlsym=2755.75 fastDlsym=3755.75 normalInstance=4743.75 fastInstance=5743.75 calls=63
+FastNativeAbiProbe initial normalRegistered=743.75 fastRegistered=1743.75 normalDlsym=2755.75 fastDlsym=3755.75 normalInstance=4743.75 fastInstance=5743.75 calls=63
+FastNativeAbiProbe unregistered normalRegistered=10743.75 fastRegistered=11743.75 normalDlsym=12755.75 fastDlsym=13755.75 normalInstance=14743.75 fastInstance=15743.75 calls=63
+FastNativeAbiProbe reregistered normalRegistered=20743.75 fastRegistered=21743.75 normalDlsym=22755.75 fastDlsym=23755.75 normalInstance=24743.75 fastInstance=25743.75 calls=63
 ```
 
 ## Regression verification
@@ -101,10 +118,16 @@ The same ART build passed:
 - Linux L-005 imageless Hello using the exact Win64-staged shared multipath
   `boot.jar` bytes.
 
+One regression attempt ended with a Wine client `recvmsg: Connection reset by
+peer` during a J-1 CriticalNative process. It produced no ART assertion or ABI
+failure; the immediate complete CriticalNative rerun passed 6/6 in both memory
+modes, and the remaining regressions passed.
+
 ## Remaining scope
 
-The mixed/high-FP normal/FastNative ABI and unresolved app-JNI coverage are no
-longer W-024 blockers. The native-JIT gate remains temporarily because W-024
-still includes broader registration/unregistration and instrumentation state
-transitions, restoration of the Math/libcore native demotions, cleanup of
-diagnostic policy/logging, and real Windows 10 acceptance.
+The mixed/high-FP normal/FastNative ABI, unresolved app-JNI, and
+register/unregister/re-register binding transitions are no longer W-024
+blockers. The native-JIT gate remains temporarily because W-024 still includes
+instrumentation/deoptimization entrypoint transitions, restoration of the
+Math/libcore native demotions, cleanup of diagnostic policy/logging, and real
+Windows 10 acceptance.

@@ -53,7 +53,7 @@ Measured on agent01 under Wine:
 | Default Hello | About 21–24 managed compilations; PASS |
 | Default JIT smoke | 10/10 |
 | Default probe matrix | 14/14 |
-| Native JIT | Gated off; direct CriticalNative and 7/7 mixed/high-FP normal/FastNative ABI matrices pass; W-024 state/product/host work remains |
+| Native JIT | Gated off; direct CriticalNative and 7/7 mixed/high-FP normal/FastNative ABI matrices pass through binding transitions; W-024 instrumentation/product/host work remains |
 | J-1 fallback | Diagnostic opt-out with `ART_WIN64_JIT_DUAL=0`; Hello passes |
 | Code cache | 64 KiB initial release capacity; 64 MiB maximum |
 
@@ -414,8 +414,9 @@ emulation is added.
   checks at the JIT-root and CodeInfo encoding sites.
 - Native JIT remains gated independently until the remaining W-024 state
   transitions, product demotion restoration, diagnostic cleanup, and
-  real-Windows acceptance are complete. Mixed/high-FP and unresolved app-JNI
-  calling-convention coverage now pass.
+  real-Windows acceptance are complete. Mixed/high-FP, unresolved app-JNI,
+  and unregister/re-register binding-transition coverage now pass; the
+  remaining transition gap is instrumentation/deoptimization.
 
 ## 7. Implementation and commit status
 
@@ -625,6 +626,12 @@ control executes the same values with 0/7 native targets compiled. Five
 complete focused runs passed. Unresolved CriticalNative mixed signatures are
 covered separately.
 
+The same gate now exercises native data-entrypoint changes after compilation.
+It unregisters the probe class, verifies dlsym re-resolution with `+10000`
+values, installs a second `RegisterNatives` table, and verifies `+20000`
+alternate values. The verifier allows exactly seven target compile records for
+all three phases, so the transition cannot pass by recompiling the methods.
+
 The separate optimizing-compiler direct CriticalNative convention is also
 fixed. Win64 direct calls now use unified Microsoft x64 argument ordinals,
 reserve the 32-byte home area, and spill after it. The unresolved critical
@@ -643,9 +650,10 @@ is recognizing drive, root, and UNC absolute paths; Linux behavior is unchanged.
 The memory plan does not change the remaining blocker. The compiled-JNI split,
 XMM moves, and mixed/high-FP matrix are landed; the current acceptance probe is
 `tools/verify/win64_phase4/run_native_abi_probe.sh`. The diagnostic
-`ART_WIN64_JIT_NATIVE=1` override remains opt-in for W-024 state-transition,
-product-demotion, diagnostic-cleanup, and real-Windows work rather than an
-unresolved calling-convention defect.
+`ART_WIN64_JIT_NATIVE=1` override remains opt-in for W-024
+instrumentation/deoptimization transitions, product-demotion,
+diagnostic-cleanup, and real-Windows work rather than an unresolved calling
+convention or native-binding defect.
 
 ## 12. Verification and acceptance
 
@@ -707,7 +715,8 @@ gate and declaring P5 complete:
 The focused compiled normal/FastNative native-JIT probe and both registered
 and unresolved direct CriticalNative probes are covered and pass. The native
 gate remains until the remaining W-024 state transitions and product/host
-cleanup are complete.
+cleanup are complete. Registration binding transitions are covered; the
+remaining transition work is instrumentation/deoptimization.
 
 ### 12.5 Threshold-zero stress resolution
 
@@ -771,9 +780,10 @@ The landed fix covers both defects:
    colon-separated after it parses the public semicolon-separated property.
 
 Remaining direct-call work is real Windows 10 acceptance. Broader W-024 work
-still covers state transitions, native-JIT gate removal, diagnostic cleanup,
-and libcore demotions; the compiled-JNI signature matrix itself now passes.
-None justifies retaining the RWX J-1 path as the product default.
+still covers instrumentation/deoptimization transitions, native-JIT gate
+removal, diagnostic cleanup, and libcore demotions; the compiled-JNI signature
+and binding-transition matrices now pass. None justifies retaining the RWX
+J-1 path as the product default.
 
 ## 13. Current status — 2026-07-24
 
@@ -791,7 +801,7 @@ None justifies retaining the RWX J-1 path as the product default.
 | PE asm definitions | Windows-target generator test enforces `RUNTIME_INSTRUMENTATION_OFFSET=0x328` |
 | Threshold-zero CriticalNative | Direct visitor uses Win64 unified ordinals/home area; dlsym caller PC preserved; repeated J-1 and dual-view probes pass |
 | Unresolved CriticalNative dlsym | ART-owned `JVM_NativeLoad` bridge; mixed/spilled/scalar exported calls pass through both load APIs |
-| Compiled normal/FastNative | Gate-open 7/7 distinct targets; registered/unresolved, static/instance, mixed/high-FP, references, deep spills, and returns pass |
+| Compiled normal/FastNative | Gate-open 7/7 distinct targets; registered/unresolved, static/instance, mixed/high-FP, references, deep spills, returns, and unregister/dlsym/re-register transitions pass with exactly seven compile records |
 
 ### Open
 
@@ -799,7 +809,7 @@ None justifies retaining the RWX J-1 path as the product default.
 |------|---------|
 | Real Windows acceptance | Host access; Wine implementation and matrix are complete |
 | Direct encoding checks | Add checks at JIT-root patch and CodeInfo construction sites |
-| Native JIT | Complete registration/unregistration and instrumentation/entrypoint state transitions, restore product demotions, remove the diagnostic gate, and validate on real Windows |
+| Native JIT | Complete instrumentation/deoptimization entrypoint transitions, restore product demotions, remove the diagnostic gate, and validate on real Windows |
 
 ### Current test summary
 
@@ -812,8 +822,8 @@ None justifies retaining the RWX J-1 path as the product default.
 | FloatProbe `-Xjitthreshold:0` | PASS, 5/5 current harness | PASS, 5/5 current harness |
 | Direct registered CriticalNative signatures | PASS, 5/5 | PASS, 5/5 |
 | Direct unresolved CriticalNative signatures | PASS, 5/5 | PASS, 5/5 |
-| FastNative ABI probe, native gate closed | PASS, 0/7 compiled | PASS, 0/7 compiled |
-| FastNative ABI probe, native gate open | PASS, 7/7 compiled | PASS, 7/7 compiled |
+| FastNative ABI probe, native gate closed | PASS, three binding phases, 0/7 compiled | PASS, three binding phases, 0/7 compiled |
+| FastNative ABI probe, native gate open | PASS, three binding phases, 7/7 compiled once | PASS, three binding phases, 7/7 compiled once |
 
 ## 14. Decision log
 
@@ -838,6 +848,7 @@ None justifies retaining the RWX J-1 path as the product default.
 | 2026-07-24 | Direct CriticalNative Win64 visitor and dlsym caller-PC fixes landed; threshold-zero and mixed registered signature probes pass in both J-1 and dual-view modes |
 | 2026-07-24 | Replaced direct `LoadLibraryA` native-load shortcut with an ART-owned `JavaVMExt::LoadNativeLibrary` bridge; unresolved mixed-signature dlsym and both Java load APIs pass |
 | 2026-07-24 | Mixed/high-FP normal/FastNative matrix passes 7/7 after adding XMM-to-XMM JNI argument moves |
+| 2026-07-24 | The same seven compiled JNI thunks pass unregister/dlsym/re-register binding transitions without recompilation |
 
 ## 15. Code anchors
 

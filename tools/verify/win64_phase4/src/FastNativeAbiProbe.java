@@ -1,6 +1,6 @@
 import dalvik.annotation.optimization.FastNative;
 
-/** Focused Win64 compiled-JNI normal/FastNative argument mapping probe. */
+/** Focused Win64 compiled-JNI normal/FastNative argument and binding-transition probe. */
 public final class FastNativeAbiProbe {
     private static final double BASE_VALUE = 743.75;
 
@@ -32,6 +32,36 @@ public final class FastNativeAbiProbe {
             int g, float h, double i, double j, int k);
 
     private static native int callMask();
+    private static native void unregisterNatives();
+    private static native void registerAlternateNatives();
+
+    private static final class Results {
+        double normalRegistered;
+        double fastRegistered;
+        double normalDlsym;
+        double fastDlsym;
+        double normalInstance;
+        double fastInstance;
+    }
+
+    private static Results runCalls(FastNativeAbiProbe probe, Object marker) {
+        Results results = new Results();
+        for (int iteration = 0; iteration < 1000; ++iteration) {
+            results.normalRegistered = normalRegistered(
+                    11, 2.5, 7, 4.25f, 13, 6.75, 17, 8.5f, 9.25, 10.5, 19);
+            results.fastRegistered = fastRegistered(
+                    11, 2.5, 7, 4.25f, 13, 6.75, 17, 8.5f, 9.25, 10.5, 19);
+            results.normalDlsym = normalDlsym(
+                    11, 2.5, 7, 4.25f, 13, 6.75, 17, 8.5f, 9.25, 10.5, 19, true);
+            results.fastDlsym = fastDlsym(
+                    11, 2.5, 7, 4.25f, 13, 6.75, 17, 8.5f, 9.25, 10.5, 19, true);
+            results.normalInstance = probe.normalInstance(
+                    marker, 11, 2.5, 7, 4.25f, 13, 6.75, 17, 8.5f, 9.25, 10.5, 19);
+            results.fastInstance = probe.fastInstance(
+                    marker, 11, 2.5, 7, 4.25f, 13, 6.75, 17, 8.5f, 9.25, 10.5, 19);
+        }
+        return results;
+    }
 
     private static void checkValue(double actual, double expected, String name) {
         if (Double.doubleToRawLongBits(actual) != Double.doubleToRawLongBits(expected)) {
@@ -39,50 +69,54 @@ public final class FastNativeAbiProbe {
         }
     }
 
+    private static void checkPhase(Results results, double phaseOffset, String phase) {
+        checkValue(results.normalRegistered, BASE_VALUE + phaseOffset, phase + ".normalRegistered");
+        checkValue(results.fastRegistered,
+                BASE_VALUE + phaseOffset + 1000.0, phase + ".fastRegistered");
+        checkValue(results.normalDlsym,
+                BASE_VALUE + phaseOffset + 2012.0, phase + ".normalDlsym");
+        checkValue(results.fastDlsym,
+                BASE_VALUE + phaseOffset + 3012.0, phase + ".fastDlsym");
+        checkValue(results.normalInstance,
+                BASE_VALUE + phaseOffset + 4000.0, phase + ".normalInstance");
+        checkValue(results.fastInstance,
+                BASE_VALUE + phaseOffset + 5000.0, phase + ".fastInstance");
+        if (callMask() != 63) {
+            throw new AssertionError(phase + " native ABI functions not all called: " + callMask());
+        }
+    }
+
+    private static void printPhase(Results results, String phase) {
+        System.out.println("FastNativeAbiProbe " + phase
+                + " normalRegistered=" + results.normalRegistered
+                + " fastRegistered=" + results.fastRegistered
+                + " normalDlsym=" + results.normalDlsym
+                + " fastDlsym=" + results.fastDlsym
+                + " normalInstance=" + results.normalInstance
+                + " fastInstance=" + results.fastInstance
+                + " calls=" + callMask());
+    }
+
     public static void main(String[] args) {
         System.loadLibrary("nativeabiprobe");
 
         FastNativeAbiProbe probe = new FastNativeAbiProbe();
         Object marker = new Object();
-        double normalRegisteredResult = 0.0;
-        double fastRegisteredResult = 0.0;
-        double normalDlsymResult = 0.0;
-        double fastDlsymResult = 0.0;
-        double normalInstanceResult = 0.0;
-        double fastInstanceResult = 0.0;
 
-        for (int iteration = 0; iteration < 1000; ++iteration) {
-            normalRegisteredResult = normalRegistered(
-                    11, 2.5, 7, 4.25f, 13, 6.75, 17, 8.5f, 9.25, 10.5, 19);
-            fastRegisteredResult = fastRegistered(
-                    11, 2.5, 7, 4.25f, 13, 6.75, 17, 8.5f, 9.25, 10.5, 19);
-            normalDlsymResult = normalDlsym(
-                    11, 2.5, 7, 4.25f, 13, 6.75, 17, 8.5f, 9.25, 10.5, 19, true);
-            fastDlsymResult = fastDlsym(
-                    11, 2.5, 7, 4.25f, 13, 6.75, 17, 8.5f, 9.25, 10.5, 19, true);
-            normalInstanceResult = probe.normalInstance(
-                    marker, 11, 2.5, 7, 4.25f, 13, 6.75, 17, 8.5f, 9.25, 10.5, 19);
-            fastInstanceResult = probe.fastInstance(
-                    marker, 11, 2.5, 7, 4.25f, 13, 6.75, 17, 8.5f, 9.25, 10.5, 19);
-        }
+        Results initial = runCalls(probe, marker);
+        checkPhase(initial, 0.0, "initial");
+        printPhase(initial, "initial");
 
-        checkValue(normalRegisteredResult, BASE_VALUE, "normalRegistered");
-        checkValue(fastRegisteredResult, BASE_VALUE + 1000.0, "fastRegistered");
-        checkValue(normalDlsymResult, BASE_VALUE + 2012.0, "normalDlsym");
-        checkValue(fastDlsymResult, BASE_VALUE + 3012.0, "fastDlsym");
-        checkValue(normalInstanceResult, BASE_VALUE + 4000.0, "normalInstance");
-        checkValue(fastInstanceResult, BASE_VALUE + 5000.0, "fastInstance");
-        if (callMask() != 63) {
-            throw new AssertionError("native ABI functions not all called: " + callMask());
-        }
+        unregisterNatives();
+        Results unregistered = runCalls(probe, marker);
+        checkPhase(unregistered, 10000.0, "unregistered");
+        printPhase(unregistered, "unregistered");
 
-        System.out.println("FastNativeAbiProbe values normalRegistered=" + normalRegisteredResult
-                + " fastRegistered=" + fastRegisteredResult
-                + " normalDlsym=" + normalDlsymResult
-                + " fastDlsym=" + fastDlsymResult
-                + " normalInstance=" + normalInstanceResult
-                + " fastInstance=" + fastInstanceResult
-                + " calls=" + callMask());
+        registerAlternateNatives();
+        Results reregistered = runCalls(probe, marker);
+        checkPhase(reregistered, 20000.0, "reregistered");
+        printPhase(reregistered, "reregistered");
+
         System.out.println("FastNativeAbiProbe OK");
     }
 }
