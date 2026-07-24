@@ -7,8 +7,7 @@ set -euo pipefail
 #   T2 – Managed methods get JIT-compiled
 #   T3 – Hello output is correct
 #   T4 – Native methods are NOT JIT-compiled by default (new gate)
-#   T5 – ART_WIN64_JIT_NATIVE=1 permits a native compile (override only;
-#        native ABI correctness is covered by run_native_abi_probe.sh)
+#   T5 – ART_WIN64_JIT_NATIVE=1 compiles and executes the native stub
 #   T6 – ART_WIN64_JIT=0 disables all compile
 #   T7 – -Xusejit:false path still works (no crash)
 #   T8 – JIT filter/exclude env vars work
@@ -71,6 +70,12 @@ has_clean_hello() {
     grep -q "main end exception=0" <<< "$output"
 }
 
+has_clean_native_hello() {
+  local output="$1"
+  grep -q "StringFactory.newStringFromBytes" <<< "$output" &&
+    has_clean_hello "$output"
+}
+
 # --------------------------------------------------------------------
 cyan "=== T1: JIT Code Cache creation ==="
 
@@ -112,14 +117,8 @@ cyan "=== T5: ART_WIN64_JIT_NATIVE=1 gate override ==="
 
 OUT5=$(ART_WIN64_JIT_NATIVE=1 run_dalvik "$RUN/hello.jar" "Hello")
 NCOMP5=$(count_compiles "$OUT5")
-NATIVE5=$(grep "Win64 CompileMethod done success=1" <<< "$OUT5" 2>/dev/null | grep "StringFactory.newStringFromBytes" || true)
 echo "  Native-gate-open mode ncomp: $NCOMP5"
-assert "ART_WIN64_JIT_NATIVE=1 permits native compilation" test -n "$NATIVE5"
-if grep -q "main end exception=0" <<< "$OUT5"; then
-  echo "  Native-gate-open Hello happened to complete cleanly"
-else
-  echo "  Native-gate-open ABI remains blocked; see RESULT-native-abi.md"
-fi
+assert "ART_WIN64_JIT_NATIVE=1 compiles and executes native ABI" has_clean_native_hello "$OUT5"
 
 # --------------------------------------------------------------------
 cyan "=== T6: ART_WIN64_JIT=0 disables all compile ==="

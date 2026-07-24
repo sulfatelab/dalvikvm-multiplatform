@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Reproduce the current Win64 compiled-JNI/FastNative gate behavior.
-# The gate-closed control must pass. Until W-024 is fixed, opening the native
-# JIT gate for System.arraycopy must compile the JNI stub and fail the probe.
+# Verify the Win64 compiled-JNI/FastNative convention split.
+# Set EXPECT_FIXED=0 to reproduce the historical pre-split failure contract.
 
 REPO="$(cd "$(dirname "$0")/../../.." && pwd)"
 BUILD="${BUILD:-$REPO/build/win64_phase1}"
 RUN="$BUILD/run"
 WINE="${WINE:-wine64}"
+EXPECT_FIXED="${EXPECT_FIXED:-1}"
 CLOSED_LOG="${TMPDIR:-/tmp}/win64-fastnative-gate-closed.log"
 OPEN_LOG="${TMPDIR:-/tmp}/win64-fastnative-gate-open.log"
 
@@ -53,18 +53,34 @@ if [[ $closed_rc -eq 0 ]] &&
   closed_ok=true
 fi
 
-open_reproduced=false
+open_ok=false
+if [[ $open_rc -eq 0 ]] &&
+   grep -qF "method=void java.lang.System.arraycopy" "$OPEN_LOG" &&
+   grep -qF "FastNativeAbiProbe OK" "$OPEN_LOG" &&
+   grep -qF "main end exception=0" "$OPEN_LOG"; then
+  open_ok=true
+fi
+
+historical_failure=false
 if [[ $open_rc -ne 0 ]] &&
    grep -qF "method=void java.lang.System.arraycopy" "$OPEN_LOG" &&
    ! grep -qF "FastNativeAbiProbe OK" "$OPEN_LOG"; then
-  open_reproduced=true
+  historical_failure=true
 fi
 
 printf 'gate_closed_exit=%s gate_closed_ok=%s\n' "$closed_rc" "$closed_ok"
-printf 'gate_open_exit=%s gate_open_failure_reproduced=%s\n' "$open_rc" "$open_reproduced"
+printf 'gate_open_exit=%s gate_open_ok=%s historical_failure=%s\n' \
+  "$open_rc" "$open_ok" "$historical_failure"
+printf 'expected_mode=%s\n' "$([[ $EXPECT_FIXED == 1 ]] && echo fixed || echo historical-failure)"
 printf 'gate_closed_log=%s\n' "$CLOSED_LOG"
 printf 'gate_open_log=%s\n' "$OPEN_LOG"
 
-if [[ $closed_ok != true || $open_reproduced != true ]]; then
+if [[ $closed_ok != true ]]; then
+  exit 1
+fi
+if [[ $EXPECT_FIXED == 1 && $open_ok != true ]]; then
+  exit 1
+fi
+if [[ $EXPECT_FIXED != 1 && $historical_failure != true ]]; then
   exit 1
 fi

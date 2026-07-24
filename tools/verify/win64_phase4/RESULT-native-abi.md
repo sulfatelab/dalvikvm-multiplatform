@@ -5,13 +5,14 @@ Date: 2026-07-24. VM: agent01. Runtime: Wine 10.0. Build:
 
 ## Current baseline
 
-`run_native_abi_probe.sh` is a regression reproducer for W-024, not an
-acceptance test for enabling native JIT.
+`run_native_abi_probe.sh` is now an acceptance test for the compiled-JNI
+convention split. Set `EXPECT_FIXED=0` only when reproducing the historical
+pre-split behavior.
 
 | Mode | Result |
 |------|--------|
 | Native-method JIT gate closed | PASS: `FastNativeAbiProbe OK`, exit 0 |
-| `ART_WIN64_JIT_NATIVE=1`, filter `System.arraycopy` | Expected baseline failure after the native method is compiled; probe does not reach its OK marker |
+| `ART_WIN64_JIT_NATIVE=1`, filter `System.arraycopy` | PASS: compiled stub, `FastNativeAbiProbe OK`, exit 0 |
 
 Command:
 
@@ -19,12 +20,12 @@ Command:
 bash tools/verify/win64_phase4/run_native_abi_probe.sh
 ```
 
-The gate-open run currently times out while Wine receives repeated faults
-after the first bad compiled-JNI call. The stable evidence is that
-`System.arraycopy(Object,int,Object,int,int)` is successfully JIT-compiled and
-the probe then fails before its success marker. A separate focused run of the
-existing `PerfSmokeProbe` reported `NullPointerException: src == null` at the
-same transition.
+The historical gate-open run timed out while Wine received repeated faults
+after the first bad compiled-JNI call. The pre-split evidence was that
+`System.arraycopy(Object,int,Object,int,int)` compiled successfully and the
+probe failed before its success marker; a focused `PerfSmokeProbe` reported
+`NullPointerException: src == null` at the same transition. The current split
+passes both the control and gate-open runs.
 
 ## Root cause
 
@@ -37,21 +38,24 @@ The x86-64 JNI compiler has two conventions at once:
    `RCX/RDX/R8/R9` or `XMM0..XMM3`, followed by stack arguments after the
    mandatory 32-byte shadow area.
 
-ART commit `f87f5de9d3` correctly added the second convention, but reused its
-register arrays and limits in `X86_64ManagedRuntimeCallingConvention`. The JNI
-stub therefore reads the first Java core argument from `RDX` instead of
-`RSI`, allows only three Java core register arguments after the method
-register, and treats managed floating arguments after `XMM3` as stack values.
+Before this stage, ART commit `f87f5de9d3` correctly added the second
+convention, but reused its register arrays and limits in
+`X86_64ManagedRuntimeCallingConvention`. The JNI stub consequently read the
+first Java core argument from `RDX` instead of `RSI`, allowed only three Java
+core register arguments after the method register, and treated managed
+floating arguments after `XMM3` as stack values. The implementation now keeps
+separate managed and native arrays/limits.
 
 For `System.arraycopy`, the real managed input is `src` in `RSI` and
 `srcPos == 0` in `RDX`; the bad stub reads `RDX` as `src`, producing a null
 source. `StringFactory.newStringFromBytes` fails analogously because its
 `byte[] data` is in `RSI` while `high == 0` is in `RDX`.
 
-## Prototype confirmation
+## Implementation confirmation
 
-A temporary research patch split managed and native register tables and kept
-the managed limits at six core/eight floating registers. It produced:
+The landed split keeps the managed limits at six core/eight floating registers
+and uses the Win64 four-slot table only for native destinations and scratch
+registers. It produces:
 
 - filtered `System.arraycopy` `PerfSmokeProbe`: exit 0, `perf.ok=true`;
 - unrestricted `ART_WIN64_JIT_NATIVE=1` Hello: exit 0 with compiled
@@ -59,9 +63,9 @@ the managed limits at six core/eight floating registers. It produced:
 - `FastNativeAbiProbe`: exit 0 after compiled `System.arraycopy`.
 
 This also exercises seven outgoing native arguments, including the Win64
-shadow area and three stack arguments. The prototype was reverted; the native
-JIT gate remains required until the complete ABI patch and mixed-FP tests are
-landed.
+shadow area and three stack arguments. The native-JIT gate remains a diagnostic
+override while mixed-FP, high managed-FP ordinal, unresolved app-JNI, and
+normal/Fast/Critical state-transition coverage are added.
 
 Direct optimizing-compiler CriticalNative calls are a separate W-024 path.
 Their confirmed defects are the SysV-shaped direct-call visitor and the
