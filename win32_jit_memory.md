@@ -53,7 +53,7 @@ Measured on agent01 under Wine:
 | Default Hello | About 21–24 managed compilations; PASS |
 | Default JIT smoke | 10/10 |
 | Default probe matrix | 14/14 |
-| Native JIT | Gated off; `ART_WIN64_JIT_NATIVE=1` exposes the FastNative ABI defect |
+| Native JIT | Gated off; diagnostic override exposes an incoming managed-ABI defect in compiled JNI stubs |
 | J-1 fallback | Diagnostic opt-out with `ART_WIN64_JIT_DUAL=0`; Hello passes |
 | Code cache | 64 KiB initial release capacity; 64 MiB maximum |
 
@@ -412,8 +412,9 @@ emulation is added.
 - Remaining work is real-Windows repeated-start testing, dynamic-code/CFG
   policy testing, large `SEC_COMMIT` pressure measurement, and direct release
   checks at the JIT-root and CodeInfo encoding sites.
-- Native JIT remains gated independently until the FastNative MS x64 ABI
-  problem is fixed.
+- Native JIT remains gated independently until the compiled-JNI adapter keeps
+  ART-managed inputs separate from Microsoft x64 native outputs and the full
+  W-024 signature matrix passes.
 
 ## 7. Implementation and commit status
 
@@ -595,11 +596,30 @@ The historical separated-J-2 failure was not evidence of incomplete D-1 work.
 ### 11.2 Native JIT remains separate
 
 JIT compilation of native methods is gated off by default. The compiled
-FastNative path still mixes ART's managed convention with MS x64 native
-argument placement and produces invalid multi-argument calls.
+FastNative path needs two conventions at the stub boundary: Linux-like ART
+managed inputs and Microsoft x64 native outputs. The current Win64 patch
+correctly defines the outgoing unified four-slot register layout, 32-byte
+shadow area, and stack arguments, but reuses those native register arrays and
+limits in `X86_64ManagedRuntimeCallingConvention`. The stub therefore reads
+the wrong incoming registers before repacking the values.
+
+The concrete failures match that shift exactly. For static
+`StringFactory.newStringFromBytes`, managed `RSI` contains `byte[] data` and
+`RDX` contains `high == 0`; the stub reads `RDX` as the first Java argument and
+throws `data == null`. For `System.arraycopy`, managed `RSI` contains `src`
+and `RDX` contains `srcPos == 0`; a compiled stub reads a null `src`.
+
+A temporary split between managed and native register definitions made both
+workloads pass. The `System.arraycopy` prototype also exercised seven native
+arguments, including the shadow area and three stack arguments, so the tested
+outgoing core/reference packing is not the immediate failure. The prototype
+was reverted. Mixed-FP, high managed-FP ordinals, unresolved app JNI, and
+normal/Fast/Critical variants still require generated-code coverage.
 
 The memory plan does not change this blocker. Enablement requires a separate
-FastNative ABI design and test stage.
+compiled-JNI ABI patch and test stage. The current reproducer is
+`tools/verify/win64_phase4/run_native_abi_probe.sh`; the diagnostic
+`ART_WIN64_JIT_NATIVE=1` override is not a supported execution mode.
 
 ## 12. Verification and acceptance
 
@@ -751,7 +771,7 @@ as the product default.
 | Real Windows acceptance | Host access; Wine implementation and matrix are complete |
 | Threshold-zero stress | Root cause confirmed in direct `@CriticalNative` Win64 ABI; complete fix not landed |
 | Direct encoding checks | Add checks at JIT-root patch and CodeInfo construction sites |
-| Native JIT | FastNative MS x64 ABI |
+| Native JIT | Split incoming ART-managed and outgoing MS x64 conventions; complete mixed-signature coverage |
 
 ### Current test summary
 
@@ -762,6 +782,8 @@ as the product default.
 | JIT matrix | 14/14 | 14/14 |
 | FloatProbe normal threshold | PASS | PASS |
 | FloatProbe `-Xjitthreshold:0` | Baseline FAIL; two-fix research prototype 10/10 | Baseline FAIL; two-fix research prototype 10/10 |
+| FastNative ABI probe, native gate closed | PASS | PASS |
+| FastNative ABI probe, native gate open | Baseline expected FAIL; convention-split prototype PASS | Baseline expected FAIL; convention-split prototype PASS |
 
 ## 14. Decision log
 
@@ -782,6 +804,7 @@ as the product default.
 | 2026-07-23 | Full rebuild exposed Linux-layout `asm_defines` regeneration; Windows-target codegen and a permanent 0x328 offset assertion fixed it |
 | 2026-07-23 | Threshold-zero FloatProbe fails identically in J-1 and dual view, separating it from the historical J-2 layout defect |
 | 2026-07-24 | Threshold-zero root cause isolated to missing Win64 direct-CriticalNative shadow space plus dlsym-stub `r11` caller-PC clobber; two-fix prototype passes 20/20 and is reverted pending the complete ABI patch |
+| 2026-07-24 | Compiled-JNI/FastNative failure isolated to MS native register definitions leaking into the incoming ART managed convention; split-convention prototype passes targeted System.arraycopy and StringFactory runs, then is reverted |
 
 ## 15. Code anchors
 

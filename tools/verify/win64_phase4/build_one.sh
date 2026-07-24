@@ -11,7 +11,8 @@ SRC="$REPO/tools/verify/win64_phase4/src/${CLS}.java"
 rm -rf "$OUT/${CLS}_classes" "$OUT/${CLS}_dex"
 mkdir -p "$OUT/${CLS}_classes" "$OUT/${CLS}_dex"
 "$JAVAC" -d "$OUT/${CLS}_classes" "$SRC"
-"${D8[@]}" --release --min-api 31 --output "$OUT/${CLS}_dex" "$OUT/${CLS}_classes/${CLS}.class"
+mapfile -t _CLASSES < <(find "$OUT/${CLS}_classes" -name '*.class' | sort)
+"${D8[@]}" --release --min-api 31 --output "$OUT/${CLS}_dex" "${_CLASSES[@]}"
 python3 - <<PY
 import zipfile, os
 repo=r'''$REPO'''

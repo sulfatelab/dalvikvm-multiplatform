@@ -1,6 +1,6 @@
 # Win64 JIT smoke test — default dual-view and native-JIT gate verification
 
-Date: 2026-07-23. VM: agent01, Wine. Build: win64_phase1 RelWithDebInfo.
+Date: 2026-07-24. VM: agent01, Wine. Build: win64_phase1 RelWithDebInfo.
 
 ## Test: `run_jit_smoke.sh`
 
@@ -13,24 +13,31 @@ native-JIT gate and the managed-JIT control environment variables.
 | Test | Assertion | Result |
 |------|-----------|--------|
 | T1 | JIT code cache created (`JitCodeCache::Create OK`) | **PASS** |
-| T2 | ≥1 managed method JIT-compiled | **PASS** (24 compiles) |
-| T3 | Prints `Hello from dalvikvm!` | **PASS** |
+| T2 | ≥1 managed method JIT-compiled | **PASS** (23 compiles in the final run) |
+| T3 | Prints Hello and reports `main end exception=0` | **PASS** |
 | T4 | No native methods JIT-compiled by default | **PASS** (gate active) |
-| T5 | `ART_WIN64_JIT_NATIVE=1` runs Hello | **PASS** (23 compiles) |
-| T6 | `ART_WIN64_JIT=0` disables all compile | **PASS** (0 compiles) |
-| T7 | `-Xusejit:false` no crash | **PASS** |
-| T8a | `ART_WIN64_JIT_FILTER=StringBuilder` runs | **PASS** (5 compiles) |
-| T8b | `ART_WIN64_JIT_EXCLUDE=StringBuilder` runs | **PASS** |
+| T5 | `ART_WIN64_JIT_NATIVE=1` permits a native compile | **PASS** (override wiring only; ABI remains blocked) |
+| T6 | `ART_WIN64_JIT=0` disables all compile and completes Hello cleanly | **PASS** (0 compiles) |
+| T7 | `-Xusejit:false` completes Hello cleanly | **PASS** |
+| T8a | `ART_WIN64_JIT_FILTER=StringBuilder` completes Hello cleanly | **PASS** (5 compiles) |
+| T8b | `ART_WIN64_JIT_EXCLUDE=StringBuilder` completes Hello cleanly | **PASS** |
 
 ## Key observations
 
 - Default path: 64 KiB initial / 64 MiB maximum code cache created successfully
   with the corrected contiguous dual view.
-- 24 managed methods compiled in the primary Hello run (Baseline):
+- 23 managed methods compiled in the primary Hello run (Baseline):
   String.equals, String.length, StringBuilder.append, Math.min/max,
   Unsafe.getReferenceAcquire, etc.
 - Zero native-method compiles in default mode — the new `method->IsNative()`
   gate correctly excludes all native methods.
+- T5 verifies only that the diagnostic override reaches native compilation.
+  It does not claim that gate-open execution is correct. The previous check
+  searched only for `Hello from dalvikvm!` and was a false-positive because
+  that text can be printed before `main end exception=1`.
+- `run_native_abi_probe.sh` now provides the focused control: gate closed
+  passes, while compiling `System.arraycopy` with the gate open reproduces the
+  known W-024 compiled-JNI argument failure.
 - `ART_WIN64_JIT=0` cleanly disables all JIT while keeping nterp.
 - `-Xusejit:false` may still create the JIT cache (ART init ordering on Win)
   but Hello passes without crash.
@@ -50,3 +57,4 @@ native-JIT gate and the managed-JIT control environment variables.
 
 - [win32_jit_memory.md](../../win32_jit_memory.md) §13 — implementation status
 - [win32_open_items.md](../../win32_open_items.md) W-025 — JIT code cache + codegen TLS
+- [RESULT-native-abi.md](RESULT-native-abi.md) — focused W-024 native ABI evidence
