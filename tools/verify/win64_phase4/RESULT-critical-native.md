@@ -136,10 +136,11 @@ The probe DLL uses CMake `WINDOWS_EXPORT_ALL_SYMBOLS` because Android's
 
 - Real Windows 10 acceptance is still required.
 - W-024 remains open for removal of the native-JIT diagnostic gate,
-  restoration of the remaining Math/libcore native demotions, diagnostic
-  cleanup, and real-Windows acceptance. Registered and unresolved
-  CriticalNative calls now also pass the JVMTI forced-interpreter transition
-  in both memory modes; see `RESULT-jvmti-force.md`.
+  diagnostic cleanup, defensive interpreter-shorty cleanup, and real-Windows
+  acceptance. Math.ceil/floor and the shared ELF/PE registration table are
+  restored; see `RESULT-math-critical.md`. Registered and unresolved
+  CriticalNative calls also pass the JVMTI forced-interpreter transition in
+  both memory modes; see `RESULT-jvmti-force.md`.
 
 ## Regression verification
 

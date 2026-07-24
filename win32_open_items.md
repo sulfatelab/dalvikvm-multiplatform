@@ -182,9 +182,9 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 
 ### W-024 — Restore original @CriticalNative / @FastNative surfaces after JIT/TLS/entrypoints
 - **State:** OPEN
-- **Kind:** workaround / debt (must revert multipath demotions)
+- **Kind:** diagnostic gate / fallback cleanup / host validation debt
 - **Area:** art / libcore / JNI ABI
-- **Symptom / why:** Official AOSP libcore marks many natives `@CriticalNative` or `@FastNative` (Math/StrictMath were **@FastNative → @CriticalNative** in AOSP; see libcore `d021f1d8475c`). The two concrete compiler/stub ABI defects found in this stage are fixed, but Win64 still has product workarounds and incomplete coverage:
+- **Symptom / why:** Official AOSP libcore marks many natives `@CriticalNative` or `@FastNative` (Math/StrictMath were **@FastNative → @CriticalNative** in AOSP; see libcore `d021f1d8475c`). The concrete compiler/stub ABI defects, transition coverage, and product demotions are fixed; Win64 still has a diagnostic native-JIT gate, defensive interpreter fallbacks, and a real-host validation gap:
   1. **Fixed:** the compiled-JNI adapter now keeps incoming ART-managed registers separate from outgoing Microsoft x64 native registers.
   2. **Fixed:** optimizing direct CriticalNative calls now use unified Microsoft x64 ordinals, reserve the 32-byte shadow area, spill after it, and preserve the unresolved dlsym caller PC across the PE `r11` scratch use.
   3. **Fixed/covered:** mixed-signature unresolved app-JNI CriticalNative dlsym calls now resolve through ART's native-library registry and pass with core/FP, stack-spilled, and scalar-return shapes.
@@ -194,19 +194,19 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
   7. **Fixed/covered:** registered and unresolved CriticalNative mixed/spilled/scalar calls pass during and after method tracing in both J-1 and dual-view modes, with tracing mode restored and no trace file left behind.
   8. **Fixed/covered:** a separate Win64 `openjdkjvmti.dll` and thread-scoped single-step agent exercise ART's real force-interpreter/deoptimization transition. Registered and unresolved normal, FastNative, and CriticalNative calls pass 3/3 in both memory modes.
   9. Interpreter JNI historically lacked full CriticalNative shorty coverage (partially papered by **W-019** for Math `DD`/`DDD`/…). This remains a fallback/workaround rather than proof of quick/direct parity.
-  10. Product workaround: **Math.ceil / Math.floor** are pure Java (`ART-WinNT` comments in `Math.java`; natives unregistered in `Math.c`) even though AOSP exposes them as `@CriticalNative` natives.
-  11. Product workaround: Win `Math.c` uses a PE-specific registration table (`gMethodsWin` CriticalNative-shaped pointers) versus Linux `FAST_NATIVE_METHOD`; retain it only until PE trampolines and registrations match AOSP.
+  10. **Fixed:** **Math.ceil / Math.floor** are native `@CriticalNative` methods again; the pure-Java `ART-WinNT` stand-ins are removed.
+  11. **Fixed:** `Math.c` uses one common ELF/PE registration table with ceil/floor included; the Windows wrappers, `_WIN32` branch, and `gMethodsWin` are removed.
 - **Current behavior:**
-  - Annotations remain on most Math/StrictMath/etc. methods, but **ceil/floor are non-native pure Java**.
-  - Noncompiled fallback calls still rely on interpreter CriticalNative shorty dispatch and correct CriticalNative binding (no `JNIEnv*`). The optimizing direct-call path is now Win64-ABI aware.
+  - Math/StrictMath/etc. annotations remain intact, and **ceil/floor are native CriticalNative methods**. An audit of local Win64 libcore commits and `ART-WinNT` markers found no other CriticalNative/FastNative Java demotion.
+  - Noncompiled Java callers use ART's normal quick/critical native entrypoint plumbing. Interpreter CriticalNative shorty expansion remains only as defensive fallback pending deletion; it is not the product path.
   - Forced interpretation now matches Linux ART: Java callers enter the interpreter while native methods retain JNI compiler/generated entrypoints. The former Windows-only native `InterpreterJni` detour was removed; it aborted on the mixed `DJDIF` probe shorty.
   - The compiled-JNI convention split and XMM-to-XMM argument moves are implemented. The focused normal/FastNative matrix passes with 7/7 distinct JNI thunk targets compiled, exact mixed/high-FP values, and exactly seven compile records across initial, unregistered/dlsym, and re-registered bindings.
   - The gate-open matrix also starts and stops non-sampling method tracing. Tracing mode changes `0 -> 1 -> 0`; all normal/FastNative methods pass during and after tracing; the temporary trace file is deleted; and the target compilation record count remains seven.
   - The CriticalNative harness also traces both registered direct calls and unresolved exported-symbol calls in J-1 and dual-view modes. Exact values pass during and after tracing, mode changes `0 -> 1 -> 0`, and no trace output remains.
-  - JIT compilation of all native methods is disabled by default. `ART_WIN64_JIT_NATIVE=1` remains an opt-in diagnostic override pending product demotion restoration, diagnostic cleanup, and real-Windows acceptance; calling convention, native binding, method-tracing, and JVMTI forced-interpreter transitions are no longer blockers.
+  - JIT compilation of all native methods is disabled by default. `ART_WIN64_JIT_NATIVE=1` remains an opt-in diagnostic override pending diagnostic/fallback cleanup and real-Windows acceptance; calling convention, native binding, method-tracing, JVMTI forced-interpreter transitions, and product surfaces are no longer blockers.
   - `FloatProbe -Xjitthreshold:0` now passes repeatedly through the unresolved direct `System.currentTimeMillis()` / `System.nanoTime()` path in both J-1 and dual-view modes.
   - `CriticalNativeDlsymProbe` passes unresolved mixed core/FP, more-than-four-argument, stack-spilled, and scalar-return calls in both modes. The harness covers `System.loadLibrary`, absolute `System.load`, and a semicolon-separated public library path.
-  - No threshold-zero workaround is used: the complete direct-call ABI/stub fix is landed. The remaining diagnostic workarounds are the native-JIT opt-in gate and the product demotions listed above.
+  - No threshold-zero or Math product workaround remains. The remaining diagnostic workaround is the native-JIT opt-in gate, plus cleanup of now-redundant interpreter shorties/logging.
 - **Threshold-zero investigation and resolution (2026-07-24):**
   1. `GetCriticalNativeDirectCallFrameSize("J")` correctly returned 32 on Win64, while the old optimizing direct-call visitor reported zero and emitted no `sub rsp, 32`.
   2. The dlsym stub therefore positions its 208-byte SaveRefsAndArgs frame 32 bytes too high; the walker reads caller spill data (`0x0000000100000001`) as the next `ArtMethod*`.
@@ -228,7 +228,10 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
   10. The CriticalNative harness now repeats registered and unresolved mixed/spilled/scalar suites during and after method tracing in both memory modes. The default matrix passes 3/3 instrumentation runs per mode with explicit trace cleanup.
   11. The Win64 `openjdkjvmti` target builds all 29 upstream translation units as a separate plugin DLL. The JVMTI probe enables thread-scoped single-step, observes events only while enabled, and preserves exact values across registered/unresolved normal, FastNative, and CriticalNative calls in three runs per memory mode.
   12. PE cannot import C++ `thread_local` data, so optional ART plugins call an exported `Thread::CurrentFromGdb()` accessor while `art.dll` retains the direct TLS fast path. Explicit PE data annotations are limited to the zero-initialized ART runtime fields actually consumed by the plugin.
-  13. Remaining W-024 native-JIT work is product/host cleanup, not calling conventions, binding changes, method tracing, or debugger/JVMTI forced interpretation.
+  13. Math.ceil/floor are restored to the exact pre-`f16cd44db5fe` source state. The shared Math registration table is also restored exactly; Win64 and Linux rebuild from the same source.
+  14. `MathCriticalProbe` verifies native modifiers, 23 direct and reflective edge cases, signed-zero bits, 2,000 repeated calls, and source-level absence of `gMethodsWin`. It passes 3/3 in dual, J-1, and Win64 `-Xint`, plus Linux `-Xint` and threshold-zero JIT on identical boot.jar bytes.
+  15. Win64 ZipProbe/HashMap and conscrypt SslProviderProbe pass after restoration; Linux ZipProbe/HashMap and L-005 pass. The Linux converter does not currently build `libjavacrypto.so`, which is a native-module packaging difference rather than a boot-jar or CriticalNative blocker.
+  16. Remaining W-024 native-JIT work is diagnostic/host cleanup, not calling conventions, bindings, tracing, debugger/JVMTI forced interpretation, or libcore demotions.
 - **Proper fix:**
   1. **Landed this stage:** split the JNI compiler's incoming managed convention from its outgoing native convention. The managed side remains identical to Linux ART (`RDI` method, five core Java argument registers, eight FP registers); Microsoft unified four-slot rules are used only for native destinations, out-frame sizing, and native-call scratch registers.
   2. **Landed this stage:** give the two sets of arrays and limits explicit managed/native names and add the missing XMM-to-XMM move support. The existing Win64 shadow/stack calculation now passes independent mixed FP/core and unresolved normal/Fast app-JNI coverage.
@@ -241,10 +244,10 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
   9. **Landed this stage:** initialize the visitor stack offset with the shadow area so spilled arguments cannot overlap the home area.
   10. **Landed this stage:** preserve the unresolved-stub caller PC across `LOAD_RUNTIME_INSTANCE` by reloading it from the existing saved return-PC slot on Windows.
   11. **Landed this stage:** add direct-call tests for unresolved `()J`, registered FP-only/mixed/spilled signatures, and unresolved exported mixed-signature dlsym calls. Remaining direct-call test work is real Windows.
-  12. Restore **every** multipath demotion of methods that were originally `@CriticalNative` / `@FastNative` in AOSP (starting with **Math.ceil / Math.floor** → native + `@CriticalNative` again).
-  13. Re-register matching natives in `Math.c` (and any other demoted tables) on **both** PE and ELF with AOSP-correct CriticalNative/FastNative ABIs.
-  14. Prefer real ART CriticalNative/FastNative trampolines over InterpreterJni shorty expansion; then **trim** PE-only shorty explosion (**W-011**) and dual `gMethodsWin` paths where redundant.
-  15. Audit libcore for other `ART-WinNT` pure-Java / ABI demotions of Critical/Fast natives (not just Math) and revert once entrypoints are product-default.
+  12. **Landed this stage:** restore **every identified** multipath Java demotion of methods originally `@CriticalNative` / `@FastNative`; Math.ceil/floor are native + `@CriticalNative` again.
+  13. **Landed this stage:** re-register Math natives through one common ELF/PE table with AOSP-correct CriticalNative function pointers.
+  14. **Partly landed:** Linux-like CriticalNative/FastNative entrypoints are the product path and the dual `gMethodsWin` table is deleted. Trim the now-redundant PE interpreter shorty expansion (**W-011**) after real-Windows acceptance.
+  15. **Landed this stage:** audit local Win64 libcore commits and `ART-WinNT` markers for other pure-Java / ABI demotions; none remain after Math ceil/floor restoration.
 - **Completed exit criteria:**
   - Threshold-zero FloatProbe passes repeated J-1 and dual-view runs without a diagnostic patch.
   - Direct registered-call ABI tests cover zero, mixed, FP, stack-spilled arguments, and scalar returns.
@@ -254,11 +257,12 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
   - The same normal/FastNative bindings pass during and after method tracing with tracing mode restored and no trace file left behind.
   - Registered and unresolved CriticalNative suites pass during and after method tracing in both memory modes with trace cleanup.
   - Full JVMTI forced-interpreter transition coverage passes 3/3 in J-1 and dual-view modes over registered and unresolved normal, FastNative, and CriticalNative calls.
+  - Math.ceil/floor are native CriticalNative methods again, and one shared registration table builds for ELF and PE.
+  - Math native modifiers and edge behavior pass 3/3 dual, 3/3 J-1, 3/3 Win64 `-Xint`, Linux `-Xint`, and Linux threshold-zero JIT using identical shared boot.jar bytes.
+  - Win64 Math/HashMap/conscrypt and Linux Math/HashMap/shared-boot smokes pass. Linux conscrypt is unavailable only because the converter graph has no `libjavacrypto.so` target.
 - **Remaining exit criteria:**
   - The `ART_WIN64_JIT_NATIVE` gate is removed after product cleanup and real-Windows acceptance.
-  - No pure-Java stand-ins for AOSP `@CriticalNative`/`@FastNative` Math (ceil/floor native again).
-  - Wine + Linux smokes for Math/HashMap/conscrypt without relying on pure-Java ceil or incomplete CriticalNative shorty lists.
-  - Document that W-019 temporary ABI/shorty fixes are superseded (may remain as defensive fallback until deleted).
+  - Delete now-redundant W-019/W-011 interpreter shorty fallbacks after real-Windows acceptance.
 - **Code anchors:**
   - `vendor/art/compiler/optimizing/code_generator_x86_64.{h,cc}` (`CriticalNativeCallingConventionVisitorX86_64`, `PrepareCriticalNativeCall`)
   - `vendor/art/compiler/jni/quick/x86_64/calling_convention_x86_64.cc` (incoming managed vs outgoing native convention split)
@@ -268,12 +272,13 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
   - `vendor/art/runtime/arch/x86_64/asm_support_x86_64.S` (`LOAD_RUNTIME_INSTANCE`, Win64 `r11` scratch)
   - `vendor/art/openjdkjvm/openjdkjvm_memory_windows.cc` (`ART_LoadNativeLibrary` bridge)
   - `vendor/art/libnativeloader/native_loader.cpp` (Windows absolute paths; internal colon-separated search contract)
-  - `vendor/libcore/ojluni/src/main/java/java/lang/Math.java` (`ART-WinNT` pure-Java ceil/floor)
-  - `vendor/libcore/ojluni/src/main/native/Math.c` (`gMethodsWin` / no ceil|floor register; Linux `FAST_NATIVE_METHOD`)
+  - `vendor/libcore/ojluni/src/main/java/java/lang/Math.java` (restored native CriticalNative ceil/floor)
+  - `vendor/libcore/ojluni/src/main/native/Math.c` (one common ELF/PE registration table)
   - `vendor/art/runtime/interpreter/interpreter.cc` (`InterpreterJniGeneric` CriticalNative shorties)
   - `tools/verify/win64_phase4/{run_native_abi_probe.sh,src/FastNativeAbiProbe.java,native_abi/,RESULT-native-abi.md}`
   - `tools/verify/win64_phase4/{run_critical_native_probe.sh,src/CriticalNativeProbe.java,src/CriticalNativeDlsymProbe.java,critical_native/,RESULT-critical-native.md}`
   - `tools/verify/win64_phase4/{run_jvmti_force_probe.sh,src/JvmtiForceProbe.java,jvmti_force/,RESULT-jvmti-force.md}`
+  - `tools/verify/win64_phase4/{run_math_critical_probe.sh,src/MathCriticalProbe.java,RESULT-math-critical.md}`
   - `vendor/art/openjdkjvmti/` and `tools/verify/win64_phase1/CMakeLists.txt` (separate Win64 JVMTI plugin)
   - `vendor/art/runtime/{thread-current-inl.h,thread.h,interpreter/interpreter_common.cc}` (PE plugin TLS accessor and Linux-like native interpreter policy)
   - `tools/verify/win64_libcore_icu/openjdkjvm_memory_standalone.c` (`JVM_NativeLoad` product export)
@@ -281,7 +286,7 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Blocked on:** no design blocker; implementation and real-Windows validation remain
 - **Related:** W-019 (CLOSED temporary Math ABI fix), W-011 (InterpreterJni shorty expansion), W-025 (JIT memory; threshold-zero proved unrelated)
 - **Opened:** 2026-07-17
-- **Updated:** 2026-07-24 — direct CriticalNative and mixed/high-FP normal/FastNative coverage now passes unresolved dlsym, deep spills, rebinding, method tracing, and JVMTI forced interpretation in both memory modes; W-024 remains open for product demotions, gate/diagnostic cleanup, and real Windows
+- **Updated:** 2026-07-24 — direct CriticalNative and mixed/high-FP normal/FastNative coverage passes unresolved dlsym, deep spills, rebinding, method tracing, and JVMTI forced interpretation; Math native surfaces and the common ELF/PE table are restored; W-024 remains open for gate/diagnostic/fallback cleanup and real Windows
 
 ## Product leftovers (not single-line workarounds)
 
@@ -335,7 +340,7 @@ Summary (details below; do not delete history):
 - **W-015** — openjdkjvm memory exports minimal PE surface (2026-07-17) — product ships comprehensive standalone `libopenjdkjvm.dll`
 - **W-016** — ICU needs external `ICU_DATA` / `icudt72l.dat` for wine smoke (2026-07-17) — product always stages run/icu/icudt72l.dat via tools/win64/stage_run_assets.sh (same class as boot.jar); libicu_jni defaults ICU_DATA to run/icu when unset
 - **W-018** — NetProbe StructLinger NPE (getsockopt SO_LINGER incomplete in javacore Win bridge) (2026-07-17) — implemented getsockoptLinger/setsockoptLinger in win_net_natives; NetProbe wine PASS
-- **W-019** — Math @CriticalNative / FastNative double ABI on Win64 (2026-07-17) — Math.ceil/floor/sqrt + HashSet wine PASS after interpreter CriticalNative DD/DDD
+- **W-019** — Math @CriticalNative / FastNative double ABI on Win64 (2026-07-17; superseded 2026-07-24) — historical interpreter DD/DDD workaround replaced by Linux-like entrypoints and restored native Math surface
 - **W-020** — FileChannelImpl.map0 pointer truncation on Win64 (LLP64) (2026-07-17) — `ptr_to_jlong(mapAddress)` instead of `(jlong)(unsigned long)`
 - **W-021** — Default KeyStore type Android-compatible (AndroidCAStore) (2026-07-17)
 - **W-022** — Product default CA bundle (AndroidCAStore cacerts) (2026-07-17)
@@ -442,12 +447,12 @@ Summary (details below; do not delete history):
 - **Opened:** 2026-07-17
 
 ### W-019 — Math @CriticalNative / FastNative double ABI on Win64
-- **State:** CLOSED (2026-07-17) — Math.ceil/floor/sqrt + HashSet wine PASS after interpreter CriticalNative DD/DDD
-- **See also:** **W-024** — full restore of AOSP Critical/FastNative after JIT/TLS/entrypoints (ceil/floor pure-Java demotion still OPEN debt)
+- **State:** CLOSED (2026-07-17; workaround superseded 2026-07-24) — Math.ceil/floor/sqrt + HashSet wine passed after interpreter CriticalNative DD/DDD; W-024 now restores Linux-like entrypoints and the native Math surface
+- **See also:** **W-024** — Math.ceil/floor and the common ELF/PE registration table are restored; interpreter shorties remain only as defensive cleanup debt
 - **Kind:** workaround / runtime ABI
 - **Area:** libcore Math / ART interpreter JNI (Win64 -Xint)
-- **Root cause:** Official AOSP CriticalNative is fine on Linux quick/generic-JNI. Win64 multipath forces `ArtMethod::Invoke` through the interpreter; `InterpreterJniGeneric` only handled CriticalNative shorties `II`/`I`/`Z`/`ZI`. `Math.ceil` is shorty `DD` (`(D)D`), so dispatch fell through and crashed. Secondary: registering `Math_*_jni(JNIEnv*,jclass,jdouble)` under CriticalNative is the wrong ABI.
-- **Fix (landed source):** interpreter CriticalNative `DD`/`DDD`/`FF`/`J`; Math.c gMethodsWin → `Math_ceil(jdouble)` etc.; posix stubs `localtime_r`/`mingw_gettimeofday` for art rebuild.
+- **Historical root cause:** Official AOSP CriticalNative is fine on Linux quick/generic-JNI. Win64 multipath formerly forced `ArtMethod::Invoke` through the interpreter; `InterpreterJniGeneric` only handled CriticalNative shorties `II`/`I`/`Z`/`ZI`. `Math.ceil` is shorty `DD` (`(D)D`), so dispatch fell through and crashed. Secondary: registering `Math_*_jni(JNIEnv*,jclass,jdouble)` under CriticalNative is the wrong ABI.
+- **Historical fix:** interpreter CriticalNative `DD`/`DDD`/`FF`/`J`; `Math.c` `gMethodsWin` → `Math_ceil(jdouble)` etc.; posix stubs for the ART rebuild. W-024 removed `gMethodsWin`, restored ceil/floor native declarations, and stopped routing native methods through the Windows-only interpreter detour. The shorties remain only as defensive fallback until deletion.
 - **Exit criteria:** `MathProbe` + `SslProviderProbe` wine PASS with rebuilt `art.dll`.
 - **Code anchors:** `vendor/art/runtime/interpreter/interpreter.cc`, `vendor/libcore/ojluni/src/main/native/Math.c`, `compat/src/win64_posix_stubs.c`
 - **Opened:** 2026-07-17
@@ -607,7 +612,7 @@ _No open design notes. Closed D- items live under §Closed._
 ## Suggested next closures (priority)
 
 1. ~~**D-001**~~ **CLOSED** — single shared boot.jar (runtime OS selection); dual-host FS smoke is not the close bar.  
-2. **W-001–W-003** — TLS/entrypoint implementation (design draft ready); then **W-024** restore Critical/FastNative surfaces.  
+2. ~~**W-001**~~ closed; **W-002–W-003** retain residual TLS/entrypoint cleanup. **W-024** surfaces are restored and now need gate/fallback cleanup plus real-Windows acceptance.
 3. ~~**L-001**~~ — **CLOSED** real PE libcore/openjdk/ICU hybrid; residual Linux TU/bridge growth optional.  
 4. **H-001** — host Phase-4 with multiplatform package.  
 5. ~~**L-005** — Linux Hello gate~~ **CLOSED**.
@@ -634,8 +639,8 @@ _No open design notes. Closed D- items live under §Closed._
   - **Temporary J-1 diagnostic workaround:** `ART_WIN64_JIT_DUAL=0` selects the single-view `VirtualAlloc` path for comparison or emergency diagnosis. It writes code through an RX-to-RWX-to-RX transition and is not the product default.
   - **No disk file:** the section is unnamed and backed by the Windows paging system; no temporary filesystem object, pseudo-fd, or Windows memfd emulation is created.
   - **Historical separated-view defect:** the retired layout placed code far from roots and stack maps, overflowing signed 32-bit JIT-root displacements and uint32 CodeInfo distance. The corrected topology removes that layout.
-  - **Threshold-zero stress:** resolved outside memory topology. The direct `@CriticalNative` path now has Win64 shadow/unified-argument handling and preserves its caller PC across the PE `LOAD_RUNTIME_INSTANCE` `r11` scratch. Repeated J-1 and dual-view acceptance passes; remaining W-024 scope is product/host work.
-  - Native gate: all native methods are excluded from JIT by default. The diagnostic `ART_WIN64_JIT_NATIVE=1` override passes the 7/7 mixed/high-FP normal/FastNative matrix across rebinding and tracing; the separate CriticalNative suite passes tracing in both memory modes; and the JVMTI forced-interpreter matrix passes 3/3 per mode. The gate remains opt-in pending product/host cleanup.
+  - **Threshold-zero stress:** resolved outside memory topology. The direct `@CriticalNative` path now has Win64 shadow/unified-argument handling and preserves its caller PC across the PE `LOAD_RUNTIME_INSTANCE` `r11` scratch. Repeated J-1 and dual-view acceptance passes; remaining W-024 scope is diagnostic/fallback cleanup and real-host work.
+  - Native gate: all native methods are excluded from JIT by default. The diagnostic `ART_WIN64_JIT_NATIVE=1` override passes the 7/7 mixed/high-FP normal/FastNative matrix across rebinding and tracing; the separate CriticalNative suite passes tracing in both memory modes; the JVMTI forced-interpreter matrix passes 3/3 per mode; and restored Math CriticalNative passes dual/J-1/-Xint plus Linux controls. The gate remains opt-in pending diagnostic/host cleanup.
 - **Implemented proper fix:** Keep ART's observable layout and post-mapping JIT logic Linux-like while containing the Windows difference in the section-allocation helper:
   1. Require Windows 10 version 1803 or later and link `onecore.lib` for `MapViewOfFile3`.
   2. Create one unnamed pagefile-backed section and map the two complete views described above.
@@ -647,7 +652,7 @@ _No open design notes. Closed D- items live under §Closed._
 - **Backing-store rule:** The selected section is backed by the Windows paging system, not by a named or temporary filesystem file. It can consume commit/pagefile backing, so large-capacity behavior up to 1 GiB remains an explicit test item.
 - **Rejected fixes:** moving stack maps alone (does not fix root loads); Win-only far-root codegen plus an extended header; moving all method metadata into the code arena; forcing every alias below 4 GiB.
 - **Safety checks:** mapping-time contiguity, low-4-GiB placement, logical sizes, and R/RX/RW protection roles are implemented. Direct signed-int32 JIT-root and uint32 CodeInfo construction checks remain open hardening.
-- **Separate residual:** Complete W-024 product demotion restoration, diagnostic cleanup, and real-Windows acceptance before removing the native-JIT gate. The forced-interpreter transition matrix is complete under Wine.
+- **Separate residual:** Complete W-024 diagnostic/fallback cleanup and real-Windows acceptance before removing the native-JIT gate. Product demotions and the forced-interpreter transition matrix are complete under Wine.
 - **Code anchors:** `mem_map_windows.cc` constrained section mapping; `mem_map.cc` Windows in-place split ownership; `jit_memory_region.cc` corrected dual-view branch and common post-mapping logic; `utils.cc` cache flush; `code_generator_x86_64.cc` `PatchJitRootUse`; `oat_quick_method_header.h` `code_info_offset_`; `jit.cc` native gate; `art-dlmalloc.cc` `USE_LOCKS=0`
 - **Verified:** default corrected dual-view Hello passes with about 21–24 managed compiles; JIT smoke 10/10; JIT matrix 14/14; J-1 diagnostic Hello passes; D-1 audit complete (37/37 GS sites); threshold-zero, registered, unresolved mixed-dlsym, method-traced, and JVMTI-forced native probes pass in both memory modes; the normal/FastNative mixed/high-FP matrix compiles 7/7 targets and survives rebinding plus method tracing without extra target compilation; standalone section-layout probe passes coherence, execution, protection, forced low-space fragmentation, and non-64-KiB capacity cases under Wine (2026-07-24)
 - **Design:** [win32_jit_memory.md](win32_jit_memory.md) §2–§13 (Linux low-4-GiB contract, historical diagnosis, implemented Windows 10 section design, verification, and residual work)
@@ -655,4 +660,4 @@ _No open design notes. Closed D- items live under §Closed._
 - **Updated:** 2026-07-24 — corrected pagefile-section dual view remains verified; threshold-zero W-024 CriticalNative ABI/stub fixes are landed and pass in both memory modes; temporary J-1 diagnostic opt-out and real-Windows acceptance remain
 
 
-*Last snapshot: 2026-07-24 — W-001 closed; nterp ON; corrected pagefile-section dual view is the managed-JIT default (10/10 smoke, 14/14 matrix); D-1 complete; direct CriticalNative and 7/7 mixed/high-FP normal/FastNative matrices pass unresolved dlsym, rebinding, method tracing, and JVMTI forced interpretation in both memory modes; `ART_WIN64_JIT_DUAL=0` temporarily retains J-1 for diagnosis; real-Windows acceptance, product demotions, and gate/diagnostic cleanup remain; 12 OPEN workarounds remaining.*
+*Last snapshot: 2026-07-24 — W-001 closed; nterp ON; corrected pagefile-section dual view is the managed-JIT default (10/10 smoke, 14/14 matrix); D-1 complete; direct CriticalNative and 7/7 mixed/high-FP normal/FastNative matrices pass unresolved dlsym, rebinding, method tracing, and JVMTI forced interpretation; Math.ceil/floor and one common ELF/PE table are restored; `ART_WIN64_JIT_DUAL=0` temporarily retains J-1 for diagnosis; real-Windows acceptance and gate/diagnostic/fallback cleanup remain; 12 OPEN workarounds remaining.*

@@ -53,7 +53,7 @@ Measured on agent01 under Wine:
 | Default Hello | About 21–24 managed compilations; PASS |
 | Default JIT smoke | 10/10 |
 | Default probe matrix | 14/14 |
-| Native JIT | Gated off; direct CriticalNative and 7/7 mixed/high-FP normal/FastNative matrices pass through binding, method-tracing, and JVMTI forced-interpreter transitions in both memory modes; W-024 product/host work remains |
+| Native JIT | Gated off; direct CriticalNative and 7/7 mixed/high-FP normal/FastNative matrices pass through binding, method-tracing, and JVMTI forced-interpreter transitions in both memory modes; Math native surfaces are restored; W-024 diagnostic/host work remains |
 | J-1 fallback | Diagnostic opt-out with `ART_WIN64_JIT_DUAL=0`; Hello passes |
 | Code cache | 64 KiB initial release capacity; 64 MiB maximum |
 
@@ -412,8 +412,9 @@ emulation is added.
 - Remaining work is real-Windows repeated-start testing, dynamic-code/CFG
   policy testing, large `SEC_COMMIT` pressure measurement, and direct release
   checks at the JIT-root and CodeInfo encoding sites.
-- Native JIT remains gated independently until W-024 product-demotion
-  restoration, diagnostic cleanup, and real-Windows acceptance are complete.
+- Native JIT remains gated independently until W-024 diagnostic cleanup and
+  real-Windows acceptance are complete. Math.ceil/floor and the common ELF/PE
+  registration table are restored.
   Mixed/high-FP, unresolved app-JNI, unregister/re-register binding,
   method-tracing, and JVMTI forced-interpreter transitions now pass for normal,
   FastNative, and CriticalNative calls in both memory modes.
@@ -680,9 +681,10 @@ CriticalNative compilations while still checking all six native calls across
 the forced-interpreter transition.
 
 The diagnostic `ART_WIN64_JIT_NATIVE=1` override remains opt-in for W-024
-product-demotion restoration, diagnostic cleanup, and real-Windows work rather
-than an unresolved calling convention, native-binding, tracing, or JVMTI
-transition defect.
+diagnostic cleanup and real-Windows work rather than an unresolved calling
+convention, native-binding, tracing, JVMTI transition, or product-demotion
+defect. Math.ceil/floor are native CriticalNative methods again and Math.c uses
+one common ELF/PE registration table.
 
 ## 12. Verification and acceptance
 
@@ -744,8 +746,8 @@ gate and declaring P5 complete:
 The focused compiled normal/FastNative native-JIT probe and both registered
 and unresolved direct CriticalNative probes are covered and pass. Registration
 binding, method tracing, and JVMTI forced-interpreter transitions pass in both
-memory modes. The native gate remains until W-024 product restoration,
-diagnostic cleanup, and real-Windows acceptance are complete.
+memory modes. The Math product surface is restored. The native gate remains
+until W-024 diagnostic cleanup and real-Windows acceptance are complete.
 
 ### 12.5 Threshold-zero stress resolution
 
@@ -810,9 +812,10 @@ The landed fix covers both defects:
 
 Remaining direct-call work is real Windows 10 acceptance. Broader W-024 work
 still covers native-JIT gate removal, diagnostic cleanup, and libcore
-demotions; the compiled-JNI signature, binding, method-tracing, and JVMTI
-forced-interpreter matrices now pass. None justifies retaining the RWX J-1
-path as the product default.
+fallback cleanup; Math.ceil/floor and the common registration table are
+restored. The compiled-JNI signature, binding, method-tracing, and JVMTI
+forced-interpreter matrices pass. None justifies retaining the RWX J-1 path as
+the product default.
 
 ## 13. Current status — 2026-07-24
 
@@ -833,6 +836,7 @@ path as the product default.
 | CriticalNative method tracing | Registered and unresolved suites pass during/after tracing in J-1 and dual-view modes; mode restores to zero and trace output is deleted |
 | Compiled normal/FastNative | Gate-open 7/7 distinct targets; registered/unresolved, static/instance, mixed/high-FP, references, deep spills, returns, rebinding, and method tracing pass with exactly seven target compile records |
 | JVMTI forced interpreter | Separate `openjdkjvmti.dll`; thread-scoped single-step; registered/unresolved normal, FastNative, and CriticalNative exact values pass 3/3 in each memory mode |
+| Math CriticalNative surface | ceil/floor native again; one ELF/PE table; dual/J-1/-Xint 3/3 plus Linux JIT/-Xint pass on identical boot.jar bytes |
 
 ### Open
 
@@ -840,7 +844,7 @@ path as the product default.
 |------|---------|
 | Real Windows acceptance | Host access; Wine implementation and matrix are complete |
 | Direct encoding checks | Add checks at JIT-root patch and CodeInfo construction sites |
-| Native JIT | Restore product demotions, remove the diagnostic gate, clean diagnostics, and validate on real Windows |
+| Native JIT | Remove the diagnostic gate, clean diagnostics/fallbacks, and validate on real Windows |
 
 ### Current test summary
 
@@ -858,6 +862,7 @@ path as the product default.
 | FastNative ABI probe, native gate open | PASS, three binding phases, 7/7 compiled once | PASS, three binding phases, 7/7 compiled once |
 | FastNative method tracing | PASS, mode `0 -> 1 -> 0`, no trace file | PASS, mode `0 -> 1 -> 0`, no trace file |
 | JVMTI forced interpreter | PASS, 3/3; all six calls exact; two normal/FastNative compile records | PASS, 3/3; all six calls exact; two normal/FastNative compile records |
+| Restored Math ceil/floor | PASS, 3/3 threshold-zero and 3/3 `-Xint` | PASS, 3/3 threshold-zero and 3/3 `-Xint` |
 
 ## 14. Decision log
 
@@ -886,6 +891,7 @@ path as the product default.
 | 2026-07-24 | Normal/FastNative bindings pass during and after method tracing with mode restoration and trace cleanup |
 | 2026-07-24 | Registered and unresolved CriticalNative suites pass during and after method tracing in both memory modes |
 | 2026-07-24 | Separate Win64 `openjdkjvmti.dll` and thread-scoped single-step probe pass 3/3 in both memory modes; the divergent native-interpreter branch is removed |
+| 2026-07-24 | Restore Math.ceil/floor as CriticalNative and remove `gMethodsWin`; Win64 and Linux use one source table and identical boot.jar bytes |
 
 ## 15. Code anchors
 

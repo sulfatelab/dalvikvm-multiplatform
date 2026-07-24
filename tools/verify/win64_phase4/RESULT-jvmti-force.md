@@ -77,8 +77,8 @@ gate consume the same Win64-staged shared multipath artifact:
 
 ```text
 build/win64_phase1/run/boot.jar
-sha256 a398657762ce19b18bf9e0ade82400cbb9ffce9e7765afb35900b03d77cff7c1
-size   3146511 bytes
+sha256 3cbe9a7f0e4596229c0c5e229e6655463373b1445922b9557286313a28a35a2a
+size   3436578 bytes
 ```
 
 The shared-jar design and runtime OS selection are recorded in
