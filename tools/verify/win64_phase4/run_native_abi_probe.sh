@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Verify mixed/high-FP Win64 compiled-JNI normal/FastNative conventions and binding transitions.
+# Verify mixed/high-FP Win64 compiled-JNI normal/FastNative conventions, rebinding, and tracing.
 # Set EXPECT_FIXED=0 to reproduce the historical pre-split failure contract.
 
 REPO="$(cd "$(dirname "$0")/../../.." && pwd)"
@@ -17,6 +17,7 @@ EXPECT_FIXED="${EXPECT_FIXED:-1}"
 TIMEOUT="${TIMEOUT:-60}"
 CLOSED_LOG="${TMPDIR:-/tmp}/win64-fastnative-gate-closed.log"
 OPEN_LOG="${TMPDIR:-/tmp}/win64-fastnative-gate-open.log"
+TRACE_LOG="${TMPDIR:-/tmp}/win64-fastnative-instrumentation.log"
 
 cmake -S "$REPO/tools/verify/win64_phase4/native_abi" \
   -B "$NATIVE_BUILD" \
@@ -63,6 +64,7 @@ run_probe() {
   shift
   (
     cd "$BUILD"
+    rm -f native-abi-instrumentation.trace
     env \
       ANDROID_ROOT=run \
       ANDROID_ART_ROOT=run \
@@ -80,8 +82,12 @@ run_probe() {
         -XjdwpProvider:none \
         -Xms64m -Xmx512m \
         -Xjitthreshold:0 \
+        "-Dnative.abi.instrumentation=${NATIVE_ABI_INSTRUMENTATION_PROPERTY:-0}" \
         '-Djava.library.path=empty-native-dir;.' \
         -cp "$RUN/fastnativeabiprobe.jar" FastNativeAbiProbe
+    rc=$?
+    rm -f native-abi-instrumentation.trace
+    exit "$rc"
   ) >"$log" 2>&1
 }
 
@@ -98,6 +104,10 @@ VALUE_MARKERS=(
   "FastNativeAbiProbe initial normalRegistered=743.75 fastRegistered=1743.75 normalDlsym=2755.75 fastDlsym=3755.75 normalInstance=4743.75 fastInstance=5743.75 calls=63"
   "FastNativeAbiProbe unregistered normalRegistered=10743.75 fastRegistered=11743.75 normalDlsym=12755.75 fastDlsym=13755.75 normalInstance=14743.75 fastInstance=15743.75 calls=63"
   "FastNativeAbiProbe reregistered normalRegistered=20743.75 fastRegistered=21743.75 normalDlsym=22755.75 fastDlsym=23755.75 normalInstance=24743.75 fastInstance=25743.75 calls=63"
+)
+TRACE_VALUE_MARKERS=(
+  "FastNativeAbiProbe tracing normalRegistered=20743.75 fastRegistered=21743.75 normalDlsym=22755.75 fastDlsym=23755.75 normalInstance=24743.75 fastInstance=25743.75 calls=63"
+  "FastNativeAbiProbe postTracing normalRegistered=20743.75 fastRegistered=21743.75 normalDlsym=22755.75 fastDlsym=23755.75 normalInstance=24743.75 fastInstance=25743.75 calls=63"
 )
 
 count_compiled_targets() {
@@ -134,17 +144,31 @@ has_value_markers() {
   done
 }
 
+has_trace_value_markers() {
+  local log="$1"
+  local marker
+  for marker in "${TRACE_VALUE_MARKERS[@]}"; do
+    if ! grep -qF "$marker" "$log"; then
+      return 1
+    fi
+  done
+}
+
 set +e
 run_probe "$CLOSED_LOG"
 closed_rc=$?
 run_probe "$OPEN_LOG" ART_WIN64_JIT_NATIVE=1
 open_rc=$?
+NATIVE_ABI_INSTRUMENTATION_PROPERTY=1 run_probe "$TRACE_LOG" ART_WIN64_JIT_NATIVE=1
+trace_rc=$?
 set -e
 
 closed_compiled="$(count_compiled_targets "$CLOSED_LOG")"
 open_compiled="$(count_compiled_targets "$OPEN_LOG")"
+trace_compiled="$(count_compiled_targets "$TRACE_LOG")"
 closed_records="$(count_compilation_records "$CLOSED_LOG")"
 open_records="$(count_compilation_records "$OPEN_LOG")"
+trace_records="$(count_compilation_records "$TRACE_LOG")"
 
 closed_values=false
 if has_value_markers "$CLOSED_LOG"; then
@@ -153,6 +177,10 @@ fi
 open_values=false
 if has_value_markers "$OPEN_LOG"; then
   open_values=true
+fi
+trace_values=false
+if has_value_markers "$TRACE_LOG" && has_trace_value_markers "$TRACE_LOG"; then
+  trace_values=true
 fi
 
 closed_ok=false
@@ -175,6 +203,18 @@ if [[ $open_rc -eq 0 ]] &&
   open_ok=true
 fi
 
+trace_ok=false
+if [[ $trace_rc -eq 0 ]] &&
+   [[ $trace_values == true ]] &&
+   grep -Eq "FastNativeAbiProbe tracingMode before=0 during=[1-9][0-9]* after=0 traceFileDeleted=true" \
+     "$TRACE_LOG" &&
+   grep -qF "FastNativeAbiProbe OK" "$TRACE_LOG" &&
+   grep -qF "main end exception=0" "$TRACE_LOG" &&
+   [[ $trace_compiled -eq ${#TARGET_METHODS[@]} ]] &&
+   [[ $trace_records -ge ${#TARGET_METHODS[@]} ]]; then
+  trace_ok=true
+fi
+
 historical_failure=false
 if [[ $open_rc -ne 0 ]] &&
    [[ $open_compiled -gt 0 ]] &&
@@ -187,9 +227,12 @@ printf 'gate_closed_exit=%s gate_closed_ok=%s compiled_targets=%s/%s compilation
 printf 'gate_open_exit=%s gate_open_ok=%s compiled_targets=%s/%s compilation_records=%s historical_failure=%s\n' \
   "$open_rc" "$open_ok" "$open_compiled" "${#TARGET_METHODS[@]}" "$open_records" \
   "$historical_failure"
+printf 'instrumentation_exit=%s instrumentation_ok=%s compiled_targets=%s/%s compilation_records=%s\n' \
+  "$trace_rc" "$trace_ok" "$trace_compiled" "${#TARGET_METHODS[@]}" "$trace_records"
 printf 'expected_mode=%s\n' "$([[ $EXPECT_FIXED == 1 ]] && echo fixed || echo historical-failure)"
 printf 'gate_closed_log=%s\n' "$CLOSED_LOG"
 printf 'gate_open_log=%s\n' "$OPEN_LOG"
+printf 'instrumentation_log=%s\n' "$TRACE_LOG"
 
 if [[ $closed_ok != true ]]; then
   tail -100 "$CLOSED_LOG" >&2
@@ -197,6 +240,10 @@ if [[ $closed_ok != true ]]; then
 fi
 if [[ $EXPECT_FIXED == 1 && $open_ok != true ]]; then
   tail -100 "$OPEN_LOG" >&2
+  exit 1
+fi
+if [[ $EXPECT_FIXED == 1 && $trace_ok != true ]]; then
+  tail -100 "$TRACE_LOG" >&2
   exit 1
 fi
 if [[ $EXPECT_FIXED != 1 && $historical_failure != true ]]; then

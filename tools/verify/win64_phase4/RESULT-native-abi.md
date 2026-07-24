@@ -11,6 +11,7 @@ The focused compiled-JNI acceptance gate now passes the mixed/high-FP matrix:
 |------|--------|
 | Native-method JIT gate closed | PASS: exit 0, three exact binding phases, 0/7 native targets compiled |
 | `ART_WIN64_JIT_NATIVE=1` | PASS: exit 0, three exact binding phases, 7/7 targets and exactly 7 compile records |
+| Native gate open plus method tracing | PASS: tracing mode `0 -> 1 -> 0`, exact during/after values, exactly 7 target compile records |
 
 Command:
 
@@ -24,6 +25,7 @@ run reported:
 ```text
 gate_closed_exit=0 gate_closed_ok=true compiled_targets=0/7 compilation_records=0
 gate_open_exit=0 gate_open_ok=true compiled_targets=7/7 compilation_records=7 historical_failure=false
+instrumentation_exit=0 instrumentation_ok=true compiled_targets=7/7 compilation_records=7
 ```
 
 ## Root causes
@@ -92,6 +94,20 @@ records across all three phases. This proves the transitions execute through
 the existing compiled-thunk set rather than passing because ART recompiled the
 methods after each binding change.
 
+A third process tests method-tracing instrumentation after the binding phases.
+It starts non-sampling tracing through `dalvik.system.VMDebug`, verifies the
+runtime tracing mode changes from 0 to 1, executes every alternate normal and
+FastNative binding while tracing is active, stops tracing, verifies mode 0,
+and executes the same methods again. ART's tracing path switches the runtime to
+debuggable, invalidates pre-tracing JIT code, and installs entry/exit
+instrumentation support. The target-method log still contains exactly seven
+successful compilation records, so native target recompilation is not masking
+the transition.
+
+The trace uses a relative temporary file in the Wine run directory. Java
+deletes it after tracing, the harness removes it defensively on process exit,
+and the acceptance test verifies no file remains.
+
 The registered static signature is `(JDIFJDIFDDI)D`. The unresolved signature
 adds a trailing boolean, `(JDIFJDIFDDIZ)D`, so it cannot reuse the registered
 JNI thunk and must compile independently. Instance methods use
@@ -103,6 +119,9 @@ The exact accepted lines are:
 FastNativeAbiProbe initial normalRegistered=743.75 fastRegistered=1743.75 normalDlsym=2755.75 fastDlsym=3755.75 normalInstance=4743.75 fastInstance=5743.75 calls=63
 FastNativeAbiProbe unregistered normalRegistered=10743.75 fastRegistered=11743.75 normalDlsym=12755.75 fastDlsym=13755.75 normalInstance=14743.75 fastInstance=15743.75 calls=63
 FastNativeAbiProbe reregistered normalRegistered=20743.75 fastRegistered=21743.75 normalDlsym=22755.75 fastDlsym=23755.75 normalInstance=24743.75 fastInstance=25743.75 calls=63
+FastNativeAbiProbe tracing normalRegistered=20743.75 fastRegistered=21743.75 normalDlsym=22755.75 fastDlsym=23755.75 normalInstance=24743.75 fastInstance=25743.75 calls=63
+FastNativeAbiProbe postTracing normalRegistered=20743.75 fastRegistered=21743.75 normalDlsym=22755.75 fastDlsym=23755.75 normalInstance=24743.75 fastInstance=25743.75 calls=63
+FastNativeAbiProbe tracingMode before=0 during=1 after=0 traceFileDeleted=true
 ```
 
 ## Regression verification
@@ -125,9 +144,10 @@ modes, and the remaining regressions passed.
 
 ## Remaining scope
 
-The mixed/high-FP normal/FastNative ABI, unresolved app-JNI, and
-register/unregister/re-register binding transitions are no longer W-024
-blockers. The native-JIT gate remains temporarily because W-024 still includes
-instrumentation/deoptimization entrypoint transitions, restoration of the
+The mixed/high-FP normal/FastNative ABI, unresolved app-JNI,
+register/unregister/re-register binding transitions, and method-tracing
+instrumentation transition are no longer W-024 blockers. The native-JIT gate
+remains temporarily because W-024 still includes CriticalNative tracing and
+full debugger/JVMTI forced-interpreter transitions, restoration of the
 Math/libcore native demotions, cleanup of diagnostic policy/logging, and real
 Windows 10 acceptance.

@@ -1,5 +1,8 @@
 import dalvik.annotation.optimization.FastNative;
 
+import java.io.File;
+import java.lang.reflect.Method;
+
 /** Focused Win64 compiled-JNI normal/FastNative argument and binding-transition probe. */
 public final class FastNativeAbiProbe {
     private static final double BASE_VALUE = 743.75;
@@ -97,7 +100,60 @@ public final class FastNativeAbiProbe {
                 + " calls=" + callMask());
     }
 
-    public static void main(String[] args) {
+    private static void runInstrumentationTransition(FastNativeAbiProbe probe, Object marker)
+            throws Exception {
+        File traceFile = new File("native-abi-instrumentation.trace");
+        traceFile.delete();
+
+        Class<?> vmDebug = Class.forName("dalvik.system.VMDebug");
+        Method getMode = vmDebug.getMethod("getMethodTracingMode");
+        Method start = vmDebug.getMethod("startMethodTracing",
+                String.class, int.class, int.class, boolean.class, int.class);
+        Method stop = vmDebug.getMethod("stopMethodTracing");
+
+        int beforeMode = ((Integer) getMode.invoke(null)).intValue();
+        if (beforeMode != 0) {
+            throw new AssertionError("method tracing already active: " + beforeMode);
+        }
+
+        boolean tracingStarted = false;
+        Results tracing;
+        int duringMode;
+        try {
+            start.invoke(null, traceFile.getPath(), 1024 * 1024, 0, false, 0);
+            tracingStarted = true;
+            duringMode = ((Integer) getMode.invoke(null)).intValue();
+            if (duringMode == 0) {
+                throw new AssertionError("method tracing did not become active");
+            }
+            tracing = runCalls(probe, marker);
+            checkPhase(tracing, 20000.0, "tracing");
+            printPhase(tracing, "tracing");
+        } finally {
+            if (tracingStarted) {
+                stop.invoke(null);
+            }
+        }
+
+        int afterMode = ((Integer) getMode.invoke(null)).intValue();
+        if (afterMode != 0) {
+            throw new AssertionError("method tracing remained active: " + afterMode);
+        }
+        Results postTracing = runCalls(probe, marker);
+        checkPhase(postTracing, 20000.0, "postTracing");
+        printPhase(postTracing, "postTracing");
+
+        boolean traceFileDeleted = traceFile.delete() || !traceFile.exists();
+        if (!traceFileDeleted) {
+            throw new AssertionError("failed to delete trace file " + traceFile);
+        }
+        System.out.println("FastNativeAbiProbe tracingMode before=" + beforeMode
+                + " during=" + duringMode
+                + " after=" + afterMode
+                + " traceFileDeleted=" + traceFileDeleted);
+    }
+
+    public static void main(String[] args) throws Exception {
         System.loadLibrary("nativeabiprobe");
 
         FastNativeAbiProbe probe = new FastNativeAbiProbe();
@@ -116,6 +172,10 @@ public final class FastNativeAbiProbe {
         Results reregistered = runCalls(probe, marker);
         checkPhase(reregistered, 20000.0, "reregistered");
         printPhase(reregistered, "reregistered");
+
+        if ("1".equals(System.getProperty("native.abi.instrumentation"))) {
+            runInstrumentationTransition(probe, marker);
+        }
 
         System.out.println("FastNativeAbiProbe OK");
     }

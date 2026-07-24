@@ -38,7 +38,8 @@ native-JIT gate and the managed-JIT control environment variables.
 - `run_native_abi_probe.sh` provides the focused acceptance control: the
   mixed/high-FP normal/FastNative matrix passes with 0/7 targets compiled when
   the gate is closed and 7/7 when it is open, across initial,
-  unregister/dlsym, and re-register binding phases without recompilation.
+  unregister/dlsym, re-register, and method-tracing phases without extra
+  target compilation or a leftover trace file.
 - `ART_WIN64_JIT=0` cleanly disables all JIT while keeping nterp.
 - `-Xusejit:false` may still create the JIT cache (ART init ordering on Win)
   but Hello passes without crash.
