@@ -691,6 +691,16 @@ It is enabled only by `ART_WIN64_JIT_LOG_COMPILES=1`; the ABI/JVMTI acceptance
 harnesses set that flag when they need exact compilation records. JIT smoke
 verifies both the opt-in records and a normal quiet run.
 
+The remaining expanded `InterpreterJni` shorties are also not observed product
+paths. A temporary fatal-tripwire build disabled both runtime-started fallback
+calls and still passed Win64 `-Xint`, direct/unresolved CriticalNative,
+normal/FastNative, method tracing, and JVMTI forced interpretation. With both
+calls disabled, Clang reported `InterpreterJni` unused. The source was restored
+and the final binaries rebuilt. Linux and Win64 use identical boot.jar dex and
+annotation bytes, so there is no Windows-only boot shorty set. Deletion remains
+gated on repeating this experiment on Windows 10; see
+`tools/verify/win64_phase4/RESULT-interpreter-jni-fallback.md`.
+
 ## 12. Verification and acceptance
 
 ### 12.1 Platform-memory tests
@@ -898,6 +908,7 @@ the product default.
 | 2026-07-24 | Separate Win64 `openjdkjvmti.dll` and thread-scoped single-step probe pass 3/3 in both memory modes; the divergent native-interpreter branch is removed |
 | 2026-07-24 | Restore Math.ceil/floor as CriticalNative and remove `gMethodsWin`; Win64 and Linux use one source table and identical boot.jar bytes |
 | 2026-07-24 | Make per-method Win64 JIT compile records opt-in; smoke expands to 12/12 and verifies product-default silence |
+| 2026-07-24 | Fatal-tripwire audit shows legacy runtime-started InterpreterJni fallback is unreachable across Wine `-Xint`, native ABI, tracing, and JVMTI suites; retain until Windows 10 confirmation |
 
 ## 15. Code anchors
 

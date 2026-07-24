@@ -132,11 +132,29 @@ The probe DLL uses CMake `WINDOWS_EXPORT_ALL_SYMBOLS` because Android's
 `JNIEXPORT` visibility attribute alone does not create a PE export for
 `JNI_OnLoad` in this toolchain.
 
+## Legacy interpreter fallback reachability
+
+Linux and Win64 consume identical boot.jar dex and annotation bytes, so a
+Windows-only boot-native shorty set cannot explain or justify the old expanded
+`InterpreterJni` table.
+
+A research-only build replaced both runtime-started calls to `InterpreterJni`
+with fatal tripwires. It passed Win64 `-Xint` Math, direct and unresolved
+CriticalNative in both memory modes, method tracing, the 7/7 compiled
+normal/FastNative matrix, and the real JVMTI forced-interpreter transition.
+Clang reported `InterpreterJni` unused when those two calls were disabled,
+confirming there was no hidden third call site. The tripwires were reverted and
+the final Win64 binaries were rebuilt.
+
+This proves the fallback is unused by the current Wine matrix, but does not
+authorize deletion without the same Windows 10 run. Detailed evidence and the
+cleanup sequence are in `RESULT-interpreter-jni-fallback.md`.
+
 ## Remaining scope
 
 - Real Windows 10 acceptance is still required.
 - W-024 remains open for removal of the native-JIT diagnostic gate,
-  defensive interpreter-shorty cleanup, and real-Windows acceptance.
+  Windows 10 confirmation and then defensive interpreter-shorty cleanup.
   Math.ceil/floor and the shared ELF/PE registration table are
   restored; see `RESULT-math-critical.md`. Registered and unresolved
   CriticalNative calls also pass the JVMTI forced-interpreter transition in

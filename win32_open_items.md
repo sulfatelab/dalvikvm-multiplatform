@@ -135,23 +135,28 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Code anchors:** `vendor/art/runtime/multiplatform/windows/sigchain_windows.cc`, `runtime_windows.cc`
 - **Opened:** 2026-07-16
 
-### W-011 — Expanded InterpreterJni shorty coverage for PE (bypass missing quick/JNI stubs)
-- **State:** OPEN
+### W-011 — Legacy expanded InterpreterJni shorty fallback
+- **State:** OPEN (fallback is unreachable in the current Wine matrix; Windows 10 deletion gate remains)
 - **Kind:** workaround
 - **Area:** art / jni
-- **Current behavior:** Extra shorty paths in interpreter JNI so Phase-2/3 natives work without full quick/JNI trampoline matrix.
-- **Proper fix:** After real PE libcore + entrypoints, audit whether generic path suffices; trim PE-only shorty explosion if redundant.
-- **Code anchors:** interpreter JNI / generic paths (Phase-2 RESULT notes: FJ/IJ/VLJ/…)
+- **Current behavior:** Phase-2/3 added PE shorty cases while quick/JNI entrypoints were incomplete. Quick/JNI, compiled normal/FastNative, direct CriticalNative, method tracing, and JVMTI forced interpretation are now the product paths. A temporary fatal-tripwire build disabled both runtime-started calls into `InterpreterJni`; Win64 `-Xint`, CriticalNative, normal/FastNative, tracing, and JVMTI suites all passed, and Clang reported the fallback function unused. The source was restored before the final build.
+- **Shared-artifact implication:** Linux and Win64 use identical `boot.jar` dex/annotation bytes (`3cbe9a7...`), so no Windows-only boot shorty or native annotation set exists to justify this expansion.
+- **Proper fix:** Repeat the tripwire matrix on Windows 10, restore `ArtInterpreterToInterpreterBridge` to upstream's pre-start-only invariant, and reduce `InterpreterJni` to the `android-16.0.0_r4` implementation plus only independently proven PE requirements.
+- **Evidence:** `tools/verify/win64_phase4/RESULT-interpreter-jni-fallback.md`
+- **Code anchors:** `vendor/art/runtime/interpreter/interpreter.cc` (`InterpreterJni`, `EnterInterpreterFromInvoke`, `ArtInterpreterToInterpreterBridge`)
 - **Opened:** 2026-07-16
+- **Updated:** 2026-07-24 — Wine reachability audit passes; cleanup is ready for the Windows 10 gate
 
-### W-012 — `ResolveJniEntryPoint` without `art_jni_dlsym_lookup_stub` (`%gs`)
-- **State:** OPEN
+### W-012 — Legacy InterpreterJni direct JNI resolver
+- **State:** OPEN (fallback-only; candidate removal with W-011)
 - **Kind:** workaround
 - **Area:** art / jni
-- **Current behavior:** Windows avoids GS-based JNI lookup stub.
-- **Proper fix:** Fold into final managed-self / JNI trampoline design (W-002).
-- **Code anchors:** Phase-2 RESULT; JNI resolution paths under `_WIN32`
+- **Current behavior:** `ResolveJniEntryPoint` bypasses the generated dlsym lookup stub only inside the legacy `InterpreterJni` fallback. Product unresolved normal/FastNative and CriticalNative calls use the repaired generated stubs and ART native-library registry; the Wine tripwire audit reaches neither fallback call site.
+- **Proper fix:** Remove or reduce this helper together with W-011 after the Windows 10 tripwire matrix. Do not treat it as the product JNI lookup policy.
+- **Evidence:** `tools/verify/win64_phase4/RESULT-interpreter-jni-fallback.md`, `tools/verify/win64_phase4/RESULT-critical-native.md`, `tools/verify/win64_phase4/RESULT-native-abi.md`
+- **Code anchors:** `vendor/art/runtime/interpreter/interpreter.cc` (`ResolveJniEntryPoint`)
 - **Opened:** 2026-07-16
+- **Updated:** 2026-07-24 — product dlsym stubs pass; helper remains only in the defensive fallback
 
 ### W-013 — dlmalloc WIN32 / low-4GB / MORECORE choices for imageless ART
 - **State:** OPEN (may stay as permanent Win allocator policy)
@@ -232,7 +237,8 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
   14. `MathCriticalProbe` verifies native modifiers, 23 direct and reflective edge cases, signed-zero bits, 2,000 repeated calls, and source-level absence of `gMethodsWin`. It passes 3/3 in dual, J-1, and Win64 `-Xint`, plus Linux `-Xint` and threshold-zero JIT on identical boot.jar bytes.
   15. Win64 ZipProbe/HashMap and conscrypt SslProviderProbe pass after restoration; Linux ZipProbe/HashMap and L-005 pass. The Linux converter does not currently build `libjavacrypto.so`, which is a native-module packaging difference rather than a boot-jar or CriticalNative blocker.
   16. Per-method `Win64 CompileMethod done` output is now opt-in. Log-dependent harnesses explicitly set `ART_WIN64_JIT_LOG_COMPILES=1`; JIT smoke verifies a normal quiet product run.
-  17. Remaining W-024 native-JIT work is gate/fallback/host cleanup, not calling conventions, bindings, tracing, debugger/JVMTI forced interpretation, libcore demotions, or compile-log noise.
+  17. A temporary fatal-tripwire build disabled both runtime-started `InterpreterJni` call sites. Win64 `-Xint`, direct/unresolved CriticalNative, normal/FastNative, method tracing, and JVMTI forced interpretation all passed; Clang reported `InterpreterJni` unused. The source was restored and rebuilt. See `RESULT-interpreter-jni-fallback.md`.
+  18. Because Linux and Win64 use identical boot.jar dex/annotation bytes, there is no Windows-only boot-native shorty set. Remaining W-024 work is the real-Windows gate/fallback decision, not calling conventions, bindings, tracing, debugger/JVMTI forced interpretation, libcore demotions, or compile-log noise.
 - **Proper fix:**
   1. **Landed this stage:** split the JNI compiler's incoming managed convention from its outgoing native convention. The managed side remains identical to Linux ART (`RDI` method, five core Java argument registers, eight FP registers); Microsoft unified four-slot rules are used only for native destinations, out-frame sizing, and native-call scratch registers.
   2. **Landed this stage:** give the two sets of arrays and limits explicit managed/native names and add the missing XMM-to-XMM move support. The existing Win64 shadow/stack calculation now passes independent mixed FP/core and unresolved normal/Fast app-JNI coverage.
@@ -249,6 +255,7 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
   13. **Landed this stage:** re-register Math natives through one common ELF/PE table with AOSP-correct CriticalNative function pointers.
   14. **Partly landed:** Linux-like CriticalNative/FastNative entrypoints are the product path and the dual `gMethodsWin` table is deleted. Trim the now-redundant PE interpreter shorty expansion (**W-011**) after real-Windows acceptance.
   15. **Landed this stage:** audit local Win64 libcore commits and `ART-WinNT` markers for other pure-Java / ABI demotions; none remain after Math ceil/floor restoration.
+  16. **Research complete under Wine:** both runtime-started `InterpreterJni` routes can be replaced by fatal tripwires without affecting `-Xint`, tracing, or JVMTI acceptance. Repeat on Windows 10 before restoring the upstream fallback scope.
 - **Completed exit criteria:**
   - Threshold-zero FloatProbe passes repeated J-1 and dual-view runs without a diagnostic patch.
   - Direct registered-call ABI tests cover zero, mixed, FP, stack-spilled arguments, and scalar returns.
@@ -261,6 +268,7 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
   - Math.ceil/floor are native CriticalNative methods again, and one shared registration table builds for ELF and PE.
   - Math native modifiers and edge behavior pass 3/3 dual, 3/3 J-1, 3/3 Win64 `-Xint`, Linux `-Xint`, and Linux threshold-zero JIT using identical shared boot.jar bytes.
   - Win64 Math/HashMap/conscrypt and Linux Math/HashMap/shared-boot smokes pass. Linux conscrypt is unavailable only because the converter graph has no `libjavacrypto.so` target.
+  - The Wine fallback-reachability tripwire matrix passes without entering runtime-started `InterpreterJni`; source restoration and final Win64 rebuild pass.
 - **Remaining exit criteria:**
   - The `ART_WIN64_JIT_NATIVE` gate is removed after real-Windows acceptance.
   - Delete now-redundant W-019/W-011 interpreter shorty fallbacks after real-Windows acceptance.
@@ -280,15 +288,16 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
   - `tools/verify/win64_phase4/{run_critical_native_probe.sh,src/CriticalNativeProbe.java,src/CriticalNativeDlsymProbe.java,critical_native/,RESULT-critical-native.md}`
   - `tools/verify/win64_phase4/{run_jvmti_force_probe.sh,src/JvmtiForceProbe.java,jvmti_force/,RESULT-jvmti-force.md}`
   - `tools/verify/win64_phase4/{run_math_critical_probe.sh,src/MathCriticalProbe.java,RESULT-math-critical.md}`
+  - `tools/verify/win64_phase4/RESULT-interpreter-jni-fallback.md` (temporary tripwire reachability audit and Windows 10 cleanup gate)
   - `vendor/art/openjdkjvmti/` and `tools/verify/win64_phase1/CMakeLists.txt` (separate Win64 JVMTI plugin)
   - `vendor/art/runtime/{thread-current-inl.h,thread.h,interpreter/interpreter_common.cc}` (PE plugin TLS accessor and Linux-like native interpreter policy)
   - `vendor/art/runtime/jit/jit.cc` (native gate and opt-in compile-record diagnostics)
   - `tools/verify/win64_libcore_icu/openjdkjvm_memory_standalone.c` (`JVM_NativeLoad` product export)
   - AOSP history: `d021f1d8475c` FastNative→CriticalNative Math; multipath `f16cd44db5fe` pure-Java ceil/floor; `b9265e7b5da6` CriticalNative register fix; art `7ea144b073` / `4c17423714` interpreter Critical/FastNative bridge
-- **Blocked on:** no design blocker; implementation and real-Windows validation remain
-- **Related:** W-019 (CLOSED temporary Math ABI fix), W-011 (InterpreterJni shorty expansion), W-025 (JIT memory; threshold-zero proved unrelated)
+- **Blocked on:** real Windows 10 tripwire/acceptance is required before deleting W-011/W-012 or the native-JIT gate
+- **Related:** W-019 (CLOSED temporary Math ABI fix), W-011/W-012 (legacy InterpreterJni fallback), W-025 (JIT memory; threshold-zero proved unrelated)
 - **Opened:** 2026-07-17
-- **Updated:** 2026-07-24 — direct CriticalNative and mixed/high-FP normal/FastNative coverage passes unresolved dlsym, deep spills, rebinding, method tracing, and JVMTI forced interpretation; Math native surfaces and the common ELF/PE table are restored; compile records are opt-in; W-024 remains open for native gate/fallback cleanup and real Windows
+- **Updated:** 2026-07-24 — direct CriticalNative and mixed/high-FP normal/FastNative coverage passes unresolved dlsym, deep spills, rebinding, method tracing, and JVMTI forced interpretation; Math native surfaces and the common ELF/PE table are restored; compile records are opt-in; the legacy interpreter fallback is unreachable in the Wine tripwire matrix; W-024 remains open for the Windows 10 gate/fallback decision
 
 ## Product leftovers (not single-line workarounds)
 
@@ -543,7 +552,7 @@ Summary (details below; do not delete history):
 - **Gap:** Phase-3 product matrix for process/exec, locale (without full ICU4J bundles), zip edges, UDP IPv4, dual-stack IPv6 Os.socket bind.
 - **Fix:**
   - `win_process_natives.c` CreateProcess `UNIXProcess` + openjdk OnLoad register
-  - InterpreterJni 12-slot path for multi-arg natives (`forkAndExec`, `sendtoBytes`)
+  - Historical Phase-3 `InterpreterJni` 12-slot workaround for multi-arg natives (`forkAndExec`, `sendtoBytes`); current product calls use JNI compiler/generated entrypoints and the fallback is pending W-011 cleanup
   - UDP `recvfrom` InetSocketAddress holder fill; multicast GroupReq/IpMreqn
   - ZipFile CEN: Windows heap-read + DirectByteBuffer mirror (mmap CEN invalid under wine)
   - LocaleProbe uses Calendar/String case without ICU DecimalFormatSymbols bundles
@@ -551,7 +560,7 @@ Summary (details below; do not delete history):
   - Gate: `tools/verify/win64_phase3/run_l003_wine.sh` — OVERALL PASS
 - **Exit criteria:** Process/UDP/locale/zip/IPv6 gates documented + wine green **met**.
 - **Non-goals / host residual:** TCP IPv4-mapped dual-stack under wine; full ICU Collator resources; zip STORED empty-dir edges beyond DEFLATED multi-entry.
-- **Code anchors:** `win_process_natives.c`, `win_net_natives.c`, `ZipFile.java` (Win CEN), `FileInputStream.c` available0, `interpreter.cc` 12-slot, probes under `tools/verify/win64_phase3/src/`
+- **Code anchors:** `win_process_natives.c`, `win_net_natives.c`, `ZipFile.java` (Win CEN), `FileInputStream.c` available0, historical `interpreter.cc` 12-slot fallback, probes under `tools/verify/win64_phase3/src/`
 - **Opened:** 2026-07-17
 - **Closed:** 2026-07-17
 
