@@ -62,5 +62,5 @@ Additional final-binary verification:
 - JIT-enabled NetProbe repeated 10/10;
 - CriticalNative combined acceptance: dual 10/10 and J-1 10/10 process runs;
 - compiled-JNI/FastNative gate-closed and gate-open checks pass;
-- JIT smoke 10/10;
+- JIT smoke 12/12;
 - JIT matrix 14/14.

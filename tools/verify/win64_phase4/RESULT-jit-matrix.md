@@ -44,5 +44,5 @@ regress any existing workload.
 |-------|--------|
 | P3 | First compiled method — DONE (2026-07-21) |
 | **P4** | **Matrix (CEnc, float, Math, Io) — DONE (2026-07-22)** |
-| **P5 (Wine)** | **Corrected dual view default; 10/10 smoke and 14/14 matrix — DONE (2026-07-23)** |
+| **P5 (Wine)** | **Corrected dual view default; 12/12 smoke and 14/14 matrix — DONE (updated 2026-07-24)** |
 | P5 (real Windows) | Windows 10 acceptance, mitigation checks, and diagnostic-gate cleanup — pending |

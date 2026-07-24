@@ -63,6 +63,7 @@ run_one() {
     ART_WIN64_JIT_DUAL="$dual" \
     ART_WIN64_JIT_NATIVE=1 \
     ART_WIN64_JIT_FILTER=JvmtiForceProbe \
+    ART_WIN64_JIT_LOG_COMPILES=1 \
     ANDROID_ROOT=run ANDROID_ART_ROOT=run ANDROID_I18N_ROOT=run \
     ANDROID_DATA=run/data ICU_DATA=run/icu WINEDEBUG="${WINEDEBUG:--all}" \
     timeout -k 1 "$TIMEOUT" "$WINE" ./dalvikvm.exe \

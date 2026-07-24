@@ -136,8 +136,8 @@ The probe DLL uses CMake `WINDOWS_EXPORT_ALL_SYMBOLS` because Android's
 
 - Real Windows 10 acceptance is still required.
 - W-024 remains open for removal of the native-JIT diagnostic gate,
-  diagnostic cleanup, defensive interpreter-shorty cleanup, and real-Windows
-  acceptance. Math.ceil/floor and the shared ELF/PE registration table are
+  defensive interpreter-shorty cleanup, and real-Windows acceptance.
+  Math.ceil/floor and the shared ELF/PE registration table are
   restored; see `RESULT-math-critical.md`. Registered and unresolved
   CriticalNative calls also pass the JVMTI forced-interpreter transition in
   both memory modes; see `RESULT-jvmti-force.md`.
@@ -153,7 +153,7 @@ The same ART build also passed:
 - `run_jvmti_force_probe.sh`: 3/3 dual-view and 3/3 J-1 forced-interpreter
   transitions over registered and unresolved normal, FastNative, and
   CriticalNative calls;
-- `run_jit_smoke.sh`: 10/10;
+- `run_jit_smoke.sh`: 12/12, including default-silent compile diagnostics;
 - `run_jit_matrix.sh`: 14/14;
 - native Linux `nativeloader`, `art`, `openjdkjvm`, and `dalvikvm` build;
 - Linux L-005 imageless Hello on the same shared multipath `boot.jar` bytes

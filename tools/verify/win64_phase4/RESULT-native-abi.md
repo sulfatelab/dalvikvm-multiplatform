@@ -134,7 +134,7 @@ The same ART build passed:
 - JVMTI forced-interpreter acceptance, 3/3 dual-view and 3/3 J-1 runs, covering
   registered and unresolved normal, FastNative, and CriticalNative calls;
 - pthread_once stress, 10/10;
-- JIT smoke, 10/10;
+- JIT smoke, 12/12, including default-silent compile diagnostics;
 - JIT matrix, 14/14;
 - native Linux `nativeloader`, `art`, `openjdkjvm`, and `dalvikvm` build;
 - Linux L-005 imageless Hello using the exact Win64-staged shared multipath
@@ -150,8 +150,8 @@ modes, and the remaining regressions passed.
 The mixed/high-FP normal/FastNative ABI, unresolved app-JNI,
 register/unregister/re-register binding transitions, and method-tracing
 instrumentation and JVMTI forced-interpreter transitions are no longer W-024
-blockers. The native-JIT gate remains temporarily while W-024 cleans up the
-remaining diagnostic policy/logging and obtains real Windows 10 acceptance.
+blockers. Per-method compile records are now opt-in. The native-JIT gate
+remains temporarily until W-024 obtains real Windows 10 acceptance.
 The Math/libcore native demotion is restored in `RESULT-math-critical.md`.
 CriticalNative method tracing is covered by
 `run_critical_native_probe.sh`; JVMTI single-step/deoptimization coverage is

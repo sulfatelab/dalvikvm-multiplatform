@@ -63,6 +63,7 @@ The same rebuilt source and shared boot artifact passed:
 
 - Win64 `libopenjdk.dll` build;
 - Linux `libopenjdk.so` build;
+- JIT smoke, 12/12, including default-silent compile diagnostics;
 - JIT matrix, 14/14, including `MathProbe.done=ok`;
 - CriticalNative direct/signature acceptance, 6/6 plus 3/3 instrumentation in
   each memory mode;

@@ -25,6 +25,7 @@ run_one() {
   cd "$BUILD"
   ANDROID_ROOT=run ANDROID_ART_ROOT=run ANDROID_I18N_ROOT=run \
   ANDROID_DATA=run/data ICU_DATA=run/icu \
+  ART_WIN64_JIT_LOG_COMPILES=1 \
   WINEDEBUG="${WINEDEBUG:--all}" \
   timeout "$TIMEOUT" wine64 ./dalvikvm.exe \
     -Xbootclasspath:run/boot.jar \

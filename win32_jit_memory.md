@@ -51,7 +51,7 @@ Measured on agent01 under Wine:
 | Nterp | ON after runtime startup; rSELF=r15 and rREFS=rbp |
 | Managed JIT | ON by default with the corrected section dual view |
 | Default Hello | About 21–24 managed compilations; PASS |
-| Default JIT smoke | 10/10 |
+| Default JIT smoke | 12/12, including default-silent compile diagnostics |
 | Default probe matrix | 14/14 |
 | Native JIT | Gated off; direct CriticalNative and 7/7 mixed/high-FP normal/FastNative matrices pass through binding, method-tracing, and JVMTI forced-interpreter transitions in both memory modes; Math native surfaces are restored; W-024 diagnostic/host work remains |
 | J-1 fallback | Diagnostic opt-out with `ART_WIN64_JIT_DUAL=0`; Hello passes |
@@ -227,7 +227,7 @@ logical pairs are contiguous.
 Verified under Wine:
 
 - Hello with the default environment;
-- JIT smoke 10/10;
+- JIT smoke 12/12;
 - probe matrix 14/14, including FloatProbe, ThrowProbe, and GcProbe;
 - explicit Windows `FlushInstructionCache` for generated code;
 - low-space fragmentation and non-64-KiB capacities in the permanent section
@@ -242,7 +242,7 @@ reuse view.
 Verified:
 
 - managed JIT Hello;
-- JIT smoke 10/10;
+- JIT smoke 12/12;
 - probe matrix 14/14;
 - code-cache collection paths used by the existing tests.
 
@@ -412,8 +412,8 @@ emulation is added.
 - Remaining work is real-Windows repeated-start testing, dynamic-code/CFG
   policy testing, large `SEC_COMMIT` pressure measurement, and direct release
   checks at the JIT-root and CodeInfo encoding sites.
-- Native JIT remains gated independently until W-024 diagnostic cleanup and
-  real-Windows acceptance are complete. Math.ceil/floor and the common ELF/PE
+- Native JIT remains gated independently until W-024 real-Windows acceptance
+  and defensive-fallback cleanup are complete. Math.ceil/floor and the common ELF/PE
   registration table are restored.
   Mixed/high-FP, unresolved app-JNI, unregister/re-register binding,
   method-tracing, and JVMTI forced-interpreter transitions now pass for normal,
@@ -681,10 +681,15 @@ CriticalNative compilations while still checking all six native calls across
 the forced-interpreter transition.
 
 The diagnostic `ART_WIN64_JIT_NATIVE=1` override remains opt-in for W-024
-diagnostic cleanup and real-Windows work rather than an unresolved calling
+real-Windows acceptance rather than an unresolved calling
 convention, native-binding, tracing, JVMTI transition, or product-demotion
 defect. Math.ceil/floor are native CriticalNative methods again and Math.c uses
 one common ELF/PE registration table.
+
+Per-method `Win64 CompileMethod done` logging is no longer a product default.
+It is enabled only by `ART_WIN64_JIT_LOG_COMPILES=1`; the ABI/JVMTI acceptance
+harnesses set that flag when they need exact compilation records. JIT smoke
+verifies both the opt-in records and a normal quiet run.
 
 ## 12. Verification and acceptance
 
@@ -747,7 +752,7 @@ The focused compiled normal/FastNative native-JIT probe and both registered
 and unresolved direct CriticalNative probes are covered and pass. Registration
 binding, method tracing, and JVMTI forced-interpreter transitions pass in both
 memory modes. The Math product surface is restored. The native gate remains
-until W-024 diagnostic cleanup and real-Windows acceptance are complete.
+until W-024 real-Windows acceptance is complete.
 
 ### 12.5 Threshold-zero stress resolution
 
@@ -811,8 +816,8 @@ The landed fix covers both defects:
    colon-separated after it parses the public semicolon-separated property.
 
 Remaining direct-call work is real Windows 10 acceptance. Broader W-024 work
-still covers native-JIT gate removal, diagnostic cleanup, and libcore
-fallback cleanup; Math.ceil/floor and the common registration table are
+still covers native-JIT gate removal and defensive interpreter-fallback
+cleanup after real-Windows acceptance; Math.ceil/floor and the common registration table are
 restored. The compiled-JNI signature, binding, method-tracing, and JVMTI
 forced-interpreter matrices pass. None justifies retaining the RWX J-1 path as
 the product default.
@@ -823,10 +828,10 @@ the product default.
 
 | Item | Evidence |
 |------|----------|
-| J-1 single-view memory | JIT smoke 10/10; matrix 14/14 |
+| J-1 single-view memory | JIT smoke 12/12; matrix 14/14 |
 | D-1 r15 compiler TLS | 37/37 GS sites audited |
 | Managed JIT default | Corrected pagefile-section dual view; Hello about 21–24 compilations |
-| Corrected dual-view integration | JIT smoke 10/10; matrix 14/14; protections checked with `VirtualQuery` |
+| Corrected dual-view integration | JIT smoke 12/12; matrix 14/14; protections checked with `VirtualQuery` |
 | Section-layout probe | 64 MiB and non-64-KiB capacity cases pass under Wine; low primary remains contiguous under forced low-space fragmentation |
 | dlmalloc configuration | `USE_LOCKS=0`; spin-lock experiment reverted |
 | Root-cause correction | JIT-root signed displacement plus latent CodeInfo overflow |
@@ -851,7 +856,7 @@ the product default.
 | Test | J-1 opt-out | Default corrected dual view |
 |------|------------|-----------------------------|
 | Hello | PASS | PASS |
-| JIT smoke | 10/10 | 10/10 |
+| JIT smoke | 12/12 | 12/12 |
 | JIT matrix | 14/14 | 14/14 |
 | FloatProbe normal threshold | PASS | PASS |
 | FloatProbe `-Xjitthreshold:0` | PASS, 3/3 current harness | PASS, 3/3 current harness |
@@ -892,6 +897,7 @@ the product default.
 | 2026-07-24 | Registered and unresolved CriticalNative suites pass during and after method tracing in both memory modes |
 | 2026-07-24 | Separate Win64 `openjdkjvmti.dll` and thread-scoped single-step probe pass 3/3 in both memory modes; the divergent native-interpreter branch is removed |
 | 2026-07-24 | Restore Math.ceil/floor as CriticalNative and remove `gMethodsWin`; Win64 and Linux use one source table and identical boot.jar bytes |
+| 2026-07-24 | Make per-method Win64 JIT compile records opt-in; smoke expands to 12/12 and verifies product-default silence |
 
 ## 15. Code anchors
 

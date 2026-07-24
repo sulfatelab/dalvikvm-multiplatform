@@ -11,6 +11,7 @@ set -euo pipefail
 #   T6 – ART_WIN64_JIT=0 disables all compile
 #   T7 – -Xusejit:false path still works (no crash)
 #   T8 – JIT filter/exclude env vars work
+#   T9 – compile diagnostics are silent by default
 #
 # Usage: ./tools/verify/win64_phase4/run_jit_smoke.sh
 #   WINEDEBUG=fixme-all ./run_jit_smoke.sh   (override wine debug)
@@ -45,6 +46,7 @@ run_dalvik() {
   cd "$BUILD"
   ANDROID_ROOT=run ANDROID_ART_ROOT=run ANDROID_I18N_ROOT=run \
   ANDROID_DATA=run/data ICU_DATA=run/icu \
+  ART_WIN64_JIT_LOG_COMPILES="${ART_WIN64_JIT_LOG_COMPILES:-}" \
   WINEDEBUG="${WINEDEBUG:--all}" \
   timeout "$TIMEOUT" wine64 ./dalvikvm.exe \
     -Xbootclasspath:run/boot.jar \
@@ -79,7 +81,7 @@ has_clean_native_hello() {
 # --------------------------------------------------------------------
 cyan "=== T1: JIT Code Cache creation ==="
 
-OUT1=$(run_dalvik "$RUN/hello.jar" "Hello")
+OUT1=$(ART_WIN64_JIT_LOG_COMPILES=1 run_dalvik "$RUN/hello.jar" "Hello")
 echo "$OUT1" | grep -vE '^dalvikvm\.exe|^wine:|^[[:space:]]*$' | head -5
 echo "  ... (full log truncated)"
 
@@ -115,7 +117,8 @@ fi
 # --------------------------------------------------------------------
 cyan "=== T5: ART_WIN64_JIT_NATIVE=1 gate override ==="
 
-OUT5=$(ART_WIN64_JIT_NATIVE=1 run_dalvik "$RUN/hello.jar" "Hello")
+OUT5=$(ART_WIN64_JIT_NATIVE=1 ART_WIN64_JIT_LOG_COMPILES=1 \
+  run_dalvik "$RUN/hello.jar" "Hello")
 NCOMP5=$(count_compiles "$OUT5")
 echo "  Native-gate-open mode ncomp: $NCOMP5"
 assert "ART_WIN64_JIT_NATIVE=1 compiles and executes native ABI" has_clean_native_hello "$OUT5"
@@ -123,7 +126,8 @@ assert "ART_WIN64_JIT_NATIVE=1 compiles and executes native ABI" has_clean_nativ
 # --------------------------------------------------------------------
 cyan "=== T6: ART_WIN64_JIT=0 disables all compile ==="
 
-OUT6=$(ART_WIN64_JIT=0 run_dalvik "$RUN/hello.jar" "Hello")
+OUT6=$(ART_WIN64_JIT=0 ART_WIN64_JIT_LOG_COMPILES=1 \
+  run_dalvik "$RUN/hello.jar" "Hello")
 NCOMP6=$(count_compiles "$OUT6")
 echo "  JIT_OFF mode ncomp: $NCOMP6"
 assert "ART_WIN64_JIT=0 completes Hello cleanly" has_clean_hello "$OUT6"
@@ -141,13 +145,23 @@ assert "-Xusejit:false completes Hello cleanly" has_clean_hello "$OUT7"
 # --------------------------------------------------------------------
 cyan "=== T8: JIT filter/exclude env vars ==="
 
-OUT8_FILT=$(ART_WIN64_JIT_FILTER=StringBuilder run_dalvik "$RUN/hello.jar" "Hello")
+OUT8_FILT=$(ART_WIN64_JIT_FILTER=StringBuilder ART_WIN64_JIT_LOG_COMPILES=1 \
+  run_dalvik "$RUN/hello.jar" "Hello")
 FCOMP=$(count_compiles "$OUT8_FILT")
 echo "  Filter mode ncomp: $FCOMP"
 assert "ART_WIN64_JIT_FILTER completes Hello cleanly" has_clean_hello "$OUT8_FILT"
 
-OUT8_EXCL=$(ART_WIN64_JIT_EXCLUDE=StringBuilder run_dalvik "$RUN/hello.jar" "Hello")
+OUT8_EXCL=$(ART_WIN64_JIT_EXCLUDE=StringBuilder ART_WIN64_JIT_LOG_COMPILES=1 \
+  run_dalvik "$RUN/hello.jar" "Hello")
 assert "ART_WIN64_JIT_EXCLUDE completes Hello cleanly" has_clean_hello "$OUT8_EXCL"
+
+# --------------------------------------------------------------------
+cyan "=== T9: Compile diagnostics are opt-in ==="
+
+OUT9=$(run_dalvik "$RUN/hello.jar" "Hello")
+NCOMP9=$(count_compiles "$OUT9")
+assert "Default diagnostic-off mode completes Hello cleanly" has_clean_hello "$OUT9"
+assert "Default diagnostic-off mode emits zero compile records" [ "$NCOMP9" -eq 0 ]
 
 # --------------------------------------------------------------------
 echo ""

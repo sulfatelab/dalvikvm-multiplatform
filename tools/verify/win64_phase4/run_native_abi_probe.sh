@@ -73,6 +73,7 @@ run_probe() {
       ICU_DATA=run/icu \
       WINEDEBUG="${WINEDEBUG:--all}" \
       ART_WIN64_JIT_FILTER=FastNativeAbiProbe \
+      ART_WIN64_JIT_LOG_COMPILES=1 \
       "$@" \
       timeout -k 1 "$TIMEOUT" "$WINE" ./dalvikvm.exe \
         -Xbootclasspath:run/boot.jar \
