@@ -634,13 +634,20 @@ The Win64 graph rebuilt successfully with `-j32`. Acceptance on agent01 passed:
 Full details are in
 `tools/verify/win64_phase4/RESULT-w004-runtime-load.md`.
 
-**Stage W004-D — native Windows closure: PENDING**
+**Stage W004-D — native Windows closure: PACKAGE READY, HOST RUN PENDING**
 
-Package a focused native-host bundle containing the structural report plus the
-quick/nterp/JIT/native-ABI/GC/thread probes. Require all child logs, repeated
-process starts, zero crash dumps, and no helper symbol in the shipped DLL.
-W-004 closes only after this native run passes; Wine alone is not sufficient for
-a macro expanded through core runtime assembly.
+`tools/win64/host_package/package_win64_w004.sh` builds and locally verifies a
+focused native-host bundle containing the Linux-generated structural report
+plus quick/nterp/JIT/native-ABI/GC/thread probes. The package checker validates
+the inspected DLL hashes, manifest, PE export/import contract, and absence of
+the helper. Its staged Wine smoke passes before the final archive is written.
+
+The Windows 10+ PowerShell runner verifies package hashes, runs both dual and
+J-1 native paths, performs ten repeated starts, scans all logs for fatal/access-
+violation markers, and recursively scans for crash dumps. W-004 closes only
+after the returned native logs pass review; Wine alone is not sufficient for a
+macro expanded through core runtime assembly. Procedure:
+`tools/verify/win64_phase4/W004_HOST_CHECKLIST.md`.
 
 #### 6.7.7 Rollback and review rules
 

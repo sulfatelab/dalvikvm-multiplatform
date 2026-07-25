@@ -119,10 +119,31 @@ Linux controls also passed:
 W-004 remains open. The direct load is expanded through core ART assembly, so
 Wine is not the final host acceptance boundary.
 
-The native package must contain the shipped product artifacts and focused
-quick/nterp/JIT/native-ABI/GC/thread probes. It must also contain a structural
-report generated on Linux, because LLVM inspection tools are not required on
-the Windows host. Closure requires:
+The focused native package is implemented by
+`tools/win64/host_package/package_win64_w004.sh`. Its source and artifact
+contract are checked by `check_w004_host_package.py`, and the staged package is
+exercised under Wine by `smoke_w004_host_package_wine.py` before the final
+manifest and archive are written.
+
+The package contains the shipped product artifacts, focused
+quick/nterp/JIT/native-ABI/GC/thread probes, and a structural report generated
+on Linux. LLVM inspection tools are not required on the Windows host. The
+embedded PowerShell runner requires Windows 10 RS4 build 17134 or later,
+verifies all packaged SHA-256 values and report/artifact hash agreement, then
+runs the complete host matrix and recursive dump scan. See
+[`W004_HOST_CHECKLIST.md`](W004_HOST_CHECKLIST.md).
+
+Local package verification passes:
+
+- package checker before and after Wine execution;
+- ZIP integrity check;
+- nterp `-Xint`, dual-view JIT, and threshold-zero FloatProbe;
+- CriticalNative, normal/FastNative, and JVMTI forced-interpreter probes;
+- GC stress and thread-heavy probes; and
+- three independent default-JIT package starts.
+
+The issued host runner expands this to dual and J-1 native ABI/JVMTI cases,
+handle-leak coverage, and ten repeated starts. Native closure requires:
 
 - all focused child cases and repeated process starts pass;
 - no access violation, unexpected nonzero exit, hang, or crash dump occurs;
