@@ -133,10 +133,11 @@ The structural gate requires:
 
 All eight processes report:
 
+- `warmup_threshold=100, optimize_threshold=100`;
 - baseline compilation;
 - OSR compilation;
 - `Jumping to long W002OsrProbe.osrLoop(int)`;
-- `W002OsrProbe OK checksum=9835131152`; and
+- `W002OsrProbe OK checksum=65553463744`; and
 - `main end exception=0`.
 
 Switch runs additionally report the switch OSR completion marker. Nterp runs
@@ -199,7 +200,7 @@ Package generation:
 - regenerates and rechecks the final manifest; and
 - creates `dist/win64_w002_host.zip`.
 
-The staged package smoke passes 8/8 processes, and ZIP integrity passes.
+The R2 staged package smoke passes 8/8 processes, and ZIP integrity passes.
 The native runner repeats every pair twice, enforces Windows build 17134 or
 later, validates package hashes and structural-report artifact identities,
 scans fatal markers, and recursively rejects any `*.dmp`.
@@ -255,8 +256,44 @@ workload. This is a test-determinism correction. R1 contains no evidence of a
 crash, runtime corruption, bad result, or failure in the nterp return adapter;
 that adapter remains unaccepted on native Windows until R2 records the jump.
 
-The current reviewer rejects the otherwise valid evidence-only return because
-it expects the complete issued payload as well as the matching identity
-metadata. R2 tooling must accept the evidence-only form after exact metadata
-comparison while retaining strict log, result-record, fatal-marker, and dump
-checks.
+The R2 reviewer accepts this evidence-only return form after exact byte
+comparison of `BUILD_INFO.txt`, `MANIFEST.json`, `SHA256SUMS.txt`, and
+`W002_STRUCTURAL_REPORT.txt`. If any non-identity payload file is returned,
+the reviewer requires the complete issued payload and re-hashes every file;
+partial payloads are rejected. Strict log, result-record, fatal-marker, and
+dump checks remain unchanged.
+
+## Deterministic R2 correction and verification
+
+R2 makes the timing contract explicit instead of relying on Wine being slower
+than a native host:
+
+- every OSR command supplies `-Xjitwarmupthreshold:100` and
+  `-Xjitthreshold:100`;
+- every OSR log must confirm
+  `warmup_threshold=100, optimize_threshold=100`;
+- the loop runs 2,000,000 iterations and must return exact checksum
+  `65553463744`; and
+- the native runner still requires baseline compile, OSR compile, the OSR jump,
+  clean return, interpreter-specific return markers, and no fatal log or dump.
+
+The revised pre-issue verification passes:
+
+| Control | R2 result |
+|---------|-----------|
+| Reviewer and OSR contract unit tests | PASS, 7/7 |
+| Source and PE object structural gate | PASS |
+| Focused Wine OSR, four mode pairs, two repeats | PASS, 8/8 |
+| Focused Wine attach, four mode pairs, two repeats | PASS, 8/8 |
+| Complete Win64 build, `-j32` | PASS |
+| Complete Linux build, `-j32` | PASS |
+| Linux shared-boot imageless Hello and GC stress | PASS |
+| Linux nterp baseline/OSR/jump/checksum | PASS with thresholds 100/100 and checksum `65553463744` |
+| Full Phase 3 Wine aggregate | PASS all gates |
+| Full Phase 4 Wine aggregate | PASS all gates |
+| R1 evidence-only identity handling | PASS; review proceeds to the genuine `OVERALL FAIL` result instead of reporting a missing payload |
+
+R2 does not alter ART runtime code or the Windows/Linux managed-entry design.
+It removes nondeterminism from the acceptance workload and fixes the offline
+evidence transport contract. W-002 remains open until the issued R2 returns
+21 PASS records and `OVERALL PASS` on native Windows.

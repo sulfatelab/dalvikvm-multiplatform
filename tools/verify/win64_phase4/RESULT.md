@@ -126,7 +126,10 @@ Wine combinations. Native Windows R1 then passes package identity, structure,
 all 8/8 attached-thread processes, and all 4/4 switch-OSR processes with no
 fatal marker or dump. Its four clean default-nterp processes miss the OSR jump
 because the runner left the nterp warmup threshold at 65535 and the short loop
-finished before the asynchronous transition. W-002 remains open for a
-deterministic native Windows 10 RS4+ R2. See
+finished before the asynchronous transition. R2 now pins both JIT thresholds
+to 100, runs 2,000,000 iterations with checksum `65553463744`, and passes the
+focused matrix, Phase 3/4 aggregates, Linux controls, package smoke, and seven
+tooling tests. W-002 remains open for the issued deterministic native Windows
+10 RS4+ R2 result. See
 [`RESULT-w002-managed-entry.md`](RESULT-w002-managed-entry.md) and
 [`W002_HOST_CHECKLIST.md`](W002_HOST_CHECKLIST.md).
