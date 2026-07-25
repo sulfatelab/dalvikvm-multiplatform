@@ -80,3 +80,12 @@ win64-dev-env + wine64 10.0.
 | Suite | **PASS all wine Phase 4 gates** |
 
 Evidence: `evidence/all_wine_gates.txt`
+
+## W-004 runtime-load re-run (2026-07-25)
+
+The helper-based Win64 `LOAD_RUNTIME_INSTANCE` was replaced by a direct
+same-image load of `Runtime::instance_`. The rebuilt Phase 4 aggregate passes,
+including its new structural/source/dependency gate, with 574 direct
+relocations and zero retired-helper references. Full focused results and the
+remaining native-Windows closure bar are recorded in
+[`RESULT-w004-runtime-load.md`](RESULT-w004-runtime-load.md).

@@ -670,10 +670,12 @@ filesystem artifact.
 
 The separate optimizing-compiler direct CriticalNative convention is also
 fixed. Win64 direct calls now use unified Microsoft x64 argument ordinals,
-reserve the 32-byte home area, and spill after it. The unresolved critical
-dlsym stub reloads its caller PC after the PE runtime-instance macro uses
-`r11` as scratch. The focused direct-signature probe covers zero, mixed
-integer/floating, FP-only, stack-spilled arguments, and scalar returns.
+reserve the 32-byte home area, and spill after it. W-024 originally made the
+unresolved critical dlsym stub reload its caller PC after the helper-based PE
+runtime-instance macro used `r11` as scratch. W-004 later replaced that helper
+with a direct load that does not clobber `r11` and removed the reload. The
+focused direct-signature probe covers zero, mixed integer/floating, FP-only,
+stack-spilled arguments, and scalar returns.
 
 Unresolved mixed-signature app JNI is now covered as well. The initial probe
 returned zeros because the previous Win64 `Runtime.nativeLoad` shortcut called
@@ -833,9 +835,10 @@ The exact mismatch is:
    lands at caller SP + 32 instead of the caller's method slot.
 
 Adding the missing 32-byte area corrected the stack walk and exposed a second
-independent Win64 stub defect: `LOAD_RUNTIME_INSTANCE r10` uses `r11` as its PE
-scratch register, overwriting the caller PC that the dlsym stub keeps live in
-`r11`. The stub then installed `Runtime*` as the native return address.
+independent Win64 stub defect: the then-current `LOAD_RUNTIME_INSTANCE r10`
+used `r11` as its PE scratch register, overwriting the caller PC that the dlsym
+stub kept live in `r11`. The stub then installed `Runtime*` as the native return
+address.
 
 The landed fix covers both defects:
 
@@ -845,9 +848,11 @@ The landed fix covers both defects:
 2. Win64 direct-call stack offsets start after the 32-byte shadow area, so
    argument moves and `GetCriticalNativeDirectCallFrameSize()` agree for zero,
    mixed, and spilled arguments.
-3. The dlsym stub reloads its caller PC from the existing saved frame slot
-   after `LOAD_RUNTIME_INSTANCE`. The common macro and Linux assembly remain
-   unchanged.
+3. The original W-024 fix made the dlsym stub reload its caller PC from the
+   existing saved frame slot after `LOAD_RUNTIME_INSTANCE`; the common macro
+   and Linux assembly were unchanged in that stage. W-004 later replaced the
+   Windows helper with a direct same-image data load, which does not clobber
+   `r11`, and removed the now-unnecessary local reload. Linux remains unchanged.
 4. `run_critical_native_probe.sh` covers unresolved `()J`, registered zero,
    FP-only, mixed integer/FP, stack-spilled signatures, scalar returns, and the
    corresponding unresolved exported app-JNI dlsym shapes. JIT dump inspection

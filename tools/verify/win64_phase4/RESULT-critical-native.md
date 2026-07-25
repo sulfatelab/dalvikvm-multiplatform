@@ -39,7 +39,7 @@ Two independent Win64 ABI defects combined in the unresolved `()J` path:
    32-byte shadow area. The dlsym stub consequently placed its
    SaveRefsAndArgs frame 32 bytes too high for stack walking.
 2. `art_jni_dlsym_lookup_critical_stub` kept the caller PC live in `r11`, but
-   the PE form of `LOAD_RUNTIME_INSTANCE` also uses `r11` as scratch. After the
+   the PE form of `LOAD_RUNTIME_INSTANCE` then used `r11` as scratch. After the
    stack-layout fix exposed this second defect, the stub attempted to return to
    `Runtime*`.
 
@@ -62,9 +62,12 @@ The optimizing visitor now has a narrow Windows-target branch:
   the home area;
 - the existing SysV GPR/FPR sequences are unchanged for Linux.
 
-The unresolved critical dlsym stub reloads the saved caller PC from its existing
-frame slot immediately after the Windows `LOAD_RUNTIME_INSTANCE` expansion.
-This keeps the common macro and non-Windows assembly unchanged.
+The original W-024 implementation made the unresolved critical dlsym stub
+reload the saved caller PC from its existing frame slot immediately after the
+Windows `LOAD_RUNTIME_INSTANCE` expansion. That kept the common macro and
+non-Windows assembly unchanged. W-004 later replaced the Windows helper with a
+direct same-image data load that does not clobber `r11`, then removed the local
+reload as obsolete; the stack-layout fix remains unchanged.
 
 Win64 `JVM_NativeLoad` now delegates through `art.dll!ART_LoadNativeLibrary`,
 which follows AOSP `OpenjdkJvm.cc` and calls `JavaVMExt::LoadNativeLibrary`.

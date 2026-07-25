@@ -56,7 +56,7 @@ Primary evidence is **this tree’s ART** (`vendor/art`, android-16.0.0_r4 / art
 | Quick entrypoint table | `runtime/entrypoints/quick/quick_entrypoints.h`, `quick_entrypoints_list.h` |
 | Invoke routing | `runtime/art_method.cc` (`art_quick_invoke_*`, default quick policy + diagnostic opt-out) |
 | Offsets | `tools/cpp-define-generator/thread.def` → `THREAD_*_OFFSET` |
-| Win asm/platform anchors | Current `LOAD_RUNTIME_INSTANCE` PE helper plus the W-004 direct-load redesign; ported SETUP frames and rSELF macros |
+| Win asm/platform anchors | W-004 direct same-image `LOAD_RUNTIME_INSTANCE`; ported SETUP frames and rSELF macros |
 
 Secondary: platform ABI documentation (System V AMD64 / AArch64, Microsoft x64 / ARM64 / Arm64EC), and TEB/TLS layout knowledge used by Windows PE runtimes.
 
@@ -431,12 +431,11 @@ Unchanged conceptually:
 
 Windows only changes **how offsets are addressed** (reg base vs GS), not the C++ layout of `Thread`.
 
-### 6.7 Runtime instance load — W-004 redesign draft (2026-07-25)
+### 6.7 Runtime instance load — W-004 implementation record (2026-07-25)
 
-**Status:** analysis and implementation plan complete; code is unchanged in this
-stage. The recommended fix is a direct same-image PE/COFF load of the existing
-`Runtime::instance_` data symbol. Native Windows acceptance remains part of the
-closure bar because this macro is expanded across core quick-entrypoint paths.
+**Status:** direct same-image PE/COFF load implemented; structural, Wine, and
+Linux acceptance pass. Native Windows acceptance remains the W-004 closure bar
+because this macro is expanded across core quick-entrypoint paths.
 
 #### 6.7.1 Scope correction
 
@@ -469,43 +468,35 @@ Other upstream ART ISAs also load the singleton data directly: arm64 uses
 `adrp` + `ldr`, RISC-V uses `la` + `ld`, and x86 uses its PC-relative base
 sequence. A helper call is not part of the conceptual ART contract.
 
-The current Windows macro instead expands to a 23-byte call sequence:
+Windows now loads the existing MSVC-ABI data definition directly from the same
+PE image:
 
 ```asm
-pushq %rax
-pushq %rcx
-subq $40, %rsp
-call art_Runtime_instance_ptr
-movq (%rax), %r11
-addq $40, %rsp
-popq %rcx
-popq %rax
-movq %r11, reg
+movq "?instance_@Runtime@art@@0PEAV12@EA"(%rip), reg
 ```
 
-The C++ helper is a Microsoft-x64 function returning `Runtime**`. In the current
-RelWithDebInfo artifact it happens to compile to a small `lea`/return body, but
-the call site still crosses a C ABI edge and reserves shadow space.
+The current RelWithDebInfo objects contain the following direct
+`IMAGE_REL_AMD64_REL32` relocations:
 
-Artifact inspection of `build/win64_phase1/art.dll` and its input objects found:
-
-| Object/path | `art_Runtime_instance_ptr` call relocations |
-|-------------|--------------------------------------------:|
+| Object/path | Direct `Runtime::instance_` relocations |
+|-------------|----------------------------------------:|
 | x86_64 quick entrypoints | 563 |
 | generated x86_64 nterp | 10 |
 | x86_64 JNI entrypoints | 1 |
 | **Total** | **574** |
 
-At this build shape, replacing each 23-byte expansion with one 7-byte
-RIP-relative `movq` removes about 9,184 bytes of repeated call-site code, before
-alignment and deletion of the helper itself. The count is evidence, not a fixed
-test expectation; allocator and entrypoint generation can change it.
+Before W-004, each site expanded to a 23-byte Microsoft-x64 helper call with
+shadow space, saved registers, an `r11` scratch, and a returned `Runtime**`
+dereference. The implemented 7-byte load removes about 9,184 bytes of repeated
+call-site code at this build shape, before alignment and deletion of the helper
+itself. The count is evidence, not a fixed test expectation; allocator and
+entrypoint generation can change it.
 
-#### 6.7.3 Why the helper is not a clean permanent ABI
+#### 6.7.3 Why the helper was removed
 
 The macro is intended to behave like a data load: write the requested register
-without otherwise disturbing managed state. The helper cannot express that
-contract safely through the ordinary Microsoft x64 ABI:
+without otherwise disturbing managed state. The retired helper could not
+express that contract safely through the ordinary Microsoft x64 ABI:
 
 - Microsoft x64 permits a call to clobber `rax`, `rcx`, `rdx`, `r8`–`r11`, and
   `xmm0`–`xmm5`. The macro saves only `rax` and `rcx`, writes `r11` as an
@@ -514,19 +505,20 @@ contract safely through the ordinary Microsoft x64 ABI:
 - The call sequence changes flags through `subq`/`addq`; the Linux data-load
   sequence does not. It also mutates the managed stack and pushes a return
   address merely to read a process-global pointer.
-- The `reg == rcx` case already caused a generic-JNI instrumentation fault and
-  required the `r11` scratch workaround.
+- The `reg == rcx` case caused a generic-JNI instrumentation fault and required
+  the `r11` scratch workaround.
 - Threshold-zero CriticalNative debugging later found the inverse collision:
   the unresolved dlsym stub kept its caller PC in `r11`, and the macro replaced
-  it with `Runtime*`. That path now reloads the caller PC after the helper.
-- Generic JNI also re-materializes an FP return value after the helper because
-  an ordinary call is permitted to clobber `xmm0`.
+  it with `Runtime*`. Before W-004, that path reloaded the caller PC after the
+  helper.
+- Generic JNI also re-materialized an FP return value immediately after the
+  helper because an ordinary call is permitted to clobber `xmm0`.
 
-The current body is small, but correctness must not depend on one unoptimized
-C++ leaf function continuing to use a convenient subset of volatile registers.
-Making the helper a custom assembly ABI could narrow the clobber set, but it
-would retain an unnecessary call, stack traffic, and a second platform-specific
-symbol.
+Correctness no longer depends on one C++ leaf function continuing to use a
+convenient subset of volatile registers. The direct load does not call through
+an ABI, touch `rsp`, change flags, or use an extra scratch register. The local
+CriticalNative `r11` reload and immediate generic-JNI `xmm0` re-materialization
+were removed with the helper.
 
 #### 6.7.4 PE/COFF feasibility findings
 
@@ -560,64 +552,89 @@ Relevant platform references:
 
 #### 6.7.5 Design options
 
-| Option | Shape | Advantages | Costs / risks | Draft decision |
-|--------|-------|------------|---------------|----------------|
-| **A. Direct current MS-mangled data symbol** | One same-image RIP-relative `movq` | Smallest source and runtime divergence; preserves the existing export/import ABI; no call, stack, flags, or scratch clobber | Assembly quotes one Microsoft C++ mangled name; a class/member ABI change requires updating it | **Preferred** |
+| Option | Shape | Advantages | Costs / risks | Outcome |
+|--------|-------|------------|---------------|---------|
+| **A. Direct current MS-mangled data symbol** | One same-image RIP-relative `movq` | Smallest source and runtime divergence; preserves the existing export/import ABI; no call, stack, flags, or scratch clobber | Assembly quotes one Microsoft C++ mangled name; a class/member ABI change requires updating it | **Implemented** |
 | **B. Stable C assembly label on `Runtime::instance_`** | Give the Windows member `__asm__("art_Runtime_instance")`, then direct-load it | Stable readable symbol; clang correctly emits direct definition references and `__imp_art_Runtime_instance` for consumers | Changes the currently exported ART data ABI and adds a Windows-only declaration attribute in common `runtime.h`; requires rebuilding every consumer | Viable fallback, not preferred while the current ABI works |
 | **C. Exported C `Runtime**` address cell** | RIP-load the cell, then dereference it | Stable C name and Linux-like two-load shape without a call | Adds a second global/relocation and potential initialization/ownership questions; still more Windows-only machinery | Fallback only |
 | **D. Harden or hand-write the helper** | Custom leaf helper with a documented private clobber set | Avoids exposing a C++ spelling at every assembly relocation | Retains hundreds of calls and the extra symbol; easier to regress than a data load | Reject as permanent design |
 | **E. Self-IAT import or cache `Runtime*` in `Thread`** | Import `art.dll` from itself, or add per-thread runtime state | Avoids spelling the current data definition at the use site | Cyclic/self-import is the wrong PE model; a Thread field changes common layout and lifecycle for no benefit | Reject |
 
-Option A best matches the user's Linux-parity rule. Upstream Linux assembly
-already names the C++ singleton explicitly; the Windows branch should name the
-same singleton using the selected MSVC ABI spelling. If the spelling becomes a
-real maintenance burden, Option B is cleaner than restoring a call helper.
+Option A best matches the user's Linux-parity rule and is now the product path.
+Upstream Linux assembly already names the C++ singleton explicitly; the Windows
+branch names the same singleton using the selected MSVC ABI spelling. If the
+spelling becomes a real maintenance burden, Option B remains cleaner than
+restoring a call helper.
 
-#### 6.7.6 Preferred implementation stages
+#### 6.7.6 Implementation and verification stages
 
-**Stage W004-A — source conversion and cleanup**
+**Stage W004-A — source conversion and cleanup: COMPLETE**
 
-1. Replace only the `_WIN32` body of `LOAD_RUNTIME_INSTANCE` with a quoted
-   same-image RIP-relative load of the existing MSVC data symbol. Keep the Linux
+1. Replaced only the `_WIN32` body of `LOAD_RUNTIME_INSTANCE` with a quoted
+   same-image RIP-relative load of the existing MSVC data symbol. Kept the Linux
    two-instruction GOT body byte-for-byte unchanged.
-2. Delete `art_Runtime_instance_ptr()` from `runtime_windows.cc` and delete
-   `Runtime::InstanceLocation()`, which exists only for that helper.
-3. Remove the helper-specific comment in `base/macros.h`.
-4. Remove only compensations made obsolete by the direct load: the Windows
+2. Deleted `art_Runtime_instance_ptr()` from `runtime_windows.cc` and deleted
+   `Runtime::InstanceLocation()`, which existed only for that helper.
+3. Removed the helper-specific comment in `base/macros.h`.
+4. Removed only compensations made obsolete by the direct load: the Windows
    caller-PC reload after `LOAD_RUNTIME_INSTANCE` in the critical dlsym stub and
    the immediate generic-JNI `xmm0` re-materialization attributed to the helper.
-   Keep the later re-materialization required after an actual instrumentation
+   Kept the later re-materialization required after an actual instrumentation
    exit-hook call.
-5. Do not alter JIT code generation, JIT memory layout, managed argument
+5. Did not alter JIT code generation, JIT memory layout, managed argument
    registers, `rSELF`, callee-save frame layouts, or the external
    `Runtime::instance_` export/import contract.
+6. Added explicit CMake object dependencies for all five x86_64 assembly
+   consumers because the clang ASM rule declared a depfile without emitting
+   one. Incremental and clean builds now rebuild the same macro users.
 
-**Stage W004-B — structural artifact gate**
+**Stage W004-B — structural artifact gate: COMPLETE**
 
-Add an automated PE inspection check that fails unless all of these hold:
+`tools/verify/win64_phase1/check_w004_runtime_load.py` is integrated into the
+Phase 4 aggregate and fails unless all of these hold:
 
 1. `art.dll` exports the existing `Runtime::instance_` data symbol and
    `openjdkjvmti.dll` still imports it through the IAT.
-2. No object or final DLL references or exports `art_Runtime_instance_ptr`.
+2. No affected object or checked DLL references or exports
+   `art_Runtime_instance_ptr`.
 3. The quick, JNI, and generated-nterp objects contain direct
    `IMAGE_REL_AMD64_REL32` relocations to `Runtime::instance_`.
-4. Representative final disassembly is one RIP-relative load with no `call`,
-   `push`, `pop`, or `rsp` adjustment in the macro expansion.
-5. The Linux macro body remains unchanged. The test should not hard-code 574;
-   it should require a nonzero direct-reference count and zero helper calls.
+4. Every direct relocation in the three affected objects is attached to a
+   RIP-relative `movq`, with no helper relocation.
+5. All five assembly consumers list the shared macro source as an explicit
+   incremental-build dependency.
+6. The source cleanup and Linux macro body remain intact. The test does not
+   hard-code 574 as a pass condition; each required object must have a nonzero
+   direct-reference count and zero helper calls.
 
-**Stage W004-C — build and Wine regression**
+Current gate result:
 
-1. Rebuild the Win64 graph with `cmake --build build/win64_phase1 -j32`.
-2. Run the phase-3 aggregate quick/exception/GC/thread gates.
-3. Run phase-4 JIT smoke and matrix, threshold-zero CriticalNative, native ABI,
-   method-tracing, JVMTI forced-interpreter, GC stress, and thread-heavy gates in
-   both the default dual view and J-1 diagnostic mode where the harness provides
-   both.
-4. Run the W-024 cleanup check so no removed compensation silently returns.
-5. Rebuild/run the Linux imageless Hello and GC-stress controls.
+```text
+W-004 runtime load structural check: PASS (quick=563 jni=1 nterp=10 total=574)
+```
 
-**Stage W004-D — native Windows closure**
+**Stage W004-C — build, Wine, and Linux regression: COMPLETE**
+
+The Win64 graph rebuilt successfully with `-j32`. Acceptance on agent01 passed:
+
+| Gate | Result |
+|------|--------|
+| PE structural/source/dependency check | PASS, 574 direct / 0 helper |
+| JIT smoke | 12/12 |
+| Phase 3 aggregate | PASS all gates |
+| JIT matrix | 14/14 |
+| CriticalNative dual view | 6/6 float+signature + 3/3 tracing |
+| CriticalNative J-1 | 6/6 float+signature + 3/3 tracing |
+| Normal/FastNative ABI | 7/7 default and 7/7 under tracing |
+| JVMTI forced interpreter | dual 3/3; J-1 3/3 |
+| Phase 4 aggregate | PASS all gates, including GC/thread/handle/crash paths |
+| Linux imageless shared-boot Hello | PASS |
+| Linux GC stress | PASS |
+
+Full details are in
+`tools/verify/win64_phase4/RESULT-w004-runtime-load.md`.
+
+**Stage W004-D — native Windows closure: PENDING**
 
 Package a focused native-host bundle containing the structural report plus the
 quick/nterp/JIT/native-ABI/GC/thread probes. Require all child logs, repeated
@@ -1483,7 +1500,7 @@ W-001 marked CLOSED in [win32_open_items.md](win32_open_items.md).
 | QuickEntryPoints in Thread | `quick_entrypoints.h`, `Thread::QuickEntryPointOffset` |
 | Win quick-invoke policy | `vendor/art/runtime/art_method.cc` (default quick invoke with diagnostic opt-out) |
 | Win SETUP frames (was int3) | Ported off Win `int3`; Apple still traps |
-| Current PE Runtime helper and direct-load draft | `LOAD_RUNTIME_INSTANCE` in `asm_support_x86_64.S`; §6.7 |
+| Direct PE Runtime singleton load | `LOAD_RUNTIME_INSTANCE` in `asm_support_x86_64.S`; §6.7 |
 | Nterp Win conflicts (GS + r15=rREFS) | `mterp/x86_64ng/main.S`; generated `mterp_x86_64.S`; §15 |
 | Nterp Win policy | `interpreter/mterp/nterp.cc` `IsNterpSupported` (default on; diagnostic opt-out) |
 | FS.base=Thread* rejected | §16; wine `PF_RDWRFSGSBASE_AVAILABLE`; public `CONTEXT` has no FsBase |

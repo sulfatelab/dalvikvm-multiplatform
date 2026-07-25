@@ -24,7 +24,8 @@ WINEDEBUG=-all wine64 ./dalvikvm.exe -showversion
 # ART version 2.1.0 x86_64
 ```
 
-Recorded log: [`showversion.log`](showversion.log)
+The recorded gate output is reproduced above; the original transient Wine log
+is not retained in the repository.
 
 ### Artifacts (`build/win64_phase1/`)
 
@@ -47,7 +48,11 @@ Recorded log: [`showversion.log`](showversion.log)
 - POSIX stubs (`compat/src/win64_posix_stubs.c`) + force-included `mdvm_win64_prelude.h`.
 - Static intermediate libs for artbase/dexfile/profile/unwindstack (DLL data-export issues avoided).
 - Windows cpu_features (`impl_x86_windows.c`).
-- Runtime instance load for asm via `art_Runtime_instance_ptr` / `LOAD_RUNTIME_INSTANCE` PE path.
+- Runtime instance loading for assembly originally used the Phase-1
+  `art_Runtime_instance_ptr` / `LOAD_RUNTIME_INSTANCE` PE helper path. W-004
+  later retired the helper in favor of a one-instruction same-image load of the
+  existing `Runtime::instance_` symbol; the structural gate is
+  `check_w004_runtime_load.py`.
 
 ### Critical fixes for A2
 
@@ -94,4 +99,4 @@ WINEDEBUG=-all wine64 ./dalvikvm.exe -showversion
 | `vendor/art/runtime/multiplatform/windows/*` | thread/runtime/monitor/sigchain stubs |
 | Archive `libnativehelper/JniInvocation.c`, `DlHelp.c` | PE library load name + LoadLibraryA |
 | `vendor/art/runtime/base/mutex-inl.h` | WaitOnAddress futex path |
-| `vendor/art/runtime/arch/x86_64/asm_support_x86_64.S` | PE `LOAD_RUNTIME_INSTANCE` |
+| `vendor/art/runtime/arch/x86_64/asm_support_x86_64.S` | PE `LOAD_RUNTIME_INSTANCE` (Phase-1 helper later replaced by W-004 direct load) |

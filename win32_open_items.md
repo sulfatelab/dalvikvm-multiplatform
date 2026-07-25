@@ -102,20 +102,21 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Opened:** 2026-07-16
 - **Updated:** 2026-07-18 — Win SETUP enabled
 
-### W-004 — `LOAD_RUNTIME_INSTANCE` PE helper call (vs GOT)
-- **State:** OPEN (redesign drafted; implementation and native acceptance pending)
-- **Kind:** workaround / assembly ABI debt
+### W-004 — `LOAD_RUNTIME_INSTANCE` direct PE singleton load
+- **State:** OPEN (implementation, structural, Wine, and Linux acceptance complete; native Windows pending)
+- **Kind:** native-host acceptance gap
 - **Area:** art / asm
-- **Symptom / why:** The Windows macro crosses the Microsoft x64 C ABI merely to read `Runtime::instance_`. It mutates the stack and flags and introduces volatile-register side effects that the Linux/other-ISA data-load macros do not have. The `rcx` destination and later `r11` caller-PC collisions already required path-specific repairs; generic JNI also re-materializes `xmm0` after the helper.
-- **Current behavior:** Win64 calls `art_Runtime_instance_ptr` with 32-byte shadow space plus alignment, dereferences the returned `Runtime**`, and uses `r11` as scratch. The current RelWithDebInfo input objects contain 574 helper-call relocations (563 quick, 10 generated nterp, 1 JNI), so this is a broadly expanded core-runtime sequence rather than a cold compatibility shim.
+- **Symptom / why:** The retired Windows macro crossed the Microsoft x64 C ABI merely to read `Runtime::instance_`. It mutated the stack and flags and introduced volatile-register side effects that the Linux/other-ISA data-load macros do not have. The `rcx` destination and later `r11` caller-PC collisions required path-specific repairs; generic JNI also re-materialized `xmm0` after the helper.
+- **Current behavior:** Win64 directly loads `?instance_@Runtime@art@@0PEAV12@EA` with one same-image RIP-relative `movq`. The current RelWithDebInfo input objects contain 574 direct `IMAGE_REL_AMD64_REL32` relocations (563 quick, 10 generated nterp, 1 JNI), zero retired helper references, and no helper-specific `r11` or immediate `xmm0` compensation. Linux retains its original two-instruction GOT sequence.
 - **Research finding:** `Runtime::instance_` is already explicitly exported/imported by `LIBART_PROTECTED`. With the selected clang GNU driver, lld, and MSVC ABI, a quoted direct reference to `?instance_@Runtime@art@@0PEAV12@EA` assembles as `IMAGE_REL_AMD64_REL32` and links inside `art.dll` to one 7-byte RIP-relative load. Same-image ASLR preserves the displacement. External consumers keep normal `dllimport`/IAT behavior.
-- **Proper fix (draft):** Replace only the Windows macro body with a direct same-image load of the existing MS-mangled data symbol; keep Linux byte-for-byte unchanged. Delete `art_Runtime_instance_ptr`, helper-only `Runtime::InstanceLocation()`, and the helper-specific `r11`/`xmm0` compensations. Add a PE structural gate, full Wine regression, Linux controls, and a focused native-Windows acceptance package before closure.
+- **Implemented proper fix:** Replaced only the Windows macro body with the direct same-image load; deleted `art_Runtime_instance_ptr`, helper-only `Runtime::InstanceLocation()`, and the obsolete helper-specific `r11`/`xmm0` compensations. Explicit dependencies now make all five assembly consumers rebuild when shared assembly support changes.
+- **Verification:** `check_w004_runtime_load.py` validates the source cleanup, unchanged Linux macro, direct relocation/disassembly shape, export/import contract, zero helper references, and assembly dependencies. Clean and incremental `-j32` builds pass; Phase 3, Phase 4, JIT 12/12 and 14/14, CriticalNative, normal/FastNative, JVMTI, GC/thread/handle/crash Wine gates, Linux shared-boot Hello, and Linux GC stress pass. See [RESULT-w004-runtime-load.md](tools/verify/win64_phase4/RESULT-w004-runtime-load.md).
 - **Important scope:** Dynamically generated JIT code does not use this macro. Do not require or reuse this same-image RIP-relative sequence for the low-4-GiB JIT cache, which may be more than signed 32-bit reach from `art.dll`; that remains W-025 territory.
 - **Rejected permanent designs:** Retaining/hardening the call helper; importing `art.dll` from itself; caching `Runtime*` in `Thread`. A stable C assembly label on the existing member is the first fallback if maintaining the MS-mangled spelling becomes unacceptable; an exported `Runtime**` address cell is second fallback.
-- **Code anchors:** `vendor/art/runtime/arch/x86_64/asm_support_x86_64.S` (`LOAD_RUNTIME_INSTANCE`); `quick_entrypoints_x86_64.S` (generic-JNI `xmm0` compensation); `jni_entrypoints_x86_64.S` (critical dlsym `r11` compensation); `runtime/multiplatform/windows/runtime_windows.cc` (`art_Runtime_instance_ptr`); `runtime/runtime.h` (`instance_`, helper-only `InstanceLocation()`); `libartbase/base/macros.h` (`LIBART_PROTECTED`, helper ABI comment)
+- **Code anchors:** `vendor/art/runtime/arch/x86_64/asm_support_x86_64.S` (`LOAD_RUNTIME_INSTANCE`); `tools/verify/win64_phase1/CMakeLists.txt` (assembly dependencies); `tools/verify/win64_phase1/check_w004_runtime_load.py` (structural gate)
 - **Design / gates:** [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md) §6.7
 - **Opened:** 2026-07-16
-- **Updated:** 2026-07-25 — direct same-image PE/COFF design selected for the draft; implementation not started
+- **Updated:** 2026-07-25 — direct load implemented and locally accepted; native Windows closure package pending
 
 ### W-008 — Some product smoke still passes `-Xint` / imageless / `-Xno-sig-chain`
 - **State:** OPEN (partial — managed JIT suites run without `-Xint`; older product/diagnostic probes retain it)
@@ -183,7 +184,7 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Area:** art / libcore / JNI ABI
 - **Symptom / why:** Official AOSP libcore marks many natives `@CriticalNative` or `@FastNative` (Math/StrictMath were **@FastNative → @CriticalNative** in AOSP; see libcore `d021f1d8475c`). The concrete compiler/stub ABI defects, transition coverage, product demotions, native-host validation, diagnostic gate, and defensive interpreter fallbacks are now resolved:
   1. **Fixed:** the compiled-JNI adapter now keeps incoming ART-managed registers separate from outgoing Microsoft x64 native registers.
-  2. **Fixed:** optimizing direct CriticalNative calls now use unified Microsoft x64 ordinals, reserve the 32-byte shadow area, spill after it, and preserve the unresolved dlsym caller PC across the PE `r11` scratch use.
+  2. **Fixed:** optimizing direct CriticalNative calls now use unified Microsoft x64 ordinals, reserve the 32-byte shadow area, and spill after it. The original W-024 repair also preserved the unresolved dlsym caller PC across the then-current PE `r11` scratch use; W-004 later removed both the helper scratch and that local reload.
   3. **Fixed/covered:** mixed-signature unresolved app-JNI CriticalNative dlsym calls now resolve through ART's native-library registry and pass with core/FP, stack-spilled, and scalar-return shapes.
   4. **Fixed/covered:** mixed/high-FP compiled normal/FastNative stubs now pass for registered and unresolved app JNI, static and instance methods, references, six managed FP ordinals, unified Win64 slots, deep stack spills, and double returns.
   5. **Fixed/covered:** already-compiled normal/FastNative thunks survive class-wide `UnregisterNatives`, dlsym re-resolution, and a second `RegisterNatives` table without recompilation.
@@ -208,7 +209,7 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
   1. `GetCriticalNativeDirectCallFrameSize("J")` correctly returned 32 on Win64, while the old optimizing direct-call visitor reported zero and emitted no `sub rsp, 32`.
   2. The dlsym stub therefore positions its 208-byte SaveRefsAndArgs frame 32 bytes too high; the walker reads caller spill data (`0x0000000100000001`) as the next `ArtMethod*`.
   3. Adding the missing 32-byte outgoing area corrected the walk and exposed the `LOAD_RUNTIME_INSTANCE` `r11` clobber, which made native return execute `Runtime*`.
-  4. The final visitor plus local `r11` reload are landed. The combined acceptance harness passes 5/5 threshold-zero runs in each memory mode; earlier focused repetitions also passed 10/10 in each mode.
+  4. The final visitor and its original local `r11` reload landed together. W-004 later replaced the helper with a direct same-image data load and removed the now-unnecessary reload. The combined acceptance harness passes 5/5 threshold-zero runs in each memory mode; earlier focused repetitions also passed 10/10 in each mode.
   5. `CriticalNativeProbe` adds registered direct-call coverage for zero, FP-only, mixed integer/FP, stack-spilled arguments, and scalar returns. It passes 5/5 in each memory mode.
   6. The first unresolved mixed probe returned zeros because the old Win64 `Runtime.nativeLoad` shortcut called `LoadLibraryA` and `JNI_OnLoad` without registering the DLL in `JavaVMExt::libraries_`. `JVM_NativeLoad` now delegates to `art.dll!ART_LoadNativeLibrary` and `JavaVMExt::LoadNativeLibrary`, matching AOSP ownership.
   7. Host `OpenNativeLibrary` now recognizes Windows drive, root, and UNC absolute paths. Its internal search list intentionally remains colon-separated because `BaseDexClassLoader.getLdLibraryPath()` normalizes the platform-facing semicolon list to that ART contract.
@@ -242,7 +243,7 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
   7. **Landed this stage:** cover full JVMTI forced-interpreter transitions with thread-scoped single-step across registered/unresolved normal, FastNative, and CriticalNative calls in both memory modes.
   8. **Landed this stage:** add a Win64 branch to `CriticalNativeCallingConventionVisitorX86_64` using unified four-slot Microsoft x64 registers, a 32-byte shadow area, and stack arguments after it.
   9. **Landed this stage:** initialize the visitor stack offset with the shadow area so spilled arguments cannot overlap the home area.
-  10. **Landed this stage:** preserve the unresolved-stub caller PC across `LOAD_RUNTIME_INSTANCE` by reloading it from the existing saved return-PC slot on Windows.
+  10. **Historically landed, later retired by W-004:** preserved the unresolved-stub caller PC across the old helper-based `LOAD_RUNTIME_INSTANCE` by reloading it from the existing saved return-PC slot on Windows. The direct same-image load no longer clobbers `r11`, so the reload is absent from current source.
   11. **Landed and native-host accepted:** add direct-call tests for unresolved `()J`, registered FP-only/mixed/spilled signatures, and unresolved exported mixed-signature dlsym calls.
   12. **Landed this stage:** restore **every identified** multipath Java demotion of methods originally `@CriticalNative` / `@FastNative`; Math.ceil/floor are native + `@CriticalNative` again.
   13. **Landed this stage:** re-register Math natives through one common ELF/PE table with AOSP-correct CriticalNative function pointers.
@@ -272,7 +273,7 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
   - `vendor/art/compiler/utils/x86_64/jni_macro_assembler_x86_64.cc` and `assembler_x86_64_test.cc` (XMM-to-XMM argument moves)
   - `vendor/art/runtime/arch/x86_64/jni_frame_x86_64.h` (Win64 shadow size and direct-call frame calculation)
   - `vendor/art/runtime/arch/x86_64/jni_entrypoints_x86_64.S` (`art_jni_dlsym_lookup_critical_stub`)
-  - `vendor/art/runtime/arch/x86_64/asm_support_x86_64.S` (`LOAD_RUNTIME_INSTANCE`, Win64 `r11` scratch)
+  - `vendor/art/runtime/arch/x86_64/asm_support_x86_64.S` (current direct `LOAD_RUNTIME_INSTANCE`; the Win64 `r11` scratch was retired by W-004)
   - `vendor/art/openjdkjvm/openjdkjvm_memory_windows.cc` (`ART_LoadNativeLibrary` bridge)
   - `vendor/art/libnativeloader/native_loader.cpp` (Windows absolute paths; internal colon-separated search contract)
   - `vendor/libcore/ojluni/src/main/java/java/lang/Math.java` (restored native CriticalNative ceil/floor)
@@ -641,7 +642,7 @@ _No open design notes. Closed D- items live under §Closed._
 ## Suggested next closures (priority)
 
 1. ~~**D-001**~~ **CLOSED** — single shared boot.jar (runtime OS selection); dual-host FS smoke is not the close bar.  
-2. ~~**W-001**, **W-011**, **W-012**, and **W-024**~~ closed; **W-002–W-004** retain residual TLS/entrypoint/assembly cleanup, with the W-004 direct-load draft ready for implementation.
+2. ~~**W-001**, **W-011**, **W-012**, and **W-024**~~ closed; **W-002/W-003** retain residual TLS/entrypoint cleanup, while **W-004** awaits only native Windows acceptance of its implemented direct load.
 3. ~~**L-001**~~ — **CLOSED** real PE libcore/openjdk/ICU hybrid; residual Linux TU/bridge growth optional.  
 4. **H-001** — host Phase-4 with multiplatform package.  
 5. ~~**L-005** — Linux Hello gate~~ **CLOSED**.
@@ -668,7 +669,7 @@ _No open design notes. Closed D- items live under §Closed._
   - **Temporary J-1 diagnostic workaround:** `ART_WIN64_JIT_DUAL=0` selects the single-view `VirtualAlloc` path for comparison or emergency diagnosis. It writes code through an RX-to-RWX-to-RX transition and is not the product default.
   - **No disk file:** the section is unnamed and backed by the Windows paging system; no temporary filesystem object, pseudo-fd, or Windows memfd emulation is created.
   - **Historical separated-view defect:** the retired layout placed code far from roots and stack maps, overflowing signed 32-bit JIT-root displacements and uint32 CodeInfo distance. The corrected topology removes that layout.
-  - **Threshold-zero stress:** resolved outside memory topology. The direct `@CriticalNative` path now has Win64 shadow/unified-argument handling and preserves its caller PC across the PE `LOAD_RUNTIME_INSTANCE` `r11` scratch. Repeated J-1 and dual-view acceptance passes; W-024 is closed.
+  - **Threshold-zero stress:** resolved outside memory topology. The direct `@CriticalNative` path has Win64 shadow/unified-argument handling. W-024 originally added a caller-PC reload around the helper-based runtime load; W-004 subsequently replaced that helper with a direct load that does not clobber `r11` and removed the reload. Repeated J-1 and dual-view acceptance passes; W-024 is closed.
   - Native methods follow the common ART JIT policy by default. The 7/7 mixed/high-FP normal/FastNative matrix passes across rebinding and tracing; the separate CriticalNative suite passes tracing in both memory modes; the JVMTI forced-interpreter matrix passes 3/3 per mode; and restored Math CriticalNative passes dual/J-1/-Xint plus Linux controls.
 - **Implemented proper fix:** Keep ART's observable layout and post-mapping JIT logic Linux-like while containing the Windows difference in the section-allocation helper:
   1. Require Windows 10 version 1803 or later and link `onecore.lib` for `MapViewOfFile3`.
