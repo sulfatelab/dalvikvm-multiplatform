@@ -1,6 +1,6 @@
 # Win64 heap memory and embedded dlmalloc design — W-013
 
-**Status:** implementation in progress; Stages A–D complete, Stage E remains OPEN
+**Status:** Stages A–E complete; native Windows closure stress remains OPEN
 **Updated:** 2026-07-25
 **Target baseline:** Windows 10 version 1803 or later (NTDDI_WIN10_RS4)
 **Related:** [win32_open_items.md](win32_open_items.md) W-013,
@@ -44,8 +44,9 @@ discovery. Stage C replaced the implicit anonymous low-address policy and
 manual hole scan with explicit `VirtualAlloc2` constraints, and added shared
 whole-allocation ownership for Windows `MemMap` ranges. Stage D then routed
 heap activation, deactivation, and discard through those owning mappings on
-both Windows and Linux. W-013 remains open until the low-VA audit and closure
-matrix are complete.
+both Windows and Linux. Stage E restored Linux-like placement for metadata
+arenas, LinearAlloc, and the card table, and removed the Win64-only card-mark
+skip. W-013 remains open until the native Windows closure matrix is complete.
 
 ## 1. Goals and invariants
 
@@ -117,9 +118,9 @@ authority to create unrelated mappings.
 
 ## 3. Current implementation and remaining divergence
 
-Stages A through D removed the configuration, owner-discovery, anonymous
-mapping-policy, and heap page-state shortcuts. The remaining implementation
-divergence is:
+Stages A through E removed the configuration, owner-discovery, anonymous
+mapping-policy, heap page-state, blanket low-metadata, and skipped-card
+shortcuts. The remaining implementation divergence is:
 
 | Area | Current behavior | Target behavior |
 |------|------------------|-----------------|
@@ -135,7 +136,8 @@ divergence is:
 | logical shrink | `SetSize()` and `AlignBy()` retain the whole Windows allocation, discard/deactivate excluded pages, and shrink only the logical range | Complete in Stage D |
 | heap page state | dlmalloc and RosAlloc growth, shrink, clear, and page release call `MemMap::ActivateRange()`, `DeactivateRange()`, and `DiscardRange()` | Complete in Stage D |
 | fixed file overlay | `MapViewOfFileEx` cannot replace an ordinary `VirtualAlloc` reservation in place | Remains unsupported; use an explicit placeholder design before enabling image/OAT paths that require this operation |
-| low metadata | Win64 currently forces ordinary arena pools, compiler metadata, LinearAlloc, and the card table low | Keep low placement only where an encoding or object-reference contract requires it |
+| low metadata | Runtime/compiler/JIT arenas, ordinary LinearAlloc, and the card table use anywhere mappings as on Linux | Complete in Stage E |
+| invalid card address | `CardTable::MarkCard()` follows the common checked path; Windows no longer logs once and silently skips the write barrier | Complete in Stage E |
 
 The current code must not be described as complete merely because Hello,
 GcProbe, or the JIT suites pass. `GcProbe` primarily exercises large-object
@@ -354,22 +356,27 @@ The following ranges remain below 4 GiB where applicable:
 - the complete JIT primary view described in
   [win32_jit_memory.md](win32_jit_memory.md).
 
-### 7.2 Consumers to audit and normally release from low VA
+### 7.2 Audited metadata consumers
 
-The following are metadata or native implementation storage and should use
-anywhere mappings unless a specific encoding audit proves a constraint:
+The Stage E audit produced these outcomes:
 
-- ordinary LinearAlloc storage;
-- runtime, compiler, and JIT metadata arena pools;
-- card tables, space bitmaps, read-barrier tables, and allocation-info maps;
-- native stacks, reference tables, temporary mappings, and test buffers.
+| Consumer | Placement | Reason |
+|----------|-----------|--------|
+| ordinary `arena_pool_` and `jit_arena_pool_` | anywhere | verifier/compiler/JIT native metadata has no compressed-reference representation |
+| ordinary LinearAlloc | anywhere | 64-bit runtime `ArtMethod`, field, IMT, and dex-cache metadata uses pointer-size-aware storage; only the existing AOT cross-compilation case retains the upstream low pool |
+| card table | anywhere | x86-64 card marking loads the full biased pointer from `Thread` and adds a 64-bit shifted object address; the table does not need to share the heap's address range |
+| space bitmaps, read-barrier tables, allocation-info maps, reference tables, stacks, and temporary buffers | anywhere | these call sites were already unrestricted; Stage E found no Win64 blanket-low branch to remove |
 
-The existing Win64 blanket low placement for `arena_pool_`, `jit_arena_pool_`,
-`linear_alloc_arena_pool_`, and the card table is a Phase-2 stabilization
-policy, not the target architecture. Remove each constraint only after auditing
-its consumers. If a field or instruction encoding truncates a pointer, fix and
-validate that encoding at its construction site instead of forcing an entire
-unrelated arena low.
+The removed Phase-2 policy forced `arena_pool_`, `jit_arena_pool_`,
+`linear_alloc_arena_pool_`, and the card table below 4 GiB. Stage E also
+removed a Windows-only `MarkCard()` range check that logged once and returned
+without marking. That was a bring-up workaround, not a safe recovery policy:
+silently losing a dirty-card write can hide heap corruption.
+
+The regression audit pins all remaining literal product low requests to eight
+source files covering object spaces, heap/image reservations, the JIT primary
+view, and the exact sentinel page. A new low consumer must update the audit and
+state its encoding or exact-address reason.
 
 ## 8. Rejected and deferred alternatives
 
@@ -480,15 +487,29 @@ Linux `-j16` build, Linux imageless Hello, and Linux GCStress pass. Evidence:
 
 ### Stage E — reduce low-address use
 
+**Completed:** 2026-07-25
+
 1. Inventory every `low_4gb=true` call site and every Win64-only forced-low
    branch.
 2. Classify the exact encoding/reference constraint.
 3. Remove low placement from metadata and native storage when unneeded.
 4. Add targeted range/encoding checks where a real constraint remains.
 
-Stages A through D are the W-013 correctness fix. Stage E is required before
-W-013 closes because the remaining blanket forced-low consumers can hide
-encoding regressions and exhaust the address range under stress.
+Landed as ART `47567cebcc`. Runtime/compiler/JIT arenas, ordinary LinearAlloc,
+and the card table now follow the Linux anywhere policy. Java object spaces,
+LOS, image/heap ranges, and the complete JIT primary view remain low; the
+sentinel page remains an exact low-address request. The common unconditional
+card-marking path is restored.
+
+`tools/verify/win64_w013/run_low_4gb_policy_probe.sh` rejects the old forced-low
+branches, rejects a Windows-specific card-table path, and pins the remaining
+required-low source inventory. Win64 `-j16` build, JIT smoke 12/12, GCStress,
+ThreadHeavy, HandleLeak, Linux `-j16` build, imageless Hello, and Linux
+GCStress pass. Evidence: `tools/verify/win64_w013/RESULT.md`.
+
+Stages A through E implement the W-013 design. Native Windows pressure,
+commit-charge, protection/extent, and repeated-start acceptance remain part of
+the closure matrix.
 
 ## 10. Verification and closure bar
 
@@ -558,8 +579,9 @@ W-013 can move to CLOSED only when all of the following are true:
 8. The tracker and historical Phase-2 notes point to the landed implementation
    rather than the macro-masking workaround.
 
-Until then, the current behavior remains a documented workaround, not a
-permanent allocator policy.
+Until then, the permanent design is implemented but W-013 remains unclosed
+pending native acceptance. No macro-masking, blanket forced-low metadata, or
+skipped-card workaround remains in the product path.
 
 ## 12. Code anchors
 
@@ -573,7 +595,7 @@ permanent allocator policy.
 | JIT mspaces and growth | `vendor/art/runtime/jit/jit_memory_region.cc` |
 | common `MemMap` policy | `vendor/art/libartbase/base/mem_map.{h,cc}` |
 | Windows VM backend | `vendor/art/libartbase/base/mem_map_windows.cc` |
-| Win64 forced-low arenas | `vendor/art/runtime/runtime.cc` |
+| low-address consumer policy | `vendor/art/runtime/runtime.cc`; `vendor/art/runtime/gc/accounting/card_table.{h,cc}` |
 
 ## 13. External API references
 

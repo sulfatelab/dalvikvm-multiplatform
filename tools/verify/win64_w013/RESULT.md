@@ -1,6 +1,6 @@
 # W-013 Win64 heap-memory implementation
 
-**Status:** Stages A–D PASS; Stage E and native closure stress remain OPEN
+**Status:** Stages A–E PASS; native closure stress remains OPEN
 **Date:** 2026-07-25
 **Host:** agent01
 
@@ -131,11 +131,46 @@ W013_MEM_MAP_POLICY_PASS anywhere=00007FFFFE7C0000 low=0000000000010000 boundary
 The source gate rejects direct `mprotect()`/`madvise()` calls in malloc-space,
 dlmalloc-space, RosAlloc-space, and RosAlloc allocator transition paths.
 
+## Stage E — audited low-address consumers
+
+ART commit: `47567cebcc`
+
+Landed behavior:
+
+- ordinary runtime and verifier arenas use unrestricted mappings as on Linux;
+- compiler/JIT metadata arenas use unrestricted mappings as on Linux;
+- ordinary runtime LinearAlloc no longer creates a Win64-only low arena pool;
+- the upstream AOT cross-compilation low-LinearAlloc condition remains intact;
+- the card table uses an unrestricted mapping because x86-64 card marking
+  loads its full biased pointer and uses a 64-bit object-derived index;
+- the Windows-only `MarkCard` OOB log-and-skip path is removed, restoring the
+  common checked write barrier; and
+- Java object spaces, LOS, required image/heap reservations, the complete JIT
+  primary view, and the exact sentinel request remain low.
+
+Focused audit command:
+
+```text
+tools/verify/win64_w013/run_low_4gb_policy_probe.sh
+```
+
+Observed:
+
+```text
+W013_LOW_4GB_POLICY_PASS required_files=8 metadata=anywhere card_mark=unconditional
+```
+
+The audit rejects the retired `win64_low_4gb` branch, the retired card-mark
+skip, any Windows-specific card-table behavior, and changes to the exact set of
+product files containing literal required-low requests.
+
 ## Integration verification
 
 ```text
 cmake --build build/win64_phase1 --target art dalvikvm -j16
+tools/verify/win64_w013/run_dlmalloc_config_probe.sh
 tools/verify/win64_w013/run_mem_map_policy_probe.sh
+tools/verify/win64_w013/run_low_4gb_policy_probe.sh
 tools/verify/win64_phase4/run_jit_smoke.sh
 tools/verify/win64_phase4/run_gcstress.sh
 tools/verify/win64_phase4/run_threadheavy.sh
@@ -150,12 +185,17 @@ Results:
 - Win64 `art.dll` and `dalvikvm.exe`: build PASS;
 - Win64 W-013 address-policy/ownership probe: PASS, including the tested
   4-GiB boundary and exactly-once owner release;
+- Win64 W-013 low-address source audit: PASS, with eight required-low product
+  files and unrestricted metadata/card-table policy;
 - Win64 JIT smoke under Wine: 12/12 PASS;
 - Win64 GCStress, ThreadHeavy, and HandleLeak under Wine: PASS;
 - Linux `libart.so` and `dalvikvm`: full rebuild PASS;
 - Linux L-005 imageless Hello: PASS, exit 0;
 - Linux GCStress: PASS, including repeated explicit CMS collections.
 
-Stages A through D do not close W-013. Low-VA reduction, fixed file-overlay
-design if image/OAT loading needs it, native Windows commit/stress acceptance,
-and the complete closure matrix remain.
+Stages A through E implement the accepted W-013 design. Fixed file-overlay over
+an ordinary `VirtualAlloc` reservation remains unsupported and is not used by
+the imageless/JIT path; any future image/OAT implementation that needs it must
+use placeholder APIs and rollback. Native Windows commit/pressure,
+protection/extent, repeated-start, and the remaining closure matrix still keep
+W-013 open.

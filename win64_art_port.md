@@ -768,9 +768,10 @@ See `tools/verify/win64_phase2/RESULT.md` and `tools/verify/win64_phase1/hello_a
 ### Landed (runtime)
 - dlmalloc WIN32 mmap override fixed (MORECORE, low-4g non-moving).
 - MemMap `mprotect`/`msync`/`madvise` Win64 behavior.
-- LinearAlloc / arena pools forced **low 4GB** on Win64 as a Phase-2
-  stabilization measure; W-013 now requires an encoding audit before retaining
-  that policy.
+- LinearAlloc / arena pools were forced **low 4GB** on Win64 as a Phase-2
+  stabilization measure. W-013 Stage E removed that policy after the encoding
+  audit; runtime/compiler/JIT metadata and the card table now follow Linux-like
+  anywhere placement.
 - VEH register + stack dump; SignalCatcher skipped; `-Xno-sig-chain` allowed.
 - **SysV vs MSVC ABI:**
   - Win64 `ArtMethod::Invoke` → `EnterInterpreterFromInvoke` (skip quick invoke stubs).
@@ -800,14 +801,15 @@ ART MoreCore, and registered the non-moving space as `dlmalloc_space_`. The
 rebuild and imageless Hello rerun completed successfully; the old "pending"
 wording was historical and is removed here.
 
-That recovery fix was not the final allocator architecture. W-013 Stage A
-removed the macro masking on 2026-07-25: Windows macros remain visible,
-dlmalloc respects embedding-provided configuration, ART compile-checks its
-MoreCore-only policy, and Win32 MoreCore uses page-size growth granularity.
-Remaining stages attach each mspace directly to its owner, make
-anywhere/low/exact address policy explicit, use `VirtualAlloc2` constraints,
-repair mapping ownership, and audit the Phase-2 blanket low placement for
-LinearAlloc and metadata arenas. See
+That recovery fix was not the final allocator architecture. W-013 Stages A–E
+landed on 2026-07-25: Windows macros remain visible; dlmalloc respects
+embedding-provided configuration; ART compile-checks its MoreCore-only policy;
+Win32 MoreCore uses page-size growth granularity; each mspace dispatches to its
+attached owner; anywhere/low/exact address policy is explicit; `VirtualAlloc2`
+enforces constrained placement; `MemMap` owns page-state transitions and whole
+Windows mappings; and the Phase-2 blanket low placement for LinearAlloc,
+metadata arenas, and the card table is removed. The Win64-only card-marking
+skip is also gone. Native Windows closure stress remains. See
 [win32_heap_memory.md](win32_heap_memory.md) and
 [win32_open_items.md](win32_open_items.md) W-013.
 
