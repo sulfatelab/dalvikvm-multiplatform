@@ -1,9 +1,9 @@
 # W-002 managed-entry repair
 
-**Status:** IMPLEMENTATION PASS; WINE AND LINUX PASS; NATIVE WINDOWS
-ACCEPTANCE PENDING
+**Status:** IMPLEMENTATION PASS; WINE AND LINUX PASS; NATIVE WINDOWS R1
+PARTIAL PASS; DETERMINISTIC NTERP-OSR R2 PENDING
 
-**Date:** 2026-07-25
+**Date:** 2026-07-26
 
 **Host:** agent01
 
@@ -23,7 +23,10 @@ The repaired paths now preserve the normal ART/Linux structure:
 - native attached threads publish rSELF only when they cross the existing
   quick-invoke boundary.
 
-W-002 remains open only for the issued native Windows 10 acceptance run.
+W-002 remains open for a revised native Windows 10 acceptance run. Native R1
+accepted the package, structure, attached-thread path, and switch OSR path, but
+the default-nterp workload completed before it deterministically jumped into
+the asynchronously compiled OSR method.
 
 ## Quick/switch OSR root cause and fix
 
@@ -211,3 +214,49 @@ python3 tools/verify/win64_phase4/review_w002_host_result.py \
 
 The expected native result has 21 PASS records over 16 child processes and
 ends in `OVERALL PASS`. Until that evidence returns, W-002 remains open.
+
+## Native Windows R1 result
+
+R1 evidence is `/tmp/w002-run1.zip`, SHA-256
+`0a1fa8ac02a3eba7d536d539c8fc77ad7c596e93e85c3bbc07191ba66e6e6b81`.
+It was produced on Windows 10 Enterprise LTSC build 19044 x64 with PowerShell
+5.1. The evidence archive and the issued package have identical
+`BUILD_INFO.txt`, `MANIFEST.json`, `SHA256SUMS.txt`, and
+`W002_STRUCTURAL_REPORT.txt` metadata.
+
+The native result contains 17 PASS and 4 FAIL records:
+
+| Control | Native R1 result |
+|---------|------------------|
+| Host and package identity | PASS |
+| Artifact-bound structural report | PASS |
+| Attached threads, all four mode pairs, two repeats | PASS, 8/8 |
+| Switch OSR, dual and J-1, two repeats | PASS, 4/4 |
+| Default-nterp OSR, dual and J-1, two repeats | INCOMPLETE, 0/4 required jumps |
+| Fatal-log scan | PASS |
+| Recursive crash-dump scan | PASS, `NO_DMP_FILES` |
+
+All 16 child processes exited zero without a timeout. Every OSR process
+returned the exact checksum and `main end exception=0`. Both dual/default
+runs and J-1/default run 2 completed baseline and OSR compilation, but the
+loop ended without `Jumping to long W002OsrProbe.osrLoop(int)`. J-1/default
+run 1 completed baseline compilation before the loop ended.
+
+The R1 command supplied `-Xjitthreshold:100` but not
+`-Xjitwarmupthreshold`. Its runtime configuration therefore reported
+`warmup_threshold=65535, optimize_threshold=100`. Native nterp completed the
+300,000-iteration loop before asynchronous OSR installation was followed by
+another hotness check that could enter compiled code. The slower Wine runs
+had enough time to make the same workload pass, so the previous gate was
+timing-dependent.
+
+R2 must explicitly lower the warmup threshold and lengthen the exact-checksum
+workload. This is a test-determinism correction. R1 contains no evidence of a
+crash, runtime corruption, bad result, or failure in the nterp return adapter;
+that adapter remains unaccepted on native Windows until R2 records the jump.
+
+The current reviewer rejects the otherwise valid evidence-only return because
+it expects the complete issued payload as well as the matching identity
+metadata. R2 tooling must accept the evidence-only form after exact metadata
+comparison while retaining strict log, result-record, fatal-marker, and dump
+checks.

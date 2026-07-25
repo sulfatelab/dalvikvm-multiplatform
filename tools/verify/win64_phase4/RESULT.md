@@ -104,7 +104,7 @@ relocations and zero retired-helper references. Full focused results and the
 accepted native-Windows closure are recorded in
 [`RESULT-w004-runtime-load.md`](RESULT-w004-runtime-load.md).
 
-## W-002 managed-entry re-run (2026-07-25)
+## W-002 managed-entry re-run (2026-07-26)
 
 The quick/switch OSR stub now keeps its Microsoft C++ entry, converts arguments
 inside assembly, preserves Win64 nonvolatiles, and publishes rSELF in r15.
@@ -122,7 +122,11 @@ Focused Wine acceptance passes:
 The complete Phase 3 aggregate, Win64 build, Linux full build, Linux
 shared-boot Hello/GC, and Linux nterp OSR control also pass. The focused native
 Windows package passes its manifest/export checks and all eight staged-package
-Wine combinations. W-002 remains open only for native Windows 10 RS4+
-acceptance. See
+Wine combinations. Native Windows R1 then passes package identity, structure,
+all 8/8 attached-thread processes, and all 4/4 switch-OSR processes with no
+fatal marker or dump. Its four clean default-nterp processes miss the OSR jump
+because the runner left the nterp warmup threshold at 65535 and the short loop
+finished before the asynchronous transition. W-002 remains open for a
+deterministic native Windows 10 RS4+ R2. See
 [`RESULT-w002-managed-entry.md`](RESULT-w002-managed-entry.md) and
 [`W002_HOST_CHECKLIST.md`](W002_HOST_CHECKLIST.md).
