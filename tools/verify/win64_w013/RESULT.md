@@ -1,6 +1,6 @@
 # W-013 Win64 heap-memory implementation
 
-**Status:** Stages A–E PASS; native R1 reviewed and repaired; R2 acceptance pending
+**Status:** CLOSED — Stages A–E and native Windows R2 acceptance PASS
 **Date:** 2026-07-25
 **Host:** agent01
 
@@ -272,6 +272,8 @@ Results:
 - Linux `libart.so` and `dalvikvm`: full rebuild PASS;
 - Linux L-005 imageless Hello: PASS, exit 0;
 - Linux GCStress: PASS, including repeated explicit CMS collections.
+- Native Windows R2: 56/56 acceptance records PASS with complete exits and
+  sampled metrics, 20/20 repeated starts, and no crash dumps.
 
 ## Native Windows R1 review
 
@@ -321,9 +323,55 @@ consecutive HandleLeak runs, NetProbe, IoProbe, dual-view JIT smoke 12/12, and
 J-1 Hello with 31 successful compilations. R1 remains a failed evidence set;
 only a newly built and returned R2 package can close native acceptance.
 
-## Native Windows handoff
+## Native Windows R2 acceptance
 
-The remaining host-only matrix is packaged by:
+Returned evidence:
+
+```text
+archive w013-log-r2.7z
+SHA-256 456e297d70c2f166308c869812ddec262fa38bc6dcd2852ea56edd5b2205078e
+issued package SHA-256 935708f339e39ef0e3f2c2f2239997adc7fa42907977b83f5870de45d3b1e0a7
+root commit c909ca797372dbd30464f7ca1279380510d0f231
+ART commit 27a1ac74a42957d68d1e21eb941e13e7976f8085
+Windows 10 Enterprise LTSC 2021 build 19044
+PowerShell 5.1.19041.7548
+result OVERALL PASS
+```
+
+The returned `BUILD_INFO.txt`, `MANIFEST.json`, and `SHA256SUMS.txt` match the
+issued R2 package byte for byte. Independent review found 56 PASS records and
+zero failures. All 52 child logs have an expected numeric exit code,
+`timed_out=False`, `metrics_sampled=True`, and nonnegative paged, working-set,
+and virtual-memory peaks; no launch error is present.
+
+Native coverage passed:
+
+- mapping/configuration/owner probes, including 32 protection transitions,
+  3,856-way low-VA fragmentation, complete low-VA exhaustion and recovery,
+  and 128 repeated owner destructions;
+- non-moving pressure at 128-MiB and 1-GiB `-Xmx`, each churning 75,497,472
+  bytes with stable low addresses and post-GC regrowth;
+- forced/moving/LOS GC, GCStress, ThreadHeavy, and HandleLeak; HandleLeak
+  completed 400 file cycles, 80 socket cycles, and the final regular-file
+  round trip;
+- 512-MiB and 1-GiB startup, with the 1-GiB cases reaching about 2.32 GB peak
+  paged bytes and 1.08 GB peak working set on a host with 34.3 GB RAM and a
+  9-GiB pagefile;
+- default dual-view JIT with 30 successful compilations and diagnostic J-1
+  with 26, both completing Hello with no JNI exception;
+- JIT disable/usejit/filter/exclude/quiet modes and the fourteen-case matrix;
+- twenty independent default-JIT starts; and
+- fatal/access-violation scan plus recursive dump scan (`NO_DMP_FILES`).
+
+The mapping probe's overflow message is the expected rejection of its explicit
+overflow test, not an acceptance failure. No R1 access violation, discard
+failure, HandleLeak misclassification, missing metric, timeout, or hidden
+marker failure recurs. The compact durable review is recorded in
+`tools/verify/win64_w013/evidence/native_r2/ACCEPTANCE.md`.
+
+## Native Windows acceptance package
+
+The host matrix is packaged by:
 
 ```text
 tools/win64/host_package/package_win64_w013.sh
@@ -339,14 +387,16 @@ ThreadHeavy and HandleLeak; 512-MiB and 1-GiB startup; default dual-view JIT,
 the J-1 diagnostic path, and the fourteen-case JIT matrix; twenty repeated
 default-JIT starts; per-process memory metrics and host pagefile data; fatal-log
 scanning; and recursive dump scanning. Execution and evidence-return
-instructions are in `tools/verify/win64_w013/W013_HOST_CHECKLIST.md`. This
-package does not count as native acceptance until its returned
-`logs/RESULT_W013.txt` ends in `OVERALL PASS` and the complete logs are
-reviewed.
+instructions are in `tools/verify/win64_w013/W013_HOST_CHECKLIST.md`. The R2
+return meets this bar: `logs/RESULT_W013.txt` ends in `OVERALL PASS`,
+the complete logs were reviewed, and the returned package metadata matches the
+issued package.
 
 Stages A through E implement the accepted W-013 design. Fixed file-overlay over
 an ordinary `VirtualAlloc` reservation remains unsupported and is not used by
 the imageless/JIT path; any future image/OAT implementation that needs it must
-use placeholder APIs and rollback. Native Windows commit/pressure,
-protection/extent, repeated-start, and the remaining R2 closure matrix still
-keep W-013 open.
+use placeholder APIs and rollback. Native Windows commit pressure,
+protection/extent, and repeated-start acceptance now pass on
+native Windows 10. W-013 is closed. Any future fixed file-overlay requirement
+or reserve-only/lazy-commit redesign is separate work and must not reopen the
+retired macro-masking workaround implicitly.

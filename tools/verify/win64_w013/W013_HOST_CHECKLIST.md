@@ -2,10 +2,16 @@
 
 **Target:** Windows 10 version 1803 or later, x64
 
-**Purpose:** close the environment-dependent heap-memory acceptance remaining
-after W-013 Stages A–E, the reviewed failed R1 run, and the post-R1 Wine/Linux
-repair gates. Do not reuse the R1 package built from root `dbca77c`; it contains
-the defects recorded in `RESULT.md`.
+**Acceptance:** PASS on 2026-07-25 using Windows 10 build 19044. Returned R2
+archive `w013-log-r2.7z` has SHA-256
+`456e297d70c2f166308c869812ddec262fa38bc6dcd2852ea56edd5b2205078e`;
+the reviewed result contains 56 PASS records, zero failures, complete metrics,
+and `NO_DMP_FILES`. See `evidence/native_r2/ACCEPTANCE.md`.
+
+**Purpose:** document the accepted native host matrix and provide the repeat
+procedure after W-013 Stages A–E, the reviewed failed R1 run, and the post-R1
+Wine/Linux repair gates. Do not reuse the R1 package built from root `dbca77c`;
+it contains the defects recorded in `RESULT.md`.
 
 ## Run
 

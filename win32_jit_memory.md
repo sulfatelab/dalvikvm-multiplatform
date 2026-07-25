@@ -868,12 +868,12 @@ None of this justifies retaining the RWX J-1 path as the product default.
 
 | Item | Evidence |
 |------|----------|
-| J-1 single-view memory | Native R1 found provider metadata written after RX restore; ART `27a1ac74a4` rebinding now uses `ScopedCodeCacheWrite`; post-fix Wine Hello passes with 31 successful compilations; native R2 pending |
+| J-1 single-view memory | ART `27a1ac74a4` rebinding uses `ScopedCodeCacheWrite`; native R2 passes with 26 successful compilations, Hello, clean return, and no dump |
 | D-1 r15 compiler TLS | 37/37 GS sites audited |
 | Managed/native JIT default | Corrected pagefile-section dual view; Hello about 28–30 successful records after native-gate removal |
 | Corrected dual-view integration | JIT smoke 12/12; matrix 14/14; protections checked with `VirtualQuery` |
 | Section-layout probe | 64 MiB and non-64-KiB capacity cases pass under Wine; low primary remains contiguous under forced low-space fragmentation |
-| dlmalloc and `MemMap` ownership | W-013 Stages A–E complete: explicit MoreCore-only configuration, direct mspace-owner attachment, `VirtualAlloc2`/shared ownership, explicit heap page-state operations, and Linux-like metadata placement |
+| dlmalloc and `MemMap` ownership | W-013 CLOSED: Stages A–E plus native R2 mapping, ownership, discard, pressure, metrics, and repeated-start acceptance pass |
 | Root-cause correction | JIT-root signed displacement plus latent CodeInfo overflow |
 | PE asm definitions | Windows-target generator test enforces `RUNTIME_INSTRUMENTATION_OFFSET=0x328` |
 | Threshold-zero CriticalNative | Direct visitor uses Win64 unified ordinals/home area; dlsym caller PC preserved; repeated J-1 and dual-view probes pass |
@@ -888,7 +888,7 @@ None of this justifies retaining the RWX J-1 path as the product default.
 
 | Item | Blocker |
 |------|---------|
-| P5 mapping real-Windows acceptance | W-013 R1 was executed and reviewed; default dual view passed its compile/Hello path, but R1 exposed an independent J-1 metadata-write crash and runner defects. Those are fixed; R2 protections, metrics, repeated-start/load, and code-cache pressure remain |
+| P5 mapping real-Windows acceptance | W-013 heap/JIT integration subset is complete: R2 protections, metrics, J-1/default JIT, and repeated starts pass. Broader mitigation/direct-encoding closure remains under W-025 |
 | Direct encoding checks | Add checks at JIT-root patch and CodeInfo construction sites |
 
 ### Current test summary
@@ -939,6 +939,7 @@ None of this justifies retaining the RWX J-1 path as the product default.
 | 2026-07-24 | Make per-method Win64 JIT compile records opt-in; smoke expands to 12/12 and verifies product-default silence |
 | 2026-07-24 | Wine fatal-tripwire audit shows legacy runtime-started InterpreterJni fallback is unreachable across `-Xint`, native ABI, tracing, and JVMTI suites, establishing the native-host test candidate |
 | 2026-07-25 | W-013 native R1 J-1 dump resolves to `ArtDetachMspaceMoreCoreProvider` writing executable-mspace metadata after the mapping returned to RX; attach/detach now run inside the existing `ScopedCodeCacheWrite` transition, with dual-view behavior unchanged |
+| 2026-07-25 | W-013 native R2 passes 56/56 records: corrected dual view compiles 30 methods, J-1 compiles 26, 20/20 repeated starts and complete metrics pass, and no dump is present; W-013 closes while broader W-025 work remains separate |
 | 2026-07-24 | Native Windows 10 build 19044 tripwire matrix passes all nine cases with exact required native compile records and no crash dump; W-024 cleanup is authorized |
 | 2026-07-24 | ART `42a03f2ea0` restores exact upstream interpreter scope and common default native-JIT policy; final Win64 and Linux regressions pass and W-011/W-012/W-024 close |
 
