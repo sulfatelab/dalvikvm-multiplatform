@@ -1,31 +1,41 @@
 # ART on Windows NT — TLS, Managed ABI, Quick Entrypoints, and JIT
 
-**Status:** DRAFT + **implementation started** (Win64 x86_64 spine); **mterp design §15**  
-**Date:** 2026-07-18  
-**Scope:** Design **all** ART-WinNT ISA targets in theory; implement later with **x86_64 first**.  
-**Related:** [win64_art_port.md](win64_art_port.md) (product phases), [win32_open_items.md](win32_open_items.md) (open workarounds W-001+), Phase 3+ runtime hardening, Phase 5 JIT/oat.
+**Status:** Win64 x86_64 quick invoke, nterp, managed JIT, and native JIT
+implemented and product-default; other Windows ISAs remain design-only
+**Updated:** 2026-07-25
+**Scope:** Record the cross-ISA design and the implemented x86_64 contracts.
+**Related:** [win64_art_port.md](win64_art_port.md) (product phases),
+[win32_jit_memory.md](win32_jit_memory.md) (implemented code-cache design), and
+[win32_open_items.md](win32_open_items.md) (remaining W-002/W-003/W-004/W-008/W-010/W-014/W-017 and W-025 work).
 
 ---
 
 ## 0. Why this document exists
 
-Today’s multiplatform Win64 product runs **imageless interpreter** (`-Xint`). That path deliberately avoids:
+The current multiplatform Win64 product remains imageless but no longer
+depends on `-Xint`. Quick invoke, nterp N-1, managed JIT, and native JIT are
+default-on. Win64 uses `r15` as rSELF and `rbp` as nterp rREFS; Linux keeps
+its GS-relative x86_64 Thread model. The default JIT cache is one unnamed
+pagefile-backed section with a contiguous low R/RX primary view and a complete
+RW updater alias. Native ABI, tracing, JVMTI forced-interpreter, and native
+Windows W-024/W-013 acceptance subsets pass.
 
-- `%gs`-based `Thread*` access in quick/nterp assembly,
-- SysV-shaped `art_quick_invoke_*` stubs,
-- JIT code-cache emission and managed↔native bridges.
-
-Leaving pure `-Xint` (phase 3+ / phase 5) requires a **coherent design** of three layers that AOSP treats as one machine-specific package:
+The port required a **coherent design** of three layers that AOSP treats as one
+machine-specific package:
 
 1. **How C++ finds `Thread*`** (`Thread::Current()`).
 2. **How managed / quick / nterp code finds `Thread*` and `QuickEntryPoints`**.
 3. **Calling conventions** between JIT/nterp frames, quick entrypoints, and C++ (Win64 / Arm64 / Arm64EC ABIs).
 
-This draft designs those layers for:
+Sections 3 through 17.7 preserve the staged research and implementation
+history. Any historical “current” or “next” statement there is superseded by
+§17.8, [win32_jit_memory.md](win32_jit_memory.md), and the current tracker.
+
+This document covers those layers for:
 
 | Target label | Machine | Product role |
 |--------------|---------|--------------|
-| **win-x86_64** | Windows AMD64 PE | **Primary implementation focus** |
+| **win-x86_64** | Windows AMD64 PE | **Implemented product target** |
 | **win-x86** | Windows i386 PE | DRAFT only (not a near-term product) |
 | **win-arm64** | Windows ARM64 native PE | DRAFT; future WoA native |
 | **win-arm64ec** | Arm64EC PE (x64-convention interop on ARM64) | DRAFT; mixed x64/ARM64EC process story |
@@ -44,9 +54,9 @@ Primary evidence is **this tree’s ART** (`vendor/art`, android-16.0.0_r4 / art
 | CPU self setup | `runtime/arch/x86_64/thread_x86_64.cc`, `runtime/arch/x86/thread_x86.cc`, `runtime/arch/arm64/thread_arm64.cc` |
 | Managed self + entrypoints asm | `runtime/arch/x86_64/asm_support_x86_64.S`, `quick_entrypoints_x86_64.S`, `arm64/asm_support_arm64.S`, `quick_entrypoints_arm64.S` |
 | Quick entrypoint table | `runtime/entrypoints/quick/quick_entrypoints.h`, `quick_entrypoints_list.h` |
-| Invoke routing | `runtime/art_method.cc` (`art_quick_invoke_*`, Win32 force-interpreter) |
+| Invoke routing | `runtime/art_method.cc` (`art_quick_invoke_*`, default quick policy + diagnostic opt-out) |
 | Offsets | `tools/cpp-define-generator/thread.def` → `THREAD_*_OFFSET` |
-| Win stubs already present | `LOAD_RUNTIME_INSTANCE` PE helper; `_WIN32` `int3` in many SETUP macros |
+| Win asm/platform anchors | `LOAD_RUNTIME_INSTANCE` PE helper; ported SETUP frames and rSELF macros |
 
 Secondary: platform ABI documentation (System V AMD64 / AArch64, Microsoft x64 / ARM64 / Arm64EC), and TEB/TLS layout knowledge used by Windows PE runtimes.
 
@@ -145,7 +155,10 @@ So on Linux amd64:
 #### Invoke path
 
 `ArtMethod::Invoke` → `art_quick_invoke_stub` / `_static_stub` (assembly, SysV args: method, args*, size, Thread*, JValue*, shorty).  
-Win32 currently **forces** `EnterInterpreterFromInvoke` because those stubs + GS are not ported (`art_method.cc` comment: SysV + `%gs:THREAD_SELF`).
+At the initial design checkpoint Win32 **forced**
+`EnterInterpreterFromInvoke` because those stubs and the GS replacement were
+not ported. That historical restriction is removed: quick invoke is now the
+default, with `ART_WIN64_QUICK_INVOKE=0` retained only as a diagnostic opt-out.
 
 ### 3.2 arm64 Linux (AArch64 Procedure Call Standard) — oracle for win-arm64
 
@@ -423,23 +436,25 @@ Windows only changes **how offsets are addressed** (reg base vs GS), not the C++
 Linux: GOT load of `art::Runtime::instance_`.  
 Windows PE (already): `LOAD_RUNTIME_INSTANCE` calls `art_Runtime_instance_ptr` with shadow space.  
 
-JIT should either:
+The historical design considered either:
 
 - emit the same helper call, or  
 - load from a **hidden global** via RIP-relative LEA of an `__declspec(dllimport)`-safe indirection exported from `art.dll`.
 
-Prefer **one** PE-safe sequence used by both hand asm and JIT emitter.
+The x86_64 implementation uses one PE-safe helper sequence across the affected
+hand-written and generated paths; W-004 tracks whether to retain that helper or
+replace it with a direct PE-safe import.
 
-### 6.8 JIT design (phase 5, all arches drafted)
+### 6.8 JIT design (x86_64 implemented; other arches drafted)
 
 #### Code cache
 
 | Topic | WinNT design |
 |-------|----------------|
-| Allocation | `VirtualAlloc` RW → later RX (or RWX only if policy allows; prefer W^X) |
-| Publish | `VirtualProtect` RW→RX; flush I-cache (`FlushInstructionCache`) on non-x86 |
-| Free / collect | existing ART JIT GC hooks + `VirtualFree` |
-| CFG / CET | Prefer **not** dynamic CFG calls into JIT until researched; use regular `call rel32` within cache; document CET shadow-stack interactions as open |
+| Allocation | One unnamed pagefile-backed section mapped twice: contiguous low R/RX primary plus full RW alias |
+| Publish | Write through the RW alias; execute through RX; call `FlushInstructionCache` explicitly |
+| Free / collect | Existing ART JIT GC hooks; mapped views use `UnmapViewOfFile` and the section handle is closed |
+| CFG / CET | Basic real-host execution passes; broader mitigation/direct-encoding hardening remains W-025 |
 | Antivirus | Expect false positives; keep cache private, avoid RWX long windows |
 
 #### Compiler backend
@@ -459,7 +474,7 @@ Same as Linux conceptually:
 ArtMethod::entry_point_from_quick_compiled_code_ → JIT / oat / bridge
 ```
 
-Windows must stop forcing interpreter in `ArtMethod::Invoke` once:
+Windows stopped forcing interpreter in `ArtMethod::Invoke` after:
 
 1. rSELF published,  
 2. `art_quick_invoke_*` Win stubs exist,  
@@ -467,7 +482,9 @@ Windows must stop forcing interpreter in `ArtMethod::Invoke` once:
 
 #### Nterp / mterp
 
-If nterp asm uses `%gs`, it needs the same THREAD_LOAD macros. Until then, stay on Switch interpreter (`-Xint`) even if JIT is partially enabled for select methods (possible but not recommended).
+Nterp now uses the same Windows rSELF contract: `r15` is Thread and `rbp` is
+rREFS. Linux continues to use GS/r15. `ART_WIN64_NTERP=0` is a diagnostic
+opt-out; normal Win64 execution does not require `-Xint`.
 
 ### 6.9 Thread attach / detach publish protocol
 
@@ -502,7 +519,7 @@ JIT deopt flags (`THREAD_DEOPT_CHECK_REQUIRED_OFFSET`) stay Thread fields access
 
 ## 7. Per-architecture draft sketches
 
-### 7.1 win-x86_64 (implement first)
+### 7.1 win-x86_64 (implemented)
 
 ```text
 C++ ABI:     rcx, rdx, r8, r9 + 32B shadow
@@ -513,15 +530,15 @@ Invoke stub:  MS x64 entry → set r15 → managed
 Reject:       ARCH_SET_GS, %gs:THREAD_*, SysV-only invoke stubs
 ```
 
-**Implementation slices (when coding starts):**
+**Implemented slices:**
 
 1. Assembler macros for THREAD_LOAD/STORE + DEFINE_FUNCTION (PE symbols, no `@PLT`).  
 2. `art_quick_invoke_{,static_}stub` Win64.  
 3. Port `SETUP_*_FRAME` macros off `int3`.  
 4. Port high-traffic quick entrypoints (alloc, invoke trampolines, exception deliver, JNI).  
-5. Remove Win force-interpreter gate behind a runtime flag.  
-6. JIT emitter: self via r15; cache W^X.  
-7. Wine64 + real Win10 gates beyond `-Xint`.
+5. Use quick invoke by default with a diagnostic force-interpreter opt-out.
+6. JIT emitter: self via r15; pagefile-backed dual-view W^X cache.
+7. Wine64 gates plus focused real-Windows W-024 and W-013 acceptance.
 
 ### 7.2 win-x86 (draft only)
 
@@ -579,20 +596,27 @@ Quick entrypoint **asm prologues** are where these differences are centralized.
 
 ---
 
-## 9. Open decisions (must resolve before coding JIT)
+## 9. Decision status
 
-1. **Managed method/arg registers on win-x86_64:** keep Linux-like `rdi/rsi/...` inside managed and only convert at C++ boundary, **or** redefine managed to MS-like `rcx/rdx/...`?  
-   - *Lean toward:* Linux-like managed + convert at boundary (less dual backend).  
+1. **Managed method/arg registers on win-x86_64:** **CLOSED** — keep the
+   Linux-like managed convention and convert only at Microsoft x64 native/C++
+   boundaries.
 2. **Exact rSELF register:** **CLOSED — r15** (nterp **rREFS=rbp**). Spill-bitmap/JNI audit is implementation work, not an open design choice.  
-3. **Nterp priority vs optimizing JIT first.**  
-4. **CET / shadow stack / CFG policy** for JIT call sites.  
-5. **Whether wine64 is sufficient** to validate GS-free entrypoints (likely yes for ABI; host still required for TEB edge cases).  
-6. **Arm64EC product:** separate SKU or never?  
+3. **Nterp priority vs optimizing JIT:** **CLOSED for x86_64** — both are
+   implemented and default-on.
+4. **CET / shadow stack / CFG policy:** residual hardening under W-025.
+5. **Wine sufficiency:** **CLOSED as policy** — Wine is a development gate, not
+   final product acceptance. Focused native W-024/W-013 matrices pass; broader
+   host acceptance remains tracked separately.
+6. **Arm64EC product:** design-only; no product SKU is scheduled.
 7. **Single art.dll multi-ISA:** rejected for now.
 
 ---
 
-## 10. Non-goals (this design phase)
+## 10. Historical design-phase non-goals
+
+The first two bullets describe the scope of the original design-only change;
+the x86_64 implementation subsequently landed.
 
 - Implementing stubs or JIT in this change.  
 - Claiming phase 5 complete.  
@@ -607,15 +631,14 @@ Quick entrypoint **asm prologues** are where these differences are centralized.
 
 | Phase | TLS / entry / JIT relevance |
 |-------|-----------------------------|
-| Phase 2–3 (`-Xint`) | C++ TLS only; managed self unused for invoke |
-| Phase 3+ hardening | Still interpreter; optional early rSELF plumbing tests |
-| **Entrypoint port (pre-JIT)** | Win invoke stubs + quick entrypoints + rSELF macros |
-| **Phase 5 JIT** | Code cache + emitter using same self/ABI contracts |
+| Phase 2–3 (`-Xint`) | Historical bootstrap: C++ TLS only |
+| Entrypoint/nterp port | **Complete:** Win invoke stubs, quick entrypoints, rSELF macros, N-1 |
+| **Phase 5 JIT** | **Implemented/default:** managed/native codegen plus corrected dual view |
 | oat/dex2oat | Optional; imageless JIT can precede oat PE |
 
 ---
 
-## 12. Recommended implementation order (when approved)
+## 12. Historical implementation order (completed for x86_64)
 
 1. Document lock-in: **no GS Thread\* on Windows**; **rSELF register model**.  
 2. Introduce THREAD_LOAD/STORE macros; keep Linux GS path intact.  
@@ -628,7 +651,7 @@ Quick entrypoint **asm prologues** are where these differences are centralized.
 ---
 
 
-## 12b. Implementation progress (2026-07-18)
+## 12b. Historical implementation checkpoint (2026-07-18)
 
 Locked for coding:
 
@@ -650,7 +673,7 @@ Landed in tree:
 | `ART_QUICK_ENTRYPOINT_ABI` | `libartbase/base/macros.h` + entrypoint defs |
 | Invoke force gated by env | `art_method.cc` |
 | `InitCpu` Win comments | `thread_x86_64.cc` |
-| Nterp disabled on `_WIN32` | `interpreter/mterp/nterp.cc` |
+| Nterp initially disabled on `_WIN32`; later ported/default-on | `interpreter/mterp/nterp.cc` |
 
 Wine smoke (2026-07-18, `build/win64_phase1`):
 
@@ -676,19 +699,15 @@ Wine matrix with `ART_WIN64_QUICK_INVOKE=1` (fresh PE, imageless):
 
 Design step 5 (**compiled Hello without forced `-Xint`**, still imageless) is **met** under opt-in quick invoke + switch interpreter.
 
-Still open (toward product default + Phase 5 JIT):
-
-- ~~Flip product default: `ART_WIN64_QUICK_INVOKE` on by default~~ **DONE** §17.8.  
-- ~~Port mterp N-1~~ **DONE**; product nterp default ON §17.8.  
-- JNI quick stubs (`art_jni_dlsym_lookup_*`) under rSELF when leaving InterpreterJni (W-012).  
-- CoreProbe NPE (libcore/reflect path; not specific to quick invoke).  
-- W-024 Critical/FastNative restore.  
-- Phase 5: JIT code cache + emitter on same self/ABI contracts.  
-- Host (real Win10) re-run.
+The checkpoint's quick-invoke, nterp, CoreProbe, W-012, W-024, and Phase-5 JIT
+items are complete. Current residual work is the explicitly open tracker set:
+W-002/W-003/W-004/W-008/W-010/W-014/W-017, broader W-025 hardening, and the
+host-validation gaps in [win32_open_items.md](win32_open_items.md).
 
 ## 15. Nterp / mterp on WinNT x86_64 — analysis and design
 
-**Status:** DESIGN (research complete; implementation not started)  
+**Status:** IMPLEMENTED for Win64 x86_64; the detailed subsections preserve the
+pre-implementation option analysis
 **Current product (updated §17.8):** `IsNterpSupported()` **true** on `_WIN32` by default (opt-out `ART_WIN64_NTERP=0`).  
 **Goal (historical design):** specify a correct port that fits the locked rSELF model without reintroducing GS Thread\* — **met**.
 
@@ -704,7 +723,7 @@ Control model (README):
 - No ManagedStack transitions between nterp and compiled frames.  
 - Entry points: `ExecuteNterpImpl` / `ExecuteNterpWithClinitImpl` (OAT-prefixed headers for stack walk).
 
-Gate today (`nterp.cc`):
+Historical gate at the design checkpoint (`nterp.cc`):
 
 ```text
 IsNterpSupported():
@@ -787,7 +806,7 @@ Arm64 nterp is the cleaner oracle: **xSELF=x19** is a normal callee-saved pointe
 
 ### 15.4 Design options (Win x86_64)
 
-#### Option N-0 — Switch interpreter only (current product)
+#### Option N-0 — Switch interpreter only (historical fallback)
 
 - Keep `IsNterpSupported()==false` on `_WIN32`.  
 - Non-`-Xint` uses switch interpreter + existing quick invoke / entrypoints.  
@@ -824,7 +843,10 @@ ExecuteNterpImpl (Win):
   // then SETUP_STACK_FRAME (defines rREFS=rbp, rFP, …)
 ```
 
-   `ExecuteNterpWithClinitImpl` must **not** read TID via rSELF **before** that materialization (today it does). Order becomes: spill → load Thread → tid check → body, **or** call a tiny C++ helper that does the clinit gate.
+   `ExecuteNterpWithClinitImpl` could not read TID via rSELF **before** that
+   materialization (the design-checkpoint source did). The required order was:
+   spill → load Thread → tid check → body, or call a tiny C++ helper that does
+   the clinit gate.
 
 8. **nterp→nterp:** same OS thread → rSELF already valid; do not clobber r15.  
 9. **nterp→compiled / compiled→nterp:** compiled code must honor r15 as self when quick is enabled; invoke stubs already set r15 from C++.  
@@ -864,10 +886,10 @@ rREFS = %r15   // unchanged
 ### 15.5 Recommended strategy (phased)
 
 ```text
-Now (product):     N-0  switch only on Win
+Historical start: N-0  switch only on Win
 LOCKED nterp port: N-1  rSELF=r15, rREFS=rbp  (+ optional N-4 dual gensrc)
 REJECTED:          N-2 (rSELF=rbp) / N-3 (TLS every access)
-JIT (Phase 5):     independent of nterp, but same r15 self contract
+Current product:   N-1 plus JIT, both using the same r15 self contract
 ```
 
 **Ordering relative to §12:**
@@ -919,7 +941,7 @@ Must be safe when called with partial nterp frame (after callee spill, before SE
 
 Enabling nterp does **not** replace the need for correct **quick entrypoint** exception/alloc/JNI paths; nterp *calls* those (alloc entrypoint offsets on Thread, card table, etc.).
 
-### 15.8 Testing plan (when implementing)
+### 15.8 Testing plan used for implementation
 
 1. Unit: assemble `mterp_x86_64` for PE and Linux; size check `handler_size`.  
 2. Wine `ART_WIN64_NTERP=1 ART_WIN64_QUICK_INVOKE=1` Hello **without** `-Xint`.  
@@ -943,10 +965,10 @@ Enabling nterp does **not** replace the need for correct **quick entrypoint** ex
 | Question | Answer |
 |----------|--------|
 | Can we enable stock Linux nterp on Win? | **No** (GS + r15 dual use). |
-| Is switch-only viable? | **Yes** for current product (N-0). |
-| **LOCKED** nterp port map? | **N-1:** rSELF=r15, rREFS=rbp + entry Thread materialization. |
-| First code touch? | `x86_64ng/main.S` map + `NTERP_TRAMPOLINE` + clinit entry order + regen. |
-| Gate to re-enable `IsNterpSupported` on Win? | Feature flag + wine matrix green, not compile success alone. |
+| Is switch-only viable? | **Yes only as a diagnostic fallback;** N-1 is the product default. |
+| **LOCKED** nterp port map? | **N-1:** rSELF=r15, rREFS=rbp + entry Thread materialization; implemented. |
+| First code touch? | Historical: `x86_64ng/main.S` map + `NTERP_TRAMPOLINE` + clinit entry order + regen. |
+| Gate to re-enable `IsNterpSupported` on Win? | Met; Wine matrices are green and the product default is on. |
 
 
 ## 16. Feasibility: Win64 amd64 `FS.base = Thread*` to free a register (2026-07-18)
@@ -1270,7 +1292,7 @@ W-001 marked CLOSED in [win32_open_items.md](win32_open_items.md).
 | Win SETUP frames (was int3) | Ported off Win `int3`; Apple still traps |
 | PE Runtime load helper | `LOAD_RUNTIME_INSTANCE` in `asm_support_x86_64.S` |
 | Nterp Win conflicts (GS + r15=rREFS) | `mterp/x86_64ng/main.S`; generated `mterp_x86_64.S`; §15 |
-| Nterp disabled on Win | `interpreter/mterp/nterp.cc` `IsNterpSupported` |
+| Nterp Win policy | `interpreter/mterp/nterp.cc` `IsNterpSupported` (default on; diagnostic opt-out) |
 | FS.base=Thread* rejected | §16; wine `PF_RDWRFSGSBASE_AVAILABLE`; public `CONTEXT` has no FsBase |
 | rSELF=r15, rREFS=rbp locked | §17; §15 N-1; asm_support `rSELF r15` |
 
@@ -1278,4 +1300,4 @@ W-001 marked CLOSED in [win32_open_items.md](win32_open_items.md).
 
 ## 14. One-paragraph executive summary
 
-On Linux amd64, ART’s managed world is **GS-relative Thread TLS** layered on top of normal C++ `thread_local`, with quick entrypoints and JIT assuming SysV bridges; on Linux arm64, managed world is **x19 = Thread\***. Windows **cannot** reuse GS for Thread\* (TEB owns GS); **FS.base=Thread\*** is also **rejected** (§16: FSGSBASE/wine/CONTEXT portability), so managed self is a GPR. The WinNT design therefore adopts the **arm64-style explicit self register** on all Windows ISAs (**LOCKED: r15** on x86_64 with nterp **rREFS=rbp**; **x19** on ARM64/Arm64EC), keeps C++ `Thread::Current()` on `thread_local`/`TlsAlloc`, and isolates **Microsoft / Arm64EC C++ calling conventions** at quick-entrypoint and invoke bridges. JIT is “just” machine code that obeys the same self + entrypoint contracts with a W^X `VirtualAlloc` cache. **x86_64 is the first implementation target**; x86, arm64, and Arm64EC are specified so the abstractions do not paint us into a GS-shaped corner.
+On Linux amd64, ART’s managed world is **GS-relative Thread TLS** layered on top of normal C++ `thread_local`, with quick entrypoints and JIT assuming SysV bridges; on Linux arm64, managed world is **x19 = Thread\***. Windows **cannot** reuse GS for Thread\* (TEB owns GS); **FS.base=Thread\*** is also **rejected** (§16: FSGSBASE/wine/CONTEXT portability), so managed self is a GPR. The WinNT design therefore adopts the **arm64-style explicit self register** on all Windows ISAs (**LOCKED and implemented: r15** on x86_64 with nterp **rREFS=rbp**; **x19** remains a design for ARM64/Arm64EC), keeps C++ `Thread::Current()` on `thread_local`/`TlsAlloc`, and isolates Microsoft C++ calling conventions at quick-entrypoint and invoke bridges. JIT code obeys the same self and entrypoint contracts and uses one unnamed pagefile-backed section with a low contiguous R/RX primary view plus an RW updater alias. **x86_64 is implemented**; x86, arm64, and Arm64EC remain design-only so future work is not forced into a GS-shaped abstraction.

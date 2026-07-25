@@ -1,10 +1,12 @@
 # MinDalvikVM (Linux) — Project Scope
 
-Status: draft 2 — step two underway (2026-06-20)
+Status: historical Linux converter and bring-up record; converter/native graph,
+shared boot.jar, and Linux imageless execution are complete (updated 2026-07-25)
 Author: initial survey pass + bp/cmake comparison audit
-Scope of this document: orientation + locked decisions. Step one (survey) and
-the cmake/bp audit are done. Step two (build the converter, prototype on
-`libbase`) is now in progress.
+Scope of this document: orientation, locked decisions, and the 2026-06-20
+implementation sequence. Statements explicitly labeled historical describe
+the original archive checkpoint; current sources live under nested `vendor/`,
+and current Windows/Linux status is tracked by the root platform documents.
 
 ## 0. Locked decisions (step 2)
 
@@ -12,9 +14,9 @@ the cmake/bp audit are done. Step two (build the converter, prototype on
   already Python; no JVM/Gradle in the codegen path.)
 - **Blueprint parsing: hand-written parser.** Small grammar, no external
   dependency, exactly the features we need. (Section 6.1.)
-- **First target snapshot: the archive's 2023 submodule pins.** Keeps the
-  hand-written `.cmake` as a validation baseline while we build the converter;
-  submodule updates are a separate later step.
+- **Initial target snapshot: the archive's 2023 submodule pins.** This kept the
+  hand-written `.cmake` as a validation baseline while the converter was built;
+  the current repository has since advanced its nested gitlinks.
 - **libc: glibc only for now; musl deferred.** (Section 5.2 item 5, Section 7.)
 - Verified host toolchain: python 3.14, cmake 4.2, ninja 1.13, clang 21, gcc 15.
 
@@ -31,7 +33,7 @@ the cmake/bp audit are done. Step two (build the converter, prototype on
 - **Project-owned `//compat`** include root established for vendored shim
   headers replacing absent Android deps (first: `gtest/gtest_prod.h`). Distinct
   from the read-only AOSP tree and from `native/jdwpheader`-style glue.
-- **Next milestone: the ART core** (`libartbase`, `libdexfile`, `runtime`,
+- **Historical next milestone, completed below: the ART core** (`libartbase`, `libdexfile`, `runtime`,
   `dalvikvm`, ...). Substantially larger: requires modelling `art.go` flag
   injection (Section 5.1), the generated-source pipeline (operator_out, mterp
   asm, asm_defines), and the bigger overlay surface from the audit (palette
@@ -107,11 +109,11 @@ LD_LIBRARY_PATH=build/native build/native/dalvikvm -showversion
   driver invocation, and the clang-21 toolchain-drift shims. Everything else is
   generated.
 
-Remaining project work is breadth/polish:
-- Bump submodules to current AOSP (drops the one `FillVRegs` patch and the
-  toolchain-drift shims).
-- The Java side (`boot.jar`, already close in the archive) for a full
-  end-to-end `command-example.txt`-style run.
+Subsequent project work completed the Java side, moved the maintained source
+graph to nested `vendor/` repositories, and established one shared Linux/Win64
+boot.jar. Current platform debt is tracked in
+[win32_open_items.md](win32_open_items.md), not in this historical milestone
+list.
 
 ### End-to-end run — the VM executes bytecode (2026-06-20)
 
@@ -127,16 +129,20 @@ ART at `-O3`, which miscompiles it (an earlier `-O3` run faked a "LinkMethods
 hang"; that diagnosis was wrong). Debug's GC is unusably slow. RelWithDebInfo
 (`-O2 -DNDEBUG -g`) is correct and keeps symbols.
 
-Current blocker to `main()`: the **libcore JNI natives aren't loaded**.
-`libart`'s `runtime_libs: ["libjavacore"]` (runtime/Android.bp:533) is a
-dlopen-at-runtime dependency (correctly not a link edge), and the
+**Historical blocker at the 2026-06-20 checkpoint:** the **libcore JNI natives
+weren't loaded**.
+At that checkpoint, `libart`'s `runtime_libs: ["libjavacore"]`
+(runtime/Android.bp:533) was a dlopen-at-runtime dependency (correctly not a
+link edge), and the
 **javacorenatives** group (`libjavacore`, `libopenjdk`, + ICU/crypto/expat JNI)
-isn't converted yet. Without it, libcore `native` methods (e.g.
-`Class.getNameNative`) are unregistered, so the first exception's `toString`
-recurses to a StackOverflow → SIGSEGV. See `tools/verify/e2e/RESULT.md`.
+wasn't converted yet. Without it, libcore `native` methods (e.g.
+`Class.getNameNative`) were unregistered, so the first exception's `toString`
+recurred to a StackOverflow → SIGSEGV. See `tools/verify/e2e/RESULT.md`.
 
-Next milestone: convert the javacorenatives group (the audit already analyzed
-its port decisions) and load it, so `Hello.main()` runs to completion.
+That blocker was later resolved: the current Linux product executes the shared
+boot.jar, and the Windows product loads real PE `libjavacore`, `libopenjdk`,
+and ICU modules. The original next milestone was to convert and load the
+javacorenatives group so `Hello.main()` could run to completion.
 
 ## 1. What this project is
 
@@ -528,14 +534,16 @@ lock in next phase, current leaning:
   match it; the audit notes are the arbiter of correct-vs-bug.
 - **Android SDK dependency (`d8`).** The Java side needs `d8`. Acceptable for
   now; note it as an external prerequisite.
-- **No build attempted yet.** Everything above is from reading and comparing the
-  archive, not from a successful build of either tree. First real build is a
-  future step.
+- **Historical pre-build risk:** at the initial survey checkpoint no build had
+  yet been attempted. Sections 0b and the verification results record the later
+  successful converter, runtime, and end-to-end builds.
 
-## 8. Next steps (immediate)
+## 8. Original next steps (historical; completed)
 
-This document is step one and the only deliverable for now. The proposed
-sequence after sign-off:
+This was the proposed sequence after the original survey sign-off. It is kept
+as the converter's implementation history; the repository initialization,
+converter, dependency-graph expansion, codegen, Java build, and end-to-end
+smoke have since been completed.
 
 1. **Lock the converter decision** — Python vs Kotlin; reuse a Blueprint parser
    vs write one; confirm the three-layer structure. (Section 6.1.)
@@ -573,8 +581,6 @@ sequence after sign-off:
 - Java build: `../MinDalvikVM-Archive/javalib/build.gradle.kts`
 - Reusable helpers: `../MinDalvikVM-Archive/buildSrc/src/main/`
 - Submodule list + URLs: `../MinDalvikVM-Archive/.gitmodules`
-
-
 
 
 

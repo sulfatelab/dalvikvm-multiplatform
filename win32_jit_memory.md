@@ -1,6 +1,7 @@
 # Win64 JIT memory and codepath — current design and status
 
-**Status:** P5 Wine implementation complete; pagefile-backed dual mapping is the default
+**Status:** pagefile-backed dual mapping is the default; Wine gates and the
+W-013 native Windows heap/JIT integration subset pass; broader W-025 hardening remains
 **Updated:** 2026-07-25
 **Target baseline:** Windows 10 version 1803 or later (NTDDI_WIN10_RS4)
 **Related:** [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md),
@@ -623,10 +624,10 @@ R15 is pinned as rSELF and removed from the Win64 allocatable callee-saves.
 
 The historical separated-J-2 failure was not evidence of incomplete D-1 work.
 
-### 11.2 Native JIT remains separate
+### 11.2 Native JIT ABI repair is complete
 
-JIT compilation of native methods is gated off by default. The compiled
-FastNative path needs two conventions at the stub boundary: Linux-like ART
+Historically, JIT compilation of native methods was gated off. The compiled
+FastNative path requires two conventions at the stub boundary: Linux-like ART
 managed inputs and Microsoft x64 native outputs. The current Win64 patch
 correctly defines the outgoing unified four-slot register layout, 32-byte
 shadow area, and stack arguments. The incoming/outgoing register tables and
@@ -682,9 +683,9 @@ returned zeros because the previous Win64 `Runtime.nativeLoad` shortcut called
 `JavaVMExt::LoadNativeLibrary`. The host loader's only Windows path divergence
 is recognizing drive, root, and UNC absolute paths; Linux behavior is unchanged.
 
-The memory plan does not change the remaining product work. The compiled-JNI
-split, XMM moves, and mixed/high-FP matrix are landed; the current acceptance
-probe is `tools/verify/win64_phase4/run_native_abi_probe.sh`.
+The memory plan did not own that ABI repair. The compiled-JNI split, XMM moves,
+and mixed/high-FP matrix are landed; the acceptance probe is
+`tools/verify/win64_phase4/run_native_abi_probe.sh`.
 
 Win64 now also builds ART's upstream `openjdkjvmti` sources as a separate
 `openjdkjvmti.dll`, matching Linux topology. A focused agent enables
@@ -790,10 +791,10 @@ gate and declaring P5 complete:
 The focused W-024 native-host matrix passed on Windows 10 Enterprise LTSC 2021
 build 19044: both normal/FastNative modes compile the required 7/7 targets,
 both JVMTI modes compile the two allowed targets and no CriticalNative target,
-all transition values pass, and no tripwire or crash dump appears. The native
-gate remains only until fallback/gate cleanup and post-change regressions are
-complete. Broader P5 mapping-protection and code-cache-load acceptance remains
-separate from this W-024 reachability gate.
+all transition values pass, and no tripwire or crash dump appears. The W-024
+native-method gate and interpreter fallback expansion were removed after
+acceptance and post-change regressions. Broader P5 mapping-protection,
+mitigation, and code-cache-load acceptance remains under W-025.
 
 ### 12.5 Threshold-zero stress resolution
 

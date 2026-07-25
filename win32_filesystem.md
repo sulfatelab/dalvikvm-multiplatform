@@ -4,19 +4,21 @@ Product tree: **dalvikvm-multiplatform** (nested `vendor/libcore` on `artmp_*`).
 
 > **Scope:** Path semantics and file I/O for native Win64 ART (PE32+, no WSL).  
 > **Related:** [win64_art_port.md](win64_art_port.md) §4.7.1 (product path mandate), Phase 3 libcore bring-up.  
-> **Date:** 2026-07-16 (rev 4)  
-> **Status:** **Decision locked — Option H (Hybrid).** Windows NIO.2 provider is a **non-goal for now**. Path/FS foundations + wine path gates landing (see `tools/verify/win64_phase3/RESULT.md`).
+> **Updated:** 2026-07-25 (rev 6)
+> **Status:** **Option H implemented and accepted.** Wine path/file gates and
+> native Windows G12 pass; Windows NIO.2 remains a non-goal (see
+> `tools/verify/win64_phase3/RESULT.md`).
 
 ## 0. Why a separate document
 
 Win64 path handling is **not** “one FileSystem class.” libcore and ART open paths through **three loosely coupled layers**. Choosing `UnixFileSystem` vs `WinNTFileSystem` only fixes layer A. Mixed paths (`C:\User\example/some/file`) are a **product mandate** (see win64_art_port §4.7.1) and force a clear design before Phase 3 coding.
 
-This note answers:
+This note records:
 
-1. How **libcore** and **libart** use path/filesystem APIs today.  
+1. How **libcore** and **libart** use path/filesystem APIs.
 2. What OpenJDK/ojluni Windows code can be **reused**.  
 3. Whether to keep `UnixFileSystem`, port `WinNTFileSystem`, or hybridize.  
-4. A phased feasibility plan and acceptance cases.
+4. The completed phased plan and acceptance cases.
 
 ---
 
@@ -28,7 +30,7 @@ This note answers:
            ▼
  ┌─────────────────────────────────────┐
  │ A. java.io.File + FileSystem        │  path *syntax* (absolute, normalize,
- │    DefaultFileSystem → UnixFileSystem│  parent/name, separator, list attrs)
+ │    DefaultFileSystem → WinNT FS       │  parent/name, separator, list attrs)
  │    (+ optional java.nio.file later) │
  └─────────────────┬───────────────────┘
                    │ f.getPath() strings
@@ -129,9 +131,9 @@ Using `:` as the list separator on a platform where **absolute paths contain `:`
   - `C:\libs\a.jar;C:\libs\b.jar`
   - `C:\User/admin/.ssh/../lib\x.jar;D:/other/y.jar`
 
-#### What must change in this tree (today hardcodes `:`)
+#### Required tree changes — implemented
 
-| Site | Today | Win64 product |
+| Site | Historical state | Implemented Win64 product |
 |------|--------|----------------|
 | `parsed_options.cc` `-cp` help + storage | string as given | document `;`; store raw string |
 | `ParseStringList<':'>` for `-Xbootclasspath`, locations, images | split `:` | **`ParseStringList<';'>`** (or platform constant) under `ART_TARGET_WINDOWS` |
@@ -170,7 +172,14 @@ Linux/Android port **keeps** `:`. This is an intentional **OS divergence**, not 
 - Not “always return forward slashes for friendliness.”  
 - Not extended-length `\\?\` as the default Java-visible form.
 
-## 2. What this tree has today
+## 2. Historical pre-implementation inventory
+
+This section records the tree state when Option H was selected. It is not the
+current implementation inventory. The current product has Windows-specific
+`DefaultFileSystem` and `WinNTFileSystem` sources in both the ojluni tree and
+`vendor/libcore/multiplatform/windows`, selects WinNT semantics at runtime,
+uses `;` in ART and Java classpath handling, and routes file operations through
+the PE libcore/ART bridges.
 
 ### 2.1 Layer A — java.io
 
@@ -427,15 +436,15 @@ Correct for path *syntax*, but streams (IoBridge/Os) and ART jar open still need
 - Wine-only validation as product sign-off (wine = agent01 gate; host Windows for drive/UNC confidence).  
 - Permanent `UnixFileSystem` product façade (Option U rejected).
 
-## 9. Recommended Phase 3 sequencing (FS only)
+## 9. Completed Phase 3 sequencing (FS only)
 
-1. **Spec freeze:** this doc + win64_art_port §4.7.1 (mixed mandatory, **`;` list separator** on Win64).  
-2. **Shared `normalize_win_path`** (C++), unit-tested for P1–P5 strings.  
-3. **Layer B open/stat/read/write/close** on PE (unblocks streams even before full FileSystem math).  
-4. **Layer A WinNT-class FileSystem** + `DefaultFileSystem` switch on `ART_TARGET_WINDOWS`.  
-5. **Layer C** call normalize in `OS::Open*` / zip.  
-6. Golden tests P1–P9 under wine64; subset on real Windows.  
-7. Retire Phase-2 Unix path stubs.  
+1. **Spec freeze:** completed; mixed paths and `;` list separation are locked.
+2. **Shared Windows path normalization:** implemented in the PE path bridges.
+3. **Layer B open/stat/read/write/close:** implemented in product `libjavacore`.
+4. **Layer A WinNT-class FileSystem:** implemented with runtime OS selection.
+5. **Layer C:** ART opens Windows/mixed paths and parses Windows path lists.
+6. **Golden tests:** P1–P9-class coverage passes under Wine and the native G12 host gate.
+7. **Bootstrap stubs:** retained only for legacy/bootstrap harnesses, not the product module path.
 8. **Stop on NIO.** Windows NIO is not a scheduled follow-on unless product explicitly reopens it.
 
 ---
@@ -462,7 +471,8 @@ Correct for path *syntax*, but streams (IoBridge/Os) and ART jar open still need
 - **`path.separator=;` on Win64**; ART boot/classpath parsers must match.  
 - Reuse OpenJDK `WinNTFileSystem` for syntax/attrs; implement `Libcore.os` file ops with Win32; share normalize with ART `OS::Open*`.  
 - **Windows NIO.2 provider: non-goal for now.**  
-- **Feasibility: Go** — early Phase 3 FS track feeding A4.
+- **Implementation accepted:** Phase 3 A4/path/file gates pass under Wine and
+  native Windows G12; the hybrid model is the product default.
 
 ## 12. References (in-tree)
 
@@ -478,7 +488,8 @@ Correct for path *syntax*, but streams (IoBridge/Os) and ART jar open still need
 
 ---
 
-*Rev 5 — Option H path gates under wine; ASCII drive letters; Windows NIO.2 non-goal for now.*
+*Rev 6 — Option H implemented; Wine and native G12 accepted; ASCII drive
+letters retained; Windows NIO.2 remains a non-goal.*
 
 
 ## Appendix — ICU drive-letter pitfall (Phase 3 evidence)
@@ -509,4 +520,5 @@ private static boolean isDriveLetter(char c) {
 
 Gate: `tools/verify/win64_phase3/run_probe.sh` asserts drive/mixed/UNC absolute + multi-jar `;`.
 
-*Rev 5 — Option H path gates; ASCII drive letters; Windows NIO still non-goal.*
+*Rev 6 — Option H accepted on Wine and native Windows; Windows NIO still
+non-goal.*

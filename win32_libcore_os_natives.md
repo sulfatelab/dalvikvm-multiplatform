@@ -1,6 +1,7 @@
 # Win32 libcore Os / `Linux` natives map
 
-**Status:** living design map for hybrid `libjavacore`  
+**Status:** current implementation map for product hybrid `libjavacore`
+**Updated:** 2026-07-25
 **Preferred name:** `win32_libcore_os_natives.md` (vs `win32_libcore_syscalls.md`)  
 **Related:** L-001, W-007, [win32_filesystem.md](win32_filesystem.md)  
 **Scope:** `libcore.io.Linux` / private helper natives used by Os & IoBridge (not NIO.2).
@@ -23,6 +24,14 @@
 | needed | 0 |
 | enosys | 44 |
 | **Total tracked natives** | **126** |
+
+The Windows product also uses one explicit process-wide socket-fd registry
+(`compat/src/win64_socket_fd_registry.c`) shared across `libjavacore`,
+`libopenjdk`, NIO, JVM I/O, dup/close, and socket creation. This replaces the
+unsafe HANDLE/SOCKET numeric-probing heuristic. The native W-013 R2 HandleLeak
+gate passes 400 file cycles and 80 socket cycles without handle growth or fd
+misclassification. Windows NIO.2 remains outside this map and is still a
+product non-goal.
 
 ## Implemented
 
@@ -171,4 +180,6 @@
 
 Keep AOSP `libcore_io_Linux.cpp` **out** on Win. Implement semantics via `win_fs_natives.c` / `win_net_natives.c` + register table.
 
-*Updated L-003 pass: Runtime.exec (CreateProcess) + multicast GroupReq/IpMreqn; Os map counts approximate.*
+*Updated 2026-07-25: Runtime.exec (CreateProcess), multicast GroupReq/IpMreqn,
+and the shared socket-fd registry are product paths. Counts above are verified
+against the two method tables in this document.*

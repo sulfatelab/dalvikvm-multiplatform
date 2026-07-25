@@ -591,9 +591,9 @@ full focused R2 matrix passed on native Windows 10 build 19044, including
 sustained non-moving mspace growth, large heaps, JIT modes, repeated starts,
 metrics, log scanning, and dump scanning.
 
-## 11. Closure definition
+## 11. Closure definition — met
 
-W-013 can move to CLOSED only when all of the following are true:
+W-013 was eligible to move to CLOSED only when all of the following became true:
 
 1. Windows macros remain visible while ART's explicit MoreCore-only dlmalloc
    configuration is compile-verified.

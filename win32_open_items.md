@@ -2,6 +2,7 @@
 
 **Status:** living tracker  
 **Created:** 2026-07-17  
+**Updated:** 2026-07-25
 **Rule:** Every **temporary workaround** that future work must remove belongs here as **OPEN**.  
 When the proper fix lands, mark the item **CLOSED**, move it into §Closed (sorted), and keep the full history.  
 Do **not** list permanent non-goals as OPEN workarounds—list them under §Non-goals.
@@ -20,7 +21,7 @@ Do **not** list permanent non-goals as OPEN workarounds—list them under §Non-
 |-----|------|
 | [win64_art_port.md](win64_art_port.md) | Product phases / feasibility |
 | [win32_filesystem.md](win32_filesystem.md) | Option H path model |
-| [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md) | TLS / managed ABI / quick / JIT design (draft) |
+| [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md) | Implemented x86_64 TLS / managed ABI / quick / nterp / JIT contract plus cross-ISA design record |
 | [win32_jit_memory.md](win32_jit_memory.md) | JIT memory contract, historical separated-view diagnosis, and implemented Windows 10 pagefile-section design |
 | [win32_heap_memory.md](win32_heap_memory.md) | W-013 heap / embedded-dlmalloc ownership, low-address, and MoreCore target design |
 | [win32_libcore_os_natives.md](win32_libcore_os_natives.md) | Os/`Linux` natives: Implemented / Needed / ENOSYS |

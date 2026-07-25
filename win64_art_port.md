@@ -5,8 +5,9 @@ Product tree: **dalvikvm-multiplatform** (nested vendor + artmp_*).
 > **Arch lock:** **64-bit only** (`x86_64-pc-windows-msvc`, PE32+). “Win32 API” below means the Windows platform API on x64, not a 32-bit product.
 
 Status: historical feasibility and phased-port record; Phases 0–3 gate-complete,
-Phase 4 Wine-complete, and corrected JIT dual view enabled by default
-Updated: 2026-07-24
+Phase 4 Wine-complete with focused native W-024/W-013 acceptance, and x86_64
+quick/nterp/managed/native JIT enabled by default
+Updated: 2026-07-25
 
 **Living tracker (leftovers + temporary workarounds):** [win32_open_items.md](win32_open_items.md)
 Product goal (owner requirement): **full native Windows NT support** for this repo’s ART runtime — a real `dalvikvm.exe` + DLLs + `boot.jar` that runs plain Java on Win32/Win64 **without** Android platform APIs and **without** WSL/VM indirection.
@@ -76,18 +77,22 @@ A release is not “full” until all of the following pass on native Windows:
 | A8 | Crash path does not silent-corrupt; controlled abort or dump is possible (need not match Linux signal catcher UX). |
 | A9 | No dependency on WSL, Android device, or Android platform shared libraries at runtime. |
 
-**JIT/dex2oat** can be a **v1.1** gate if v1 is explicitly “interpreter product.” Document that choice; do not claim JIT parity until entrypoints are Win64-correct.
+The original plan allowed JIT/dex2oat to be a v1.1 gate. Current x86_64 quick,
+nterp, managed-JIT, and native-JIT entrypoints are correct and default-on;
+dex2oat/oat PE production remains deferred.
 
 ---
 
 ## 3. Why this is a real port (evidence)
 
-### 3.1 Upstream does not ship a Windows runtime
+### 3.1 Upstream baseline did not ship a Windows runtime
 
-- `vendor/art/build/Android.bp`: ART defaults set **`windows: { enabled: false }`**.
-- `vendor/art/libartbase/base/globals.h`: target flavors are only **ANDROID / LINUX / FUCHSIA** — no `ART_TARGET_WINDOWS`.
-- `vendor/art/runtime/`: essentially **zero `_WIN32`** runtime implementation; host path is `thread_linux.cc` / `runtime_linux.cc` / `monitor_linux.cc` (signals, `sigaltstack`).
-- Existing Windows code is **leaf-level**: `mem_map_windows.cc`, libbase/liblog windows sources, dex tools.
+At the Android base tag, ART defaults disabled Windows, `globals.h` had no
+`ART_TARGET_WINDOWS`, and runtime support stopped at leaf-level Windows files
+such as `mem_map_windows.cc`. The current `artmp_*` branch has since added the
+target identity, build policy, and the project-owned runtime spine under
+`vendor/art/runtime/multiplatform/windows/`. This section records why the port
+was necessary; it is not a description of the current branch.
 
 ### 3.2 Linux port still assumes Unix
 
@@ -206,7 +211,8 @@ Prefer an **official or self-built LLVM Windows release** (clang, lld, libc++, c
 - Includes: SDK `um`/`shared`/`ucrt` before any accidental third-party Win32 headers.
 - Linker: `lld-link` (or `clang++ -fuse-ld=lld`) against SDK import libs.
 - C++ library: `libc++` (not MSVC STL, not MinGW libstdc++).
-- Assembler: Clang IA for `.S`; Win64 calling-convention ports still required in ART sources.
+- Assembler: Clang IA for `.S`; the required Win64 calling-convention ports
+  are now implemented in the x86_64 ART sources.
 - Harness: `FATAL_ERROR` if compiler is MSVC or clang-cl; `FATAL_ERROR` if Windows SDK paths are missing on a Windows build.
 
 CMake configure sketch (native Windows; adjust SDK paths to the installed version):
@@ -237,7 +243,7 @@ Cross-compile from Linux is optional for compile-only CI **if** a Windows SDK sy
 | Layer | Feasible? | Notes |
 |-------|-----------|--------|
 | `clang` / `clang++` codegen for Windows | **Yes** | LLVM targets both `x86_64-pc-windows-msvc` (MSVC *object* ABI) and `x86_64-pc-windows-gnu`. Spot-check on agent01: Ubuntu clang 21 emits **x86-64 COFF** for both triples (`clang -target … -c` → COFF object). |
-| Integrated assembler (`.S` → COFF) | **Yes** | Same driver; Win64 **calling convention** still must be ported in ART sources — that is ABI work, not missing compiler support. |
+| Integrated assembler (`.S` → COFF) | **Yes** | Same driver; the Win64 calling-convention work was ABI work and is now implemented for x86_64. |
 | `lld` / `lld-link` | **Yes** | LLVM ships a COFF linker. **Rechecked agent01:** `/usr/bin/lld`, `ld.lld`, `lld-link` → Ubuntu LLD **21.1.8**. |
 | `compiler-rt` builtins | **Yes** | Standard LLVM component; needed for some runtime helpers. |
 | `libc++` on Windows | **Yes, with care** | libc++ supports Windows configurations; must be built/installed as part of the LLVM Windows toolchain. Do **not** fall back to MSVC STL or MinGW libstdc++. |
@@ -279,17 +285,20 @@ That is **“Clang compiler + MSVC/Windows SDK headers.”** It is **not** “bu
 
 **Question:** Can the Windows ART tree be **cross-compiled on Linux** (this project’s current home), under the locks: LLVM `clang++` (not `cl`/`clang-cl`), **MSVC/Windows SDK headers**, no MinGW, no WSL-as-product?
 
-**Short answer:** **Yes for build/CI artifacts; no as a substitute for Windows runtime validation.** Cross-compile is a first-class *compile/link* path; Hello.main and libcore still need a real Windows host (or hardware) to gate.
+**Short answer:** **Yes for build/CI artifacts; no as a substitute for Windows
+runtime validation.** Cross-compile is the first-class compile/link path.
+Native G12 and focused W-024/W-013 host evidence now exist, while Wine remains
+a development gate only.
 
 | Stage | On Linux host? | Notes |
 |-------|----------------|--------|
 | Compile C/C++/ASM → COFF | **Yes** | Spot-check: agent01 Ubuntu clang 21 already produces `x86-64 COFF` with `-target x86_64-pc-windows-msvc`. |
-| Assemble ART `.S` to COFF | **Yes** | Integrated assembler; content must still be **Win64 ABI**-correct. |
+| Assemble ART `.S` to COFF | **Yes** | Integrated assembler; the product x86_64 sources now contain the required Win64 ABI bridges. |
 | Preprocess/include `windows.h` / UCRT | **Yes, iff sysroot** | Linux Clang does **not** ship these. Need a Windows Kits tree on the Linux machine (see below). |
-| Link `dalvikvm.exe` / DLLs | **Yes, iff lld + SDK libs** | Need `lld-link` (or `clang -fuse-ld=lld` in link mode) and SDK `Lib/*/um/x64`, `ucrt`, etc. agent01 currently has `clang` but **no** `lld-link`/`ld.lld` installed — fixable package gap. |
+| Link `dalvikvm.exe` / DLLs | **Yes** | agent01 has Clang 21.1.8, `lld-link`/`ld.lld`, xwin SDK libraries, Windows-target compiler-rt, and cross-built libc++. |
 | Build libc++ for Windows target | **Yes / bring-your-own** | Either use a prebuilt Windows libc++ in the sysroot or build libc++ once for `x86_64-pc-windows-msvc` and cache it. |
-| Run `dalvikvm.exe` | **No** | PE won’t run natively on Linux. Wine is **not** the acceptance bar for this port (and is unreliable for ART VEH/GC). |
-| Full e2e (A3–A8) | **No on Linux alone** | Requires Windows test machine/CI runner. |
+| Run `dalvikvm.exe` | **Wine gate only** | PE does not run natively on Linux; Wine executes development gates but is not the product acceptance bar. |
+| Full e2e (A3–A8) | **No on Linux alone** | Requires Windows test machine/CI runner; native G12 has passed. |
 
 **What you must put on the Linux builder**
 
@@ -324,9 +333,11 @@ cmake -S native -B build/win64 -G Ninja   -DCMAKE_SYSTEM_NAME=Windows   -DCMAKE_
 
 (Exact `-isystem` / version dir names should be centralized in a `cmake/WindowsLLVM.cmake` module; the sketch is the shape, not the final path discovery.)
 
-**Hard corners (still feasible, not free)**
+**Historical hard corners and their current resolution**
 
-1. **codegen driver / host tools:** `operator_out`, mterp generation, `asm_defines` currently run at configure time with the **build** clang. For cross builds, run those tools as **Linux host executables** (build them for the builder, not for Windows), then compile their outputs with the Windows target — classic host vs target split. ART already thinks this way in Soong; the Linux port must not assume “configure-time clang == target clang.”
+1. **codegen driver / host tools:** the build keeps Python and generated-source
+   tooling on the Linux host, then compiles generated output for the Windows
+   target. Host and target roles are no longer conflated.
 2. **Trying to *run* Windows codegen binaries on Linux** during the build: avoid; keep Python + host ELF tools.
 3. **lld vs MSVC `.lib`:** works for normal import libs; exotic MSVC whole-archive / PDB workflows need care — prefer LLVM-side debug (`-g` + lld) for CI.
 4. **License/redistribution:** shipping the SDK *in the git repo* is wrong; CI should fetch or cache a kit the same way other projects cache Windows Kits. Document the pin (e.g. SDK 10.0.22621.0).
@@ -464,9 +475,11 @@ Host package helper (idempotent):
 - wine64 runs both  
 - CMake toolchain configures and builds `hi.exe`
 
-##### What this does *not* finish
+##### What this environment did *not* finish by itself
 
-The env does **not** implement ART’s Windows runtime spine (VEH, threads, entrypoints, libcore natives). It only removes the “can we even compile C++ for Win64?” blocker for the port described in the rest of this document.
+The environment only removed the “can we compile C++ for Win64?” blocker. The
+runtime spine, VEH, threads, entrypoints, and libcore natives were later
+implemented in this repository and are described by the phase records below.
 
 ---
 
@@ -558,19 +571,23 @@ Product-class apps (network bots, CLI) need A4+A7; pure compute may pass earlier
    - `UnixFileSystem.prefixLength` / `isAbsolute` only treat a leading `/` as absolute → **`C:\…` is not absolute**.
    - `normalize` only collapses `/`, leaves `\` as ordinary characters → wrong parent/name/resolve semantics.
    - `file.separator=/` alone does not make drive letters or UNC work in `java.io.File`.
-4. OpenJDK already solved this in **`java.io.WinNTFileSystem`** (+ `WinNTFileSystem_md.c`); Android ojluni in this tree **does not ship** those sources — reuse = **port from OpenJDK windows/** + refit Android hooks.
+4. OpenJDK already solved this in **`java.io.WinNTFileSystem`** (+ `WinNTFileSystem_md.c`). The Android base tag did not ship those sources; the
+   current project has ported/refitted them under `vendor/libcore/ojluni` and
+   `vendor/libcore/multiplatform/windows`.
 
 **Classpath list separator is a separate axis** (do not conflate with file separators):
 
 | Axis | Android/Linux today | Win64 ART requirement |
 |------|---------------------|------------------------|
 | File path chars inside one path | `/` | **`\` and `/` both valid; mixed OK**; prefer normalize-to-Win32 for kernel calls |
-| Multi-path list (`-cp`, `-Xbootclasspath`, `java.class.path`, `DexPathList`) | `:` | **Keep `:` as primary** for ART/Android compatibility (`parsed_options` help text, `Split(..., ':')`, bootclasspath). Optionally **also accept `;`** later if dual-split is implemented carefully (`;` must not break drive letters — `C:\a.jar;D:\b.jar`). |
+| Multi-path list (`-cp`, `-Xbootclasspath`, `java.class.path`, `DexPathList`) | `:` | **`;` implemented and required**; Linux keeps `:`. This avoids splitting drive-letter paths. |
 
 **Architecture (revised hybrid):**
 
 1. **`java.io` path facade:** adopt a **Windows-capable `FileSystem`** (OpenJDK `WinNTFileSystem` lineage or equivalent project class), not bare `UnixFileSystem`, for Win64 product builds.
-2. **Byte I/O:** still mostly `IoBridge` → `Libcore.os` → implement PE natives for open/read/write/close/stat (the bulk of A4); path facade and Os layer both must open mixed paths.
+2. **Byte I/O:** `IoBridge` → `Libcore.os` uses the implemented PE
+   open/read/write/close/stat bridge; the path facade and Os layer both accept
+   mixed paths.
 3. **NIO.2 (`sun.nio.fs`):** **non-goal for now** (no Windows provider port). Leave Linux-shaped stubs / fail clearly; **`java.io.File` must not lag**.
 4. **Normalize at the Win32 boundary:** before `CreateFileW` / `GetFileAttributesW`, normalize mixed paths to a consistent wide path (OpenJDK WinNT does this; do not rely on accidental CRT tolerance alone).
 5. **`path.separator=;`** on Win64; ART `-cp` / `-Xbootclasspath` parsing must use `;` (not hardcoded `:`).
@@ -681,34 +698,38 @@ Each phase has a kill-or-continue gate. This is the execution roadmap when imple
 - G12 real Win10 host goldens **PASS** (`evidence/host/RESULT_HOST.txt`, 2026-07-16T205926): net/dns/golden/abspath/props/GC all markers green.
 - Phase 3 acceptance (A4–A7 + Option H + golden app on native Windows) **met**.
 
-- Systematic native registration matrix; file/path UTF-8; network.
-- **Path model (Option H / win32_filesystem.md):** WinNT-class `java.io` + Os/ART open; mixed paths; normal `C:\…` absolutes; **`path.separator=;`**. Drive math uses ASCII letters (not ICU `Character.isLetter`). **Windows NIO non-goal for now.**
-- ICU data loading on Windows paths (including mixed/drive-letter locations).
-- boringssl Windows ASM or C.
-- **Gate:** A4–A7 for target app class (define one golden app early), including golden paths:
-  - relative `run/hello.jar`
-  - `C:/…` and `C:\\…` and **mixed** `C:\\Users\\x/y/z.jar` open/load
+The original Phase-3 implementation list is complete: systematic native
+registration, UTF-8 file/path handling, classic networking, Option H
+`WinNTFileSystem` semantics, ICU data loading, and the PE crypto/TLS stack are
+all product paths. Windows NIO.2 remains a non-goal.
 
-### Phase 4 — Hardening (2–4 months) — **WINE COMPLETE**
+### Phase 4 — Hardening (2–4 months) — **WINE COMPLETE; FOCUSED NATIVE SUBSETS PASS**
 
 - GC stress, multi-thread stress, crash dumps, resource leaks handles — **PASS** under wine64 (`tools/verify/win64_phase4/`).
 - Crash path: VEH diagnostics + unhandled filter + **MiniDumpWriteDump** to `run/crash/*.dmp` (`runtime_windows.cc`).
 - Performance smoke (arraycopy/string churn) **PASS**.
-- **Gate:** A5–A8 stable under wine; host Phase-4 re-run recommended via updated host package.
+- **Gate:** A5–A8 stable under Wine. Focused native Windows W-024 JNI/JVMTI and
+  W-013 heap/JIT/handle/repeated-start matrices pass; the broader general
+  Phase-4 host rerun remains H-001.
 - See `tools/verify/win64_phase4/RESULT.md`.
 
-### Phase 5 — JIT / oat (optional v1.1+)
+### Phase 5 — JIT / oat — **JIT COMPLETE FOR X86_64; AOT DEFERRED**
 
-> **Design draft:** TLS / managed ABI / quick entrypoints / JIT for WinNT (all ISAs sketched, x86_64 first):
+> **Implemented x86_64 design and cross-ISA record:** TLS / managed ABI / quick
+> entrypoints / nterp / JIT:
 > [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md).
 
+- Win64 quick entrypoints, nterp, managed JIT, and native JIT are default-on.
+- The JIT code cache uses the corrected unnamed pagefile-section dual view with
+  a low contiguous R/RX primary and a full RW updater alias.
+- W-013 native R2 passes J-1 and default dual-view integration; broader W-025
+  mitigation/direct-encoding hardening remains.
+- dex2oat/oat PE output remains deferred; the imageless interpreter+JIT product
+  does not require it.
 
-- Win64 quick entrypoints complete.
-- JIT code cache W^X.
-- dex2oat either ported or deferred (interpreter+JIT may suffice).
-- **Gate:** optional; declare v1 without it if needed.
-
-**Calendar (one strong engineer, part-time Linux still maintained):** ~12–24 months to solid interpreter product; faster with 2–3 people if split (build system / runtime OS / libcore).
+**Historical planning estimate:** the original estimate was 12–24 months for a
+solid interpreter product with one part-time engineer. It is retained only as
+the feasibility record, not as a current schedule.
 
 ---
 
@@ -716,14 +737,14 @@ Each phase has a kill-or-continue gate. This is the execution roadmap when imple
 
 | Risk | Severity | Mitigation |
 |------|----------|------------|
-| VEH ≠ Linux signals subtlety | Critical | Early Phase 2 spike; differential tests vs Linux oracle |
-| Win64 ABI assembly volume | Critical | Defer JIT; minimize asm in v1; shared C++ entrypoints where AOSP allows |
-| libcore native breadth | High | Golden-app-driven bring-up; stub with clear `UnsatisfiedLinkError` / exceptions |
-| Vendor submodule churn vs Windows patches | High | Compat-first; tiny vendor-patches; CI on both OSes |
-| Handle vs fd impedance in ART `unix_file` | High | UTF-8 path bridge; extend `fd_file` Windows ifdefs already partially present |
-| CFG / W^X / antivirus on JIT later | Medium | Start interpreter; document JIT policy |
-| Effort starves Linux product | High | Shared tests; Linux remains reference; Windows phases gated |
-| Underestimating “full” | High | Use acceptance bar §2; do not call tools-only “full” |
+| VEH ≠ Linux signals subtlety | Critical | VEH/minidump implementation is landed; keep H-001 native crash-path rerun open and compare with Linux behavior |
+| Win64 ABI assembly volume | Critical | x86_64 quick/nterp/JIT bridges are implemented; retain Linux/Win64 ABI matrices |
+| libcore native breadth | High | Product hybrid map tracks 82 implemented and 44 intentional ENOSYS methods |
+| Vendor submodule churn vs Windows patches | High | Nested `artmp_*` branches, small OS boundaries, and cross-host gates |
+| HANDLE vs socket/fd impedance | High | Explicit process-wide socket-fd registry plus UTF-8/wide path bridges |
+| CFG / W^X / antivirus on JIT | Medium | Corrected dual view is default; broader mitigation/direct-encoding work remains W-025 |
+| Effort starves Linux product | High | Shared boot.jar and Linux imageless gates keep Linux as the reference |
+| Underestimating “full” | High | Use acceptance bar §2 and the living tracker; do not call Wine-only evidence full acceptance |
 
 ---
 
@@ -731,7 +752,7 @@ Each phase has a kill-or-continue gate. This is the execution roadmap when imple
 
 | Aspect | Guidance |
 |--------|----------|
-| Finish Linux e2e? | **Still valuable** as the oracle and boot.jar producer; not a substitute for Windows. |
+| Linux e2e status | **Complete and still valuable** as the oracle and shared boot.jar producer; not a substitute for Windows. |
 | Shared code | bp2cmake, most of ART C++, dex format, Java boot content. |
 | Divergent code | OS spine, assembly, libcore natives, CMake link model, crypto ASM flavor. |
 | Dual maintenance cost | Expect ongoing ~20–40% tax after both work, unless Windows is frozen. |
@@ -781,11 +802,12 @@ See `tools/verify/win64_phase2/RESULT.md` and `tools/verify/win64_phase1/hello_a
 - `InitNativeMethods` loads `libicu_jni.dll` / `libjavacore.dll` / `libopenjdk.dll` on Win64.
 - Phase-2 PE JNI stubs: `tools/win64/jni_stubs/` (`libcombined.dll` stand-in) — **not** full libcore.
 
-### Follow-on (Phase 3+)
-- Real PE libcore / ICU natives (replace stubs).
-- Complete property table (`java.version` currently stub `0`).
-- Native Windows host validation (wine is gate-only).
-- JIT / quick entrypoints / GS TLS when leaving pure `-Xint`.
+### Historical follow-on (Phase 3+; completed)
+
+- Real PE libcore / ICU natives replaced the bootstrap stubs.
+- The property table reports `java.version=1.8.0`.
+- Native Windows G12 plus focused W-024/W-013 acceptance are recorded.
+- Quick invoke, rSELF TLS replacement, nterp, and JIT are product-default.
 
 
 ## 9c. Historical Phase-2 root cause — dlmalloc WIN32 mmap (2026-07-16)
@@ -810,9 +832,11 @@ enforces constrained placement; `MemMap` owns page-state transitions and whole
 Windows mappings; and the Phase-2 blanket low placement for LinearAlloc,
 metadata arenas, and the card table is removed. The Win64-only card-marking
 skip and the equivalent non-moving allocation barrier skip are also gone.
-Native Windows closure stress remains. See
-[win32_heap_memory.md](win32_heap_memory.md) and
-[win32_open_items.md](win32_open_items.md) W-013.
+Native Windows R2 closure stress passes 56/56 records, including pressure,
+large heaps, both JIT memory modes, 20 repeated starts, handle churn, complete
+metrics, and no dumps. W-013 is CLOSED; see
+[win32_heap_memory.md](win32_heap_memory.md) and the accepted evidence under
+`tools/verify/win64_w013/evidence/native_r2/ACCEPTANCE.md`.
 
 ## 10. Conclusion and current position
 
@@ -835,8 +859,8 @@ The lasting architecture is still:
    JIT, metadata formats, or managed runtime semantics.
 
 Current status and temporary workarounds live in
-[win32_open_items.md](win32_open_items.md). Heap/dlmalloc completion is W-013;
-JIT memory status is maintained in
+[win32_open_items.md](win32_open_items.md). Heap/dlmalloc W-013 is closed;
+broader JIT-memory hardening remains W-025 and is maintained in
 [win32_jit_memory.md](win32_jit_memory.md).
 
 ---
@@ -846,14 +870,15 @@ JIT memory status is maintained in
 - [win32_filesystem.md](win32_filesystem.md) — Win64 path/filesystem feasibility (layers A/B/C, mixed paths)
 
 - [bp2cmake_linux_scope.md](bp2cmake_linux_scope.md) — Linux product + three-layer converter  
-- [overlay/port_policy.py](overlay/port_policy.py) — current Linux-only Layer 2  
+- [overlay/port_policy.py](overlay/port_policy.py) and
+  [overlay/port_policy_windows.py](overlay/port_policy_windows.py) — current OS policies
 - [native/CMakeLists.txt](native/CMakeLists.txt) — Unix/clang harness  
-- `vendor/art/libartbase/base/globals.h` — target identity (extend for Windows)  
-- `vendor/art/libartbase/base/mem_map_windows.cc` — partial MemMap (extend)  
-- `vendor/art/runtime/{fault_handler,signal_catcher,thread_linux,runtime_linux}.cc` — must be Windows-paralleled  
+- `vendor/art/libartbase/base/globals.h` — implemented `ART_TARGET_WINDOWS` identity
+- `vendor/art/libartbase/base/mem_map_windows.cc` — Windows mapping and constrained dual-view implementation
+- `vendor/art/runtime/multiplatform/windows/` — project Windows runtime spine
 - `vendor/art/runtime/base/mutex.h` — futex gated on `__linux__`  
 - `vendor/art/build/Android.bp` — runtime disabled on Windows upstream  
-- `vendor/libcore/luni/src/main/native/Portability.h` — needs Windows counterpart  
+- `vendor/libcore/multiplatform/windows/` — Windows libcore Java/native implementation
 - `tools/verify/e2e/RESULT.md` — Linux e2e baseline for oracle tests
 - `/home/agent/Projects/win64-dev-env/README.md` — Win64 cross-dev environment (clang/lld, xwin SDK, libc++, compiler-rt)
 - `/home/agent/Projects/llvm-runtimes-win64/README.md` — libc++ cross-build notes
@@ -861,4 +886,6 @@ JIT memory status is maintained in
 
 ---
 
-*Phase 0–3 gated; Phase 4 wine hardening complete (GC/thread/handle/crash-dump). Host Phase-4 re-run recommended.*
+*Updated 2026-07-25: Phases 0–3 gated; Phase 4 Wine hardening complete;
+focused native W-024 and W-013 matrices pass; broader H-001/W-025 host work
+remains.*

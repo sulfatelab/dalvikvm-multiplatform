@@ -70,29 +70,30 @@ GitHub naming: `sulfatelab/dalvikvm-multiplatform_<name>` (SSH).
 
 | Path | Nested name | Branch | Pinned SHA (short) |
 |------|-------------|--------|--------------------|
-| `vendor/art` | `art` | `artmp_android-16.0.0_r4` | `90e063dfcd1b` |
+| `vendor/art` | `art` | `artmp_android-16.0.0_r4` | `27a1ac74a429` |
 | `vendor/external/boringssl` | `boringssl` | `artmp_android-16.0.0_r4` | `2f815a1e2e77` |
 | `vendor/external/cpu_features` | `cpu_features` | `artmp_android-16.0.0_r4` | `6dd8c6baeeff` |
-| `vendor/external/dlmalloc` | `dlmalloc` | `artmp_android-16.0.0_r4` | `a46e67742a8c` |
+| `vendor/external/dlmalloc` | `dlmalloc` | `artmp_android-16.0.0_r4` | `f3356ce765ab` |
 | `vendor/external/fmtlib` | `fmtlib` | `artmp_android-16.0.0_r4` | `59e0c195b177` |
 | `vendor/external/lzma` | `lzma` | `artmp_android-16.0.0_r4` | `a54a4227fc88` |
 | `vendor/external/oj-libjdwp` | `oj-libjdwp` | `artmp_android-16.0.0_r4` | `d6da5a269a49` |
 | `vendor/external/tinyxml2` | `tinyxml2` | `artmp_android-16.0.0_r4` | `457bf28c570c` |
-| `vendor/icu` | `icu` | `artmp_android-16.0.0_r4` | `f0b56faf06b0` |
+| `vendor/icu` | `icu` | `artmp_android-16.0.0_r4` | `3005c826de30` |
 | `vendor/java-external/bouncycastle` | `bouncycastle` | `artmp_android-16.0.0_r4` | `bcb46fde6479` |
-| `vendor/java-external/conscrypt` | `conscrypt` | `artmp_android-16.0.0_r4` | `1d3f90421247` |
+| `vendor/java-external/conscrypt` | `conscrypt` | `artmp_android-16.0.0_r4` | `41c1e879f299` |
 | `vendor/java-external/fdlibm` | `fdlibm` | `artmp_android-16.0.0_r4` | `3712afa2cd33` |
 | `vendor/java-external/okhttp` | `okhttp` | `artmp_android-16.0.0_r4` | `788860d05111` |
 | `vendor/libbase` | `libbase` | `artmp_android-16.0.0_r4` | `e914db1d758c` |
-| `vendor/libcore` | `libcore` | `artmp_android-16.0.0_r4` | `73fd5f198807` |
+| `vendor/libcore` | `libcore` | `artmp_android-16.0.0_r4` | `67ec4ab8dd70` |
 | `vendor/libnativehelper` | `libnativehelper` | `artmp_android-16.0.0_r4` | `edb7a45e81bb` |
 | `vendor/libprocinfo` | `libprocinfo` | `artmp_android-16.0.0_r4` | `1c617ca29fb6` |
 | `vendor/libziparchive` | `libziparchive` | `artmp_android-16.0.0_r4` | `a710e1e46346` |
 | `vendor/logging` | `logging` | `artmp_android-16.0.0_r4` | `c29f3eeaa37e` |
-| `vendor/unwinding` | `unwinding` | `artmp_android-16.0.0_r4` | `3012b1dca8e3` |
+| `vendor/unwinding` | `unwinding` | `artmp_android-16.0.0_r4` | `e4071137a8e4` |
 
-Pinned SHAs above are the values recorded at first main commit of this multiplatform tree.
-Update them by committing inside the nested repo, then `git add <path>` on main.
+Pinned SHAs above are the current main-repository gitlinks as of 2026-07-25.
+Update the table when committing a nested-repository gitlink change: commit inside
+the nested repo, then `git add <path>` on main.
 
 ## Host toolchain notes (not shipped here)
 
