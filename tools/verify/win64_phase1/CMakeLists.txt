@@ -109,6 +109,12 @@ add_executable(win64_pthread_once_probe EXCLUDE_FROM_ALL
 
 include(${CMAKE_CURRENT_SOURCE_DIR}/phase1.cmake)
 
+add_executable(win64_w013_mem_map_probe EXCLUDE_FROM_ALL
+  "${_repo}/tools/verify/win64_w013/W013MemMapPolicyProbe.cc")
+target_include_directories(win64_w013_mem_map_probe PRIVATE
+  "${MDVM_ART_DIR}/libartbase")
+target_link_libraries(win64_w013_mem_map_probe artbase base log)
+
 # ART's JVMTI implementation is a runtime plugin rather than part of art.dll.
 # Keep the target source list aligned with libopenjdkjvmti_defaults in
 # vendor/art/openjdkjvmti/Android.bp so Win64 can exercise the same debugger

@@ -1,6 +1,6 @@
 # Win64 heap memory and embedded dlmalloc design — W-013
 
-**Status:** implementation in progress; Stages A–B complete, Stages C–E remain OPEN
+**Status:** implementation in progress; Stages A–C complete, Stages D–E remain OPEN
 **Updated:** 2026-07-25
 **Target baseline:** Windows 10 version 1803 or later (NTDDI_WIN10_RS4)
 **Related:** [win32_open_items.md](win32_open_items.md) W-013,
@@ -40,8 +40,11 @@ workaround. Stage A removed it on 2026-07-25: Windows macros now remain visible,
 dlmalloc respects the embedding policy, ART's configuration is compile-checked,
 and Windows MoreCore growth uses page-size granularity. Stage B then attached
 every heap and JIT mspace directly to its owner and removed global owner
-discovery. W-013 remains open until the implicit low-address policy, mapping
-ownership gaps, low-VA audit, and closure matrix are complete.
+discovery. Stage C replaced the implicit anonymous low-address policy and
+manual hole scan with explicit `VirtualAlloc2` constraints, and added shared
+whole-allocation ownership for Windows `MemMap` ranges. W-013 remains open
+until page-state transitions, the low-VA audit, and the closure matrix are
+complete.
 
 ## 1. Goals and invariants
 
@@ -113,8 +116,8 @@ authority to create unrelated mappings.
 
 ## 3. Current implementation and remaining divergence
 
-Stage A removed the configuration and macro-masking shortcuts. The remaining
-implementation divergence is:
+Stages A through C removed the configuration, owner-discovery, and anonymous
+mapping-policy shortcuts. The remaining implementation divergence is:
 
 | Area | Current behavior | Target behavior |
 |------|------------------|-----------------|
@@ -123,10 +126,12 @@ implementation divergence is:
 | granularity | Win32 contiguous MoreCore uses `dwPageSize`; standalone mmap defaults retain allocation granularity | Complete in Stage A |
 | failure action | ART explicitly sets `errno = ENOMEM` and compile-checks the configuration | Complete in Stage A |
 | MoreCore owner | Each mspace stores its provider in `malloc_state::extp/exts`; the callback dispatches directly without runtime or heap scans | Complete in Stage B |
-| anonymous address policy | A null or low hint can imply low placement even when `low_4gb=false` | Anywhere, below-4-GiB, and exact-address requests are explicit |
-| low allocation | `VirtualQuery` scans holes, then an unrestricted allocation may be tried and rejected | `VirtualAlloc2` applies `MEM_ADDRESS_REQUIREMENTS`; no high fallback |
-| aligned anonymous maps | Common code over-allocates and partially unmaps | Windows requests alignment directly or retains one owner reservation |
-| partial release | `TargetMUnmap` uses whole-allocation `VirtualFree(MEM_RELEASE)` although common paths can request a suffix/prefix release | Windows ownership records preserve the allocation base; logical shrink uses range operations and whole release occurs only at destruction |
+| anonymous address policy | Anywhere, below-4-GiB, and exact-address requests are explicit; null/low hints no longer create an implicit low request | Complete in Stage C |
+| low allocation | `VirtualAlloc2` applies `MEM_ADDRESS_REQUIREMENTS`; there is no manual hole scan or unrestricted high fallback | Complete in Stage C |
+| aligned anonymous maps | Windows passes the final alignment directly to `VirtualAlloc2`; there is no over-allocation/partial-release path | Complete in Stage C |
+| mapping ownership | Logical splits, reservation transfers, and reuse views share an owner keyed by `AllocationBase`; private mappings use whole `VirtualFree(MEM_RELEASE)` and section views use `UnmapViewOfFile` | Complete in Stage C |
+| logical shrink | `SetSize()` and `AlignBy()` retain the whole Windows allocation and shrink only the logical range | Stage D must deactivate and discard the excluded pages explicitly |
+| fixed file overlay | `MapViewOfFileEx` cannot replace an ordinary `VirtualAlloc` reservation in place | Remains unsupported; use an explicit placeholder design before enabling image/OAT paths that require this operation |
 | low metadata | Win64 currently forces ordinary arena pools, compiler metadata, LinearAlloc, and the card table low | Keep low placement only where an encoding or object-reference contract requires it |
 
 The current code must not be described as complete merely because Hello,
@@ -274,11 +279,14 @@ base and the size must be zero. Therefore Windows must not implement common
 over-allocate/align/shrink operations by releasing arbitrary prefixes or
 suffixes.
 
-For an aligned anonymous request, prefer a direct `VirtualAlloc2` alignment
-requirement and allocate only the final size. Where a common ART operation
-logically shrinks a mapping, retain the original reservation base/size for
-destruction, update the logical accessible range, and deactivate or discard
-the unused pages. Release the whole reservation exactly once when its owning
+For an aligned anonymous request, Stage C passes a direct `VirtualAlloc2`
+alignment requirement and allocates only the final size. Where a common ART
+operation logically shrinks a mapping, Stage C retains the original Windows
+owner for destruction and updates the logical `MemMap` range without an
+invalid partial release. Stage D must deactivate and discard the excluded
+pages; until then they remain part of the committed owner allocation under
+their previous protection even though they are outside the logical `MemMap`.
+The complete allocation is released exactly once when the final sharing
 `MemMap` is destroyed.
 
 Mapped section views remain owned by `UnmapViewOfFile`, not `VirtualFree`.
@@ -413,6 +421,8 @@ Hello. Evidence: `tools/verify/win64_w013/RESULT.md`.
 
 ### Stage C — correct Windows anonymous mapping policy
 
+**Completed:** 2026-07-25
+
 1. Translate common `MemMap` requests into explicit anywhere, low, or exact
    policies.
 2. Replace the manual anonymous low scan with `VirtualAlloc2` address
@@ -420,6 +430,22 @@ Hello. Evidence: `tools/verify/win64_w013/RESULT.md`.
 3. Implement aligned mappings without partial release.
 4. Track mapping ownership kind and ensure whole-owner destruction.
 5. Verify `low_4gb=false` requests are not intentionally placed low.
+
+Landed as ART `2fa301a13b`. The Windows backend now uses `VirtualAlloc2` and
+`MEM_ADDRESS_REQUIREMENTS`, permits a half-open low mapping to end exactly at
+4 GiB, aligns anonymous mappings directly, reuses existing reservations with
+`VirtualProtect`, and shares one release owner across logical views. The
+focused Wine probe covers anywhere/low/exact placement, exact collision, the
+4-GiB boundary, 2-MiB alignment, reservation transfer, reuse-view lifetime,
+logical shrink, and exactly-once whole release. Win64 JIT smoke 12/12,
+GCStress, ThreadHeavy, HandleLeak, the Linux `-j16` build, and Linux imageless
+Hello also pass. Evidence: `tools/verify/win64_w013/RESULT.md`.
+
+Stage C intentionally does not emulate fixed file-view replacement over an
+ordinary `VirtualAlloc` reservation. Windows cannot perform that operation
+with `MapViewOfFileEx`; a future image/OAT path that requires it must use
+placeholder reservations and an explicit rollback design. The current
+imageless runtime and JIT pagefile-section path do not depend on that overlay.
 
 ### Stage D — make page-state transitions explicit
 
