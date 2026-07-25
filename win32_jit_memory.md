@@ -882,6 +882,8 @@ None of this justifies retaining the RWX J-1 path as the product default.
 | dlmalloc and `MemMap` ownership | W-013 CLOSED: Stages A–E plus native R2 mapping, ownership, discard, pressure, metrics, and repeated-start acceptance pass |
 | Root-cause correction | JIT-root signed displacement plus latent CodeInfo overflow |
 | PE asm definitions | Windows-target generator test enforces `RUNTIME_INSTRUMENTATION_OFFSET=0x328` |
+| W-002 managed OSR entries | Quick OSR bridges Microsoft C++ arguments to the shared body and publishes r15; nterp OSR uses a separate return adapter plus `NterpFree`; structural, Wine, and Linux controls pass |
+| W-002 native attach entries | Regular and daemon native threads call a pre-JITed Java callback, allocate, validate daemon state and exact values, detach, and verify `JNI_EDETACHED` in both memory and interpreter modes |
 | Threshold-zero CriticalNative | Direct visitor uses Win64 unified ordinals/home area; dlsym caller PC preserved; repeated J-1 and dual-view probes pass |
 | Unresolved CriticalNative dlsym | ART-owned `JVM_NativeLoad` bridge; mixed/spilled/scalar exported calls pass through both load APIs |
 | CriticalNative method tracing | Registered and unresolved suites pass during/after tracing in J-1 and dual-view modes; mode restores to zero and trace output is deleted |
@@ -894,6 +896,7 @@ None of this justifies retaining the RWX J-1 path as the product default.
 
 | Item | Blocker |
 |------|---------|
+| W-002 managed-entry native acceptance | Focused Windows 10 RS4+ package is issued; Wine/Linux implementation acceptance is complete |
 | P5 mapping real-Windows acceptance | W-013 heap/JIT integration subset is complete: R2 protections, metrics, J-1/default JIT, and repeated starts pass. Broader mitigation/direct-encoding closure remains under W-025 |
 | Direct encoding checks | Add checks at JIT-root patch and CodeInfo construction sites |
 
@@ -912,6 +915,10 @@ None of this justifies retaining the RWX J-1 path as the product default.
 | FastNative ABI probe, default native JIT | PASS, three binding phases, 7/7 compiled once | PASS, three binding phases, 7/7 compiled once |
 | FastNative method tracing | PASS, mode `0 -> 1 -> 0`, no trace file | PASS, mode `0 -> 1 -> 0`, no trace file |
 | JVMTI forced interpreter | PASS, 3/3; all six calls exact; two normal/FastNative compile records | PASS, 3/3; all six calls exact; two normal/FastNative compile records |
+| Managed OSR, default nterp | PASS, 2/2 | PASS, 2/2 |
+| Managed OSR, switch interpreter | PASS, 2/2 | PASS, 2/2 |
+| Attached-thread JNI, default nterp | PASS, 2/2; 16 threads/run | PASS, 2/2; 16 threads/run |
+| Attached-thread JNI, switch interpreter | PASS, 2/2; 16 threads/run | PASS, 2/2; 16 threads/run |
 | Restored Math ceil/floor | PASS, 3/3 threshold-zero and 3/3 `-Xint` | PASS, 3/3 threshold-zero and 3/3 `-Xint` |
 
 ## 14. Decision log
@@ -946,6 +953,8 @@ None of this justifies retaining the RWX J-1 path as the product default.
 | 2026-07-24 | Wine fatal-tripwire audit shows legacy runtime-started InterpreterJni fallback is unreachable across `-Xint`, native ABI, tracing, and JVMTI suites, establishing the native-host test candidate |
 | 2026-07-25 | W-013 native R1 J-1 dump resolves to `ArtDetachMspaceMoreCoreProvider` writing executable-mspace metadata after the mapping returned to RX; attach/detach now run inside the existing `ScopedCodeCacheWrite` transition, with dual-view behavior unchanged |
 | 2026-07-25 | W-013 native R2 passes 56/56 records: corrected dual view compiles 30 methods, J-1 compiles 26, 20/20 repeated starts and complete metrics pass, and no dump is present; W-013 closes while broader W-025 work remains separate |
+| 2026-07-25 | W-002 quick OSR keeps the platform C++ ABI and performs a local Microsoft-to-SysV argument conversion with r15 publication; nterp OSR gains a Windows return adapter because its save layout intentionally differs from compiled code |
+| 2026-07-25 | W-002 OSR and attached-thread JNI pass 2/2 in all dual/J-1 and default-nterp/switch combinations; Linux OSR and full builds pass; native Windows acceptance is packaged |
 | 2026-07-24 | Native Windows 10 build 19044 tripwire matrix passes all nine cases with exact required native compile records and no crash dump; W-024 cleanup is authorized |
 | 2026-07-24 | ART `42a03f2ea0` restores exact upstream interpreter scope and common default native-JIT policy; final Win64 and Linux regressions pass and W-011/W-012/W-024 close |
 
@@ -962,6 +971,7 @@ None of this justifies retaining the RWX J-1 path as the product default.
 | JIT root patching | `vendor/art/compiler/optimizing/code_generator_x86_64.cc` |
 | CodeInfo offset | `vendor/art/runtime/oat/oat_quick_method_header.h` |
 | D-1 Thread-address helper | `vendor/art/compiler/utils/x86_64/assembler_x86_64.*` |
+| W-002 OSR entry adapters | `vendor/art/runtime/arch/x86_64/quick_entrypoints_x86_64.S`; `vendor/art/runtime/interpreter/mterp/x86_64ng/main.S` |
 | JNI XMM argument moves | `vendor/art/compiler/utils/x86_64/jni_macro_assembler_x86_64.cc`; `assembler_x86_64_test.cc` |
 | Native JIT gate | `vendor/art/runtime/jit/jit.cc` |
 | dlmalloc configuration | `vendor/art/runtime/gc/allocator/art-dlmalloc.cc` |

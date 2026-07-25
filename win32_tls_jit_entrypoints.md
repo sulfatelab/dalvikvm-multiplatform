@@ -6,7 +6,8 @@ implemented and product-default; other Windows ISAs remain design-only
 **Scope:** Record the cross-ISA design and the implemented x86_64 contracts.
 **Related:** [win64_art_port.md](win64_art_port.md) (product phases),
 [win32_jit_memory.md](win32_jit_memory.md) (implemented code-cache design), and
-[win32_open_items.md](win32_open_items.md) (remaining W-002/W-003/W-008/W-010/W-014/W-017 and W-025 work).
+[win32_open_items.md](win32_open_items.md) (W-002 native acceptance plus
+remaining W-003/W-008/W-010/W-014/W-017 and W-025 work).
 
 ---
 
@@ -919,8 +920,10 @@ Wine matrix with `ART_WIN64_QUICK_INVOKE=1` (fresh PE, imageless):
 Design step 5 (**compiled Hello without forced `-Xint`**, still imageless) is **met** under opt-in quick invoke + switch interpreter.
 
 The checkpoint's quick-invoke, nterp, CoreProbe, W-012, W-024, and Phase-5 JIT
-items are complete. Current residual work is the explicitly open tracker set:
-W-002/W-003/W-008/W-010/W-014/W-017, broader W-025 hardening, and the
+items are complete. W-002's managed-entry implementation and Wine/Linux
+verification are also complete; it remains open only for the issued native
+Windows acceptance run. Current residual work is W-002 host acceptance,
+W-003/W-008/W-010/W-014/W-017, broader W-025 hardening, and the other
 host-validation gaps in [win32_open_items.md](win32_open_items.md).
 
 ## 15. Nterp / mterp on WinNT x86_64 — analysis and design
@@ -1497,6 +1500,90 @@ W-001 marked CLOSED in [win32_open_items.md](win32_open_items.md).
 
 **JIT memory / codegen:** see [win32_jit_memory.md](win32_jit_memory.md) §13 — managed and native JIT use the corrected dual view by default; D-1 r15 TLS audit is complete; the compiled-JNI managed/native split plus XMM-to-XMM moves pass a 7/7 registered/unresolved normal/FastNative mixed/high-FP matrix across rebinding and method tracing without extra target compilation; and registered/unresolved CriticalNative unified ordinals, shadow/stack layout, dlsym lookup, and method tracing pass in both memory modes through the ART-owned native-load bridge. A separate Win64 `openjdkjvmti.dll` passes the real forced-interpreter transition 3/3 in each memory mode over all three native kinds. Math.ceil/floor are native CriticalNative methods again and use the same registration table on ELF and PE. Per-method compile records are opt-in through `ART_WIN64_JIT_LOG_COMPILES=1`. W-024 native-host acceptance, upstream interpreter cleanup, and default native-JIT restoration are complete.
 
+## 17.9 W-002 managed OSR and attached-thread entries (2026-07-25)
+
+**Status:** IMPLEMENTED; Wine and Linux PASS; native Windows 10 acceptance
+package issued
+
+The rSELF design did not need to change. The remaining failures were two local
+OSR transitions that bypassed the already-correct quick-invoke boundary.
+
+### Quick/switch OSR
+
+`jit.cc` calls `art_quick_osr_stub` as an ordinary platform C++ function.
+Changing that declaration to a SysV ABI would increase divergence and push a
+Windows-only convention into C++ callers. The stub therefore retains the
+Microsoft x64 entry and converts only inside its Windows prologue:
+
+| Microsoft x64 input | Shared assembly body |
+|---------------------|----------------------|
+| rcx: copied stack | rdi |
+| rdx: stack size | rsi |
+| r8: native PC | rdx |
+| r9: result pointer | rcx |
+| stack argument 5: shorty | r8 |
+| stack argument 6: `Thread*` | r9, then managed r15 |
+
+The prologue preserves rdi and rsi because they are Microsoft nonvolatile
+registers, and the common save block preserves the native caller's r15 before
+publishing managed rSELF. The Windows CFA is 96 bytes; Linux retains its
+original 80-byte CFA and instruction path.
+
+### Nterp OSR
+
+The first defect was a raw `free` call shaped for SysV. Windows now calls
+`NterpFree`, whose assembly-facing SysV ABI bridges to UCRT's Microsoft ABI
+with the required shadow space.
+
+That correction exposed the deeper frame defect. Linux reuses nterp's
+callee-save block as the compiled OSR frame because their layouts match.
+Windows pins r15 as rSELF and excludes it from the compiled spill set, so the
+nterp and compiled layouts are intentionally different. Reusing the block let
+compiled OSR return with the wrong stack restoration state.
+
+The Windows transition now:
+
+1. keeps nterp's original save block as a return adapter;
+2. saves the compiled native PC away from `NterpFree`;
+3. copies the complete compiled OSR frame below the adapter;
+4. frees the temporary OSR data through `NterpFree`;
+5. jumps to compiled code;
+6. receives the compiled return in the adapter; and
+7. restores XMM12–XMM15 and rbx/rbp/r12–r15 before returning to the original
+   managed caller.
+
+The compiled result remains in rax/xmm0 throughout the adapter. Linux keeps its
+original direct transition and raw libc `free`.
+
+### Native attach contract
+
+`AttachCurrentThread` and `AttachCurrentThreadAsDaemon` establish ART's
+C++ TLS state; they do not own the native caller's r15. A later JNI
+`CallStaticLongMethod` crosses `ArtMethod::Invoke`, which preserves native
+r15 and publishes managed rSELF at the quick boundary. The focused probe
+pre-JITs the callback, creates regular and daemon Win32 threads, checks daemon
+state and `Thread.currentThread()`, allocates objects, validates exact
+64-bit results, detaches, and requires `GetEnv == JNI_EDETACHED`.
+
+### Verification
+
+| Control | Result |
+|---------|--------|
+| Source and PE object structure | PASS |
+| OSR, dual/default nterp | 2/2 |
+| OSR, dual/switch | 2/2 |
+| OSR, J-1/default nterp | 2/2 |
+| OSR, J-1/switch | 2/2 |
+| Attached-thread JNI, same four mode pairs | 2/2 each; 16 threads per process |
+| Full Phase 3 Wine aggregate | PASS |
+| Full Phase 4 Wine aggregate | PASS |
+| Linux full build and shared-boot Hello/GC | PASS |
+| Linux nterp OSR baseline/OSR/jump/checksum | PASS |
+| Staged native package Wine smoke | 8/8 processes |
+
+The remaining W-002 close gate is the native Windows 10 RS4+ run documented in
+`tools/verify/win64_phase4/W002_HOST_CHECKLIST.md`.
+
 
 ## 13. Appendix — evidence anchors in tree
 
@@ -1512,6 +1599,7 @@ W-001 marked CLOSED in [win32_open_items.md](win32_open_items.md).
 | Direct PE Runtime singleton load | `LOAD_RUNTIME_INSTANCE` in `asm_support_x86_64.S`; §6.7 |
 | Nterp Win conflicts (GS + r15=rREFS) | `mterp/x86_64ng/main.S`; generated `mterp_x86_64.S`; §15 |
 | Nterp Win policy | `interpreter/mterp/nterp.cc` `IsNterpSupported` (default on; diagnostic opt-out) |
+| Win quick and nterp OSR entries | `quick_entrypoints_x86_64.S` `art_quick_osr_stub`; `mterp/x86_64ng/main.S` `NterpHotnessCheck`; §17.9 |
 | FS.base=Thread* rejected | §16; wine `PF_RDWRFSGSBASE_AVAILABLE`; public `CONTEXT` has no FsBase |
 | rSELF=r15, rREFS=rbp locked | §17; §15 N-1; asm_support `rSELF r15` |
 
@@ -1519,4 +1607,4 @@ W-001 marked CLOSED in [win32_open_items.md](win32_open_items.md).
 
 ## 14. One-paragraph executive summary
 
-On Linux amd64, ART’s managed world is **GS-relative Thread TLS** layered on top of normal C++ `thread_local`, with quick entrypoints and JIT assuming SysV bridges; on Linux arm64, managed world is **x19 = Thread\***. Windows **cannot** reuse GS for Thread\* (TEB owns GS); **FS.base=Thread\*** is also **rejected** (§16: FSGSBASE/wine/CONTEXT portability), so managed self is a GPR. The WinNT design therefore adopts the **arm64-style explicit self register** on all Windows ISAs (**LOCKED and implemented: r15** on x86_64 with nterp **rREFS=rbp**; **x19** remains a design for ARM64/Arm64EC), keeps C++ `Thread::Current()` on `thread_local`/`TlsAlloc`, and isolates Microsoft C++ calling conventions at quick-entrypoint and invoke bridges. JIT code obeys the same self and entrypoint contracts and uses one unnamed pagefile-backed section with a low contiguous R/RX primary view plus an RW updater alias. **x86_64 is implemented**; x86, arm64, and Arm64EC remain design-only so future work is not forced into a GS-shaped abstraction.
+On Linux amd64, ART’s managed world is **GS-relative Thread TLS** layered on top of normal C++ `thread_local`, with quick entrypoints and JIT assuming SysV bridges; on Linux arm64, managed world is **x19 = Thread\***. Windows **cannot** reuse GS for Thread\* (TEB owns GS); **FS.base=Thread\*** is also **rejected** (§16: FSGSBASE/wine/CONTEXT portability), so managed self is a GPR. The WinNT design therefore adopts the **arm64-style explicit self register** on all Windows ISAs (**LOCKED and implemented: r15** on x86_64 with nterp **rREFS=rbp**; **x19** remains a design for ARM64/Arm64EC), keeps C++ `Thread::Current()` on `thread_local`/`TlsAlloc`, and isolates Microsoft C++ calling conventions at quick-invoke and OSR bridges. The Windows nterp OSR adapter preserves the deliberately different nterp and compiled save layouts. JIT code obeys the same self and entrypoint contracts and uses one unnamed pagefile-backed section with a low contiguous R/RX primary view plus an RW updater alias. **x86_64 implementation and Wine/Linux verification are complete; W-002 awaits only native Windows acceptance.** x86, arm64, and Arm64EC remain design-only so future work is not forced into a GS-shaped abstraction.

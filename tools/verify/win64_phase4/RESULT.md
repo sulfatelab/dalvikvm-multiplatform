@@ -1,13 +1,14 @@
 # Win64 Phase 4 — RESULT
 
-**Status:** **WINE COMPLETE** — A5–A8 hardening gates PASS under wine64; host Phase-4 re-run recommended  
-**Date:** 2026-07-16  
+**Status:** **WINE COMPLETE** — A5–A8 and focused managed/native JIT hardening gates PASS under wine64; focused native acceptance remains where listed
+**Date:** 2026-07-25
 **Depends on:** Phase 3 complete (real Win10 G12 goldens)
 
 ## Scope (from win64_art_port §Phase 4)
 
 - GC stress, multi-thread stress, crash dumps, resource/handle leaks
-- Performance smoke (TLS/interpreter-level, not full JIT)
+- Performance smoke plus focused managed/native JIT, OSR, attach, ABI, tracing,
+  and forced-interpreter transitions
 - **Gate:** A5–A8 stable; no WSL
 
 ## Gates (wine64)
@@ -21,6 +22,9 @@
 | P4_G5 Java abort path | **PASS** | `run_crashabort.sh` |
 | P4_G5b Native AV + minidump | **PASS** | `run_crashnative.sh` (VEH+UEF+`.dmp`) |
 | P4_G6 GoldenApp regression | **PASS** | phase3 `run_goldenapp.sh` |
+| W-002 structural managed entries | **PASS** | `check_w002_managed_entries.py` |
+| W-002 OSR matrix | **PASS, 8/8** | `run_w002_osr_probe.sh` |
+| W-002 attached-thread matrix | **PASS, 8/8** | `run_w002_attach_probe.sh` |
 | Full suite | **PASS** | `run_all_wine_gates.sh` |
 
 Evidence: `evidence/all_wine_gates.txt`, `evidence/crashnative.txt`
@@ -41,6 +45,8 @@ PASS native_crash_aborts
 | UEF + MiniDumpWriteDump | `vendor/art/runtime/multiplatform/windows/runtime_windows.cc` (links `dbghelp`) |
 | Phase 4 probes | `tools/verify/win64_phase4/src/*` |
 | Native AV JNI | `tools/win64/jni_stubs/win_runtime_natives.c` |
+| W-002 OSR adapters | `quick_entrypoints_x86_64.S`; `mterp/x86_64ng/main.S` |
+| W-002 probes and native package | `run_w002_*.sh`; `package_win64_w002.sh` |
 
 ## Host
 
@@ -52,16 +58,24 @@ bash tools/win64/host_package/package_win64_phase3.sh
 # Optional: scripts\run_crashabort.cmd
 ```
 
+Focused W-002 native acceptance:
+
+```bash
+JOBS=32 WINEDEBUG=-all \
+  bash tools/win64/host_package/package_win64_w002.sh
+# Native PowerShell: .\scripts\RUN_W002_HOST.ps1
+```
+
 ## Non-goals
 
-- Full JIT/dex2oat (Phase 5)
 - Windows NIO.2
 - Production perf parity with Linux
+- Treating Wine as a substitute for an explicitly required native-host gate
 
 ## Next
 
-- Host re-run Phase 4 subset on real Windows (recommended for full product claim)
-- Phase 5 optional JIT
+- Complete focused W-002 native Windows acceptance
+- Complete W-025 broader JIT-mapping native acceptance and hardening
 
 ## Multiplatform re-run (2026-07-17)
 
@@ -89,3 +103,26 @@ including its new structural/source/dependency gate, with 574 direct
 relocations and zero retired-helper references. Full focused results and the
 accepted native-Windows closure are recorded in
 [`RESULT-w004-runtime-load.md`](RESULT-w004-runtime-load.md).
+
+## W-002 managed-entry re-run (2026-07-25)
+
+The quick/switch OSR stub now keeps its Microsoft C++ entry, converts arguments
+inside assembly, preserves Win64 nonvolatiles, and publishes rSELF in r15.
+Windows nterp OSR now uses `NterpFree` and a separate return adapter instead
+of assuming that nterp and compiled callee-save layouts match.
+
+Focused Wine acceptance passes:
+
+- structural/source/PE object inspection;
+- OSR 2/2 in each dual/J-1 and default-nterp/switch pair;
+- attached-thread JNI 2/2 in the same four pairs, with 16 native threads per
+  process; and
+- the complete Phase 4 aggregate.
+
+The complete Phase 3 aggregate, Win64 build, Linux full build, Linux
+shared-boot Hello/GC, and Linux nterp OSR control also pass. The focused native
+Windows package passes its manifest/export checks and all eight staged-package
+Wine combinations. W-002 remains open only for native Windows 10 RS4+
+acceptance. See
+[`RESULT-w002-managed-entry.md`](RESULT-w002-managed-entry.md) and
+[`W002_HOST_CHECKLIST.md`](W002_HOST_CHECKLIST.md).
