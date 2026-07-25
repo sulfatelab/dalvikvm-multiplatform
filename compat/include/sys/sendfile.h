@@ -1,4 +1,7 @@
 #pragma once
+
+#if defined(_WIN32)
+
 #include <stddef.h>
 #include <stdint.h>
 #ifndef _SSIZE_T_DEFINED
@@ -12,4 +15,10 @@ ssize_t sendfile(int out_fd, int in_fd, long long* offset, size_t count);
 ssize_t sendfile64(int out_fd, int in_fd, long long* offset, size_t count);
 #ifdef __cplusplus
 }
+#endif
+
+#else
+
+#include_next <sys/sendfile.h>
+
 #endif
