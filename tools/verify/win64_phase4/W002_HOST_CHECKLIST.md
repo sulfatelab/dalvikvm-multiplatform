@@ -1,0 +1,89 @@
+# W-002 native Windows host acceptance
+
+**Target:** Windows 10 version 1803 (RS4, build 17134) or later, x64
+
+**State:** READY FOR NATIVE ACCEPTANCE
+
+## Purpose
+
+This focused package is the remaining close gate for W-002. Wine and Linux
+already pass the structural, OSR, native-thread attach, and broader regression
+controls. The native run confirms that the Win64 rSELF and OSR transitions also
+behave correctly on the supported Windows kernel and loader.
+
+The matrix covers:
+
+- corrected dual-view and J-1 diagnostic JIT memory modes;
+- product-default nterp and the switch interpreter;
+- baseline-to-OSR compilation and transition with exact checksum;
+- `AttachCurrentThread` and `AttachCurrentThreadAsDaemon`;
+- invocation of a pre-JITed Java callback from 16 newly attached native
+  threads per attach process;
+- daemon state, allocation, exact return values, detach, and
+  `JNI_EDETACHED` checks; and
+- two complete repetitions of every mode pair.
+
+The package embeds a Linux-generated structural report for the quick and nterp
+OSR assembly. The Windows host does not need LLVM tools.
+
+## Run
+
+Unpack the archive on a native Windows 10/11 x64 host. Do not use WSL or Wine.
+From PowerShell in the package root:
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+.\scripts\RUN_W002_HOST.ps1
+```
+
+The script resolves the package root from its own location, so the unpack path
+may contain spaces.
+
+## Required result
+
+`logs\RESULT_W002.txt` must end with:
+
+```text
+OVERALL PASS
+```
+
+The result must contain 21 PASS records:
+
+- host OS, package integrity, and structural report: 3;
+- OSR and attach processes: 16;
+- fatal-log scan and recursive dump scan: 2.
+
+Every child process must exit zero without timing out. The eight OSR processes
+must show baseline and OSR compilation, the jump marker, exact checksum
+`9835131152`, and no pending exception. Switch-interpreter OSR must also show
+the switch return-completion marker; nterp OSR must not use that return path.
+
+Every attach process must report `W002AttachProbe OK completed=16`, compile
+`W002AttachProbe.attachedCallback`, and finish without an exception.
+
+`logs\DMP_SCAN.txt` must contain:
+
+```text
+NO_DMP_FILES
+```
+
+## Return evidence
+
+Return the complete package directory or a ZIP containing it. Do not return
+only screenshots. In particular, preserve:
+
+- the complete `logs` directory;
+- `BUILD_INFO.txt`;
+- `MANIFEST.json`;
+- `SHA256SUMS.txt`; and
+- `W002_STRUCTURAL_REPORT.txt`.
+
+Linux-side review command:
+
+```bash
+python3 tools/verify/win64_phase4/review_w002_host_result.py \
+  /path/to/returned.zip --issued dist/win64_w002_host
+```
+
+W-002 remains open until this review passes on native Windows. Wine results are
+strong pre-issue coverage but are not a substitute for this host gate.
