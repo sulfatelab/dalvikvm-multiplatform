@@ -1,6 +1,6 @@
 # W-013 Win64 heap-memory implementation
 
-**Status:** Stage A PASS; Stages B–E remain OPEN
+**Status:** Stages A–B PASS; Stages C–E remain OPEN
 **Date:** 2026-07-25
 **Host:** agent01
 
@@ -34,11 +34,34 @@ W013_DLMALLOC_CONFIG_PASS page=4096 granularity=4096 increment=20480
 The probe also checks that Windows macros remain active, a maximal allocation
 fails with `ENOMEM`, and `art-dlmalloc.cc` contains no `_WIN32`/`WIN32` undef.
 
+## Stage B — direct mspace-owner attachment
+
+ART commit: `d011d72d56`
+
+Landed behavior:
+
+- all ART mspaces are created through `ArtCreateMspaceWithBase()`;
+- `malloc_state::extp/exts` store an `MspaceMoreCoreProvider` and validation
+  magic;
+- the dlmalloc MoreCore callback validates and dispatches directly to
+  `DlMallocSpace` or `JitMemoryRegion`;
+- heap construction, clear, and destruction attach/detach the provider;
+- JIT move construction/assignment detach the temporary provider and rebind
+  both mspaces to the destination, while reset/destruction detach them; and
+- the global `Runtime::Current()`/heap/JIT owner scan and
+  `JitCodeCache::OwnsSpace()` path are removed.
+
+The focused probe now also rejects raw `create_mspace*()` calls outside
+`art-dlmalloc.cc` and rejects restoration of the global owner-discovery path.
+
 ## Integration verification
 
 ```text
 cmake --build build/win64_phase1 --target art dalvikvm -j8
 tools/verify/win64_phase4/run_jit_smoke.sh
+tools/verify/win64_phase4/run_gcstress.sh
+tools/verify/win64_phase4/run_threadheavy.sh
+tools/verify/win64_phase4/run_handleleak.sh
 cmake --build build/native --target art dalvikvm -j8
 tools/verify/linux_hello/run_imageless_hello.sh
 ```
@@ -47,9 +70,10 @@ Results:
 
 - Win64 `art.dll` and `dalvikvm.exe`: build PASS;
 - Win64 JIT smoke under Wine: 12/12 PASS;
+- Win64 GCStress, ThreadHeavy, and HandleLeak under Wine: PASS;
 - Linux `libart.so` and `dalvikvm`: full rebuild PASS; and
 - Linux L-005 imageless Hello: PASS, exit 0.
 
-Stage A does not close W-013. Direct mspace-owner attachment, Windows address
-policy/ownership, explicit page-state operations, low-VA reduction, native
-Windows stress, and the complete closure matrix remain.
+Stages A and B do not close W-013. Windows address policy/ownership, explicit
+page-state operations, low-VA reduction, native Windows stress, and the
+complete closure matrix remain.

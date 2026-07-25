@@ -1,6 +1,6 @@
 # Win64 heap memory and embedded dlmalloc design — W-013
 
-**Status:** implementation in progress; Stage A complete, Stages B–E remain OPEN
+**Status:** implementation in progress; Stages A–B complete, Stages C–E remain OPEN
 **Updated:** 2026-07-25
 **Target baseline:** Windows 10 version 1803 or later (NTDDI_WIN10_RS4)
 **Related:** [win32_open_items.md](win32_open_items.md) W-013,
@@ -38,9 +38,10 @@ owner.
 The Phase-2 `_WIN32`/`WIN32` masking in `art-dlmalloc.cc` was a valid recovery
 workaround. Stage A removed it on 2026-07-25: Windows macros now remain visible,
 dlmalloc respects the embedding policy, ART's configuration is compile-checked,
-and Windows MoreCore growth uses page-size granularity. W-013 remains open until
-the owner lookup, implicit low-address policy, mapping ownership gaps, low-VA
-audit, and closure matrix are complete.
+and Windows MoreCore growth uses page-size granularity. Stage B then attached
+every heap and JIT mspace directly to its owner and removed global owner
+discovery. W-013 remains open until the implicit low-address policy, mapping
+ownership gaps, low-VA audit, and closure matrix are complete.
 
 ## 1. Goals and invariants
 
@@ -121,7 +122,7 @@ implementation divergence is:
 | mspace VM source | ART explicitly selects MoreCore-only, mspace-only operation on every OS | Complete in Stage A |
 | granularity | Win32 contiguous MoreCore uses `dwPageSize`; standalone mmap defaults retain allocation granularity | Complete in Stage A |
 | failure action | ART explicitly sets `errno = ENOMEM` and compile-checks the configuration | Complete in Stage A |
-| MoreCore owner | Callback discovers heap/JIT ownership through `Runtime::Current()`, the JIT cache, and a continuous-space scan | Each mspace stores its provider in dlmalloc extension state |
+| MoreCore owner | Each mspace stores its provider in `malloc_state::extp/exts`; the callback dispatches directly without runtime or heap scans | Complete in Stage B |
 | anonymous address policy | A null or low hint can imply low placement even when `low_4gb=false` | Anywhere, below-4-GiB, and exact-address requests are explicit |
 | low allocation | `VirtualQuery` scans holes, then an unrestricted allocation may be tried and rejected | `VirtualAlloc2` applies `MEM_ADDRESS_REQUIREMENTS`; no high fallback |
 | aligned anonymous maps | Common code over-allocates and partially unmaps | Windows requests alignment directly or retains one owner reservation |
@@ -157,8 +158,7 @@ allocator ownership remains controlled by ART.
 
 ### 4.2 Hide raw mspace creation behind an ART wrapper
 
-Introduce an ART-owned wrapper around `create_mspace_with_base()`. Its contract
-is conceptually:
+ART now owns a wrapper around `create_mspace_with_base()`. Its contract is:
 
 ```cpp
 class MspaceMoreCoreProvider {
@@ -173,22 +173,27 @@ mspace ArtCreateMspaceWithBase(void* base,
                                MspaceMoreCoreProvider* provider);
 ```
 
-The concrete names may follow local ART conventions, but the behavior is
-fixed:
+The implemented behavior is:
 
 1. call `create_mspace_with_base(base, initial_footprint, false)`;
 2. store `provider` in `malloc_state::extp`;
 3. store an ART validation magic in `malloc_state::exts`;
-4. return only after the attachment is complete; and
-5. clear or invalidate the attachment before the provider can be destroyed.
+4. permit a null provider only during `DlMallocSpace` construction, where the
+   constructor attaches itself before the space is published; and
+5. clear or invalidate the attachment before the provider can be destroyed or
+   before an owning object is moved.
 
 `extp` and `exts` are explicitly unused extension fields in this dlmalloc
 version. Using them avoids a global registry, runtime singleton lookup, heap
 continuous-space scan, or special JIT ownership branch.
 
 The MoreCore callback validates the magic and provider, then dispatches
-directly to that provider. `MallocSpace` and `JitMemoryRegion` provide the same
-small interface while retaining their existing growth logic.
+directly to that provider. `DlMallocSpace` and `JitMemoryRegion` implement the
+same small interface while retaining their existing growth logic. Heap spaces
+attach in the constructor and detach on clear/destruction. JIT regions detach
+and rebind both providers during move construction/assignment, and detach on
+reset/destruction, so no mspace retains a pointer to the temporary region used
+by `JitCodeCache::Create()`.
 
 ### 4.3 Lock contract
 
@@ -390,12 +395,21 @@ Evidence: `tools/verify/win64_w013/RESULT.md`.
 
 ### Stage B — attach mspaces to their owners
 
+**Completed:** 2026-07-25
+
 1. Add the provider interface and ART creation wrapper.
 2. Store provider plus magic in `extp`/`exts`.
 3. Convert heap and both JIT mspaces to the wrapper.
 4. Delete `Runtime::Current()` heap/JIT discovery and continuous-space scans
    from the callback.
 5. Add debug lock and lifetime assertions.
+
+The source gate now rejects raw `create_mspace*()` calls outside
+`art-dlmalloc.cc` and rejects restoration of the global owner-discovery path.
+Landed as ART `d011d72d56`.
+Verification covered the Win64 ART/dalvikvm build, JIT smoke 12/12, GCStress,
+ThreadHeavy, HandleLeak, the Linux ART/dalvikvm build, and Linux imageless
+Hello. Evidence: `tools/verify/win64_w013/RESULT.md`.
 
 ### Stage C — correct Windows anonymous mapping policy
 

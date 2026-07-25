@@ -568,18 +568,20 @@ The permanent ART configuration remains:
 
 Internal dlmalloc locks are redundant under that single-owner lock contract. A
 temporary `USE_SPIN_LOCKS=1` experiment was reverted after Wine regressions.
-W-013 Stage A removed the historical `_WIN32`/`WIN32` masking. dlmalloc now has
-embedding-safe Win32 defaults and ART explicitly compile-checks its
-MoreCore-only, page-granular, unlocked mspace policy. Stage B still needs to
-attach each owner through `malloc_state::extp/exts`; see
-[win32_heap_memory.md](win32_heap_memory.md) §§4–6.
+W-013 Stages A and B removed the historical `_WIN32`/`WIN32` masking and the
+global MoreCore owner lookup. dlmalloc now has embedding-safe Win32 defaults;
+ART explicitly compile-checks its MoreCore-only, page-granular, unlocked
+mspace policy; and each JIT mspace stores its `JitMemoryRegion` provider in
+`malloc_state::extp/exts`. JIT-region move operations detach the temporary
+provider and rebind both mspaces to the destination before the temporary can be
+destroyed. See [win32_heap_memory.md](win32_heap_memory.md) §§4–6.
 
 The JIT pagefile-section topology does not give dlmalloc ownership of the
 section or its views. `JitMemoryRegion` owns those `MemMap` objects, and each
-mspace only manages chunks in its writable ART-provided range. The future
-owner-attached MoreCore callback removes the current global runtime/JIT lookup
-without changing the dual-view layout, address translation, or protection
-roles described in this document.
+mspace only manages chunks in its writable ART-provided range. The landed
+owner-attached MoreCore callback changes only dispatch ownership; it does not
+change the dual-view layout, address translation, or protection roles
+described in this document.
 
 Two historical J-2 wiring bugs are recorded so they are not repeated:
 
