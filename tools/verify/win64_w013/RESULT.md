@@ -162,12 +162,43 @@ tools/verify/win64_w013/run_low_4gb_policy_probe.sh
 Observed:
 
 ```text
-W013_LOW_4GB_POLICY_PASS required_files=8 metadata=anywhere card_mark=unconditional
+W013_LOW_4GB_POLICY_PASS required_files=8 metadata=anywhere card_mark=unconditional nonmoving_barrier=unconditional
 ```
 
 The audit rejects the retired `win64_low_4gb` branch, the retired card-mark
 skip, any Windows-specific card-table behavior, and changes to the exact set of
 product files containing literal required-low requests.
+
+The first dedicated product non-moving stress run exposed one additional
+Phase-2 branch in `gc/heap-inl.h`: Windows logged every non-moving allocation,
+checked card-table range manually, and skipped the class write barrier when the
+check failed. ART `1509b1f95e` removes that branch and restores the common
+unconditional barrier. The low-address audit now rejects its return.
+
+## Product non-moving pressure
+
+Command:
+
+```text
+tools/verify/win64_w013/run_non_moving_stress.sh
+```
+
+The Java probe calls `VMRuntime.newNonMovableArray()` through reflection and
+allocates only 8-KiB primitive arrays, below the 12-KiB LOS threshold. With
+`-Xms2m -Xmx128m`, it churns 75,497,472 bytes, retains up to 1,024 live arrays,
+forces GC between twelve rounds, verifies 16 anchor addresses never move,
+checks sampled addresses stay below 4 GiB, clears the live set, and allocates
+again to exercise post-GC regrowth.
+
+Observed after `1509b1f95e`:
+
+```text
+W013_NON_MOVING_STRESS_PASS win64=ok linux=ok total_bytes=75497472
+```
+
+Win64 and Linux address spans were about 14.8 MiB, well beyond the 2-MiB
+startup setting. Both runtimes reported `nonmoving.stable=true`,
+`nonmoving.low=true`, and `nonmoving.ok=true`.
 
 ## Integration verification
 
@@ -176,6 +207,7 @@ cmake --build build/win64_phase1 --target art dalvikvm -j16
 tools/verify/win64_w013/run_dlmalloc_config_probe.sh
 tools/verify/win64_w013/run_mem_map_policy_probe.sh
 tools/verify/win64_w013/run_low_4gb_policy_probe.sh
+tools/verify/win64_w013/run_non_moving_stress.sh
 tools/verify/win64_phase4/run_jit_smoke.sh
 tools/verify/win64_phase4/run_gcstress.sh
 tools/verify/win64_phase4/run_threadheavy.sh
@@ -192,6 +224,8 @@ Results:
   4-GiB boundary and exactly-once owner release;
 - Win64 W-013 low-address source audit: PASS, with eight required-low product
   files and unrestricted metadata/card-table policy;
+- Win64 and Linux product non-moving pressure: PASS, 75,497,472 bytes churned,
+  stable low addresses, post-GC allocation recovery;
 - Win64 JIT smoke under Wine: 12/12 PASS;
 - Win64 GCStress, ThreadHeavy, and HandleLeak under Wine: PASS;
 - Linux `libart.so` and `dalvikvm`: full rebuild PASS;

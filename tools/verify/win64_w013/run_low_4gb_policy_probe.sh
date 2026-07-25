@@ -5,9 +5,10 @@ REPO="$(cd "$(dirname "$0")/../../.." && pwd)"
 RUNTIME="$REPO/vendor/art/runtime/runtime.cc"
 CARD_TABLE_CC="$REPO/vendor/art/runtime/gc/accounting/card_table.cc"
 CARD_TABLE_H="$REPO/vendor/art/runtime/gc/accounting/card_table.h"
+HEAP_INL="$REPO/vendor/art/runtime/gc/heap-inl.h"
 
-if rg -n 'win64_low_4gb|MarkCard OOB|must match low-4g heap' \
-    "$RUNTIME" "$CARD_TABLE_CC" "$CARD_TABLE_H"; then
+if rg -n 'win64_low_4gb|MarkCard OOB|Win64 NonMoving WB|must match low-4g heap' \
+    "$RUNTIME" "$CARD_TABLE_CC" "$CARD_TABLE_H" "$HEAP_INL"; then
   echo "W013_LOW_4GB_POLICY_FAIL: temporary Win64 forced-low or write-barrier workaround remains" >&2
   exit 1
 fi
@@ -30,6 +31,11 @@ fi
 
 if rg -n '#ifn?def _WIN32|defined\(_WIN32\)' "$CARD_TABLE_CC" "$CARD_TABLE_H"; then
   echo "W013_LOW_4GB_POLICY_FAIL: card-table behavior still differs on Windows" >&2
+  exit 1
+fi
+
+if rg -n 'AddrIsInCardTable|#ifn?def _WIN32|defined\(_WIN32\)' "$HEAP_INL"; then
+  echo "W013_LOW_4GB_POLICY_FAIL: non-moving allocation write barrier still differs on Windows" >&2
   exit 1
 fi
 
@@ -60,4 +66,4 @@ if ! diff -u \
   exit 1
 fi
 
-echo "W013_LOW_4GB_POLICY_PASS required_files=${#observed_low_files[@]} metadata=anywhere card_mark=unconditional"
+echo "W013_LOW_4GB_POLICY_PASS required_files=${#observed_low_files[@]} metadata=anywhere card_mark=unconditional nonmoving_barrier=unconditional"

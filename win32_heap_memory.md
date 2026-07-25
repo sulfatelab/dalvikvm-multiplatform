@@ -500,11 +500,16 @@ Landed as ART `47567cebcc`. Runtime/compiler/JIT arenas, ordinary LinearAlloc,
 and the card table now follow the Linux anywhere policy. Java object spaces,
 LOS, image/heap ranges, and the complete JIT primary view remain low; the
 sentinel page remains an exact low-address request. The common unconditional
-card-marking path is restored.
+card-marking path is restored. Dedicated non-moving pressure then found the
+same Phase-2 pattern around the allocation-time class write barrier;
+ART `1509b1f95e` removes its range-check/log/skip branch and restores the common
+unconditional barrier there as well.
 
 `tools/verify/win64_w013/run_low_4gb_policy_probe.sh` rejects the old forced-low
-branches, rejects a Windows-specific card-table path, and pins the remaining
-required-low source inventory. Win64 `-j16` build, JIT smoke 12/12, GCStress,
+branches, rejects both Windows-specific write-barrier shortcuts, and pins the
+remaining required-low source inventory. The product non-moving probe churns
+75,497,472 bytes of sub-LOS arrays on both Win64/Wine and Linux with stable low
+addresses and post-GC regrowth. Win64 `-j16` build, JIT smoke 12/12, GCStress,
 ThreadHeavy, HandleLeak, Linux `-j16` build, imageless Hello, and Linux
 GCStress pass. Evidence: `tools/verify/win64_w013/RESULT.md`.
 
@@ -543,8 +548,11 @@ the closure matrix.
 
 ### 10.3 Runtime stress
 
-- Dedicated non-moving dlmalloc allocation pressure beyond the initial page.
-- Allocation/free/trim/regrow cycles across multiple MoreCore segments.
+- PASS under Wine and Linux: dedicated product non-moving allocation pressure
+  beyond the initial footprint, using 8-KiB sub-LOS arrays, repeated GC, stable
+  address checks, live-set release, and regrowth.
+- PASS in the standalone embedded-dlmalloc probe: allocation/free/trim/regrow
+  and injected MoreCore failure across repeated segments.
 - Large-object and moving-space pressure.
 - Large `-Xmx` startup and sustained allocation tests that record Windows
   commit charge and failure behavior.

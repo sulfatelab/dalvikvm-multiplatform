@@ -809,7 +809,8 @@ attached owner; anywhere/low/exact address policy is explicit; `VirtualAlloc2`
 enforces constrained placement; `MemMap` owns page-state transitions and whole
 Windows mappings; and the Phase-2 blanket low placement for LinearAlloc,
 metadata arenas, and the card table is removed. The Win64-only card-marking
-skip is also gone. Native Windows closure stress remains. See
+skip and the equivalent non-moving allocation barrier skip are also gone.
+Native Windows closure stress remains. See
 [win32_heap_memory.md](win32_heap_memory.md) and
 [win32_open_items.md](win32_open_items.md) W-013.
 
