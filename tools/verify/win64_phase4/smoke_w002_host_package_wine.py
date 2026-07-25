@@ -85,7 +85,8 @@ def main() -> int:
         raise RuntimeError(f"invalid package directory: {root}")
 
     osr_markers = [
-        "W002OsrProbe OK checksum=9835131152",
+        "warmup_threshold=100, optimize_threshold=100",
+        "W002OsrProbe OK checksum=65553463744",
         "kind=Baseline",
         "kind=Osr",
         "Jumping to long W002OsrProbe.osrLoop(int)",
@@ -125,6 +126,7 @@ def main() -> int:
                 f"osr_{mode}_{interpreter}",
                 [
                     "-verbose:jit",
+                    "-Xjitwarmupthreshold:100",
                     "-Xjitthreshold:100",
                     "-cp",
                     "run/w002osrprobe.jar",

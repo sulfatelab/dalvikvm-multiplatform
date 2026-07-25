@@ -1,6 +1,6 @@
 public final class W002OsrProbe {
-    private static final int COUNT = 300_000;
-    private static final long EXPECTED = 9_835_131_152L;
+    private static final int COUNT = 2_000_000;
+    private static final long EXPECTED = 65_553_463_744L;
     private static volatile Object sink;
 
     private static long osrLoop(int count) {

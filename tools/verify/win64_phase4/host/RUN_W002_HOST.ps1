@@ -201,7 +201,8 @@ try {
 }
 
 $OsrMarkers = @(
-    'W002OsrProbe OK checksum=9835131152'
+    'warmup_threshold=100, optimize_threshold=100'
+    'W002OsrProbe OK checksum=65553463744'
     'kind=Baseline'
     'kind=Osr'
     'Jumping to long W002OsrProbe.osrLoop(int)'
@@ -236,7 +237,7 @@ foreach ($mode in @('dual', 'j1')) {
                 $osrForbidden += $SwitchCompletion
             }
             $osrName = 'osr_{0}_{1}_run{2:D2}' -f $mode, $interpreter, $repeat
-            Invoke-CheckedProcess $osrName "$Common -verbose:jit -Xjitthreshold:100 -cp run\w002osrprobe.jar W002OsrProbe" $osrRequired $osrForbidden
+            Invoke-CheckedProcess $osrName "$Common -verbose:jit -Xjitwarmupthreshold:100 -Xjitthreshold:100 -cp run\w002osrprobe.jar W002OsrProbe" $osrRequired $osrForbidden
 
             Clear-W002Environment
             if ($mode -eq 'dual') {

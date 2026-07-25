@@ -2,7 +2,7 @@
 
 **Target:** Windows 10 version 1803 (RS4, build 17134) or later, x64
 
-**State:** READY FOR NATIVE ACCEPTANCE
+**State:** R2 READY FOR NATIVE ACCEPTANCE
 
 ## Purpose
 
@@ -24,7 +24,10 @@ The matrix covers:
 - two complete repetitions of every mode pair.
 
 The package embeds a Linux-generated structural report for the quick and nterp
-OSR assembly. The Windows host does not need LLVM tools.
+OSR assembly. The Windows host does not need LLVM tools. R2 explicitly sets
+both JIT warmup and optimize thresholds to 100 and uses a 2,000,000-iteration
+loop so a fast native host repeatedly checks for asynchronously installed OSR
+code instead of completing before the transition.
 
 ## Run
 
@@ -54,9 +57,10 @@ The result must contain 21 PASS records:
 - fatal-log scan and recursive dump scan: 2.
 
 Every child process must exit zero without timing out. The eight OSR processes
-must show baseline and OSR compilation, the jump marker, exact checksum
-`9835131152`, and no pending exception. Switch-interpreter OSR must also show
-the switch return-completion marker; nterp OSR must not use that return path.
+must report `warmup_threshold=100, optimize_threshold=100`, show baseline and
+OSR compilation, the jump marker, exact checksum `65553463744`, and no pending
+exception. Switch-interpreter OSR must also show the switch return-completion
+marker; nterp OSR must not use that return path.
 
 Every attach process must report `W002AttachProbe OK completed=16`, compile
 `W002AttachProbe.attachedCallback`, and finish without an exception.
@@ -69,14 +73,19 @@ NO_DMP_FILES
 
 ## Return evidence
 
-Return the complete package directory or a ZIP containing it. Do not return
-only screenshots. In particular, preserve:
+Return either the complete package directory or an evidence-only ZIP. Do not
+return only screenshots. An evidence-only return must preserve:
 
 - the complete `logs` directory;
 - `BUILD_INFO.txt`;
 - `MANIFEST.json`;
 - `SHA256SUMS.txt`; and
 - `W002_STRUCTURAL_REPORT.txt`.
+
+The reviewer requires those four root metadata files to match the issued
+package byte for byte. A complete returned payload is also accepted and is
+fully re-hashed; a partial payload is rejected. In both forms, preserve the
+complete `logs` directory.
 
 Linux-side review command:
 

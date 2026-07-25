@@ -12,6 +12,14 @@ import tempfile
 import zipfile
 
 
+IDENTITY_FILES = (
+    "BUILD_INFO.txt",
+    "MANIFEST.json",
+    "SHA256SUMS.txt",
+    "W002_STRUCTURAL_REPORT.txt",
+)
+
+
 def fail(message: str) -> None:
     raise RuntimeError(message)
 
@@ -60,18 +68,37 @@ def read_sums(path: Path) -> dict[str, str]:
     return sums
 
 
-def verify_issued_payload(returned: Path, issued: Path) -> None:
-    if (returned / "SHA256SUMS.txt").read_bytes() != (
-        issued / "SHA256SUMS.txt"
-    ).read_bytes():
-        fail("returned SHA256SUMS.txt does not match the issued package")
+def verify_issued_payload(returned: Path, issued: Path) -> str:
+    for relative in IDENTITY_FILES:
+        returned_path = returned / relative
+        issued_path = issued / relative
+        if not returned_path.is_file():
+            fail(f"returned evidence is missing identity file: {relative}")
+        if not issued_path.is_file():
+            fail(f"issued package is missing identity file: {relative}")
+        if returned_path.read_bytes() != issued_path.read_bytes():
+            fail(f"returned {relative} does not match the issued package")
+
     issued_sums = read_sums(issued / "SHA256SUMS.txt")
+    payload_paths = [
+        relative for relative in issued_sums if relative not in IDENTITY_FILES
+    ]
+    returned_payload = [
+        relative for relative in payload_paths if (returned / relative).is_file()
+    ]
+    if not returned_payload:
+        return "evidence-only"
+    if len(returned_payload) != len(payload_paths):
+        missing = sorted(set(payload_paths) - set(returned_payload))
+        fail(f"returned package has a partial issued payload; missing: {missing}")
+
     for relative, expected in issued_sums.items():
         path = returned / relative
         if not path.is_file():
             fail(f"returned package is missing issued file: {relative}")
         if sha256(path) != expected:
             fail(f"returned package changed issued file: {relative}")
+    return "full-package"
 
 
 def require_markers(path: Path, markers: list[str], forbidden: list[str] | None = None) -> None:
@@ -95,7 +122,7 @@ def expected_case_names() -> list[str]:
 
 
 def review(returned: Path, issued: Path) -> None:
-    verify_issued_payload(returned, issued)
+    return_form = verify_issued_payload(returned, issued)
     logs = returned / "logs"
     if not logs.is_dir():
         fail("returned package has no logs directory")
@@ -140,7 +167,8 @@ def review(returned: Path, issued: Path) -> None:
     osr_common = [
         "exit=0",
         "timed_out=False",
-        "W002OsrProbe OK checksum=9835131152",
+        "warmup_threshold=100, optimize_threshold=100",
+        "W002OsrProbe OK checksum=65553463744",
         "kind=Baseline",
         "kind=Osr",
         "Jumping to long W002OsrProbe.osrLoop(int)",
@@ -188,7 +216,8 @@ def review(returned: Path, issued: Path) -> None:
 
     print(
         "W-002 native host result: PASS "
-        f"(build={build_match.group(1)}, cases=16, pass_records=21)"
+        f"(build={build_match.group(1)}, cases=16, pass_records=21, "
+        f"return={return_form})"
     )
 
 

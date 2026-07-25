@@ -38,7 +38,7 @@ run_one() {
       -Xno-sig-chain \
       -XjdwpProvider:none \
       -Xms64m -Xmx512m \
-      -verbose:jit -Xjitthreshold:100 \
+      -verbose:jit -Xjitwarmupthreshold:100 -Xjitthreshold:100 \
       -cp "$RUN/w002osrprobe.jar" W002OsrProbe
   ) > "$log" 2>&1; then
     rc=0
@@ -47,7 +47,8 @@ run_one() {
   fi
 
   if [[ $rc -ne 0 ]] ||
-     ! grep -qF "W002OsrProbe OK checksum=9835131152" "$log" ||
+     ! grep -qF "warmup_threshold=100, optimize_threshold=100" "$log" ||
+     ! grep -qF "W002OsrProbe OK checksum=65553463744" "$log" ||
      ! grep -qF "kind=Baseline" "$log" ||
      ! grep -qF "kind=Osr" "$log" ||
      ! grep -qF "Jumping to long W002OsrProbe.osrLoop(int)" "$log" ||
