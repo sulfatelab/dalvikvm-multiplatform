@@ -103,13 +103,19 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Updated:** 2026-07-18 — Win SETUP enabled
 
 ### W-004 — `LOAD_RUNTIME_INSTANCE` PE helper call (vs GOT)
-- **State:** OPEN (acceptable interim; still temporary vs ideal PE codegen)
-- **Kind:** workaround
+- **State:** OPEN (redesign drafted; implementation and native acceptance pending)
+- **Kind:** workaround / assembly ABI debt
 - **Area:** art / asm
-- **Current behavior:** Win path calls `art_Runtime_instance_ptr` with shadow space instead of `@GOTPCREL`.
-- **Proper fix:** Keep helper **or** RIP-relative import of `Runtime::instance_` consistently for JIT + hand asm (document single sequence).
-- **Code anchors:** `LOAD_RUNTIME_INSTANCE` in `asm_support_x86_64.S`
+- **Symptom / why:** The Windows macro crosses the Microsoft x64 C ABI merely to read `Runtime::instance_`. It mutates the stack and flags and introduces volatile-register side effects that the Linux/other-ISA data-load macros do not have. The `rcx` destination and later `r11` caller-PC collisions already required path-specific repairs; generic JNI also re-materializes `xmm0` after the helper.
+- **Current behavior:** Win64 calls `art_Runtime_instance_ptr` with 32-byte shadow space plus alignment, dereferences the returned `Runtime**`, and uses `r11` as scratch. The current RelWithDebInfo input objects contain 574 helper-call relocations (563 quick, 10 generated nterp, 1 JNI), so this is a broadly expanded core-runtime sequence rather than a cold compatibility shim.
+- **Research finding:** `Runtime::instance_` is already explicitly exported/imported by `LIBART_PROTECTED`. With the selected clang GNU driver, lld, and MSVC ABI, a quoted direct reference to `?instance_@Runtime@art@@0PEAV12@EA` assembles as `IMAGE_REL_AMD64_REL32` and links inside `art.dll` to one 7-byte RIP-relative load. Same-image ASLR preserves the displacement. External consumers keep normal `dllimport`/IAT behavior.
+- **Proper fix (draft):** Replace only the Windows macro body with a direct same-image load of the existing MS-mangled data symbol; keep Linux byte-for-byte unchanged. Delete `art_Runtime_instance_ptr`, helper-only `Runtime::InstanceLocation()`, and the helper-specific `r11`/`xmm0` compensations. Add a PE structural gate, full Wine regression, Linux controls, and a focused native-Windows acceptance package before closure.
+- **Important scope:** Dynamically generated JIT code does not use this macro. Do not require or reuse this same-image RIP-relative sequence for the low-4-GiB JIT cache, which may be more than signed 32-bit reach from `art.dll`; that remains W-025 territory.
+- **Rejected permanent designs:** Retaining/hardening the call helper; importing `art.dll` from itself; caching `Runtime*` in `Thread`. A stable C assembly label on the existing member is the first fallback if maintaining the MS-mangled spelling becomes unacceptable; an exported `Runtime**` address cell is second fallback.
+- **Code anchors:** `vendor/art/runtime/arch/x86_64/asm_support_x86_64.S` (`LOAD_RUNTIME_INSTANCE`); `quick_entrypoints_x86_64.S` (generic-JNI `xmm0` compensation); `jni_entrypoints_x86_64.S` (critical dlsym `r11` compensation); `runtime/multiplatform/windows/runtime_windows.cc` (`art_Runtime_instance_ptr`); `runtime/runtime.h` (`instance_`, helper-only `InstanceLocation()`); `libartbase/base/macros.h` (`LIBART_PROTECTED`, helper ABI comment)
+- **Design / gates:** [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md) §6.7
 - **Opened:** 2026-07-16
+- **Updated:** 2026-07-25 — direct same-image PE/COFF design selected for the draft; implementation not started
 
 ### W-008 — Some product smoke still passes `-Xint` / imageless / `-Xno-sig-chain`
 - **State:** OPEN (partial — managed JIT suites run without `-Xint`; older product/diagnostic probes retain it)
@@ -635,7 +641,7 @@ _No open design notes. Closed D- items live under §Closed._
 ## Suggested next closures (priority)
 
 1. ~~**D-001**~~ **CLOSED** — single shared boot.jar (runtime OS selection); dual-host FS smoke is not the close bar.  
-2. ~~**W-001**, **W-011**, **W-012**, and **W-024**~~ closed; **W-002–W-003** retain residual TLS/entrypoint cleanup.
+2. ~~**W-001**, **W-011**, **W-012**, and **W-024**~~ closed; **W-002–W-004** retain residual TLS/entrypoint/assembly cleanup, with the W-004 direct-load draft ready for implementation.
 3. ~~**L-001**~~ — **CLOSED** real PE libcore/openjdk/ICU hybrid; residual Linux TU/bridge growth optional.  
 4. **H-001** — host Phase-4 with multiplatform package.  
 5. ~~**L-005** — Linux Hello gate~~ **CLOSED**.
