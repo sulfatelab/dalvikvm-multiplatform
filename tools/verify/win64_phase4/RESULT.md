@@ -87,5 +87,5 @@ The helper-based Win64 `LOAD_RUNTIME_INSTANCE` was replaced by a direct
 same-image load of `Runtime::instance_`. The rebuilt Phase 4 aggregate passes,
 including its new structural/source/dependency gate, with 574 direct
 relocations and zero retired-helper references. Full focused results and the
-remaining native-Windows closure bar are recorded in
+accepted native-Windows closure are recorded in
 [`RESULT-w004-runtime-load.md`](RESULT-w004-runtime-load.md).

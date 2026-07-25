@@ -2,7 +2,19 @@
 
 **Target:** Windows 10 version 1803 (RS4, build 17134) or later, x64
 
-**State:** package implementation complete; native-host result pending
+**State:** ACCEPTED on Windows 10 build 19044; W-004 closed
+
+The accepted 2026-07-25 run produced 28 PASS records, zero failures,
+`OVERALL PASS`, and `NO_DMP_FILES`. Package metadata and the structural report
+match the issued package byte for byte. See
+[`evidence/w004_host/ACCEPTANCE.md`](evidence/w004_host/ACCEPTANCE.md).
+
+Linux-side review command:
+
+```bash
+python3 tools/verify/win64_phase4/review_w004_host_result.py \
+  /path/to/returned.zip --issued dist/win64_w004_host
+```
 
 ## Purpose
 
@@ -70,4 +82,5 @@ Return the complete `logs` directory plus:
 Do not return only screenshots. Preserve all stdout/stderr logs so marker,
 exit-code, OS-build, and dump-scan results can be reviewed.
 
-W-004 remains open until this returned evidence is reviewed and accepted.
+The procedure remains available for regression runs. The first returned run
+was reviewed and accepted, closing W-004.

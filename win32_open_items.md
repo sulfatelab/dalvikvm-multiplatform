@@ -57,7 +57,7 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 | Phases 0–3 | **Gate-complete** (P3 G12 real Win10 + wine) |
 | Phase 4 | **Wine complete**; host re-run still recommended |
 | PE libcore/ICU/openjdk | **Product-default real PE** (icu/javacore/openjdk); NIO.2 non-goal; NetProbe OK |
-| Quick/JIT/TLS | **Managed and native JIT ON with the corrected dual view by default:** rSELF=r15; nterp N-1 default ON; D-1 complete (37/37 Thread sites); JIT smoke 12/12; JIT matrix 14/14; compile records opt-in |
+| Quick/JIT/TLS | **Managed and native JIT ON with the corrected dual view by default:** rSELF=r15; nterp N-1 default ON; D-1 complete (37/37 Thread sites); JIT smoke 12/12; JIT matrix 14/14; W-004 direct Runtime singleton load native-accepted; compile records opt-in |
 | Memory | One unnamed pagefile section is mapped as a contiguous low R/RX primary view plus a full RW alias; J-1 remains only as the temporary `ART_WIN64_JIT_DUAL=0` diagnostic opt-out |
 | Heap memory | **W-013 CLOSED:** explicit MoreCore-only dlmalloc, direct mspace owners, constrained `VirtualAlloc2`, page-state operations, Linux-like metadata placement, and native R2 pressure/JIT/repeated-start acceptance PASS |
 | Linux multiplatform | Native build and L-005 imageless Hello PASS using the exact Win64-staged shared multipath `boot.jar` bytes |
@@ -101,22 +101,6 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Depends on:** W-001 validation
 - **Opened:** 2026-07-16
 - **Updated:** 2026-07-18 — Win SETUP enabled
-
-### W-004 — `LOAD_RUNTIME_INSTANCE` direct PE singleton load
-- **State:** OPEN (implementation, structural, Wine, and Linux acceptance complete; native Windows pending)
-- **Kind:** native-host acceptance gap
-- **Area:** art / asm
-- **Symptom / why:** The retired Windows macro crossed the Microsoft x64 C ABI merely to read `Runtime::instance_`. It mutated the stack and flags and introduced volatile-register side effects that the Linux/other-ISA data-load macros do not have. The `rcx` destination and later `r11` caller-PC collisions required path-specific repairs; generic JNI also re-materialized `xmm0` after the helper.
-- **Current behavior:** Win64 directly loads `?instance_@Runtime@art@@0PEAV12@EA` with one same-image RIP-relative `movq`. The current RelWithDebInfo input objects contain 574 direct `IMAGE_REL_AMD64_REL32` relocations (563 quick, 10 generated nterp, 1 JNI), zero retired helper references, and no helper-specific `r11` or immediate `xmm0` compensation. Linux retains its original two-instruction GOT sequence.
-- **Research finding:** `Runtime::instance_` is already explicitly exported/imported by `LIBART_PROTECTED`. With the selected clang GNU driver, lld, and MSVC ABI, a quoted direct reference to `?instance_@Runtime@art@@0PEAV12@EA` assembles as `IMAGE_REL_AMD64_REL32` and links inside `art.dll` to one 7-byte RIP-relative load. Same-image ASLR preserves the displacement. External consumers keep normal `dllimport`/IAT behavior.
-- **Implemented proper fix:** Replaced only the Windows macro body with the direct same-image load; deleted `art_Runtime_instance_ptr`, helper-only `Runtime::InstanceLocation()`, and the obsolete helper-specific `r11`/`xmm0` compensations. Explicit dependencies now make all five assembly consumers rebuild when shared assembly support changes.
-- **Verification:** `check_w004_runtime_load.py` validates the source cleanup, unchanged Linux macro, direct relocation/disassembly shape, export/import contract, zero helper references, and assembly dependencies. Clean and incremental `-j32` builds pass; Phase 3, Phase 4, JIT 12/12 and 14/14, CriticalNative, normal/FastNative, JVMTI, GC/thread/handle/crash Wine gates, Linux shared-boot Hello, and Linux GC stress pass. The focused Windows 10+ package, static package checker, embedded structural report, PowerShell runner, and 11-case staged-package Wine smoke are implemented and pass locally; the native run is pending. See [RESULT-w004-runtime-load.md](tools/verify/win64_phase4/RESULT-w004-runtime-load.md) and [W004_HOST_CHECKLIST.md](tools/verify/win64_phase4/W004_HOST_CHECKLIST.md).
-- **Important scope:** Dynamically generated JIT code does not use this macro. Do not require or reuse this same-image RIP-relative sequence for the low-4-GiB JIT cache, which may be more than signed 32-bit reach from `art.dll`; that remains W-025 territory.
-- **Rejected permanent designs:** Retaining/hardening the call helper; importing `art.dll` from itself; caching `Runtime*` in `Thread`. A stable C assembly label on the existing member is the first fallback if maintaining the MS-mangled spelling becomes unacceptable; an exported `Runtime**` address cell is second fallback.
-- **Code anchors:** `vendor/art/runtime/arch/x86_64/asm_support_x86_64.S` (`LOAD_RUNTIME_INSTANCE`); `tools/verify/win64_phase1/CMakeLists.txt` (assembly dependencies); `tools/verify/win64_phase1/check_w004_runtime_load.py` (structural gate); `tools/win64/host_package/package_win64_w004.sh` and `tools/verify/win64_phase4/host/RUN_W004_HOST.ps1` (native acceptance)
-- **Design / gates:** [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md) §6.7
-- **Opened:** 2026-07-16
-- **Updated:** 2026-07-25 — direct load implemented and locally accepted; native Windows closure package pending
 
 ### W-008 — Some product smoke still passes `-Xint` / imageless / `-Xno-sig-chain`
 - **State:** OPEN (partial — managed JIT suites run without `-Xint`; older product/diagnostic probes retain it)
@@ -340,6 +324,7 @@ If product reopens a non-goal, add an **L-** item and link the decision.
 
 Summary (details below; do not delete history):
 
+- **W-004** — `LOAD_RUNTIME_INSTANCE` direct PE singleton load (2026-07-25) — helper removed; direct same-image load passes structural, Wine, Linux, and native Windows acceptance
 - **W-005** — Combined PE JNI stub DLL aliased as libjavacore/libopenjdk/libicu_jni (2026-07-17) — product packaging uses stage_native_modules.sh (real PE only); libcombined is legacy non-product
 - **W-006** — Minimal NativeConverter / ICU version shims (not full ICU4C) (2026-07-17) — product uses real icu_jni NativeConverter + icuuc/icui18n + icudt; native_converter.c obsolete and removed from libcombined; charset stub no longer product path
 - **W-007** — Classic sockets / poll via Winsock `select` (not full Os/NIO) (2026-07-17) — permanent WinNT design: classic Os sockets use Winsock + **`select()`-based poll/timeouts** (not CRT-fd `WSAPoll`)
@@ -365,6 +350,23 @@ Summary (details below; do not delete history):
 - **D-001** — Shared boot.jar via runtime OS selection (2026-07-17)
 
 <!-- keep full CLOSED item bodies for history -->
+
+
+### W-004 — `LOAD_RUNTIME_INSTANCE` direct PE singleton load
+- **State:** CLOSED (2026-07-25) — direct same-image load accepted on native Windows 10 build 19044
+- **Kind:** resolved assembly ABI debt
+- **Area:** art / asm
+- **Symptom / why:** The retired Windows macro crossed the Microsoft x64 C ABI merely to read `Runtime::instance_`. It mutated the stack and flags and introduced volatile-register side effects that the Linux/other-ISA data-load macros do not have. The `rcx` destination and later `r11` caller-PC collisions required path-specific repairs; generic JNI also re-materialized `xmm0` after the helper.
+- **Current behavior:** Win64 directly loads `?instance_@Runtime@art@@0PEAV12@EA` with one same-image RIP-relative `movq`. The accepted RelWithDebInfo objects contain 574 direct `IMAGE_REL_AMD64_REL32` relocations (563 quick, 10 generated nterp, 1 JNI), zero retired helper references, and no helper-specific `r11` or immediate `xmm0` compensation. Linux retains its original two-instruction GOT sequence.
+- **Research finding:** `Runtime::instance_` is already explicitly exported/imported by `LIBART_PROTECTED`. With the selected clang GNU driver, lld, and MSVC ABI, a quoted direct reference to `?instance_@Runtime@art@@0PEAV12@EA` assembles as `IMAGE_REL_AMD64_REL32` and links inside `art.dll` to one 7-byte RIP-relative load. Same-image ASLR preserves the displacement. External consumers keep normal `dllimport`/IAT behavior.
+- **Implemented proper fix:** Replaced only the Windows macro body with the direct same-image load; deleted `art_Runtime_instance_ptr`, helper-only `Runtime::InstanceLocation()`, and the obsolete helper-specific `r11`/`xmm0` compensations. Explicit dependencies make all five assembly consumers rebuild when shared assembly support changes.
+- **Verification:** Clean and incremental `-j32` builds, the structural/source/dependency gate, Phase 3/4 Wine aggregates, JIT 12/12 and 14/14, CriticalNative, normal/FastNative, JVMTI, Linux shared-boot Hello, and Linux GC stress pass. Native Windows 10 build 19044 adds 28 PASS records over 22 child processes: nterp, dual-view JIT, threshold-zero FloatProbe, dual/J-1 native ABI and JVMTI paths, GC/thread/handle stress, and ten repeated starts. Package metadata and the structural report match the issued package byte for byte; all children exit zero without timeout, fatal marker, trace leak, or dump.
+- **Important scope:** Dynamically generated JIT code does not use this macro. Do not reuse this same-image RIP-relative sequence for the low-4-GiB JIT cache, which may be more than signed 32-bit reach from `art.dll`; that remains W-025 territory.
+- **Rejected permanent designs:** Retaining/hardening the call helper; importing `art.dll` from itself; caching `Runtime*` in `Thread`. A stable C assembly label on the existing member remains the first fallback if maintaining the MS-mangled spelling becomes unacceptable; an exported `Runtime**` address cell is second fallback.
+- **Evidence:** [RESULT-w004-runtime-load.md](tools/verify/win64_phase4/RESULT-w004-runtime-load.md), [W004_HOST_CHECKLIST.md](tools/verify/win64_phase4/W004_HOST_CHECKLIST.md), and [native acceptance](tools/verify/win64_phase4/evidence/w004_host/ACCEPTANCE.md)
+- **Code anchors:** `vendor/art/runtime/arch/x86_64/asm_support_x86_64.S` (`LOAD_RUNTIME_INSTANCE`); `tools/verify/win64_phase1/CMakeLists.txt`; `tools/verify/win64_phase1/check_w004_runtime_load.py`; `tools/win64/host_package/package_win64_w004.sh`
+- **Opened:** 2026-07-16
+- **Closed:** 2026-07-25 — implementation plus structural, Wine, Linux, and native Windows acceptance complete
 
 
 ### W-005 — Combined PE JNI stub DLL aliased as libjavacore/libopenjdk/libicu_jni
@@ -642,7 +644,7 @@ _No open design notes. Closed D- items live under §Closed._
 ## Suggested next closures (priority)
 
 1. ~~**D-001**~~ **CLOSED** — single shared boot.jar (runtime OS selection); dual-host FS smoke is not the close bar.  
-2. ~~**W-001**, **W-011**, **W-012**, and **W-024**~~ closed; **W-002/W-003** retain residual TLS/entrypoint cleanup, while **W-004** awaits only native Windows acceptance of its implemented direct load.
+2. ~~**W-001**, **W-004**, **W-011**, **W-012**, and **W-024**~~ closed; **W-002/W-003** retain residual TLS/entrypoint cleanup.
 3. ~~**L-001**~~ — **CLOSED** real PE libcore/openjdk/ICU hybrid; residual Linux TU/bridge growth optional.  
 4. **H-001** — host Phase-4 with multiplatform package.  
 5. ~~**L-005** — Linux Hello gate~~ **CLOSED**.

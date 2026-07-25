@@ -6,7 +6,7 @@ implemented and product-default; other Windows ISAs remain design-only
 **Scope:** Record the cross-ISA design and the implemented x86_64 contracts.
 **Related:** [win64_art_port.md](win64_art_port.md) (product phases),
 [win32_jit_memory.md](win32_jit_memory.md) (implemented code-cache design), and
-[win32_open_items.md](win32_open_items.md) (remaining W-002/W-003/W-004/W-008/W-010/W-014/W-017 and W-025 work).
+[win32_open_items.md](win32_open_items.md) (remaining W-002/W-003/W-008/W-010/W-014/W-017 and W-025 work).
 
 ---
 
@@ -433,9 +433,8 @@ Windows only changes **how offsets are addressed** (reg base vs GS), not the C++
 
 ### 6.7 Runtime instance load — W-004 implementation record (2026-07-25)
 
-**Status:** direct same-image PE/COFF load implemented; structural, Wine, and
-Linux acceptance pass. Native Windows acceptance remains the W-004 closure bar
-because this macro is expanded across core quick-entrypoint paths.
+**Status:** direct same-image PE/COFF load implemented; structural, Wine,
+Linux, and native Windows acceptance pass. W-004 is closed.
 
 #### 6.7.1 Scope correction
 
@@ -634,7 +633,7 @@ The Win64 graph rebuilt successfully with `-j32`. Acceptance on agent01 passed:
 Full details are in
 `tools/verify/win64_phase4/RESULT-w004-runtime-load.md`.
 
-**Stage W004-D — native Windows closure: PACKAGE READY, HOST RUN PENDING**
+**Stage W004-D — native Windows closure: COMPLETE**
 
 `tools/win64/host_package/package_win64_w004.sh` builds and locally verifies a
 focused native-host bundle containing the Linux-generated structural report
@@ -644,10 +643,13 @@ the helper. Its staged Wine smoke passes before the final archive is written.
 
 The Windows 10+ PowerShell runner verifies package hashes, runs both dual and
 J-1 native paths, performs ten repeated starts, scans all logs for fatal/access-
-violation markers, and recursively scans for crash dumps. W-004 closes only
-after the returned native logs pass review; Wine alone is not sufficient for a
-macro expanded through core runtime assembly. Procedure:
-`tools/verify/win64_phase4/W004_HOST_CHECKLIST.md`.
+violation markers, and recursively scans for crash dumps. On Windows 10 build
+19044 the returned result contains 28 PASS records, zero failures, and
+`OVERALL PASS`; all 22 children exit zero without timeouts, and the dump scan
+reports `NO_DMP_FILES`. Returned package metadata and the structural report
+match the issued package byte for byte. Procedure and evidence:
+`tools/verify/win64_phase4/W004_HOST_CHECKLIST.md` and
+`tools/verify/win64_phase4/evidence/w004_host/ACCEPTANCE.md`.
 
 #### 6.7.7 Rollback and review rules
 
@@ -918,7 +920,7 @@ Design step 5 (**compiled Hello without forced `-Xint`**, still imageless) is **
 
 The checkpoint's quick-invoke, nterp, CoreProbe, W-012, W-024, and Phase-5 JIT
 items are complete. Current residual work is the explicitly open tracker set:
-W-002/W-003/W-004/W-008/W-010/W-014/W-017, broader W-025 hardening, and the
+W-002/W-003/W-008/W-010/W-014/W-017, broader W-025 hardening, and the
 host-validation gaps in [win32_open_items.md](win32_open_items.md).
 
 ## 15. Nterp / mterp on WinNT x86_64 — analysis and design

@@ -1,6 +1,6 @@
 # W-004 direct Runtime singleton load
 
-**Status:** LOCAL PASS; native Windows acceptance pending
+**Status:** PASS; W-004 CLOSED
 
 **Date:** 2026-07-25
 
@@ -116,8 +116,8 @@ Linux controls also passed:
 
 ## Native Windows closure
 
-W-004 remains open. The direct load is expanded through core ART assembly, so
-Wine is not the final host acceptance boundary.
+Native Windows acceptance passed on Windows 10 Enterprise LTSC x64 build
+19044. W-004 is closed.
 
 The focused native package is implemented by
 `tools/win64/host_package/package_win64_w004.sh`. Its source and artifact
@@ -142,11 +142,18 @@ Local package verification passes:
 - GC stress and thread-heavy probes; and
 - three independent default-JIT package starts.
 
-The issued host runner expands this to dual and J-1 native ABI/JVMTI cases,
-handle-leak coverage, and ten repeated starts. Native closure requires:
+The returned archive passes integrity testing and its `BUILD_INFO.txt`,
+`MANIFEST.json`, `SHA256SUMS.txt`, and structural report match the issued
+package byte for byte. The host result contains 28 PASS records, zero failures,
+and `OVERALL PASS` across 22 child processes. Every child exits zero without a
+timeout, launch error, missing marker, or forbidden marker.
 
-- all focused child cases and repeated process starts pass;
-- no access violation, unexpected nonzero exit, hang, or crash dump occurs;
-- returned logs and the SHA-256 manifest match the issued package; and
-- the packaged structural report records direct singleton relocations, zero
-  helper references, one `Runtime::instance_` export, and one plugin import.
+The native matrix covers nterp `-Xint`, corrected dual-view JIT,
+threshold-zero FloatProbe, dual/J-1 CriticalNative, normal/FastNative, and
+JVMTI transitions, GC/thread/handle stress, and ten repeated default-JIT
+starts. Independent review confirmed exact ABI values and compilation counts.
+Fatal/access-violation and trace-cleanup scans pass; the recursive dump scan
+reports `NO_DMP_FILES`.
+
+Full accepted evidence:
+[`evidence/w004_host/ACCEPTANCE.md`](evidence/w004_host/ACCEPTANCE.md).
