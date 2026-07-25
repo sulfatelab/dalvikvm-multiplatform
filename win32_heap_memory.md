@@ -529,8 +529,13 @@ the closure matrix.
   failure/destroy coverage uses a mock MoreCore owner and validates
   `MoreCore(0)`, positive, negative, footprint-limit, recovery, and `ENOMEM`
   cases.
-- OPEN hardening: explicit debug death tests for wrong-owner detach,
-  use-after-detach, missing provider, and missing external lock.
+- PASS under Wine: the actual ART wrapper succeeds across provider rebind and
+  deterministically terminates for wrong-owner detach, use-after-detach,
+  missing provider, and double attachment.
+- PASS source gate: heap and JIT providers retain their debug external-lock
+  assertions. An executable missing-lock death case is not practical without a
+  fully attached ART thread and is covered by product stress under the valid
+  lock contract plus the source invariant.
 
 ### 10.2 Windows mapping tests
 

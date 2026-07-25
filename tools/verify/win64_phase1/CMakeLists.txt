@@ -115,6 +115,15 @@ target_include_directories(win64_w013_mem_map_probe PRIVATE
   "${MDVM_ART_DIR}/libartbase")
 target_link_libraries(win64_w013_mem_map_probe artbase base log)
 
+add_executable(win64_w013_mspace_owner_probe EXCLUDE_FROM_ALL
+  "${_repo}/tools/verify/win64_w013/W013MspaceOwnerProbe.cc"
+  "${MDVM_ART_DIR}/runtime/gc/allocator/art-dlmalloc.cc")
+target_include_directories(win64_w013_mspace_owner_probe PRIVATE
+  "${MDVM_ART_DIR}/runtime"
+  "${MDVM_ART_DIR}/libartbase"
+  "${MDVM_NATIVE_SRC_ROOT_DIR}/external/dlmalloc")
+target_link_libraries(win64_w013_mspace_owner_probe artbase base log)
+
 # ART's JVMTI implementation is a runtime plugin rather than part of art.dll.
 # Keep the target source list aligned with libopenjdkjvmti_defaults in
 # vendor/art/openjdkjvmti/Android.bp so Win64 can exercise the same debugger

@@ -59,6 +59,23 @@ Landed behavior:
 The focused probe now also rejects raw `create_mspace*()` calls outside
 `art-dlmalloc.cc` and rejects restoration of the global owner-discovery path.
 
+The actual `art-dlmalloc.cc` wrapper is also compiled into a focused executable:
+
+```text
+tools/verify/win64_w013/run_mspace_owner_probe.sh
+```
+
+Its success case grows through one provider, trims, detaches, rebinds a second
+provider, and regrows. Four subprocess death cases verify missing provider,
+use-after-detach, wrong-owner detach, and double attachment all terminate with
+the expected `CHECK` diagnostic. The source gate also requires the heap and JIT
+external-lock assertions.
+
+```text
+W013_MSPACE_OWNER_PASS first_calls=5 second_calls=2
+W013_MSPACE_OWNER_PROBE_PASS success=1 death=4
+```
+
 ## Stage C — explicit Windows address policy and ownership
 
 ART commit: `2fa301a13b`
@@ -205,6 +222,7 @@ startup setting. Both runtimes reported `nonmoving.stable=true`,
 ```text
 cmake --build build/win64_phase1 --target art dalvikvm -j16
 tools/verify/win64_w013/run_dlmalloc_config_probe.sh
+tools/verify/win64_w013/run_mspace_owner_probe.sh
 tools/verify/win64_w013/run_mem_map_policy_probe.sh
 tools/verify/win64_w013/run_low_4gb_policy_probe.sh
 tools/verify/win64_w013/run_non_moving_stress.sh
@@ -220,6 +238,8 @@ tools/verify/linux_hello/run_gcstress.sh
 Results:
 
 - Win64 `art.dll` and `dalvikvm.exe`: build PASS;
+- actual ART mspace-owner wrapper: success/rebind PASS and 4/4 expected-death
+  lifetime checks PASS;
 - Win64 W-013 address-policy/ownership probe: PASS, including the tested
   4-GiB boundary and exactly-once owner release;
 - Win64 W-013 low-address source audit: PASS, with eight required-low product
