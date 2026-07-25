@@ -25,23 +25,35 @@
 
 static unsigned char* g_base;
 static unsigned char* g_end;
+static unsigned char* g_floor;
 static unsigned char* g_limit;
+static size_t g_zero_calls;
+static size_t g_positive_calls;
+static size_t g_negative_calls;
+static size_t g_failed_positive_calls;
 static intptr_t g_last_positive_increment;
+static intptr_t g_last_negative_increment;
 
 static void* probe_morecore(void* mspace, intptr_t increment) {
   unsigned char* old_end = g_end;
   (void)mspace;
   if (increment > 0) {
+    ++g_positive_calls;
     if ((size_t)increment > (size_t)(g_limit - g_end)) {
+      ++g_failed_positive_calls;
       return (void*)(~(size_t)0);
     }
     g_end += increment;
     g_last_positive_increment = increment;
   } else if (increment < 0) {
-    if ((size_t)(-increment) > (size_t)(g_end - g_base)) {
+    ++g_negative_calls;
+    if ((size_t)(-increment) > (size_t)(g_end - g_floor)) {
       return (void*)(~(size_t)0);
     }
     g_end += increment;
+    g_last_negative_increment = increment;
+  } else {
+    ++g_zero_calls;
   }
   return old_end;
 }
@@ -66,8 +78,13 @@ int main(void) {
   SYSTEM_INFO system_info;
   const size_t capacity = 1u << 20;
   size_t initial_size;
+  size_t positive_calls_before_regrow;
+  size_t negative_calls_before_trim;
+  size_t failed_calls_before_limit;
   mspace arena;
   void* allocation;
+  unsigned char* grown_end;
+  unsigned char* trimmed_end;
 
   GetSystemInfo(&system_info);
   initial_size = (size_t)system_info.dwPageSize;
@@ -77,6 +94,7 @@ int main(void) {
     return Fail("VirtualAlloc failed");
   }
   g_end = g_base + initial_size;
+  g_floor = g_end;
   g_limit = g_base + capacity;
 
   arena = create_mspace_with_base(g_base, initial_size, 0);
@@ -104,6 +122,57 @@ int main(void) {
       (size_t)g_last_positive_increment >= (size_t)system_info.dwAllocationGranularity) {
     return Fail("small MoreCore request was rounded to allocation granularity");
   }
+  if (g_zero_calls == 0 || g_positive_calls == 0) {
+    return Fail("mspace growth did not query and advance MoreCore");
+  }
+  grown_end = g_end;
+  mspace_free(arena, allocation);
+
+  negative_calls_before_trim = g_negative_calls;
+  if (mspace_trim(arena, 0) == 0) {
+    return Fail("mspace_trim did not release the grown top segment");
+  }
+  if (g_negative_calls == negative_calls_before_trim ||
+      g_last_negative_increment >= 0 ||
+      ((size_t)(-g_last_negative_increment) % (size_t)system_info.dwPageSize) != 0) {
+    return Fail("mspace trim did not issue page-granular negative MoreCore");
+  }
+  if (g_end >= grown_end || g_end < g_floor) {
+    return Fail("mspace trim produced an invalid mock break");
+  }
+  trimmed_end = g_end;
+
+  positive_calls_before_regrow = g_positive_calls;
+  allocation = mspace_malloc(arena, initial_size * 4u);
+  if (allocation == NULL) {
+    return Fail("mspace regrowth allocation failed");
+  }
+  if (g_positive_calls == positive_calls_before_regrow || g_end <= trimmed_end) {
+    return Fail("mspace allocation did not regrow after trim");
+  }
+  mspace_free(arena, allocation);
+
+  if (mspace_trim(arena, 0) == 0) {
+    return Fail("mspace did not trim before mock-owner failure test");
+  }
+  failed_calls_before_limit = g_failed_positive_calls;
+  g_limit = g_end;
+  mspace_set_footprint_limit(arena, capacity * 2u);
+  errno = 0;
+  if (mspace_malloc(arena, initial_size * 4u) != NULL || errno != ENOMEM) {
+    g_limit = g_base + capacity;
+    return Fail("mock-owner capacity failure did not return ENOMEM");
+  }
+  g_limit = g_base + capacity;
+  if (g_failed_positive_calls == failed_calls_before_limit) {
+    return Fail("capacity failure did not reach the mock MoreCore owner");
+  }
+
+  mspace_set_footprint_limit(arena, capacity);
+  allocation = mspace_malloc(arena, initial_size);
+  if (allocation == NULL) {
+    return Fail("mspace was unusable after MoreCore failure");
+  }
   mspace_free(arena, allocation);
 
   errno = 0;
@@ -116,9 +185,15 @@ int main(void) {
     return Fail("VirtualFree failed");
   }
 
-  printf("W013_DLMALLOC_CONFIG_PASS page=%zu granularity=%zu increment=%td\n",
+  printf("W013_DLMALLOC_CONFIG_PASS page=%zu granularity=%zu positive=%zu negative=%zu "
+         "queries=%zu failures=%zu last_positive=%td last_negative=%td\n",
          mparams.page_size,
          mparams.granularity,
-         g_last_positive_increment);
+         g_positive_calls,
+         g_negative_calls,
+         g_zero_calls,
+         g_failed_positive_calls,
+         g_last_positive_increment,
+         g_last_negative_increment);
   return 0;
 }

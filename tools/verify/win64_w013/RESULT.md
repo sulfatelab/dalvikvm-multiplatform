@@ -28,11 +28,16 @@ tools/verify/win64_w013/run_dlmalloc_config_probe.sh
 Observed under Wine:
 
 ```text
-W013_DLMALLOC_CONFIG_PASS page=4096 granularity=4096 increment=20480
+W013_DLMALLOC_CONFIG_PASS page=4096 granularity=4096 positive=4 negative=2 queries=8 failures=1 last_positive=8192 last_negative=-20480
 ```
 
-The probe also checks that Windows macros remain active, a maximal allocation
-fails with `ENOMEM`, and `art-dlmalloc.cc` contains no `_WIN32`/`WIN32` undef.
+The probe now creates an mspace over a mock owner, grows it, frees and trims the
+top segment, regrows it, injects an owner-side capacity failure, proves the
+mspace remains usable afterward, and destroys it. It validates `MoreCore(0)`,
+page-granular positive and negative increments, footprint limits, and `ENOMEM`.
+The source gate also checks that Windows macros remain active, that raw mspace
+creation cannot bypass ART's wrapper, and that provider magic plus
+attach/detach fields remain present in `art-dlmalloc.cc`.
 
 ## Stage B — direct mspace-owner attachment
 

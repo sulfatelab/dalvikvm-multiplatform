@@ -24,6 +24,19 @@ if rg -n 'ArtDlMallocMoreCore|GetContinuousSpaces\(|GetJitCodeCache\(' \
   exit 1
 fi
 
+for required in \
+    kArtMspaceProviderMagic \
+    ArtCreateMspaceWithBase \
+    ArtAttachMspaceMoreCoreProvider \
+    ArtDetachMspaceMoreCoreProvider \
+    'state->extp' \
+    'state->exts'; do
+  if ! rg -q "$required" "$ART_DLMALLOC"; then
+    echo "W013_DLMALLOC_CONFIG_FAIL: missing mspace-owner attachment invariant: $required" >&2
+    exit 1
+  fi
+done
+
 mkdir -p "$OUT_DIR"
 
 clang --target=x86_64-pc-windows-msvc -std=c11 -O2 \

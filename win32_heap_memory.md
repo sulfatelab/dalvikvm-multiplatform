@@ -406,8 +406,9 @@ state its encoding or exact-address reason.
 
 Landed as external dlmalloc `f3356ce` and ART `8c900a9e4b`. Verification:
 
-- focused Win64 allocator probe: page 4096, granularity 4096, small MoreCore
-  increment 20480, `ENOMEM` failure behavior;
+- focused Win64 allocator probe: page 4096, granularity 4096, eight break
+  queries, four positive growth calls, two negative trims, one injected owner
+  failure, regrowth, recovery, and `ENOMEM` behavior;
 - Win64 `art.dll` and `dalvikvm.exe` rebuild;
 - Win64 JIT smoke 12/12 under Wine;
 - full Linux `art`/`dalvikvm` rebuild; and
@@ -515,14 +516,16 @@ the closure matrix.
 
 ### 10.1 Configuration and unit tests
 
-- Preprocessor/build check proves `HAVE_MMAP=0`, `HAVE_MORECORE=1`,
+- PASS: preprocessor/build check proves `HAVE_MMAP=0`, `HAVE_MORECORE=1`,
   `MORECORE_CONTIGUOUS=1`, `USE_LOCKS=0`, and Windows macros remain defined.
-- Source check permits raw mspace creation only inside the ART wrapper.
-- `create_mspace_with_base` create/grow/free/trim/regrow/destroy coverage uses a
-  mock owner and validates `MoreCore(0)`, positive, negative, limit, and failure
+- PASS: source check permits raw mspace creation only inside the ART wrapper
+  and requires provider magic plus attach/detach state.
+- PASS under Wine: `create_mspace_with_base` create/grow/free/trim/regrow/
+  failure/destroy coverage uses a mock MoreCore owner and validates
+  `MoreCore(0)`, positive, negative, footprint-limit, recovery, and `ENOMEM`
   cases.
-- Provider magic, wrong-owner, use-after-detach, and missing-lock checks fail
-  deterministically in debug builds.
+- OPEN hardening: explicit debug death tests for wrong-owner detach,
+  use-after-detach, missing provider, and missing external lock.
 
 ### 10.2 Windows mapping tests
 
