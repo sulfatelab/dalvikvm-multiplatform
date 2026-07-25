@@ -57,7 +57,7 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 
 ---
 
-## Snapshot (2026-07-24)
+## Snapshot (2026-07-25)
 
 | Bucket | Summary |
 |--------|---------|
@@ -66,7 +66,7 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 | PE libcore/ICU/openjdk | **Product-default real PE** (icu/javacore/openjdk); NIO.2 non-goal; NetProbe OK |
 | Quick/JIT/TLS | **Managed and native JIT ON with the corrected dual view by default:** rSELF=r15; nterp N-1 default ON; D-1 complete (37/37 Thread sites); JIT smoke 12/12; JIT matrix 14/14; compile records opt-in |
 | Memory | One unnamed pagefile section is mapped as a contiguous low R/RX primary view plus a full RW alias; J-1 remains only as the temporary `ART_WIN64_JIT_DUAL=0` diagnostic opt-out |
-| Heap memory | W-013 target design accepted; current macro masking, implicit low placement, global mspace-owner lookup, and Windows partial-release assumptions remain OPEN |
+| Heap memory | W-013 Stage A complete: Windows macros stay visible with explicit MoreCore-only configuration and page-size growth; Stages B–E remain OPEN |
 | Linux multiplatform | Native build and L-005 imageless Hello PASS using the exact Win64-staged shared multipath `boot.jar` bytes |
 
 ---
@@ -165,7 +165,7 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Kind:** workaround removal / platform-memory design
 - **Area:** art / heap
 - **Symptom / why:** dlmalloc's standalone Win32 defaults force mmap-style `VirtualAlloc` growth outside ART's arena. That can place Java objects above 4 GiB, which is incompatible with compressed references and heap addressing. The Phase-2 workaround hides `_WIN32`/`WIN32` while including `dlmalloc.c`, preserving ART MoreCore but also changing unrelated platform defaults accidentally.
-- **Current behavior:** ART uses `HAVE_MMAP=0`, `HAVE_MORECORE=1`, and unlocked mspaces backed by ART-owned `MemMap` ranges. Heap mspaces use `DlMallocSpace::lock_`; JIT mspaces use `Locks::jit_lock_`. The MoreCore callback still discovers its owner through `Runtime::Current()` plus heap/JIT scans. Windows anonymous mapping still infers low placement from null/low hints, so even `low_4gb=false` maps may consume low VA. The manual `VirtualQuery` allocator and generic partial-unmap assumptions also remain.
+- **Current behavior:** Stage A is complete. `_WIN32`/`WIN32` remain visible; dlmalloc's Win32 defaults respect ART's explicit `HAVE_MMAP=0`, `HAVE_MORECORE=1`, `MORECORE_CONTIGUOUS=1`, `USE_LOCKS=0`, mspace-only policy; growth granularity is `dwPageSize`; failures set `ENOMEM`. Heap mspaces use `DlMallocSpace::lock_`; JIT mspaces use `Locks::jit_lock_`. The MoreCore callback still discovers its owner through `Runtime::Current()` plus heap/JIT scans. Windows anonymous mapping still infers low placement from null/low hints, so even `low_4gb=false` maps may consume low VA. The manual `VirtualQuery` allocator and generic partial-unmap assumptions also remain.
 - **Accepted design:** ART owns virtual memory; dlmalloc manages chunks inside an owner-attached ART arena. Keep Windows macros visible, make dlmalloc defaults respect the embedder, attach an `MspaceMoreCoreProvider` through `malloc_state::extp/exts`, use explicit anywhere/low/exact address policies, allocate constrained anonymous ranges with `VirtualAlloc2` plus `MEM_ADDRESS_REQUIREMENTS`, and expose activate/deactivate/discard range operations through `MemMap`.
 - **Low-address policy:** Keep Java object spaces, non-moving/LOS, required image/heap ranges, and the JIT primary view below 4 GiB. Audit and normally remove forced-low placement for LinearAlloc, compiler/JIT metadata arenas, card tables/bitmaps, stacks, reference tables, and temporary mappings; fix actual pointer truncation at the encoding site.
 - **Commit policy:** Keep `MEM_RESERVE | MEM_COMMIT` for the first complete heap implementation. Measure large `-Xmx` commit pressure before considering reserve-only/lazy commitment, because later commit failure changes allocator failure propagation.
@@ -173,8 +173,9 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Code anchors:** `art-dlmalloc.{h,cc}`; `dlmalloc.c` Win32 defaults and `malloc_state::extp/exts`; `dlmalloc_space.cc`; `malloc_space.cc`; `jit_memory_region.cc`; `mem_map.{h,cc}`; `mem_map_windows.cc`; `runtime.cc`
 - **Design:** [win32_heap_memory.md](win32_heap_memory.md) — accepted architecture, staged implementation, rejected alternatives, and closure bar
 - **Historical root cause:** [win64_art_port.md](win64_art_port.md) §9c
+- **Evidence:** `tools/verify/win64_w013/RESULT.md` Stage A; external dlmalloc `f3356ce`; ART `8c900a9e4b`
 - **Opened:** 2026-07-16
-- **Updated:** 2026-07-24 — complete target design accepted; no implementation claimed
+- **Updated:** 2026-07-25 — Stage A complete; Stages B–E remain open
 
 ### W-014 — Stack bounds via VirtualQuery + clamp (Wine-safe estimates)
 - **State:** OPEN

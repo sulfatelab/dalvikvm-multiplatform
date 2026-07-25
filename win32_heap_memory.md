@@ -1,7 +1,7 @@
 # Win64 heap memory and embedded dlmalloc design — W-013
 
-**Status:** accepted target design; implementation remains OPEN
-**Updated:** 2026-07-24
+**Status:** implementation in progress; Stage A complete, Stages B–E remain OPEN
+**Updated:** 2026-07-25
 **Target baseline:** Windows 10 version 1803 or later (NTDDI_WIN10_RS4)
 **Related:** [win32_open_items.md](win32_open_items.md) W-013,
 [win32_jit_memory.md](win32_jit_memory.md), and
@@ -35,10 +35,12 @@ implements the virtual-memory operation, address constraint, and release
 semantics in `MemMap`; it does not let dlmalloc become a second virtual-memory
 owner.
 
-The current `_WIN32`/`WIN32` masking in `art-dlmalloc.cc` was a valid Phase-2
-recovery workaround, but it is not the final design. W-013 remains open until
-the masking, implicit low-address policy, global mspace-owner lookup, and
-Windows mapping ownership gaps are removed and the closure matrix passes.
+The Phase-2 `_WIN32`/`WIN32` masking in `art-dlmalloc.cc` was a valid recovery
+workaround. Stage A removed it on 2026-07-25: Windows macros now remain visible,
+dlmalloc respects the embedding policy, ART's configuration is compile-checked,
+and Windows MoreCore growth uses page-size granularity. W-013 remains open until
+the owner lookup, implicit low-address policy, mapping ownership gaps, low-VA
+audit, and closure matrix are complete.
 
 ## 1. Goals and invariants
 
@@ -82,8 +84,8 @@ behavior and is not a reason to use the Win32 mmap allocator.
 All ART mspaces are created with `locked=false`. Heap mspaces are serialized by
 `DlMallocSpace::lock_`; JIT mspaces are serialized by `Locks::jit_lock_`.
 Internal dlmalloc locking is therefore redundant and risks lock-order problems.
-The final code must state this configuration directly instead of obtaining it
-as a side effect of hiding the Windows preprocessor macros.
+Stage A now states and compile-checks this configuration directly instead of
+obtaining it as a side effect of hiding the Windows preprocessor macros.
 
 ## 2. What `create_mspace_with_base()` actually does
 
@@ -110,15 +112,15 @@ authority to create unrelated mappings.
 
 ## 3. Current implementation and remaining divergence
 
-The Phase-2 implementation is functional enough for imageless boot and the
-existing Wine/native probes, but it contains deliberate recovery shortcuts:
+Stage A removed the configuration and macro-masking shortcuts. The remaining
+implementation divergence is:
 
 | Area | Current behavior | Target behavior |
 |------|------------------|-----------------|
-| dlmalloc platform detection | `art-dlmalloc.cc` temporarily undefines `_WIN32` and `WIN32` while including `dlmalloc.c` | Keep Windows macros visible; make dlmalloc defaults respect embedding-provided `HAVE_*` values |
-| mspace VM source | ART forces MoreCore only because the Win32 default block is skipped | ART explicitly selects MoreCore-only mspaces on every OS |
-| granularity | Macro masking happens to use the non-Windows page-size path | Win32 MoreCore-without-mmap explicitly uses system page size, not 64-KiB allocation granularity |
-| failure action | Win32's empty default failure action is avoided accidentally | Embedded allocator explicitly sets `errno = ENOMEM` |
+| dlmalloc platform detection | Windows macros remain visible and Win32 defaults respect embedding-provided `HAVE_*` values | Complete in Stage A |
+| mspace VM source | ART explicitly selects MoreCore-only, mspace-only operation on every OS | Complete in Stage A |
+| granularity | Win32 contiguous MoreCore uses `dwPageSize`; standalone mmap defaults retain allocation granularity | Complete in Stage A |
+| failure action | ART explicitly sets `errno = ENOMEM` and compile-checks the configuration | Complete in Stage A |
 | MoreCore owner | Callback discovers heap/JIT ownership through `Runtime::Current()`, the JIT cache, and a continuous-space scan | Each mspace stores its provider in dlmalloc extension state |
 | anonymous address policy | A null or low hint can imply low placement even when `low_4gb=false` | Anywhere, below-4-GiB, and exact-address requests are explicit |
 | low allocation | `VirtualQuery` scans holes, then an unrestricted allocation may be tried and rejected | `VirtualAlloc2` applies `MEM_ADDRESS_REQUIREMENTS`; no high fallback |
@@ -366,12 +368,25 @@ unrelated arena low.
 
 ### Stage A — make allocator configuration explicit
 
+**Completed:** 2026-07-25
+
 1. Change dlmalloc's Win32 defaults to respect embedding-provided `HAVE_*` and
    failure-action definitions.
 2. Select page-size granularity for Win32 MoreCore-without-mmap.
 3. Define the full ART mspace configuration, including `USE_LOCKS=0`, without
    masking Windows macros.
 4. Add compile-time and source-configuration checks.
+
+Landed as external dlmalloc `f3356ce` and ART `8c900a9e4b`. Verification:
+
+- focused Win64 allocator probe: page 4096, granularity 4096, small MoreCore
+  increment 20480, `ENOMEM` failure behavior;
+- Win64 `art.dll` and `dalvikvm.exe` rebuild;
+- Win64 JIT smoke 12/12 under Wine;
+- full Linux `art`/`dalvikvm` rebuild; and
+- Linux imageless Hello PASS.
+
+Evidence: `tools/verify/win64_w013/RESULT.md`.
 
 ### Stage B — attach mspaces to their owners
 

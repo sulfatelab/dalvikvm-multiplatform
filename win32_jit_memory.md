@@ -568,10 +568,10 @@ The permanent ART configuration remains:
 
 Internal dlmalloc locks are redundant under that single-owner lock contract. A
 temporary `USE_SPIN_LOCKS=1` experiment was reverted after Wine regressions.
-The current `_WIN32`/`WIN32` masking used to preserve MoreCore is not the
-permanent configuration mechanism. W-013 replaces it with embedding-safe
-dlmalloc defaults, explicit configuration, and an owner attached through
-`malloc_state::extp/exts`; see
+W-013 Stage A removed the historical `_WIN32`/`WIN32` masking. dlmalloc now has
+embedding-safe Win32 defaults and ART explicitly compile-checks its
+MoreCore-only, page-granular, unlocked mspace policy. Stage B still needs to
+attach each owner through `malloc_state::extp/exts`; see
 [win32_heap_memory.md](win32_heap_memory.md) §§4–6.
 
 The JIT pagefile-section topology does not give dlmalloc ownership of the
@@ -863,7 +863,7 @@ None of this justifies retaining the RWX J-1 path as the product default.
 | Managed/native JIT default | Corrected pagefile-section dual view; Hello about 28–30 successful records after native-gate removal |
 | Corrected dual-view integration | JIT smoke 12/12; matrix 14/14; protections checked with `VirtualQuery` |
 | Section-layout probe | 64 MiB and non-64-KiB capacity cases pass under Wine; low primary remains contiguous under forced low-space fragmentation |
-| dlmalloc configuration | `USE_LOCKS=0`; spin-lock experiment reverted; W-013 explicit configuration/owner attachment remains open |
+| dlmalloc configuration | W-013 Stage A complete: Windows-aware explicit MoreCore-only configuration; owner attachment remains open |
 | Root-cause correction | JIT-root signed displacement plus latent CodeInfo overflow |
 | PE asm definitions | Windows-target generator test enforces `RUNTIME_INSTRUMENTATION_OFFSET=0x328` |
 | Threshold-zero CriticalNative | Direct visitor uses Win64 unified ordinals/home area; dlsym caller PC preserved; repeated J-1 and dual-view probes pass |

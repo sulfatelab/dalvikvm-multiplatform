@@ -800,13 +800,15 @@ ART MoreCore, and registered the non-moving space as `dlmalloc_space_`. The
 rebuild and imageless Hello rerun completed successfully; the old "pending"
 wording was historical and is removed here.
 
-That recovery fix is not the final allocator architecture. The accepted W-013
-design keeps Windows macros visible, makes dlmalloc respect embedding-provided
-configuration, attaches each mspace directly to its MoreCore owner, makes
-anywhere/low/exact address policy explicit, and uses `VirtualAlloc2` address
-requirements for constrained anonymous mappings. It also audits the Phase-2
-blanket low placement for LinearAlloc and metadata arenas instead of treating
-it as permanent. See [win32_heap_memory.md](win32_heap_memory.md) and
+That recovery fix was not the final allocator architecture. W-013 Stage A
+removed the macro masking on 2026-07-25: Windows macros remain visible,
+dlmalloc respects embedding-provided configuration, ART compile-checks its
+MoreCore-only policy, and Win32 MoreCore uses page-size growth granularity.
+Remaining stages attach each mspace directly to its owner, make
+anywhere/low/exact address policy explicit, use `VirtualAlloc2` constraints,
+repair mapping ownership, and audit the Phase-2 blanket low placement for
+LinearAlloc and metadata arenas. See
+[win32_heap_memory.md](win32_heap_memory.md) and
 [win32_open_items.md](win32_open_items.md) W-013.
 
 ## 10. Conclusion and current position
