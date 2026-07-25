@@ -23,6 +23,8 @@
 #include <unistd.h>
 #include <poll.h>
 
+#include "mdvm_socket_fd_registry.h"
+
 #ifndef JVM_EEXIST
 #define JVM_EEXIST -100
 #endif
@@ -129,22 +131,22 @@ __declspec(dllexport) jint JVM_Open(const char* fname, jint flags, jint mode) {
   return fd;
 }
 
-__declspec(dllexport) jint JVM_Close(jint fd) { return _close(fd); }
+__declspec(dllexport) jint JVM_Close(jint fd) { return mdvm_socket_fd_close(fd); }
 
 __declspec(dllexport) jint JVM_Read(jint fd, char* buf, jint nbytes) {
-  SOCKET s = (SOCKET)_get_osfhandle(fd);
-  if (s != INVALID_SOCKET && s != (SOCKET)-1) {
+  if (mdvm_socket_fd_is_socket(fd)) {
+    SOCKET s = (SOCKET)_get_osfhandle(fd);
     int n = recv(s, buf, nbytes, 0);
-    if (n != SOCKET_ERROR) return n;
+    return n != SOCKET_ERROR ? n : -1;
   }
   return _read(fd, buf, (unsigned)nbytes);
 }
 
 __declspec(dllexport) jint JVM_Write(jint fd, char* buf, jint nbytes) {
-  SOCKET s = (SOCKET)_get_osfhandle(fd);
-  if (s != INVALID_SOCKET && s != (SOCKET)-1) {
+  if (mdvm_socket_fd_is_socket(fd)) {
+    SOCKET s = (SOCKET)_get_osfhandle(fd);
     int n = send(s, buf, nbytes, 0);
-    if (n != SOCKET_ERROR) return n;
+    return n != SOCKET_ERROR ? n : -1;
   }
   return _write(fd, buf, (unsigned)nbytes);
 }
@@ -171,7 +173,7 @@ __declspec(dllexport) jint JVM_Socket(jint domain, jint type, jint protocol) {
 __declspec(dllexport) jint JVM_SocketClose(jint fd) {
   SOCKET s = (SOCKET)_get_osfhandle(fd);
   if (s != INVALID_SOCKET && s != (SOCKET)-1) shutdown(s, SD_BOTH);
-  return _close(fd);
+  return mdvm_socket_fd_close(fd);
 }
 
 __declspec(dllexport) jint JVM_SocketShutdown(jint fd, jint howto) {
@@ -225,6 +227,7 @@ __declspec(dllexport) jint JVM_SendTo(jint fd, char* buf, int len,
 }
 
 __declspec(dllexport) jint JVM_SocketAvailable(jint fd, jint* result) {
+  if (!mdvm_socket_fd_is_socket(fd)) return JNI_FALSE;
   SOCKET s = (SOCKET)_get_osfhandle(fd);
   if (s == INVALID_SOCKET || s == (SOCKET)-1) return JNI_FALSE;
   u_long n = 0;

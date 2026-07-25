@@ -18,6 +18,8 @@
 #include <ws2tcpip.h>
 #include <windows.h>
 
+#include "mdvm_socket_fd_registry.h"
+
 #pragma comment(lib, "ws2_32.lib")
 
 /* Android OsConstants (bionic) used by libcore */
@@ -84,8 +86,23 @@ static int fd_to_int(JNIEnv* env, jobject fdObj) {
 }
 
 static SOCKET socket_from_fd(int fd) {
-  if (fd < 0) return INVALID_SOCKET;
+  if (!mdvm_socket_fd_is_socket(fd)) return INVALID_SOCKET;
   return (SOCKET)_get_osfhandle(fd);
+}
+
+static int fd_from_socket(SOCKET socket) {
+  int fd = _open_osfhandle((intptr_t)socket, _O_RDWR | _O_BINARY);
+  if (fd < 0) {
+    closesocket(socket);
+    return -1;
+  }
+  if (mdvm_socket_fd_register(fd) != 0) {
+    int saved_errno = errno;
+    _close(fd);
+    errno = saved_errno;
+    return -1;
+  }
+  return fd;
 }
 
 static void throw_errno(JNIEnv* env, const char* function, int android_errno) {
@@ -294,9 +311,8 @@ __declspec(dllexport) jobject Java_libcore_io_Linux_socket(JNIEnv* env, jobject 
     int no = 0;
     setsockopt(s, IPPROTO_IPV6, IPV6_V6ONLY, (const char*)&no, sizeof(no));
   }
-  int fd = _open_osfhandle((intptr_t)s, _O_RDWR | _O_BINARY);
+  int fd = fd_from_socket(s);
   if (fd < 0) {
-    closesocket(s);
     throw_errno(env, "socket", A_EINVAL);
     return NULL;
   }
@@ -444,8 +460,8 @@ __declspec(dllexport) jobject Java_libcore_io_Linux_accept(JNIEnv* env, jobject 
       }
     }
   }
-  int fd = _open_osfhandle((intptr_t)ns, _O_RDWR | _O_BINARY);
-  if (fd < 0) { closesocket(ns); throw_errno(env, "accept", A_EINVAL); return NULL; }
+  int fd = fd_from_socket(ns);
+  if (fd < 0) { throw_errno(env, "accept", A_EINVAL); return NULL; }
   return fd_from_int(env, fd);
 }
 __declspec(dllexport) jobject Java_libcore_io_Linux_accept__Ljava_io_FileDescriptor_2Ljava_net_SocketAddress_2(
@@ -843,11 +859,11 @@ __declspec(dllexport) void Java_libcore_io_Linux_socketpair(JNIEnv* env, jobject
     return;
   }
   nb = 0; ioctlsocket(c, FIONBIO, &nb);
-  int f1 = _open_osfhandle((intptr_t)c, _O_RDWR | _O_BINARY);
-  int f2 = _open_osfhandle((intptr_t)a, _O_RDWR | _O_BINARY);
+  int f1 = fd_from_socket(c);
+  int f2 = fd_from_socket(a);
   if (f1 < 0 || f2 < 0) {
-    if (f1 >= 0) _close(f1); else closesocket(c);
-    if (f2 >= 0) _close(f2); else closesocket(a);
+    if (f1 >= 0) mdvm_socket_fd_close(f1);
+    if (f2 >= 0) mdvm_socket_fd_close(f2);
     throw_errno(env, "socketpair", A_EINVAL);
     return;
   }
@@ -999,7 +1015,7 @@ __declspec(dllexport) jobject Java_libcore_io_Linux_dup(JNIEnv* env, jobject thi
   (void)thiz;
   int ofd = fd_to_int(env, oldFd);
   if (ofd < 0) { throw_errno(env, "dup", A_EBADF); return NULL; }
-  int nfd = _dup(ofd);
+  int nfd = mdvm_socket_fd_dup(ofd);
   if (nfd < 0) { throw_errno(env, "dup", errno ? errno : A_EINVAL); return NULL; }
   return fd_from_int(env, nfd);
 }
@@ -1010,7 +1026,7 @@ __declspec(dllexport) jobject Java_libcore_io_Linux_dup2(JNIEnv* env, jobject th
   (void)thiz;
   int ofd = fd_to_int(env, oldFd);
   if (ofd < 0) { throw_errno(env, "dup2", A_EBADF); return NULL; }
-  int nfd = _dup2(ofd, newFd);
+  int nfd = mdvm_socket_fd_dup2(ofd, newFd);
   if (nfd < 0) { throw_errno(env, "dup2", errno ? errno : A_EINVAL); return NULL; }
   /* Android returns the new FileDescriptor object describing newFd */
   return fd_from_int(env, newFd);

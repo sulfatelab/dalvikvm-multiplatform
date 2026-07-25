@@ -12,6 +12,7 @@
 #include <winsock2.h>
 #include <windows.h>
 #pragma comment(lib, "ws2_32.lib")
+#include "mdvm_socket_fd_registry.h"
 #include "win_path.h"
 
 /* Android errno values commonly used by IoBridge (bionic-compatible). */
@@ -94,13 +95,7 @@ static int fd_to_int(JNIEnv* env, jobject fdObj) {
 }
 
 static int is_socket_fd(int fd) {
-  if (fd < 0) return 0;
-  SOCKET s = (SOCKET)_get_osfhandle(fd);
-  if (s == INVALID_SOCKET || s == (SOCKET)(intptr_t)-1) return 0;
-  int type = 0; int len = sizeof(type);
-  if (getsockopt(s, SOL_SOCKET, SO_TYPE, (char*)&type, &len) != 0) return 0;
-  /* Anonymous pipes must not be treated as sockets (wine SO_TYPE quirks). */
-  return (type == SOCK_STREAM || type == SOCK_DGRAM || type == SOCK_RAW) ? 1 : 0;
+  return mdvm_socket_fd_is_socket(fd);
 }
 
 /* ===== WinNTFileSystem natives ===== */
@@ -323,7 +318,7 @@ __declspec(dllexport) jobject Java_libcore_io_Linux_open(JNIEnv* env, jobject th
 __declspec(dllexport) void Java_libcore_io_Linux_close(JNIEnv* env, jobject thiz, jobject fdObj) {
   (void)thiz;
   int fd = fd_to_int(env, fdObj);
-  if (fd >= 0) _close(fd);
+  if (fd >= 0) mdvm_socket_fd_close(fd);
 }
 
 __declspec(dllexport) jint Java_libcore_io_Linux_readBytes(JNIEnv* env, jobject thiz, jobject fdObj, jobject buffer, jint offset, jint byteCount) {

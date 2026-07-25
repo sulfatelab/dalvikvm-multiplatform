@@ -23,6 +23,8 @@ typedef intptr_t ssize_t;
 #include <sys/uio.h>
 #include <poll.h>
 
+#include "mdvm_socket_fd_registry.h"
+
 #ifndef INVALID_SOCKET
 #define INVALID_SOCKET ((SOCKET)(~0))
 #endif
@@ -91,7 +93,7 @@ static void set_wsa_errno(void) {
 }
 
 static SOCKET sock_from_fd(int fd) {
-  if (fd < 0) return INVALID_SOCKET;
+  if (!mdvm_socket_fd_is_socket(fd)) return INVALID_SOCKET;
   intptr_t h = _get_osfhandle(fd);
   if (h == -1 || h == 0) return INVALID_SOCKET;
   return (SOCKET)h;
@@ -103,6 +105,12 @@ static int fd_from_socket(SOCKET s) {
   if (fd < 0) {
     closesocket(s);
     errno = EMFILE;
+    return -1;
+  }
+  if (mdvm_socket_fd_register(fd) != 0) {
+    int saved_errno = errno;
+    _close(fd);
+    errno = saved_errno;
     return -1;
   }
   return fd;
@@ -362,7 +370,7 @@ int mdvm_socketpair(int domain, int type, int protocol, int sv[2]) {
   sv[0] = fd_from_socket(a);
   if (sv[0] < 0) { closesocket(b); return -1; }
   sv[1] = fd_from_socket(b);
-  if (sv[1] < 0) { _close(sv[0]); return -1; }
+  if (sv[1] < 0) { mdvm_socket_fd_close(sv[0]); return -1; }
   return 0;
 }
 

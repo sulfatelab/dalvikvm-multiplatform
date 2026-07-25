@@ -236,15 +236,33 @@ if(MDVM_WIN64_BUILD_OPENJDK)
 
   add_library(openjdkjvm SHARED
     "${CMAKE_CURRENT_SOURCE_DIR}/openjdkjvm_memory_standalone.c"
+    "${_repo}/compat/src/win64_socket_fd_registry.c"
   )
   set_target_properties(openjdkjvm PROPERTIES OUTPUT_NAME "libopenjdkjvm")
   target_include_directories(openjdkjvm PUBLIC
     "${MDVM_ART_ROOT_DIR}/libnativehelper/include_jni"
     "${MDVM_COMPAT_INCLUDE_DIR}"
   )
-  target_compile_definitions(openjdkjvm PRIVATE ${_WIN_DEFS})
+  target_compile_definitions(openjdkjvm PRIVATE
+    ${_WIN_DEFS}
+    MDVM_SOCKET_FD_REGISTRY_EXPORTS=1)
   target_link_libraries(openjdkjvm PRIVATE kernel32 psapi ws2_32 win64_socket_posix)
   set_target_properties(openjdkjvm PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS OFF)
+
+  # Libcore.os creates sockets in javacore while java.net stream natives live
+  # in openjdk.  Both must use the one process-wide registry exported here.
+  if(TARGET javacore)
+    target_link_libraries(javacore PRIVATE openjdkjvm)
+    add_dependencies(javacore openjdkjvm)
+  endif()
+
+  add_executable(socket_fd_registry_smoke
+    "${CMAKE_CURRENT_SOURCE_DIR}/socket_fd_registry_smoke.c")
+  target_include_directories(socket_fd_registry_smoke PRIVATE "${MDVM_COMPAT_INCLUDE_DIR}")
+  target_compile_definitions(socket_fd_registry_smoke PRIVATE ${_WIN_DEFS})
+  target_compile_options(socket_fd_registry_smoke PRIVATE ${_WIN_CFLAGS})
+  target_link_libraries(socket_fd_registry_smoke PRIVATE
+    win64_socket_posix openjdkjvm ws2_32)
 
   # --- fdlibm static ---
   add_library(fdlibm STATIC ${FDLIBM_SRCS})
@@ -321,7 +339,11 @@ extern "C" void register_java_io_UnixFileSystem(JNIEnv*) {}
     "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/SocketInputStream.c"
     "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/SocketOutputStream.c"
   )
-  set_source_files_properties(${_OJ_LINUXISH_C} PROPERTIES COMPILE_DEFINITIONS "__linux__=1")
+  # Keep the explicit socket-fd registry coherent when upstream C sources use
+  # close/dup/dup2 directly for NIO descriptors.  The C++ bridge calls the
+  # helpers explicitly to avoid macro rewriting C++ member names.
+  set_source_files_properties(${_OJ_LINUXISH_C} PROPERTIES COMPILE_DEFINITIONS
+    "__linux__=1;MDVM_SOCKET_FD_TRACKING=1")
   set_target_properties(openjdk PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS OFF)
   target_include_directories(openjdk BEFORE PRIVATE
     "${MDVM_LIBCORE_DIR}/multiplatform/windows/native"
@@ -456,4 +478,3 @@ if(MDVM_WIN64_BUILD_CRYPTO)
 endif()
 
 message(STATUS "Win64 libcore/ICU: icu + optional javacore/openjdk hybrids + crypto")
-

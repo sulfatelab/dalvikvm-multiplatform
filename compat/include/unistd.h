@@ -140,6 +140,10 @@ static inline unsigned sleep(unsigned seconds) {
   }))
 #endif
 #endif
+
+#if defined(MDVM_SOCKET_FD_TRACKING)
+#include "mdvm_socket_fd_registry.h"
+#endif
 #else
 #include_next <unistd.h>
 #endif
