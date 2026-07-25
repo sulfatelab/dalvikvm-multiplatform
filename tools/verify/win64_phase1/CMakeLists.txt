@@ -188,6 +188,23 @@ if(TARGET art)
     "${MDVM_ART_WIN_RUNTIME}/runtime_windows.cc"
     "${MDVM_ART_WIN_RUNTIME}/monitor_windows.cc"
     "${MDVM_ART_WIN_OPENJDKJVM}/openjdkjvm_memory_windows.cc")
+
+  # CMake's clang ASM rule declares a depfile but does not pass -MD/-MF, so
+  # preprocessor includes are otherwise invisible to Ninja. Keep the x86_64
+  # assembly consumers synchronized with their shared support macros for both
+  # clean and incremental builds.
+  set(_art_x86_64_asm_support_deps
+    "${MDVM_ART_DIR}/runtime/arch/x86_64/asm_support_x86_64.S"
+    "${MDVM_ART_DIR}/runtime/arch/x86_64/asm_support_x86_64.h"
+    "${MDVM_ART_DIR}/runtime/interpreter/cfi_asm_support.h"
+    "${MDVM_ART_DIR}/runtime/asm_support.h")
+  set_property(SOURCE
+    "${MDVM_ART_DIR}/runtime/arch/x86_64/memcmp16_x86_64.S"
+    "${MDVM_ART_DIR}/runtime/arch/x86_64/native_entrypoints_x86_64.S"
+    "${MDVM_ART_DIR}/runtime/arch/x86_64/jni_entrypoints_x86_64.S"
+    "${MDVM_ART_DIR}/runtime/arch/x86_64/quick_entrypoints_x86_64.S"
+    "${MDVM_GENSRC_DIR}/art/asm/mterp/mterp_x86_64.S"
+    APPEND PROPERTY OBJECT_DEPENDS "${_art_x86_64_asm_support_deps}")
 endif()
 if(TARGET sigchain)
   target_sources(sigchain PRIVATE
