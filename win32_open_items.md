@@ -7,14 +7,6 @@
 When the proper fix lands, mark the item **CLOSED**, move it into §Closed (sorted), and keep the full history.  
 Do **not** list permanent non-goals as OPEN workarounds—list them under §Non-goals.
 
-### Filename
-
-| Name | Use |
-|------|-----|
-| **`win32_open_items.md`** (this file) | Preferred: leftovers **and** temporary workarounds |
-| `win32_leftovers.md` | OK alias if you prefer |
-| `win32_bug_tracker.md` | Prefer for defect IDs only; this file is broader |
-
 ### Related docs
 
 | Doc | Role |
