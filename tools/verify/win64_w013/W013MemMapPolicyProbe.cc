@@ -3,6 +3,7 @@
 #include <limits>
 #include <string>
 #include <sys/mman.h>
+#include <vector>
 
 #include <windows.h>
 
@@ -28,6 +29,102 @@ bool HasProtection(void* address, DWORD expected) {
   return Query(address, &info) && (info.Protect & 0xffu) == expected;
 }
 
+uintptr_t AlignUp(uintptr_t value, size_t alignment) {
+  return (value + alignment - 1u) & ~(static_cast<uintptr_t>(alignment) - 1u);
+}
+
+uintptr_t AlignDown(uintptr_t value, size_t alignment) {
+  return value & ~(static_cast<uintptr_t>(alignment) - 1u);
+}
+
+bool ReserveExact(uintptr_t address, size_t size, std::vector<void*>* reservations) {
+  void* reservation = ::VirtualAlloc(reinterpret_cast<void*>(address),
+                                     size,
+                                     MEM_RESERVE,
+                                     PAGE_NOACCESS);
+  if (reservation != reinterpret_cast<void*>(address)) {
+    if (reservation != nullptr) {
+      ::VirtualFree(reservation, 0u, MEM_RELEASE);
+    }
+    return false;
+  }
+  reservations->push_back(reservation);
+  return true;
+}
+
+bool ReserveLowFreeRanges(bool fragment,
+                          std::vector<void*>* reservations,
+                          size_t* reservation_count) {
+  SYSTEM_INFO system_info = {};
+  ::GetSystemInfo(&system_info);
+  const size_t granularity = system_info.dwAllocationGranularity;
+  const uintptr_t minimum = AlignUp(
+      reinterpret_cast<uintptr_t>(system_info.lpMinimumApplicationAddress), granularity);
+  constexpr size_t kFragmentChunk = 1024u * 1024u;
+
+  uintptr_t cursor = minimum;
+  while (cursor < k4GB) {
+    MEMORY_BASIC_INFORMATION info = {};
+    if (!Query(reinterpret_cast<void*>(cursor), &info)) {
+      return false;
+    }
+    const uintptr_t base = reinterpret_cast<uintptr_t>(info.BaseAddress);
+    const uintptr_t region_end =
+        info.RegionSize >= k4GB - base ? k4GB : base + info.RegionSize;
+    if (region_end <= cursor) {
+      return false;
+    }
+    if (info.State != MEM_FREE) {
+      cursor = region_end;
+      continue;
+    }
+
+    const uintptr_t free_begin = AlignUp(cursor > base ? cursor : base, granularity);
+    const uintptr_t free_end = AlignDown(region_end, granularity);
+    if (free_begin >= free_end) {
+      cursor = region_end;
+      continue;
+    }
+
+    if (fragment) {
+      // Leave one allocation-granularity hole, then reserve up to 1 MiB. Repeating
+      // this across every low free range guarantees that no two-granularity
+      // request can fit while avoiding tens of thousands of reservations.
+      if (free_end - free_begin <= granularity) {
+        cursor = free_end;
+        continue;
+      }
+      const uintptr_t reserve_begin = free_begin + granularity;
+      size_t reserve_size = static_cast<size_t>(free_end - reserve_begin);
+      if (reserve_size > kFragmentChunk) {
+        reserve_size = kFragmentChunk;
+      }
+      reserve_size = static_cast<size_t>(AlignDown(reserve_size, granularity));
+      if (reserve_size == 0u || !ReserveExact(reserve_begin, reserve_size, reservations)) {
+        return false;
+      }
+      cursor = reserve_begin + reserve_size;
+    } else {
+      const size_t reserve_size = static_cast<size_t>(free_end - free_begin);
+      if (!ReserveExact(free_begin, reserve_size, reservations)) {
+        return false;
+      }
+      cursor = free_end;
+    }
+  }
+  *reservation_count = reservations->size();
+  return true;
+}
+
+bool ReleaseReservations(std::vector<void*>* reservations) {
+  bool ok = true;
+  for (void* reservation : *reservations) {
+    ok &= ::VirtualFree(reservation, 0u, MEM_RELEASE) != FALSE;
+  }
+  reservations->clear();
+  return ok;
+}
+
 }  // namespace
 
 int main() {
@@ -37,7 +134,33 @@ int main() {
   uintptr_t anywhere_address = 0u;
   uintptr_t low_address = 0u;
   bool boundary_tested = false;
+  size_t fragment_count = 0u;
+  size_t exhaustion_count = 0u;
   constexpr size_t kTransitionCycles = 32u;
+  constexpr size_t kDestructionCycles = 128u;
+
+  {
+    error.clear();
+    art::MemMap empty = art::MemMap::MapAnonymous(
+        "w013-empty", 0u, PROT_READ | PROT_WRITE, /*low_4gb=*/false, &error);
+    ok &= Check(!empty.IsValid(), "zero-sized mapping unexpectedly succeeded");
+    ok &= Check(error == "Empty MemMap requested.", "zero-sized mapping returned wrong error");
+
+    SYSTEM_INFO system_info = {};
+    ::GetSystemInfo(&system_info);
+    const uintptr_t overflow_begin =
+        std::numeric_limits<uintptr_t>::max() - system_info.dwAllocationGranularity + 1u;
+    art::MemMap overflow = art::MemMap::MapAnonymous(
+        "w013-overflow",
+        reinterpret_cast<uint8_t*>(overflow_begin),
+        2u * system_info.dwAllocationGranularity,
+        PROT_READ | PROT_WRITE,
+        /*low_4gb=*/false,
+        /*reuse=*/false,
+        /*reservation=*/nullptr,
+        /*error_msg=*/nullptr);
+    ok &= Check(!overflow.IsValid(), "overflowing exact mapping unexpectedly succeeded");
+  }
 
   {
     constexpr size_t kAllocationSize = 64u * 1024u;
@@ -153,6 +276,72 @@ int main() {
   }
 
   {
+    SYSTEM_INFO system_info = {};
+    ::GetSystemInfo(&system_info);
+    const size_t granularity = system_info.dwAllocationGranularity;
+    std::vector<void*> fragments;
+    fragments.reserve(8192u);
+    ok &= Check(ReserveLowFreeRanges(/*fragment=*/true, &fragments, &fragment_count),
+                "failed to fragment the complete low address range");
+
+    art::MemMap fragmented = art::MemMap::MapAnonymous(
+        "w013-fragmented-low",
+        2u * granularity,
+        PROT_READ | PROT_WRITE,
+        /*low_4gb=*/true,
+        /*error_msg=*/nullptr);
+    ok &= Check(!fragmented.IsValid(),
+                "two-granularity low mapping unexpectedly fit in fragmented low VA");
+    ok &= Check(ReleaseReservations(&fragments), "failed to release low-VA fragments");
+
+    error.clear();
+    art::MemMap recovered = art::MemMap::MapAnonymous(
+        "w013-fragmented-recovery",
+        2u * granularity,
+        PROT_READ | PROT_WRITE,
+        /*low_4gb=*/true,
+        &error);
+    ok &= Check(recovered.IsValid(), error.c_str());
+  }
+
+  {
+    std::vector<void*> reservations;
+    reservations.reserve(1024u);
+    ok &= Check(ReserveLowFreeRanges(/*fragment=*/false, &reservations, &exhaustion_count),
+                "failed to reserve the complete low address range");
+
+    art::MemMap exhausted = art::MemMap::MapAnonymous(
+        "w013-exhausted-low",
+        64u * 1024u,
+        PROT_READ | PROT_WRITE,
+        /*low_4gb=*/true,
+        /*error_msg=*/nullptr);
+    ok &= Check(!exhausted.IsValid(), "low mapping unexpectedly succeeded after low-VA exhaustion");
+
+    error.clear();
+    art::MemMap high_available = art::MemMap::MapAnonymous(
+        "w013-high-after-low-exhaustion",
+        64u * 1024u,
+        PROT_READ | PROT_WRITE,
+        /*low_4gb=*/false,
+        &error);
+    ok &= Check(high_available.IsValid(), error.c_str());
+    ok &= Check(!high_available.IsValid() ||
+                    reinterpret_cast<uintptr_t>(high_available.Begin()) >= k4GB,
+                "unrestricted mapping was not high while all low VA was reserved");
+    ok &= Check(ReleaseReservations(&reservations), "failed to release exhausted low VA");
+
+    error.clear();
+    art::MemMap recovered = art::MemMap::MapAnonymous(
+        "w013-exhaustion-recovery",
+        64u * 1024u,
+        PROT_READ | PROT_WRITE,
+        /*low_4gb=*/true,
+        &error);
+    ok &= Check(recovered.IsValid(), error.c_str());
+  }
+
+  {
     const size_t page_size = art::MemMap::GetPageSize();
     error.clear();
     art::MemMap transitions = art::MemMap::MapAnonymous(
@@ -191,6 +380,22 @@ int main() {
                     "activated range is not writable");
       }
     }
+  }
+
+  for (size_t i = 0; i < kDestructionCycles && ok; ++i) {
+    error.clear();
+    art::MemMap mapping = art::MemMap::MapAnonymous(
+        "w013-repeated-destruction",
+        64u * 1024u,
+        PROT_READ | PROT_WRITE,
+        /*low_4gb=*/false,
+        &error);
+    ok &= Check(mapping.IsValid(), error.c_str());
+    void* allocation_base = mapping.IsValid() ? mapping.BaseBegin() : nullptr;
+    mapping.Reset();
+    MEMORY_BASIC_INFORMATION info = {};
+    ok &= Check(Query(allocation_base, &info), "VirtualQuery(repeated release) failed");
+    ok &= Check(info.State == MEM_FREE, "repeated mapping owner was not wholly released");
   }
 
   {
@@ -305,10 +510,14 @@ int main() {
   if (!ok) {
     return 1;
   }
-  std::printf("W013_MEM_MAP_POLICY_PASS anywhere=%p low=%p boundary=%s transitions=%zu\n",
+  std::printf("W013_MEM_MAP_POLICY_PASS anywhere=%p low=%p boundary=%s transitions=%zu "
+              "fragments=%zu exhaustion_reservations=%zu destruction_cycles=%zu\n",
               reinterpret_cast<void*>(anywhere_address),
               reinterpret_cast<void*>(low_address),
               boundary_tested ? "tested" : "occupied",
-              kTransitionCycles);
+              kTransitionCycles,
+              fragment_count,
+              exhaustion_count,
+              kDestructionCycles);
   return 0;
 }

@@ -1,0 +1,70 @@
+# W-013 native Windows host acceptance
+
+**Target:** Windows 10 version 1803 or later, x64
+
+**Purpose:** close the environment-dependent heap-memory acceptance remaining
+after W-013 Stages A–E and the Wine/Linux closure gates.
+
+## Run
+
+Unpack the generated archive on a native Windows 10/11 x64 host. From
+PowerShell in the package root:
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+.\scripts\RUN_W013_HOST.ps1
+```
+
+Do not run the package from WSL. The working directory may be anywhere; the
+script resolves the package root from its own location.
+
+## Required result
+
+`logs\RESULT_W013.txt` must end in:
+
+```text
+OVERALL PASS
+```
+
+The matrix covers:
+
+- native `VirtualAlloc2`, exact/low/anywhere placement, ownership, page-state,
+  `VirtualQuery`, zero/overflow rejection, fragmented-low-VA,
+  complete-low-VA-exhaustion, no-high-fallback, recovery, and repeated-owner-
+  destruction checks through `win64_w013_mem_map_probe.exe`;
+- embedded dlmalloc create/grow/trim/regrow/failure behavior;
+- actual ART mspace provider attachment and rebind;
+- 75,497,472 bytes per run of sub-LOS non-moving allocation pressure at both
+  128-MiB and 1-GiB `-Xmx`, with stable low addresses and post-GC regrowth;
+- moving and large-object GC stress, ThreadHeavy, and HandleLeak;
+- default dual-view JIT smoke, JIT disable/filter/exclude/quiet checks, the
+  temporary J-1 diagnostic path, and the fourteen-case managed JIT matrix;
+- 512-MiB and 1-GiB heap startup plus every process's peak paged, working-set,
+  and virtual-byte metrics;
+- twenty independent default-JIT imageless starts; and
+- fatal/check/access-violation log scanning plus a recursive crash-dump scan.
+
+`logs\HOST_MEMORY.txt` records physical-memory and pagefile data needed to
+interpret large-heap commit failures. Every child process has a five-minute
+timeout so a hung case becomes an explicit failure rather than blocking the
+matrix indefinitely.
+
+## Return evidence
+
+Return the complete `logs` directory and these package metadata files:
+
+- `BUILD_INFO.txt`
+- `MANIFEST.json`
+- `SHA256SUMS.txt`
+
+Do not return only screenshots. Preserve the text logs so addresses, process
+metrics, exit codes, OS build, and dump-scan results can be reviewed.
+
+## Interpretation
+
+`peak_paged_bytes` is a per-process pagefile-backed/private-memory proxy, not a
+machine-wide commit-limit measurement. Record the host's installed RAM and
+pagefile configuration alongside any 1-GiB failure. A failure caused by an
+insufficient system commit limit is distinct from an ART address-placement,
+protection, or allocator failure and must not be hidden by lowering `-Xmx` in
+the returned evidence.

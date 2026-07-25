@@ -106,13 +106,15 @@ tools/verify/win64_w013/run_mem_map_policy_probe.sh
 Observed under Wine:
 
 ```text
-W013_MEM_MAP_POLICY_PASS anywhere=00007FFFFE7C0000 low=0000000000010000 boundary=tested
+W013_MEM_MAP_POLICY_PASS anywhere=00007FFFFE7C0000 low=0000000000010000 boundary=tested transitions=32 fragments=3854 exhaustion_reservations=2 destruction_cycles=128
 ```
 
 The probe validates anywhere/low/exact placement, exact collision, a mapping
-ending exactly at 4 GiB, 2-MiB direct alignment, reservation transfer,
-`reuse=true` shared lifetime, logical shrink without partial release, and
-exactly-once final release.
+ending exactly at 4 GiB, zero and overflowing requests, 2-MiB direct alignment,
+3,854-way low-VA fragmentation, complete low-VA exhaustion with high VA still
+available, low-VA recovery, reservation transfer, `reuse=true` shared
+lifetime, logical shrink without partial release, exactly-once final release,
+and 128 repeated whole-owner destruction cycles.
 
 Known Stage-C boundary: `MapViewOfFileEx` cannot replace an ordinary
 `VirtualAlloc` reservation in place. Fixed file-backed overlay remains
@@ -147,7 +149,7 @@ logical-shrink tail protection.
 Observed under Wine:
 
 ```text
-W013_MEM_MAP_POLICY_PASS anywhere=00007FFFFE7C0000 low=0000000000010000 boundary=tested transitions=32
+W013_MEM_MAP_POLICY_PASS anywhere=00007FFFFE7C0000 low=0000000000010000 boundary=tested transitions=32 fragments=3854 exhaustion_reservations=2 destruction_cycles=128
 ```
 
 The source gate rejects direct `mprotect()`/`madvise()` calls in malloc-space,
@@ -241,7 +243,8 @@ Results:
 - actual ART mspace-owner wrapper: success/rebind PASS and 4/4 expected-death
   lifetime checks PASS;
 - Win64 W-013 address-policy/ownership probe: PASS, including the tested
-  4-GiB boundary and exactly-once owner release;
+  4-GiB boundary, fragmented and exhausted low VA, no high fallback, recovery,
+  and 128 repeated whole-owner releases;
 - Win64 W-013 low-address source audit: PASS, with eight required-low product
   files and unrestricted metadata/card-table policy;
 - Win64 and Linux product non-moving pressure: PASS, 75,497,472 bytes churned,
@@ -251,6 +254,29 @@ Results:
 - Linux `libart.so` and `dalvikvm`: full rebuild PASS;
 - Linux L-005 imageless Hello: PASS, exit 0;
 - Linux GCStress: PASS, including repeated explicit CMS collections.
+
+## Native Windows handoff
+
+The remaining host-only matrix is packaged by:
+
+```text
+tools/win64/host_package/package_win64_w013.sh
+```
+
+The generated archive contains the native mapping, dlmalloc configuration, and
+mspace-owner probes. The mapping probe additionally rejects zero/overflowing
+requests, forces fragmented and fully exhausted low VA, verifies that a failed
+low request does not retry high, proves recovery after releasing the
+reservations, and repeats whole-owner destruction 128 times. The runner covers
+non-moving pressure at 128-MiB and 1-GiB `-Xmx`; moving/LOS GC stress;
+ThreadHeavy and HandleLeak; 512-MiB and 1-GiB startup; default dual-view JIT,
+the J-1 diagnostic path, and the fourteen-case JIT matrix; twenty repeated
+default-JIT starts; per-process memory metrics and host pagefile data; fatal-log
+scanning; and recursive dump scanning. Execution and evidence-return
+instructions are in `tools/verify/win64_w013/W013_HOST_CHECKLIST.md`. This
+package is prepared but does not count as native acceptance until its returned
+`logs/RESULT_W013.txt` ends in `OVERALL PASS` and the complete logs are
+reviewed.
 
 Stages A through E implement the accepted W-013 design. Fixed file-overlay over
 an ordinary `VirtualAlloc` reservation remains unsupported and is not used by
