@@ -79,15 +79,17 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Updated:** 2026-07-19 — product default ON (Linux-like); opt-out `ART_WIN64_QUICK_INVOKE=0`
 
 ### W-002 — No managed GS / Thread base on Windows (`InitCpu` no-op for GS)
-- **State:** OPEN (partial — rSELF path is product default; residual JNI attach / non-invoke entries)
-- **Kind:** workaround / design debt
+- **State:** OPEN (partial — rSELF path is product default; confirmed switch/nterp OSR entry defects)
+- **Kind:** design debt / ABI defect
 - **Area:** art / TLS
 - **Symptom / why:** Linux x86_64 uses `ARCH_SET_GS` so quick/nterp use `%gs:OFFSET`. Windows GS is TEB.
 - **Current behavior:** `InitCpu` does **not** touch GS (correct). Asm uses `THREAD_*` macros: r15 base on `_WIN32`, GS on Linux. rSELF published in `art_quick_invoke_*` (default ON). Nterp N-1 (`rREFS=rbp`) product default ON (§17.8).
-- **Proper fix:** Keep **rSELF=r15**; audit remaining managed entries (JNI return, attach, trampolines) publish rSELF; then close when full matrix is green without GS.
-- **Code anchors:** `thread_x86_64.cc`; `asm_support_x86_64.S` `THREAD_*`; `nterp.cc` (default ON; opt-out `ART_WIN64_NTERP=0`); design §6 / §12b / §15 / §16 / **§17** / **§17.8**
+- **Confirmed residual defects:** `art_quick_osr_stub` receives a normal Microsoft-x64 C++ call but consumes SysV registers and does not publish its explicit `Thread*` argument into r15. The x86_64 nterp OSR transition also calls UCRT `free` with a SysV-shaped RDI argument and no Microsoft shadow space instead of using the existing `NterpFree` ABI bridge.
+- **Attach model:** `AttachCurrentThread` establishes `Thread::Current()` TLS; it must not reserve or overwrite the native caller's r15. JNI `Call*Method` routes through `ArtMethod::Invoke`, whose Win64 quick-invoke boundary saves caller r15 and publishes managed rSELF. Native attach remains required focused coverage, not a confirmed attach-time publication defect.
+- **Proper fix:** Keep **rSELF=r15**; add the Microsoft-to-SysV argument bridge plus rSELF publication and Win64 nonvolatile preservation to `art_quick_osr_stub`; route Win64 nterp OSR cleanup through `NterpFree`; audit other direct managed entries; add switch/nterp OSR and attached-thread JNI probes; then close when Wine, Linux controls, and native Windows acceptance are green without GS.
+- **Code anchors:** `jit.cc` `art_quick_osr_stub`; `quick_entrypoints_x86_64.S`; `mterp/x86_64ng/main.S` `NterpHotnessCheck`; `nterp.cc` `NterpFree`; `thread_x86_64.cc`; `asm_support_x86_64.S` `THREAD_*`; design §6 / §12b / §15 / §16 / **§17** / **§17.8**
 - **Opened:** 2026-07-16
-- **Updated:** 2026-07-23 — D-1 complete: all 37 audited compiler/JNI/trampoline Thread sites route through `ThreadOffsetAddr` and r15 on Windows. The historical separated-J-2 FloatProbe failure was a memory-layout defect, not a residual GS/codegen audit item. Residual W-002 scope is JNI attach and other non-invoke entry publication of rSELF.
+- **Updated:** 2026-07-25 — D-1 remains complete: all 37 audited compiler/JNI/trampoline Thread sites route through `ThreadOffsetAddr` and r15 on Windows. Runtime and PE disassembly isolate the remaining failure to the two OSR transitions above; JNI attach wording is corrected to the managed-entry publication model.
 - **Design:** [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md) **§15 N-1 LOCKED**, **§17** register-map lock; FS-self **§16** reject; **§17.8** defaults ON
 
 ### W-003 — Quick entrypoint SETUP frames `int3` on Windows
