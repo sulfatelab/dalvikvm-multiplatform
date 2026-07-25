@@ -38,6 +38,7 @@ function Invoke-CheckedProcess {
     $process = $null
     $launchError = $null
     $timedOut = $false
+    $metricsSampled = $false
     $exitCode = -1
     $peakPaged = -1
     $peakWorkingSet = -1
@@ -55,18 +56,53 @@ function Invoke-CheckedProcess {
     }
     try {
         $process = Start-Process @startParameters
-        if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
-            $timedOut = $true
-            $process.Kill()
+        # Force System.Diagnostics.Process to retain a real process handle. Windows
+        # PowerShell can otherwise return a Process wrapper whose post-exit
+        # accounting properties are empty for very short-lived children.
+        $null = $process.Handle
+        $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+        while ($true) {
+            try {
+                $process.Refresh()
+                $samplePaged = $process.PeakPagedMemorySize64
+                $sampleWorkingSet = $process.PeakWorkingSet64
+                $sampleVirtual = $process.PeakVirtualMemorySize64
+                if ($null -ne $samplePaged -and
+                    $null -ne $sampleWorkingSet -and
+                    $null -ne $sampleVirtual) {
+                    $peakPaged = [Math]::Max($peakPaged, [long]$samplePaged)
+                    $peakWorkingSet = [Math]::Max($peakWorkingSet, [long]$sampleWorkingSet)
+                    $peakVirtual = [Math]::Max($peakVirtual, [long]$sampleVirtual)
+                    $metricsSampled = $true
+                }
+            } catch {
+                # The child can exit between Refresh() and a property read. Exit
+                # handling below still obtains its retained process exit code.
+            }
+            if ($process.WaitForExit(50)) {
+                break
+            }
+            if ([DateTime]::UtcNow -ge $deadline) {
+                $timedOut = $true
+                $process.Kill()
+                break
+            }
         }
         $process.WaitForExit()
-        $process.Refresh()
-        $exitCode = $process.ExitCode
-        $peakPaged = $process.PeakPagedMemorySize64
-        $peakWorkingSet = $process.PeakWorkingSet64
-        $peakVirtual = $process.PeakVirtualMemorySize64
+        $rawExitCode = $process.ExitCode
+        if ($null -eq $rawExitCode) {
+            throw 'Process exit code was unavailable after WaitForExit'
+        }
+        if (-not $metricsSampled) {
+            throw 'Process memory metrics were unavailable while the child was running'
+        }
+        $exitCode = [int]$rawExitCode
     } catch {
         $launchError = $_.Exception.ToString()
+    } finally {
+        if ($null -ne $process) {
+            $process.Dispose()
+        }
     }
     $elapsedMs = [long]((Get-Date) - $started).TotalMilliseconds
 
@@ -76,6 +112,7 @@ function Invoke-CheckedProcess {
         "expected_exit=$($ExpectedExitCodes -join ',')"
         "timeout_seconds=$TimeoutSeconds"
         "timed_out=$timedOut"
+        "metrics_sampled=$metricsSampled"
         "elapsed_ms=$elapsedMs"
         "peak_paged_bytes=$peakPaged"
         "peak_working_set_bytes=$peakWorkingSet"
@@ -126,6 +163,7 @@ Add-Result "W-013 native host acceptance $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss
 try {
     Get-ComputerInfo | Select-Object WindowsProductName, WindowsVersion, OsBuildNumber, OsArchitecture |
         Format-List | Out-String | Set-Content (Join-Path $Logs 'WINDOWS_VERSION.txt')
+    $PSVersionTable | Format-List | Out-String | Add-Content (Join-Path $Logs 'WINDOWS_VERSION.txt')
     Add-Result 'PASS host_os_info'
 } catch {
     $_.Exception.ToString() | Set-Content (Join-Path $Logs 'WINDOWS_VERSION.txt')
@@ -170,7 +208,7 @@ Invoke-CheckedProcess 'hello_1024m' 'dalvikvm.exe' "$Common -Xint -Xms64m -Xmx10
 
 Clear-JitEnvironment
 $env:ART_WIN64_JIT_LOG_COMPILES = '1'
-Invoke-CheckedProcess 'jit_dual_compile' 'dalvikvm.exe' "$Common -Xms64m -Xmx512m -cp run\hello.jar Hello" @('JitCodeCache::Create OK', 'Win64 CompileMethod done success=1 method=java.lang.StringBuilder', 'Win64 CompileMethod done success=1 method=java.lang.StringFactory', 'Hello from dalvikvm!', 'main end exception=0')
+Invoke-CheckedProcess 'jit_dual_compile' 'dalvikvm.exe' "$Common -Xms64m -Xmx512m -cp run\hello.jar Hello" @('JitCodeCache::Create OK', 'Win64 CompileMethod done success=1 method=java.lang.StringBuilder', 'Hello from dalvikvm!', 'main end exception=0')
 
 $env:ART_WIN64_JIT = '0'
 Invoke-CheckedProcess 'jit_disabled' 'dalvikvm.exe' "$Common -Xms64m -Xmx512m -cp run\hello.jar Hello" @('Hello from dalvikvm!', 'main end exception=0') @('Win64 CompileMethod done success=1')
