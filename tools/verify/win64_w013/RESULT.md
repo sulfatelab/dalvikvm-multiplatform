@@ -1,6 +1,6 @@
 # W-013 Win64 heap-memory implementation
 
-**Status:** Stages A–E PASS; native closure stress remains OPEN
+**Status:** Stages A–E PASS; native R1 reviewed and repaired; R2 acceptance pending
 **Date:** 2026-07-25
 **Host:** agent01
 
@@ -75,6 +75,15 @@ external-lock assertions.
 W013_MSPACE_OWNER_PASS first_calls=5 second_calls=2
 W013_MSPACE_OWNER_PROBE_PASS success=1 death=4
 ```
+
+Native R1 additionally exposed a J-1-only move failure after the executable
+mspace mapping had returned to RX. `ArtDetachMspaceMoreCoreProvider()` was
+correctly updating `malloc_state::extp/exts`, but the metadata write itself
+faulted. ART `27a1ac74a4` now performs executable-mspace detach and attach under
+`ScopedCodeCacheWrite`; the writable data mspace remains unchanged. The exact
+J-1 create/move path now passes under Wine with code-cache creation, 31
+successful compilation records, Hello output, and a clean JNI return. The
+dual-view JIT smoke remains 12/12.
 
 ## Stage C — explicit Windows address policy and ownership
 
@@ -154,6 +163,15 @@ W013_MEM_MAP_POLICY_PASS anywhere=00007FFFFE7C0000 low=0000000000010000 boundary
 
 The source gate rejects direct `mprotect()`/`madvise()` calls in malloc-space,
 dlmalloc-space, RosAlloc-space, and RosAlloc allocator transition paths.
+
+Native R1 showed that real Windows rejects `DiscardVirtualMemory()` on a
+`PAGE_NOACCESS` page with `ERROR_INVALID_PARAMETER`. ART `6253d01afc` makes
+the Windows discard primitive walk protection regions with `VirtualQuery()`.
+An already deactivated region is changed temporarily to `PAGE_READWRITE`,
+discarded, and restored immediately to its exact previous protection. Writable
+regions are discarded directly. The VM primitive allocates no temporary
+container, and the focused transition/fragmentation/ownership probe still
+passes.
 
 ## Stage E — audited low-address consumers
 
@@ -255,6 +273,54 @@ Results:
 - Linux L-005 imageless Hello: PASS, exit 0;
 - Linux GCStress: PASS, including repeated explicit CMS collections.
 
+## Native Windows R1 review
+
+Returned archive:
+
+```text
+/tmp/w013-r1.zip
+SHA-256 643b906885d5a820d629391be7a0f9e504797960d51ae5ba37b4226c56210152
+build commit dbca77c03fa634c5e8460c06695e2636b7d0fa0d
+Windows 10 Enterprise LTSC 2021 build 19044
+result OVERALL FAIL
+```
+
+The evidence contained three product defects and two runner defects:
+
+1. `win64_w013_mem_map_probe.exe` failed when native
+   `DiscardVirtualMemory()` received `PAGE_NOACCESS`. This is fixed by ART
+   `6253d01afc` as described in Stage D.
+2. J-1 crashed with `0xc0000005` while moving `JitMemoryRegion`. Dump
+   `art-20260725-130557.dmp` has SHA-256
+   `a8376bf6fb564960167a03d69652a4c73cbe4b5112923a43962e34955a5aa849`;
+   symbolication led through `ArtDetachMspaceMoreCoreProvider`,
+   `JitMemoryRegion::DetachMspaceProviders`, `MoveFrom`, and
+   `JitCodeCache::Create`. This is fixed by ART `27a1ac74a4`.
+3. HandleLeak completed its initial file and socket churn but the final regular
+   file write was sent through Winsock and failed with `WSAEINVAL`/10022.
+   `_get_osfhandle(fd)` and `SO_TYPE` cannot classify a CRT fd because a
+   regular Win32 handle may be numerically equal to a live value in Winsock's
+   independent SOCKET namespace. Root `caad337` and libcore
+   `67ec4ab8dd70` replace the probe with one process-wide socket-fd registry
+   exported by the already shipped `libopenjdkjvm.dll`. Socket creation,
+   accept, socketpair, dup, dup2, close, Libcore.os, JVM I/O, and NIO paths all
+   update or consult that registry across `libjavacore` and `libopenjdk`.
+4. Every child exit code and peak metric was blank because the PowerShell
+   runner called `Process.Refresh()` after exit. Root `c943f1f` retains the
+   process handle, samples paged/working-set/virtual peaks every 50 ms while
+   the process is alive, rejects missing exit/metric data, and records
+   `metrics_sampled` plus the PowerShell version.
+5. The default dual-view JIT run compiled 30 methods and completed Hello, but
+   a scheduling-sensitive `StringFactory` record was absent. That record was
+   not a correctness requirement and has been removed from the host marker;
+   the deterministic code-cache, successful-compile, output, and clean-return
+   markers remain.
+
+Post-fix Wine verification includes the native socket-fd reuse probe, five
+consecutive HandleLeak runs, NetProbe, IoProbe, dual-view JIT smoke 12/12, and
+J-1 Hello with 31 successful compilations. R1 remains a failed evidence set;
+only a newly built and returned R2 package can close native acceptance.
+
 ## Native Windows handoff
 
 The remaining host-only matrix is packaged by:
@@ -274,7 +340,7 @@ the J-1 diagnostic path, and the fourteen-case JIT matrix; twenty repeated
 default-JIT starts; per-process memory metrics and host pagefile data; fatal-log
 scanning; and recursive dump scanning. Execution and evidence-return
 instructions are in `tools/verify/win64_w013/W013_HOST_CHECKLIST.md`. This
-package is prepared but does not count as native acceptance until its returned
+package does not count as native acceptance until its returned
 `logs/RESULT_W013.txt` ends in `OVERALL PASS` and the complete logs are
 reviewed.
 
@@ -282,5 +348,5 @@ Stages A through E implement the accepted W-013 design. Fixed file-overlay over
 an ordinary `VirtualAlloc` reservation remains unsupported and is not used by
 the imageless/JIT path; any future image/OAT implementation that needs it must
 use placeholder APIs and rollback. Native Windows commit/pressure,
-protection/extent, repeated-start, and the remaining closure matrix still keep
-W-013 open.
+protection/extent, repeated-start, and the remaining R2 closure matrix still
+keep W-013 open.

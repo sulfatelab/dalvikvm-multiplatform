@@ -862,13 +862,13 @@ W-024 cleanup is also complete: native methods compile by default,
 matrix passes. Math.ceil/floor and the common registration table are restored.
 None of this justifies retaining the RWX J-1 path as the product default.
 
-## 13. Current status — 2026-07-24
+## 13. Current status — 2026-07-25
 
 ### Done
 
 | Item | Evidence |
 |------|----------|
-| J-1 single-view memory | JIT smoke 12/12; matrix 14/14 |
+| J-1 single-view memory | Native R1 found provider metadata written after RX restore; ART `27a1ac74a4` rebinding now uses `ScopedCodeCacheWrite`; post-fix Wine Hello passes with 31 successful compilations; native R2 pending |
 | D-1 r15 compiler TLS | 37/37 GS sites audited |
 | Managed/native JIT default | Corrected pagefile-section dual view; Hello about 28–30 successful records after native-gate removal |
 | Corrected dual-view integration | JIT smoke 12/12; matrix 14/14; protections checked with `VirtualQuery` |
@@ -888,7 +888,7 @@ None of this justifies retaining the RWX J-1 path as the product default.
 
 | Item | Blocker |
 |------|---------|
-| P5 mapping real-Windows acceptance | Mapping protections, mitigations, repeated-start/load, and code-cache pressure remain; the focused W-024 native-host subset is complete |
+| P5 mapping real-Windows acceptance | W-013 R1 was executed and reviewed; default dual view passed its compile/Hello path, but R1 exposed an independent J-1 metadata-write crash and runner defects. Those are fixed; R2 protections, metrics, repeated-start/load, and code-cache pressure remain |
 | Direct encoding checks | Add checks at JIT-root patch and CodeInfo construction sites |
 
 ### Current test summary
@@ -938,6 +938,7 @@ None of this justifies retaining the RWX J-1 path as the product default.
 | 2026-07-24 | Restore Math.ceil/floor as CriticalNative and remove `gMethodsWin`; Win64 and Linux use one source table and identical boot.jar bytes |
 | 2026-07-24 | Make per-method Win64 JIT compile records opt-in; smoke expands to 12/12 and verifies product-default silence |
 | 2026-07-24 | Wine fatal-tripwire audit shows legacy runtime-started InterpreterJni fallback is unreachable across `-Xint`, native ABI, tracing, and JVMTI suites, establishing the native-host test candidate |
+| 2026-07-25 | W-013 native R1 J-1 dump resolves to `ArtDetachMspaceMoreCoreProvider` writing executable-mspace metadata after the mapping returned to RX; attach/detach now run inside the existing `ScopedCodeCacheWrite` transition, with dual-view behavior unchanged |
 | 2026-07-24 | Native Windows 10 build 19044 tripwire matrix passes all nine cases with exact required native compile records and no crash dump; W-024 cleanup is authorized |
 | 2026-07-24 | ART `42a03f2ea0` restores exact upstream interpreter scope and common default native-JIT policy; final Win64 and Linux regressions pass and W-011/W-012/W-024 close |
 

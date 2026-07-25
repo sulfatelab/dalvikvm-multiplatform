@@ -3,7 +3,9 @@
 **Target:** Windows 10 version 1803 or later, x64
 
 **Purpose:** close the environment-dependent heap-memory acceptance remaining
-after W-013 Stages A–E and the Wine/Linux closure gates.
+after W-013 Stages A–E, the reviewed failed R1 run, and the post-R1 Wine/Linux
+repair gates. Do not reuse the R1 package built from root `dbca77c`; it contains
+the defects recorded in `RESULT.md`.
 
 ## Run
 
