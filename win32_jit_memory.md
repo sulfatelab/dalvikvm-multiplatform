@@ -568,7 +568,7 @@ The permanent ART configuration remains:
 
 Internal dlmalloc locks are redundant under that single-owner lock contract. A
 temporary `USE_SPIN_LOCKS=1` experiment was reverted after Wine regressions.
-W-013 Stages A through C removed the historical `_WIN32`/`WIN32` masking, the
+W-013 Stages A through D removed the historical `_WIN32`/`WIN32` masking, the
 global MoreCore owner lookup, and the implicit Windows anonymous low-address
 policy. dlmalloc now has embedding-safe Win32 defaults;
 ART explicitly compile-checks its MoreCore-only, page-granular, unlocked
@@ -577,8 +577,9 @@ mspace policy; and each JIT mspace stores its `JitMemoryRegion` provider in
 provider and rebind both mspaces to the destination before the temporary can be
 destroyed. Windows `MemMap` views now share whole-allocation ownership keyed by
 `AllocationBase`, so the logical R/RX and R/RW splits keep their complete
-section view alive and release it exactly once with `UnmapViewOfFile`. See
-[win32_heap_memory.md](win32_heap_memory.md) §§4–6.
+section view alive and release it exactly once with `UnmapViewOfFile`. Heap
+page-state changes now use the same `MemMap` abstraction, without changing the
+JIT dual-view topology. See [win32_heap_memory.md](win32_heap_memory.md) §§4–6.
 
 The JIT pagefile-section topology does not give dlmalloc ownership of the
 section or its views. `JitMemoryRegion` owns those `MemMap` objects, and each
@@ -869,7 +870,7 @@ None of this justifies retaining the RWX J-1 path as the product default.
 | Managed/native JIT default | Corrected pagefile-section dual view; Hello about 28–30 successful records after native-gate removal |
 | Corrected dual-view integration | JIT smoke 12/12; matrix 14/14; protections checked with `VirtualQuery` |
 | Section-layout probe | 64 MiB and non-64-KiB capacity cases pass under Wine; low primary remains contiguous under forced low-space fragmentation |
-| dlmalloc and `MemMap` ownership | W-013 Stages A–C complete: explicit MoreCore-only configuration, direct mspace-owner attachment, and `VirtualAlloc2`/shared whole-allocation ownership |
+| dlmalloc and `MemMap` ownership | W-013 Stages A–D complete: explicit MoreCore-only configuration, direct mspace-owner attachment, `VirtualAlloc2`/shared ownership, and explicit heap page-state operations |
 | Root-cause correction | JIT-root signed displacement plus latent CodeInfo overflow |
 | PE asm definitions | Windows-target generator test enforces `RUNTIME_INSTRUMENTATION_OFFSET=0x328` |
 | Threshold-zero CriticalNative | Direct visitor uses Win64 unified ordinals/home area; dlsym caller PC preserved; repeated J-1 and dual-view probes pass |

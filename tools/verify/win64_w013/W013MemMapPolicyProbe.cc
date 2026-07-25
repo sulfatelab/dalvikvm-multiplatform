@@ -23,6 +23,11 @@ bool Query(void* address, MEMORY_BASIC_INFORMATION* info) {
   return ::VirtualQuery(address, info, sizeof(*info)) == sizeof(*info);
 }
 
+bool HasProtection(void* address, DWORD expected) {
+  MEMORY_BASIC_INFORMATION info = {};
+  return Query(address, &info) && (info.Protect & 0xffu) == expected;
+}
+
 }  // namespace
 
 int main() {
@@ -32,6 +37,7 @@ int main() {
   uintptr_t anywhere_address = 0u;
   uintptr_t low_address = 0u;
   bool boundary_tested = false;
+  constexpr size_t kTransitionCycles = 32u;
 
   {
     constexpr size_t kAllocationSize = 64u * 1024u;
@@ -149,6 +155,47 @@ int main() {
   {
     const size_t page_size = art::MemMap::GetPageSize();
     error.clear();
+    art::MemMap transitions = art::MemMap::MapAnonymous(
+        "w013-range-transitions",
+        3u * page_size,
+        PROT_READ | PROT_WRITE,
+        /*low_4gb=*/false,
+        &error);
+    ok &= Check(transitions.IsValid(), error.c_str());
+    if (transitions.IsValid()) {
+      uint8_t* first = transitions.Begin();
+      uint8_t* middle = first + page_size;
+      uint8_t* last = middle + page_size;
+      first[0] = 0x11u;
+      middle[0] = 0x22u;
+      last[0] = 0x33u;
+      ok &= Check(transitions.ActivateRange(first, 0u), "zero-length activate failed");
+      ok &= Check(transitions.DeactivateRange(first, 0u), "zero-length deactivate failed");
+      ok &= Check(transitions.DiscardRange(first, 0u), "zero-length discard failed");
+      for (size_t i = 0; i < kTransitionCycles && ok; ++i) {
+        ok &= Check(transitions.DiscardRange(middle, page_size), "range discard failed");
+        ok &= Check(transitions.DeactivateRange(middle, page_size), "range deactivate failed");
+        ok &= Check(HasProtection(middle, PAGE_NOACCESS),
+                    "deactivated range is not PAGE_NOACCESS");
+        ok &= Check(transitions.DiscardRange(middle, page_size),
+                    "discard of deactivated range failed");
+        ok &= Check(HasProtection(middle, PAGE_NOACCESS),
+                    "discard changed deactivated range protection");
+        ok &= Check(first[0] == 0x11u && last[0] == 0x33u,
+                    "range transition changed adjacent pages");
+        ok &= Check(transitions.ActivateRange(middle, page_size), "range activate failed");
+        ok &= Check(HasProtection(middle, PAGE_READWRITE),
+                    "activated range is not PAGE_READWRITE");
+        middle[0] = static_cast<uint8_t>(0x40u + i);
+        ok &= Check(middle[0] == static_cast<uint8_t>(0x40u + i),
+                    "activated range is not writable");
+      }
+    }
+  }
+
+  {
+    const size_t page_size = art::MemMap::GetPageSize();
+    error.clear();
     art::MemMap reservation = art::MemMap::MapAnonymous(
         "w013-reservation", 3u * page_size, PROT_NONE, /*low_4gb=*/false, &error);
     ok &= Check(reservation.IsValid(), error.c_str());
@@ -246,6 +293,8 @@ int main() {
       ok &= Check(Query(old_tail, &info), "VirtualQuery(logical shrink tail) failed");
       ok &= Check(info.State != MEM_FREE,
                   "logical shrink partially released a VirtualAlloc reservation");
+      ok &= Check((info.Protect & 0xffu) == PAGE_NOACCESS,
+                  "logical shrink tail was not deactivated");
       shrunk.Reset();
       ok &= Check(Query(allocation_base, &info), "VirtualQuery(released shrink owner) failed");
       ok &= Check(info.State == MEM_FREE, "logical shrink owner was not wholly released");
@@ -256,9 +305,10 @@ int main() {
   if (!ok) {
     return 1;
   }
-  std::printf("W013_MEM_MAP_POLICY_PASS anywhere=%p low=%p boundary=%s\n",
+  std::printf("W013_MEM_MAP_POLICY_PASS anywhere=%p low=%p boundary=%s transitions=%zu\n",
               reinterpret_cast<void*>(anywhere_address),
               reinterpret_cast<void*>(low_address),
-              boundary_tested ? "tested" : "occupied");
+              boundary_tested ? "tested" : "occupied",
+              kTransitionCycles);
   return 0;
 }

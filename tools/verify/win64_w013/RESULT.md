@@ -1,6 +1,6 @@
 # W-013 Win64 heap-memory implementation
 
-**Status:** Stages A–C PASS; Stages D–E remain OPEN
+**Status:** Stages A–D PASS; Stage E and native closure stress remain OPEN
 **Date:** 2026-07-25
 **Host:** agent01
 
@@ -95,8 +95,41 @@ exactly-once final release.
 Known Stage-C boundary: `MapViewOfFileEx` cannot replace an ordinary
 `VirtualAlloc` reservation in place. Fixed file-backed overlay remains
 unsupported rather than being emulated unsafely; the imageless runtime and JIT
-pagefile-section path do not require it. Stage D still needs explicit
-activate/deactivate/discard range operations.
+pagefile-section path do not require it.
+
+## Stage D — explicit heap page-state operations
+
+ART commit: `9ea15456a2`
+
+Landed behavior:
+
+- `MemMap` exposes page-aligned `ActivateRange()`, `DeactivateRange()`, and
+  `DiscardRange()` operations with containment and zero-length validation;
+- Linux uses `mprotect()` and `madvise(MADV_DONTNEED)` behind those methods;
+- Windows uses `VirtualProtect()` and `DiscardVirtualMemory()` while retaining
+  the full committed reservation;
+- positive and negative `MallocSpace::MoreCore()` transitions use the owning
+  `MemMap`;
+- dlmalloc trim/clear and RosAlloc initial discard, page release, trim, clear,
+  and page-map release no longer call platform VM APIs directly;
+- RosAlloc carries a rebased pointer to its owning `MemMap` across space
+  construction; and
+- Windows `SetSize()`/`AlignBy()` discard and deactivate excluded pages before
+  shrinking the logical range.
+
+The focused probe now performs 32 discard/deactivate/activate cycles. It
+checks `PAGE_NOACCESS` and `PAGE_READWRITE` transitions, discard while already
+no-access, adjacent-page content preservation, write-after-reactivation, and
+logical-shrink tail protection.
+
+Observed under Wine:
+
+```text
+W013_MEM_MAP_POLICY_PASS anywhere=00007FFFFE7C0000 low=0000000000010000 boundary=tested transitions=32
+```
+
+The source gate rejects direct `mprotect()`/`madvise()` calls in malloc-space,
+dlmalloc-space, RosAlloc-space, and RosAlloc allocator transition paths.
 
 ## Integration verification
 
@@ -109,6 +142,7 @@ tools/verify/win64_phase4/run_threadheavy.sh
 tools/verify/win64_phase4/run_handleleak.sh
 cmake --build build/native --target art dalvikvm -j16
 tools/verify/linux_hello/run_imageless_hello.sh
+tools/verify/linux_hello/run_gcstress.sh
 ```
 
 Results:
@@ -118,9 +152,10 @@ Results:
   4-GiB boundary and exactly-once owner release;
 - Win64 JIT smoke under Wine: 12/12 PASS;
 - Win64 GCStress, ThreadHeavy, and HandleLeak under Wine: PASS;
-- Linux `libart.so` and `dalvikvm`: full rebuild PASS; and
-- Linux L-005 imageless Hello: PASS, exit 0.
+- Linux `libart.so` and `dalvikvm`: full rebuild PASS;
+- Linux L-005 imageless Hello: PASS, exit 0;
+- Linux GCStress: PASS, including repeated explicit CMS collections.
 
-Stages A through C do not close W-013. Explicit page-state operations, low-VA
-reduction, fixed file-overlay design if image/OAT loading needs it, native
-Windows stress, and the complete closure matrix remain.
+Stages A through D do not close W-013. Low-VA reduction, fixed file-overlay
+design if image/OAT loading needs it, native Windows commit/stress acceptance,
+and the complete closure matrix remain.

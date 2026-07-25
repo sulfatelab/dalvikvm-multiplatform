@@ -1,6 +1,6 @@
 # Win64 heap memory and embedded dlmalloc design — W-013
 
-**Status:** implementation in progress; Stages A–C complete, Stages D–E remain OPEN
+**Status:** implementation in progress; Stages A–D complete, Stage E remains OPEN
 **Updated:** 2026-07-25
 **Target baseline:** Windows 10 version 1803 or later (NTDDI_WIN10_RS4)
 **Related:** [win32_open_items.md](win32_open_items.md) W-013,
@@ -42,9 +42,10 @@ and Windows MoreCore growth uses page-size granularity. Stage B then attached
 every heap and JIT mspace directly to its owner and removed global owner
 discovery. Stage C replaced the implicit anonymous low-address policy and
 manual hole scan with explicit `VirtualAlloc2` constraints, and added shared
-whole-allocation ownership for Windows `MemMap` ranges. W-013 remains open
-until page-state transitions, the low-VA audit, and the closure matrix are
-complete.
+whole-allocation ownership for Windows `MemMap` ranges. Stage D then routed
+heap activation, deactivation, and discard through those owning mappings on
+both Windows and Linux. W-013 remains open until the low-VA audit and closure
+matrix are complete.
 
 ## 1. Goals and invariants
 
@@ -116,8 +117,9 @@ authority to create unrelated mappings.
 
 ## 3. Current implementation and remaining divergence
 
-Stages A through C removed the configuration, owner-discovery, and anonymous
-mapping-policy shortcuts. The remaining implementation divergence is:
+Stages A through D removed the configuration, owner-discovery, anonymous
+mapping-policy, and heap page-state shortcuts. The remaining implementation
+divergence is:
 
 | Area | Current behavior | Target behavior |
 |------|------------------|-----------------|
@@ -130,7 +132,8 @@ mapping-policy shortcuts. The remaining implementation divergence is:
 | low allocation | `VirtualAlloc2` applies `MEM_ADDRESS_REQUIREMENTS`; there is no manual hole scan or unrestricted high fallback | Complete in Stage C |
 | aligned anonymous maps | Windows passes the final alignment directly to `VirtualAlloc2`; there is no over-allocation/partial-release path | Complete in Stage C |
 | mapping ownership | Logical splits, reservation transfers, and reuse views share an owner keyed by `AllocationBase`; private mappings use whole `VirtualFree(MEM_RELEASE)` and section views use `UnmapViewOfFile` | Complete in Stage C |
-| logical shrink | `SetSize()` and `AlignBy()` retain the whole Windows allocation and shrink only the logical range | Stage D must deactivate and discard the excluded pages explicitly |
+| logical shrink | `SetSize()` and `AlignBy()` retain the whole Windows allocation, discard/deactivate excluded pages, and shrink only the logical range | Complete in Stage D |
+| heap page state | dlmalloc and RosAlloc growth, shrink, clear, and page release call `MemMap::ActivateRange()`, `DeactivateRange()`, and `DiscardRange()` | Complete in Stage D |
 | fixed file overlay | `MapViewOfFileEx` cannot replace an ordinary `VirtualAlloc` reservation in place | Remains unsupported; use an explicit placeholder design before enabling image/OAT paths that require this operation |
 | low metadata | Win64 currently forces ordinary arena pools, compiler metadata, LinearAlloc, and the card table low | Keep low placement only where an encoding or object-reference contract requires it |
 
@@ -283,11 +286,11 @@ For an aligned anonymous request, Stage C passes a direct `VirtualAlloc2`
 alignment requirement and allocates only the final size. Where a common ART
 operation logically shrinks a mapping, Stage C retains the original Windows
 owner for destruction and updates the logical `MemMap` range without an
-invalid partial release. Stage D must deactivate and discard the excluded
-pages; until then they remain part of the committed owner allocation under
-their previous protection even though they are outside the logical `MemMap`.
-The complete allocation is released exactly once when the final sharing
-`MemMap` is destroyed.
+invalid partial release. Stage D now discards those excluded pages and changes
+them to `PAGE_NOACCESS` before updating the logical range. They remain part of
+the committed owner allocation, so later activation does not introduce a new
+commit-failure point. The complete allocation is released exactly once when
+the final sharing `MemMap` is destroyed.
 
 Mapped section views remain owned by `UnmapViewOfFile`, not `VirtualFree`.
 Ownership kind must be known rather than guessed by trying both release APIs.
@@ -302,7 +305,7 @@ zero increment:     return current end
 negative increment: discard and deactivate [new_end, old_end), return old_end
 ```
 
-Add explicit `MemMap` range operations with platform backends:
+Stage D adds explicit `MemMap` range operations with platform backends:
 
 | Semantic operation | Linux backend | Windows backend |
 |--------------------|---------------|-----------------|
@@ -313,7 +316,11 @@ Add explicit `MemMap` range operations with platform backends:
 
 The callers retain common growth and trimming decisions; only the backend
 operation differs. Range methods validate page alignment, containment in the
-owning mapping, and zero-length behavior.
+owning mapping, and zero-length behavior. `MallocSpace::MoreCore()` now uses
+them for positive and negative growth. dlmalloc trimming and clear, RosAlloc
+page release/trim/clear, zygote-space tail setup, and Windows logical shrink
+also route through the owning `MemMap`; the allocator files no longer call
+`mprotect()` or `madvise()` directly for those transitions.
 
 ### 6.1 Initial commitment policy
 
@@ -449,9 +456,27 @@ imageless runtime and JIT pagefile-section path do not depend on that overlay.
 
 ### Stage D — make page-state transitions explicit
 
+**Completed:** 2026-07-25
+
 1. Add activate, deactivate, and discard range operations.
 2. Route malloc-space growth, shrink, clear, and trim through those operations.
-3. Retain full-capacity commit initially and measure native commit pressure.
+3. Retain full-capacity commit initially; keep native commit-pressure
+   measurement in the closure matrix.
+
+Landed as ART `9ea15456a2`. Linux maps use `mprotect()` and
+`madvise(MADV_DONTNEED)` behind `MemMap`; Windows maps use `VirtualProtect()`
+and `DiscardVirtualMemory()`. RosAlloc receives its owning `MemMap` so initial
+discard, free-page release, trim, clear, and negative MoreCore no longer bypass
+the platform abstraction. Full-capacity `MEM_RESERVE | MEM_COMMIT` remains the
+policy; native Windows commit-charge measurement remains part of the closure
+matrix rather than introducing lazy commitment in this stage.
+
+The focused Wine probe performs 32 discard/deactivate/activate cycles,
+including discard while `PAGE_NOACCESS`, verifies adjacent-page contents and
+protections, and checks that logical shrink leaves its excluded tail
+`PAGE_NOACCESS`. Win64 JIT smoke 12/12, GCStress, ThreadHeavy, HandleLeak, the
+Linux `-j16` build, Linux imageless Hello, and Linux GCStress pass. Evidence:
+`tools/verify/win64_w013/RESULT.md`.
 
 ### Stage E — reduce low-address use
 
@@ -462,8 +487,8 @@ imageless runtime and JIT pagefile-section path do not depend on that overlay.
 4. Add targeted range/encoding checks where a real constraint remains.
 
 Stages A through D are the W-013 correctness fix. Stage E is required before
-W-013 closes because the current implicit policy can otherwise hide regressions
-and exhaust the address range under stress.
+W-013 closes because the remaining blanket forced-low consumers can hide
+encoding regressions and exhaust the address range under stress.
 
 ## 10. Verification and closure bar
 
