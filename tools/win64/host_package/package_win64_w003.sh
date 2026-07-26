@@ -176,6 +176,10 @@ PY
   )
 }
 
+python3 "$REPO/tools/verify/win64_phase1/check_win32_cet_contract.py" \
+  --build "$PRODUCT_BUILD" \
+  --pe-root "$OUT"
+
 clean_runtime_outputs
 write_manifests
 python3 "$REPO/tools/verify/win64_phase4/check_w003_host_package.py" "$OUT"

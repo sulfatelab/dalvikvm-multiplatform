@@ -24,6 +24,7 @@ for src in libcore_hello3.c win_path.c win_fs_natives.c win_net_natives.c win_ru
   clang "${CFLAGS[@]}" -c "$src" -o "${src%.c}.obj"
 done
 clang++ --target=x86_64-pc-windows-msvc -shared -fuse-ld=lld \
+  -Xlinker /CETCOMPAT:NO \
   -L"$WIN64_DEV_ENV/xwin/sdk/lib/ucrt/x86_64" \
   -L"$WIN64_DEV_ENV/xwin/sdk/lib/um/x86_64" \
   -L"$WIN64_DEV_ENV/xwin/crt/lib/x86_64" \

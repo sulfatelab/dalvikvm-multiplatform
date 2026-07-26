@@ -56,6 +56,10 @@ OVERLAY = Overlay(
             "-Wl,-z,global",
         ],
         drop_ldflags_containing=["art_common/out", "--enable-new-dtags", "Wl,-z,", "-z ", "max-page-size", "z,max-page-size"],
+        # Current lld defaults to CET compatibility off, but ART's x86_64
+        # exception/deoptimization long jump cannot maintain a hardware shadow
+        # stack. Make that process contract explicit on every generated PE.
+        add_ldflags=["LINKER:/CETCOMPAT:NO"],
         art_defines=_ART_PUB + [
             "ART_PAGE_SIZE_AGNOSTIC=1",
             "ART_DEFAULT_GC_TYPE_IS_CMS",

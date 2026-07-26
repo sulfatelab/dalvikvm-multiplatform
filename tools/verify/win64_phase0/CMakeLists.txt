@@ -20,6 +20,7 @@ endif()
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_C_STANDARD 11)
+add_link_options("LINKER:/CETCOMPAT:NO")
 # Windows DLLs hide symbols by default; export all for the Phase 0 graph
 # (Linux .so default visibility). Refine with .def later if needed.
 set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)

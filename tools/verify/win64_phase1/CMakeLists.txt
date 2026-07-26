@@ -14,6 +14,10 @@ endif()
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+# ART cannot maintain CET user shadow stacks. Keep every executable/DLL built
+# by this directory explicitly non-CET-compatible instead of relying on lld's
+# current default.
+add_link_options("LINKER:/CETCOMPAT:NO")
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
@@ -108,6 +112,12 @@ set_target_properties(win64_posix_stubs PROPERTIES POSITION_INDEPENDENT_CODE ON)
 add_executable(win64_pthread_once_probe EXCLUDE_FROM_ALL
   "${_repo}/tools/verify/win64_phase4/pthread_once_probe.c")
 
+add_executable(win32_cet_policy_probe EXCLUDE_FROM_ALL
+  "${CMAKE_CURRENT_SOURCE_DIR}/win32_cet_policy_probe.cc"
+  "${MDVM_ART_WIN_RUNTIME}/cet_compat.cc")
+target_include_directories(win32_cet_policy_probe PRIVATE
+  "${MDVM_ART_WIN_RUNTIME}")
+
 include(${CMAKE_CURRENT_SOURCE_DIR}/phase1.cmake)
 
 add_executable(win64_w013_mem_map_probe EXCLUDE_FROM_ALL
@@ -186,6 +196,7 @@ endif()
 if(TARGET art)
   target_sources(art PRIVATE
     "${MDVM_ART_WIN_RUNTIME}/thread_windows.cc"
+    "${MDVM_ART_WIN_RUNTIME}/cet_compat.cc"
     "${MDVM_ART_WIN_RUNTIME}/runtime_windows.cc"
     "${MDVM_ART_WIN_RUNTIME}/monitor_windows.cc"
     "${MDVM_ART_WIN_OPENJDKJVM}/openjdkjvm_memory_windows.cc")

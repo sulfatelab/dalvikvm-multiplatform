@@ -117,6 +117,10 @@ class GlobalPolicy:
     drop_ldflags: list[str] = field(default_factory=list)
     # Substring-matched ldflag drops (for flags with embedded paths like rpath).
     drop_ldflags_containing: list[str] = field(default_factory=list)
+    # Link options injected into every non-static target. This is used for
+    # target-OS contracts that must not depend on linker defaults, such as the
+    # Win64 ART CET-shadow-stack exclusion marker.
+    add_ldflags: list[str] = field(default_factory=list)
 
     strip_lib_prefix: bool = True
 
@@ -165,6 +169,7 @@ def apply_module_policy(m: Module, pol: ModulePolicy, glob: GlobalPolicy) -> Mod
     m.cppflags.extend(pol.add_cppflags)
     m.conlyflags.extend(pol.add_conlyflags)
     m.ldflags.extend(pol.add_ldflags)
+    m.ldflags.extend(glob.add_ldflags)
     if pol.set_c_std is not None:
         m.c_std = pol.set_c_std
     if pol.set_cpp_std is not None:

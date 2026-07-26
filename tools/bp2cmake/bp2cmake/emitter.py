@@ -411,7 +411,10 @@ class Emitter:
             lines.append(")")
             lines.append("")
 
-        if m.ldflags:
+        # Static libraries are archived rather than linked. Keep global target
+        # link policy on PE/shared/executable links without emitting an invalid
+        # target_link_options() call for static archives.
+        if m.ldflags and kind != "static":
             lines.append(f"target_link_options({target} PRIVATE " + " ".join(m.ldflags) + ")")
             lines.append("")
 

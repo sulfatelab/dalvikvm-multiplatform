@@ -194,6 +194,10 @@ bash tools/win64/host_package/smoke_package_wine64.sh
 ```
 MD
 
+python3 "$REPO/tools/verify/win64_phase1/check_win32_cet_contract.py" \
+  --build "$BUILD" \
+  --pe-root "$OUT"
+
 python3 - <<PY
 import os, hashlib, json
 from pathlib import Path

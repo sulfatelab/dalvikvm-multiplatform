@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.20)
 project(Win64JvmtiForceProbe C)
 
+add_link_options("LINKER:/CETCOMPAT:NO")
+
 if(NOT CMAKE_C_COMPILER_ID MATCHES "Clang")
   message(FATAL_ERROR "Need LLVM clang (got ${CMAKE_C_COMPILER_ID})")
 endif()

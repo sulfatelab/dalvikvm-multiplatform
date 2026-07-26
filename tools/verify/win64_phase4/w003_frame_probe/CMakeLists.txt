@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.20)
 project(win64_w003_frame_probe C)
 
+add_link_options("LINKER:/CETCOMPAT:NO")
+
 if(NOT MDVM_REPO_ROOT)
   message(FATAL_ERROR "MDVM_REPO_ROOT is required")
 endif()

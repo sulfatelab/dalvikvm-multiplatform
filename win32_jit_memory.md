@@ -808,7 +808,7 @@ mitigation, and code-cache-load acceptance remains under W-025.
 
 Native W-025 mitigation runs must record that Hardware-enforced Stack
 Protection is disabled. CFG may be enabled and tested independently. An
-HSP-enabled process is expected to be rejected by W-010's early startup guard,
+HSP-enabled process is rejected by W-010's implemented early startup guard,
 not treated as a JIT mapping failure and not allowed to reach generated code.
 
 ### 12.5 Threshold-zero stress resolution

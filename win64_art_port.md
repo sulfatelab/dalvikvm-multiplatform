@@ -80,8 +80,10 @@ A release is not “full” until all of the following pass on native Windows:
 The current x86_64 product additionally requires Windows CET user shadow
 stacks (Hardware-enforced Stack Protection) to be completely disabled for the
 ART process. Compatibility, audit, and strict modes are unsupported and must
-be rejected before managed execution. This is a platform prerequisite, not an
-unmet W-025 acceptance feature; CFG remains separate.
+be rejected before managed execution. Explicit PE marking and the early
+fail-closed startup guard are implemented and locally verified; native
+forced-policy rejection remains pending acceptance. This is a platform
+prerequisite, not an unmet W-025 feature; CFG remains separate.
 
 The original plan allowed JIT/dex2oat to be a v1.1 gate. Current x86_64 quick,
 nterp, managed-JIT, and native-JIT entrypoints are correct and default-on;
@@ -750,7 +752,7 @@ the feasibility record, not as a current schedule.
 | Risk | Severity | Mitigation |
 |------|----------|------------|
 | VEH ≠ Linux signals subtlety | Critical | Diagnostic VEH/minidump support is landed, but generated-code translation remains W-010. The selected design reuses common `FaultManager` through a narrow first VEH and a non-owning view of the real `CONTEXT` plus AV kind, chains every unrecognized exception, and activates only with W-014's page; validate debugger ordering, negative AVs, stack budget, and repeated nterp/JIT NPE/SOE on native Windows. |
-| CET user shadow-stack mismatch | Critical | Current x86_64 `art_quick_do_long_jump` restores the regular stack and returns without synchronizing CET's protected return stack; W-010 also redirects `CONTEXT.Rip`/`Rsp`. Mark every project PE `/CETCOMPAT:NO`, inspect packaged DLLs, and reject any nonzero process HSP policy before ART threads/JIT. Compatibility, audit, and strict modes are unsupported; CFG is separate. |
+| CET user shadow-stack mismatch | Critical | Current x86_64 `art_quick_do_long_jump` restores the regular stack and returns without synchronizing CET's protected return stack; W-010 also redirects `CONTEXT.Rip`/`Rsp`. Stage 0 now marks every project PE `/CETCOMPAT:NO`, audits packaged DLLs, and rejects any nonzero process HSP policy before memory/thread/JIT startup. Compatibility, audit, and strict modes are unsupported; native forced-policy acceptance remains and CFG is separate. |
 | Windows stack discovery / growth differs from pthread stacks | Critical | W-014 rejects fibers, uses `GetCurrentThreadStackLimits()` plus a complete `VirtualQuery()` allocation walk, `_beginthreadex` reservation semantics and retained join handles, and dynamically selects a fixed `PAGE_NOACCESS` ART page above the preserved bottom exclusion/guard prefix; the moving one-shot Windows `PAGE_GUARD` is never reused. |
 | Win64 ABI assembly volume | Critical | x86_64 quick/nterp/JIT bridges are implemented; retain Linux/Win64 ABI matrices |
 | libcore native breadth | High | Product hybrid map tracks 82 implemented and 44 intentional ENOSYS methods |

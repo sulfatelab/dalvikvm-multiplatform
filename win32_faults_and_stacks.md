@@ -1,12 +1,13 @@
 # Win64 managed faults and ART stack design
 
-**Status:** design draft for W-010 and W-014
+**Status:** Stage 0 implemented and locally verified; W-010/W-014 Stages A-E remain design/implementation work
 **Created:** 2026-07-26
+**Updated:** 2026-07-26
 **Target:** x86_64 Windows 10 build 17134+
 **Product model:** imageless ART with nterp and JIT; MSVC ABI artifacts built by
 Clang/lld with LLVM libc++
 
-This document is the authoritative design draft for the coupled Windows
+This document is the authoritative design and implementation record for the coupled Windows
 managed-fault and native-stack work tracked as W-010 and W-014. The name uses
 "faults" rather than "sigchain" because Windows has no POSIX signal-chain
 facility to reproduce. The Windows equivalent is a cooperative vectored
@@ -316,13 +317,20 @@ The supported process contract is therefore exact:
 - CFG remains a separate mitigation. Supporting or testing CFG does not imply
   CET shadow-stack support.
 
-Current artifacts happen to satisfy only the image-marker half of this rule.
-lld 21 defaults to `/CETCOMPAT:NO`, and inspection of the current
-`dalvikvm.exe`, `art.dll`, and `c++.dll` finds no
-`IMAGE_DLL_CHARACTERISTICS_EX_CET_COMPAT` and no Guard EH-continuation table.
-The repository does not yet pass `/CETCOMPAT:NO` explicitly and has no early
-process-policy check, so the current state is not a completed or enforceable
-contract.
+Stage 0 now implements both enforceable halves of this rule. The generated
+Win64 graph, all handwritten Win64 CMake harnesses, and all direct Clang/lld
+PE links pass `/CETCOMPAT:NO` explicitly. A structural verifier audits those
+sources and Ninja link commands, then scans the selected build/package trees
+and LLVM libc++ for the CET-compatible extended characteristic. The runtime
+queries the process policy immediately after selecting the logger and before
+`MemMap::Init()`, ART thread startup, nterp publication, or JIT initialization.
+Every nonzero flag and every unexpected query/version failure is rejected.
+
+Local completion is intentionally not described as native acceptance. Wine
+reports the policy as disabled and exercises the allow path, but it cannot
+prove Windows Exploit Protection compatibility, audit, and strict modes. A
+native CET-capable Windows run must still force each rejected policy family
+and prove early bounded failure with no managed execution or dump.
 
 On Windows 10 version 2004/build 19041 and later, startup queries
 `GetProcessMitigationPolicy(GetCurrentProcess(),
@@ -1044,7 +1052,7 @@ necessary; do not increase it speculatively.
 
 ## 12. Implementation stages
 
-### Stage 0 — CET shadow-stack exclusion
+### Stage 0 — CET shadow-stack exclusion — implemented locally
 
 - Add explicit `/CETCOMPAT:NO` to every project Win64 executable and DLL link
   target instead of relying on lld's current default.
@@ -1068,6 +1076,48 @@ Clean completion criteria:
 - an HSP-disabled native process passes the startup guard;
 - compatibility, audit, and strict HSP policies are rejected before managed
   execution, without relying on a late control-protection exception or dump.
+
+Implementation and local evidence (2026-07-26):
+
+- `GlobalPolicy.add_ldflags` injects `LINKER:/CETCOMPAT:NO` into every
+  generated non-static target; static archives intentionally receive no link
+  options.
+- Nine handwritten Win64 CMake harnesses and three direct Clang/lld links use
+  the same explicit option.
+- The base Phase-3 host packager and the focused W-002/W-003/W-004/W-013
+  packagers invoke the PE audit before writing their final manifests/archives.
+  A synthetic `/CETCOMPAT` PE is rejected by the same package scan.
+- `cet_compat.cc` separates Win32 API observation from a deterministic policy
+  decision. It obtains the real build number through `RtlGetVersion`, accepts
+  only zero flags, accepts `ERROR_INVALID_PARAMETER` only below build 19041,
+  and fails closed for unknown versions, future nonzero bits, or unexpected
+  query failures.
+- `Runtime::Init()` runs the guard after logger selection and before
+  `MemMap::Init()` and thread/JIT initialization. Rejection returns normal
+  startup failure rather than deliberately triggering a control-protection
+  exception.
+- The focused policy probe covers disabled, every current policy-bit family,
+  a future/reserved bit, old-build unavailability, and failure cases. Under
+  Wine it reports build 19043, zero flags, and `PASS`.
+- The structural/package verifier reports 9 CMake harnesses, 3 direct links,
+  5 enforced host packagers, 17 Ninja PE link targets, and 45 inspected PE
+  files with no CET-compatible marker. The selected Win64 build completed 321
+  steps and `dalvikvm
+  -showversion` reports `ART version 2.1.0 x86_64` under Wine.
+- The complete Phase-4 Wine suite passes after the change, including W-002,
+  W-003 frame/XMM matrices, GC/thread/handle stress, intentional crash gates,
+  and GoldenApp. The Linux rebuild, no-op rebuild, and `dalvikvm -showversion`
+  also pass.
+
+Remaining Stage 0 acceptance:
+
+- run the package on native Windows 10 build 19041+ with HSP disabled;
+- force compatibility, audit, strict, context-IP-validation, and representative
+  future/nonzero policy states in child processes and verify early rejection;
+- prove rejected starts create no `.dmp` and execute no Java/JIT work.
+
+Those native checks are the acceptance blocker. They do not block starting
+Stage A because the build and early-runtime enforcement are now present.
 
 ### Stage A — bounds, creator, and pthread lifetime
 
@@ -1237,9 +1287,10 @@ and debugger evidence.
 
 | File | Planned responsibility |
 |------|------------------------|
-| `overlay/port_policy_windows.py` and Win64 CMake harnesses | Explicit `/CETCOMPAT:NO` on every generated and handwritten executable/DLL target; no accidental linker-default dependency |
+| `overlay/port_policy_windows.py`, `tools/bp2cmake`, and Win64 CMake/shell harnesses | Implemented explicit `/CETCOMPAT:NO` on every generated and handwritten executable/DLL target; static archives excluded |
+| `runtime/multiplatform/windows/cet_compat.{h,cc}` | Implemented process-policy observation and fail-closed decision logic, independently probeable |
 | `runtime/multiplatform/windows/sigchain_windows.cc` | ART special-SIGSEGV facade, VEH handle, promotion/removal, exact exception filter |
-| `runtime/multiplatform/windows/runtime_windows.cc` | Earliest CET/HSP policy rejection plus fatal UEF/minidump policy; call platform fault initialization if needed |
+| `runtime/multiplatform/windows/runtime_windows.cc` | Implemented earliest CET/HSP policy rejection; later fatal UEF/minidump separation and platform fault initialization |
 | `runtime/multiplatform/windows/fault_handler_windows.cc` | Optional split of dispatcher/adapter if `sigchain_windows.cc` becomes too broad |
 | `runtime/multiplatform/windows/fault_handler_windows.h` | Windows-only non-owning context view and documented AV-kind constants; no common-header Win32 leakage |
 | `runtime/arch/x86/fault_handler_x86.cc` | Win64 non-owning context view, real `CONTEXT` PC/SP access, AV-kind and protected-page checks |
@@ -1249,6 +1300,7 @@ and debugger evidence.
 | `compat/include/pthread.h` | Opaque Windows `pthread_t` and strict attribute contract |
 | `compat/src/win64_posix_stubs.c` | `_beginthreadex`, handle lifetime, join/detach, stack attributes |
 | `runtime/runtime.cc` | Atomic managed-fault capability and nterp/JIT activation policy |
+| `tools/verify/win64_phase1/check_win32_cet_contract.py` and `win32_cet_policy_probe.cc` | Implemented link/PE audit plus deterministic and actual-policy probe |
 
 The exact split between `sigchain_windows.cc` and
 `fault_handler_windows.cc` is an implementation detail. There must still be

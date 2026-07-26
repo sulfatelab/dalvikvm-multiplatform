@@ -23,6 +23,7 @@ endif()
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+add_link_options("LINKER:/CETCOMPAT:NO")
 
 get_filename_component(_repo "${CMAKE_CURRENT_SOURCE_DIR}/../../.." ABSOLUTE)
 set(MDVM_NATIVE_SRC_ROOT_DIR "${_repo}/vendor" CACHE PATH "")

@@ -49,6 +49,7 @@ clang --target=x86_64-pc-windows-msvc -std=c11 -O2 \
   -I"$REPO/vendor/external/dlmalloc" \
   -nostdlib -fuse-ld=lld-link \
   -Xlinker /entry:mainCRTStartup -Xlinker /subsystem:console \
+  -Xlinker /CETCOMPAT:NO \
   -L"$WIN64_DEV_ENV/xwin/sdk/lib/um/x86_64" \
   -L"$WIN64_DEV_ENV/xwin/sdk/lib/ucrt/x86_64" \
   -L"$WIN64_DEV_ENV/xwin/crt/lib/x86_64" \

@@ -840,6 +840,13 @@ must explicitly use `/CETCOMPAT:NO`, and startup must reject every nonzero
 separate W-025 mitigation; `/guard:ehcont`, dynamic JIT CET-range registration,
 IBT, and `-fcf-protection` do not repair ART's shadow-stack mismatch.
 
+The Stage 0 enforcement is implemented: all generated and handwritten project
+PE links use explicit `/CETCOMPAT:NO`, the selected package/LLVM libc++ scan
+finds no CET-compatible marker, and `Runtime::Init()` fails closed on every
+nonzero or unexpectedly unavailable policy before memory/thread/JIT startup.
+Wine exercises the disabled-policy allow path; native compatibility/audit/
+strict rejection remains pending acceptance.
+
 JIT deopt flags (`THREAD_DEOPT_CHECK_REQUIRED_OFFSET`) stay Thread fields accessed via self base.
 
 ---
@@ -934,8 +941,9 @@ Quick entrypoint **asm prologues** are where these differences are centralized.
 4. **CET / shadow stack / CFG policy:** **CLOSED as a product contract.** CET
    user shadow stacks are unsupported and Hardware-enforced Stack Protection
    must be completely disabled for the ART process; compatibility, audit, and
-   strict modes are rejected. CFG and dynamic-code hardening remain separate
-   W-025 work.
+   strict modes are rejected. Build and startup enforcement is implemented;
+   native forced-policy acceptance remains pending. CFG and dynamic-code
+   hardening remain separate W-025 work.
 5. **Wine sufficiency:** **CLOSED as policy** — Wine is a development gate, not
    final product acceptance. Focused native W-024/W-013 matrices pass; broader
    host acceptance remains tracked separately.

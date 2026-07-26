@@ -34,6 +34,10 @@ dlmalloc_commit=$(git -C "$REPO/vendor/external/dlmalloc" rev-parse HEAD)
 win64_build=$BUILD
 EOF
 
+python3 "$REPO/tools/verify/win64_phase1/check_win32_cet_contract.py" \
+  --build "$BUILD" \
+  --pe-root "$OUT"
+
 OUT_DIR="$OUT" python3 - <<'PY'
 import hashlib
 import json
