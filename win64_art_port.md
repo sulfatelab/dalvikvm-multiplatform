@@ -5,9 +5,10 @@ Product tree: **dalvikvm-multiplatform** (nested vendor + artmp_*).
 > **Arch lock:** **64-bit only** (`x86_64-pc-windows-msvc`, PE32+). “Win32 API” below means the Windows platform API on x64, not a 32-bit product.
 
 Status: historical feasibility and phased-port record; Phases 0–3 gate-complete,
-Phase 4 Wine-complete with focused native W-024/W-013 acceptance, and x86_64
-quick/nterp/managed/native JIT enabled by default
-Updated: 2026-07-26
+Phase 4 Wine-complete with focused native W-024/W-013 acceptance, x86_64
+quick/nterp/managed/native JIT enabled by default, and W-010 Stage C focused
+Wine verification; generated-fault activation remains open
+Updated: 2026-07-27
 
 **Living tracker (leftovers + temporary workarounds):** [win32_open_items.md](win32_open_items.md)
 Product goal (owner requirement): **full native Windows NT support** for this repo’s ART runtime — a real `dalvikvm.exe` + DLLs + `boot.jar` that runs plain Java on Win32/Win64 **without** Android platform APIs and **without** WSL/VM indirection.
@@ -679,8 +680,10 @@ Each phase has a kill-or-continue gate. This is the execution roadmap when imple
   implicit-null and stack-overflow fault translation did not land and remains
   W-010. W-014 Stages A-B have since implemented accurate Windows stack
   bounds, requested reservation sizing, pthread lifetime, measured excluded-low
-  accounting, the fixed ART protected page, and detach restoration. Native
-  A-B acceptance and W-010 Stages C-D remain. Their selected coupled design is
+  accounting, the fixed ART protected page, and detach restoration. The
+  dormant W-010 Stage C exact-record/live-`CONTEXT` adapter is also
+  implemented. Native A-B/C acceptance and W-010 Stage D activation remain.
+  Their selected coupled design is
   [win32_faults_and_stacks.md](win32_faults_and_stacks.md).
 - MemMap extensions for heap + boot image optional (imageless OK).
 - Minimal JNI registration; **reduced boot.jar** if needed to reach Hello, then grow.
@@ -720,7 +723,7 @@ all product paths. Windows NIO.2 remains a non-goal.
 ### Phase 4 — Hardening (2–4 months) — **WINE COMPLETE; FOCUSED NATIVE SUBSETS PASS**
 
 - GC stress, multi-thread stress, crash dumps, resource leaks handles — **PASS** under wine64 (`tools/verify/win64_phase4/`).
-- Crash path: VEH diagnostics + unhandled filter + **MiniDumpWriteDump** to `run/crash/*.dmp` (`runtime_windows.cc`).
+- Crash path: separate diagnostic VEH plus predecessor-preserving unhandled filter and **MiniDumpWriteDump** to `run/crash/*.dmp` (`runtime_windows.cc`); the dormant W-010 managed VEH/context adapter has a focused Wine gate but is not product-enabled.
 - Performance smoke (arraycopy/string churn) **PASS**.
 - **Gate:** A5–A8 stable under Wine. Focused native Windows W-024 JNI/JVMTI and
   W-013 heap/JIT/handle/repeated-start matrices pass; the broader general
@@ -753,7 +756,7 @@ the feasibility record, not as a current schedule.
 
 | Risk | Severity | Mitigation |
 |------|----------|------------|
-| VEH ≠ Linux signals subtlety | Critical | Diagnostic VEH/minidump support is landed, but generated-code translation remains W-010. The selected design reuses common `FaultManager` through a narrow first VEH and a non-owning view of the real `CONTEXT` plus AV kind, chains every unrecognized exception, and activates only with W-014's page; validate debugger ordering, negative AVs, stack budget, and repeated nterp/JIT NPE/SOE on native Windows. |
+| VEH ≠ Linux signals subtlety | Critical | Diagnostic VEH/minidump support and the dormant W-010 exact-record/non-owning-`CONTEXT` adapter are landed and Wine-verified, but generated-code translation remains disabled. The selected design reuses common `FaultManager`, chains every unrecognized exception, validates R15 and the W-014 page, and still needs atomic activation, debugger ordering, negative AVs, stack budget, and repeated nterp/JIT NPE/SOE on native Windows. |
 | CET user shadow-stack mismatch | Critical | Current x86_64 `art_quick_do_long_jump` restores the regular stack and returns without synchronizing CET's protected return stack; W-010 also redirects `CONTEXT.Rip`/`Rsp`. Stage 0 now marks every project PE `/CETCOMPAT:NO`, audits packaged DLLs, and rejects any nonzero process HSP policy before memory/thread/JIT startup. Compatibility, audit, and strict modes are unsupported; native forced-policy acceptance remains and CFG is separate. |
 | Windows stack discovery / growth differs from pthread stacks | Critical | W-014 Stages A-B reject fibers, use `GetCurrentThreadStackLimits()` plus a complete `VirtualQuery()` allocation walk, apply `_beginthreadex` reservation semantics with retained join handles/tagged external identities, pass thread-pool reservation sizes, measure the bottom exclusion, and install/restore a verified fixed `PAGE_NOACCESS` page without adopting Windows' moving one-shot `PAGE_GUARD`. Native small/default/large reservation, guard-growth, and detach/reattach acceptance remains. |
 | Win64 ABI assembly volume | Critical | x86_64 quick/nterp/JIT bridges are implemented; retain Linux/Win64 ABI matrices |
@@ -917,6 +920,7 @@ broader JIT-memory hardening remains W-025 and is maintained in
 
 ---
 
-*Updated 2026-07-25: Phases 0–3 gated; Phase 4 Wine hardening complete;
-focused native W-024 and W-013 matrices pass; broader H-001/W-025 host work
-remains.*
+*Updated 2026-07-27: Phases 0–3 gated; Phase 4 Wine hardening complete;
+focused native W-024 and W-013 matrices pass; W-010 Stage C exact-record/live
+context probes pass under Wine while generated-fault activation and broader
+H-001/W-025 host work remain.*

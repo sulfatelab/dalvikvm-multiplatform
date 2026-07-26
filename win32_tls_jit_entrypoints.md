@@ -2,7 +2,7 @@
 
 **Status:** Win64 x86_64 quick invoke, nterp, managed JIT, and native JIT
 implemented and product-default; other Windows ISAs remain design-only
-**Updated:** 2026-07-26
+**Updated:** 2026-07-27
 **Scope:** Record the cross-ISA design and the implemented x86_64 contracts.
 **Related:** [win64_art_port.md](win64_art_port.md) (product phases),
 [win32_jit_memory.md](win32_jit_memory.md) (implemented code-cache design), and
@@ -816,19 +816,24 @@ acceptance remains open.
 
 ### 6.10 Exception delivery interaction
 
-VEH is currently used only for Win64 crash diagnostics. It logs selected
-first-chance exceptions and returns `EXCEPTION_CONTINUE_SEARCH`; it does not
-yet translate generated-code faults. Managed soft throws still use ART's
-`Thread::exception_` and delivery entrypoints.
+Win64 now has two deliberately separate exception paths. The runtime-owned
+diagnostic VEH logs selected first-chance exceptions and returns
+`EXCEPTION_CONTINUE_SEARCH`. The dormant W-010 special-`SIGSEGV` facade owns a
+second managed VEH that filters exact continuable access violations and adapts
+the live `CONTEXT` into common `FaultManager`; it is exercised by focused
+probes but product implicit checks remain disabled. Managed soft throws still
+use ART's `Thread::exception_` and delivery entrypoints.
 
 This still creates a stack-overflow policy mismatch: runtime initialization
 disables Windows implicit SO checks, while the x86_64 optimizing backend and
 nterp emit the normal unconditional
 `RSP - ART_STACK_OVERFLOW_GAP_x86_64` probe. W-014 Stage B now installs the
-fixed page and makes that eventual low-stack fault deterministic, but the
-diagnostic-only VEH cannot translate it. The switch interpreter instead uses
-explicit `Thread::stack_end_` comparisons. W-010 Stages C-D must close this
-execution-mode split before deep generated recursion is a supported path.
+fixed page and makes that eventual low-stack fault deterministic. Stage C can
+classify and adapt the record, but runtime policy still installs no generated
+stack/null handlers while implicit checks remain disabled. The switch
+interpreter instead uses explicit `Thread::stack_end_` comparisons. W-010
+Stage D must close this execution-mode split before deep generated recursion
+is a supported path.
 
 The selected W-010 design is a narrow ART `SIGSEGV` facade over a first
 process-wide VEH. It filters only continuable access violations, passes a
@@ -844,9 +849,9 @@ Native `EXCEPTION_STACK_OVERFLOW`, `EXCEPTION_GUARD_PAGE`, execute AV, and
 native/unregistered faults continue through Windows debugger/VEH/SEH policy.
 Expected implicit faults do not run first-chance logging or minidump code. The
 selected fatal UEF design is separate and chains the previous process filter.
-Stage A already removes the current diagnostic VEH before `art.dll` unload and
-restores ART's predecessor without clobbering a later host UEF; chaining from
-the current fatal UEF remains Stage C work.
+Stage A removes the current diagnostic VEH before `art.dll` unload and restores
+ART's predecessor without clobbering a later host UEF; the UEF now calls its
+predecessor after the best-effort dump, or returns search when none exists.
 
 W-010 and W-014 activate atomically for the normal nterp/JIT product. The
 dormant page and adapter may land separately, but implicit null/SO flags stay
@@ -873,6 +878,11 @@ The Stage 0 enforcement is implemented: all generated and handwritten project
 PE links use explicit `/CETCOMPAT:NO`, the selected package/LLVM libc++ scan
 finds no CET-compatible marker, and `Runtime::Init()` fails closed on every
 nonzero or unexpectedly unavailable policy before memory/thread/JIT startup.
+Stage C focused Wine evidence also passes: the deterministic record probe
+passes all eight cases, and the live VEH/context probe forwards two real page
+faults, redirects `Rip`, returns `Rax == 0`, survives promotion, and removes
+the action cleanly. Stage D must still gate and exercise generated nterp/JIT
+NPE/SOE paths.
 Wine exercises the disabled-policy allow path; native compatibility/audit/
 strict rejection remains pending acceptance.
 

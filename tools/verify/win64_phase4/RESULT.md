@@ -1,7 +1,7 @@
 # Win64 Phase 4 — RESULT
 
-**Status:** **WINE COMPLETE; FOCUSED NATIVE SUBSETS ACCEPTED** — A5–A8 and managed/native JIT hardening gates pass; W-002, W-003, W-004, and W-024 native closure matrices are accepted
-**Date:** 2026-07-26
+**Status:** **WINE COMPLETE; FOCUSED NATIVE SUBSETS ACCEPTED** — A5–A8 and managed/native JIT hardening gates pass; W-002, W-003, W-004, and W-024 native closure matrices are accepted; W-010 Stage C adapter is focused-Wine verified and remains dormant
+**Date:** 2026-07-27
 **Depends on:** Phase 3 complete (real Win10 G12 goldens)
 
 ## Scope (from win64_art_port §Phase 4)
@@ -29,6 +29,7 @@
 | W-002 OSR matrix | **PASS, 8/8** | `run_w002_osr_probe.sh` |
 | W-002 attached-thread matrix | **PASS, 8/8** | `run_w002_attach_probe.sh`; each raw thread now detaches, uses native stack, and reattaches |
 | W-014 thread reservation/lifetime/fixed page | **PASS** | `run_thread_stack_probe.sh` |
+| W-010 dormant fault record/context adapter | **PASS** | `run_fault_adapter_probe.sh` (`failures=0 cases=8`; live probe `calls=2 first=0 second=0`) |
 | Full suite | **PASS** | `run_all_wine_gates.sh` |
 
 Evidence: `evidence/all_wine_gates.txt`, `evidence/crashnative.txt`
@@ -56,6 +57,7 @@ PASS native_crash_aborts
 | W-003 XMM runtime sentinel | `w003_xmm_sentinel/`; `run_w003_xmm_sentinel.sh` |
 | W-003 native package and evidence | `package_win64_w003.sh`; `evidence/w003_host/ACCEPTANCE.md` |
 | W-014 Stages A-B stack/pthread/page gate | `../win64_phase1/win32_thread_stack_probe.c`; `../win64_phase1/win32_stack_page_probe.cc`; `../win64_phase1/win32_stack_page_fault_probe.S`; `run_thread_stack_probe.sh` |
+| W-010 Stage C adapter and probes | `../win64_phase1/win32_fault_record_probe.cc`; `../win64_phase1/win32_sigchain_probe.cc`; `run_fault_adapter_probe.sh`; `vendor/art/runtime/multiplatform/windows/sigchain_windows.cc` |
 
 ## Host
 
@@ -95,8 +97,11 @@ sentinel runs. See `evidence/w003_host/ACCEPTANCE.md`.
 
 ## Next
 
-- Complete W-014 Stages A-B native acceptance, then implement the dormant
-  W-010 VEH/context adapter in Stage C.
+- Keep W-010 dormant while implementing the atomic Stage D capability gate;
+  prove generated nterp/JIT NPE/SOE and negative/chain cases before enabling
+  implicit checks.
+- Complete W-014 Stages A-B native acceptance and W-010 native Stage C/E
+  acceptance on Windows 10/current Windows.
 - Complete W-025 broader JIT-mapping native acceptance and hardening
 
 ## Multiplatform re-run (2026-07-17)

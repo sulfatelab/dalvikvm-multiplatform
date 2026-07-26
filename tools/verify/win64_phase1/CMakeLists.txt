@@ -122,6 +122,20 @@ add_executable(win32_stack_page_probe EXCLUDE_FROM_ALL
 target_include_directories(win32_stack_page_probe PRIVATE
   "${MDVM_ART_WIN_RUNTIME}")
 
+add_executable(win32_fault_record_probe EXCLUDE_FROM_ALL
+  "${CMAKE_CURRENT_SOURCE_DIR}/win32_fault_record_probe.cc")
+target_include_directories(win32_fault_record_probe PRIVATE
+  "${MDVM_ART_DIR}")
+
+add_executable(win32_sigchain_probe EXCLUDE_FROM_ALL
+  "${CMAKE_CURRENT_SOURCE_DIR}/win32_sigchain_probe.cc"
+  "${CMAKE_CURRENT_SOURCE_DIR}/win32_stack_page_fault_probe.S")
+target_include_directories(win32_sigchain_probe PRIVATE
+  "${MDVM_ART_DIR}"
+  "${MDVM_ART_ROOT_DIR}/art/sigchainlib"
+  "${MDVM_COMPAT_INCLUDE_DIR}")
+target_link_libraries(win32_sigchain_probe sigchain)
+
 add_executable(win32_cet_policy_probe EXCLUDE_FROM_ALL
   "${CMAKE_CURRENT_SOURCE_DIR}/win32_cet_policy_probe.cc"
   "${MDVM_ART_WIN_RUNTIME}/cet_compat.cc")
@@ -238,7 +252,8 @@ if(TARGET sigchain)
   target_sources(sigchain PRIVATE
     "${MDVM_ART_WIN_RUNTIME}/sigchain_windows.cc")
   target_include_directories(sigchain PUBLIC
-    "${MDVM_ART_ROOT_DIR}/art/sigchainlib")
+    "${MDVM_ART_ROOT_DIR}/art/sigchainlib"
+    "${MDVM_ART_DIR}")
 endif()
 if(TARGET procinfo)
   target_sources(procinfo PRIVATE

@@ -1,9 +1,10 @@
 # Win64 managed faults and ART stack design
 
-**Status:** Stage 0 and W-014 Stages A-B implemented and locally verified;
-native A-B acceptance and Stages C-E remain
+**Status:** W-010 Stage C adapter and W-014 Stages A-B implemented and locally
+verified under Wine; implicit-fault activation, native acceptance, and Stages
+D-E remain
 **Created:** 2026-07-26
-**Updated:** 2026-07-26
+**Updated:** 2026-07-27
 **Target:** x86_64 Windows 10 build 17134+
 **Product model:** imageless ART with nterp and JIT; MSVC ABI artifacts built by
 Clang/lld with LLVM libc++
@@ -186,20 +187,25 @@ no-op-protection workarounds:
   transitions. `Thread` teardown directly restores and verifies the original
   reserved or committed state before an external native thread can continue.
 
-The remaining tree still violates the complete managed-fault contract:
+The current tree now has the dormant W-010 adapter, but the product capability
+is intentionally not enabled yet:
 
-- `runtime_windows.cc` installs a diagnostic VEH that logs selected
-  first-chance exceptions and always continues the search.
-- `sigchain_windows.cc` drops every registration/removal request.
-- Runtime initialization forces implicit null, stack-overflow, and suspend
-  flags off, but Win64 nterp and optimizing code still contain their normal
-  implicit accesses.
+- `sigchain_windows.cc` owns one immutable special-`SIGSEGV` action and a
+  first VEH. It filters exact continuable access violations, adapts the real
+  Win64 `CONTEXT`, supports promotion/removal, and continues the search for
+  every unsupported or unrecognized exception.
+- `runtime_windows.cc` still owns a separate diagnostic VEH. It may log fatal
+  first-chance events, but it never translates managed faults. The fatal UEF
+  writes a best-effort dump and chains to its predecessor, or returns search.
+- Runtime initialization still forces implicit null, stack-overflow, and
+  suspend flags off. Consequently nterp and optimizing code retain their
+  Linux-shaped implicit accesses, while the dormant adapter is exercised only
+  by focused probes and cannot yet turn product NPE/SOE faults into Java
+  exceptions.
 
-The remaining defects explain why nterp's implicit-null instruction can
-escape as a native AV and why the current unconditional stack probes still
-cannot provide a managed overflow path. The fixed page now makes the eventual
-stack fault deterministic and classifiable, but Stage C must add the dormant
-W-010 adapter before Stage D can translate or activate that probe.
+The adapter is therefore a real Stage C implementation, not a product
+activation. Stage D must add the atomic capability gate and then prove the
+generated-code paths with native Windows evidence.
 
 ## 5. Windows contracts and conclusions
 
@@ -484,7 +490,9 @@ registers:
   no managed user remains.
 - `EnsureFrontOfChain(SIGSEGV)` performs best-effort promotion by registering a
   new first VEH and only then removing the old handle. It must retain the old
-  registration if the new registration fails.
+  registration if the new registration fails. Failure to remove the old handle
+  after the new one was installed is fatal, because otherwise an untracked VEH
+  callback could survive runtime teardown and later call unloaded code.
 - `SkipAddSignalHandler()` has no Windows signal-interposition behavior. It is
   an explicit compatibility no-op, not an indication that external handlers
   are hidden.
@@ -679,9 +687,9 @@ later.
 Stage A already closes the basic unload hazard: runtime teardown removes the
 diagnostic VEH while `art.dll` is executable and restores ART's predecessor
 only if ART is still the current UEF. If an embedding application installed a
-later UEF, teardown preserves that later filter. The current fatal UEF still
-terminates through `EXCEPTION_EXECUTE_HANDLER`; chaining the predecessor after
-the best-effort dump remains part of Stage C's diagnostics separation.
+later UEF, teardown preserves that later filter. The fatal UEF now calls the
+saved predecessor after the best-effort dump when one exists, and otherwise
+returns `EXCEPTION_CONTINUE_SEARCH`.
 
 An opt-in diagnostic build may add a final observer VEH or a preallocated
 record ring, but it must be off by default and must not run before the managed
@@ -1258,17 +1266,35 @@ real Windows bottom layouts, small/default/large reservations, guard growth,
 reserved-page restoration, stack budgets, and detach/reattach behavior. That
 evidence belongs to Stage E and is not implied by Wine.
 
-### Stage C — dormant W-010 adapter
+### Stage C — dormant W-010 adapter — implemented locally (2026-07-27)
 
-- Implement the `sigchain_windows` special-action facade and managed VEH
-  registration/promotion lifecycle. Basic teardown removal is already landed.
-- Add the non-owning real-`CONTEXT` view to the x86_64 handler.
-- Add recursion protection and exact record filtering.
-- Run synthetic registered-range null/stack faults without enabling the full
-  product mode.
-- Separate first-chance translation from UEF/minidump diagnostics.
+- `sigchain_windows.cc` now owns the special-action facade and managed VEH
+  registration, promotion, publication, and removal lifecycle. Unsupported
+  signals fail clearly instead of disappearing in a stub.
+- `fault_handler_windows.h` defines the non-owning real-`CONTEXT` view and the
+  documented read/write access constants without leaking Windows SDK types to
+  common headers.
+- The x86_64 handler reads and writes `CONTEXT.Rip`/`Rsp`/`Rax` in place,
+  preserves the Win64 `R15 == Thread*` managed-self invariant, rejects nested
+  dispatch per thread, and requires stack faults to be reads whose exact
+  address is inside the recorded protected page.
+- The VEH performs allocation-free exact filtering for continuable access
+  violations, builds only the small synchronous `siginfo_t` view, and returns
+  search for execute faults, native/unregistered AVs, guard/stack-overflow
+  exceptions, and all unrelated exceptions.
+- `win32_fault_record_probe` covers eight deterministic positive/negative
+  record cases. `win32_sigchain_probe` faults a real `PAGE_NOACCESS` page twice,
+  verifies live context redirection and `Rax` forwarding, calls promotion
+  between faults, and then removes the action. Both pass under Wine.
+- The runtime capability remains dormant: Windows implicit null/SO/suspend
+  flags stay disabled, so no product-generated fault is translated yet.
+- Fatal diagnostics remain separate. The diagnostic VEH continues search, and
+  the UEF writes a best-effort dump then invokes the predecessor or returns
+  search.
+- The complete Phase-4 Wine aggregate passes with the new W-010 gate, and the
+  shared Linux `art`/`dalvikvm` rebuild plus `dalvikvm -showversion` pass.
 
-### Stage D — atomic product activation
+### Stage D — atomic product activation — next
 
 - Enable Win64 implicit null and stack-overflow flags.
 - Register handlers in Linux order: stack before null (suspend remains off).
@@ -1392,11 +1418,11 @@ and debugger evidence.
 |------|------------------------|
 | `overlay/port_policy_windows.py`, `tools/bp2cmake`, and Win64 CMake/shell harnesses | Implemented explicit `/CETCOMPAT:NO` on every generated and handwritten executable/DLL target; static archives excluded |
 | `runtime/multiplatform/windows/cet_compat.{h,cc}` | Implemented process-policy observation and fail-closed decision logic, independently probeable |
-| `runtime/multiplatform/windows/sigchain_windows.cc` | ART special-SIGSEGV facade, VEH handle, promotion/removal, exact exception filter |
-| `runtime/multiplatform/windows/runtime_windows.cc` | Implemented earliest CET/HSP policy rejection and diagnostic VEH/UEF teardown; later managed VEH initialization and fatal UEF chaining/separation |
-| `runtime/multiplatform/windows/fault_handler_windows.cc` | Optional split of dispatcher/adapter if `sigchain_windows.cc` becomes too broad |
+| `runtime/multiplatform/windows/sigchain_windows.cc` | Implemented ART special-SIGSEGV facade, managed VEH handle, promotion/removal, immutable action publication, recursion gate, and exact exception filter |
+| `runtime/multiplatform/windows/runtime_windows.cc` | Implemented earliest CET/HSP policy rejection, separate diagnostic VEH/UEF teardown, and predecessor-preserving fatal UEF chaining |
+| `runtime/multiplatform/windows/fault_handler_windows.cc` | Not required; the Stage C dispatcher remains narrow enough to live in `sigchain_windows.cc` |
 | `runtime/multiplatform/windows/fault_handler_windows.h` | Windows-only non-owning context view and documented AV-kind constants; no common-header Win32 leakage |
-| `runtime/arch/x86/fault_handler_x86.cc` | Win64 non-owning context view, real `CONTEXT` PC/SP access, AV-kind and protected-page checks |
+| `runtime/arch/x86/fault_handler_x86.cc` | Win64 non-owning context view, real `CONTEXT` PC/SP/RAX access, read-only stack-fault and protected-page checks |
 | `runtime/thread.cc` | Implemented exact current-stack acceptance and attach failure; later common accounting plus a small `_WIN32` fixed-page installation branch |
 | `runtime/multiplatform/windows/stack_windows.{h,cc}` | Implemented Stage B selection, commit/protect state machine, verified rollback, and exact original-state restoration |
 | `runtime/multiplatform/windows/thread_windows.cc` | Implemented bounded `Thread` integration for Stage B; no alternate signal stack |
@@ -1405,7 +1431,7 @@ and debugger evidence.
 | `compat/src/win64_posix_stubs.c` | Implemented `_beginthreadex`, handle/result lifetime, join/detach, tagged external identity, exact current-stack bounds, and stack attributes |
 | `runtime/runtime.cc` | Implemented diagnostic handler shutdown; later atomic managed-fault capability and nterp/JIT activation policy |
 | `tools/verify/win64_phase1/check_win32_cet_contract.py` and `win32_cet_policy_probe.cc` | Implemented link/PE audit plus deterministic and actual-policy probe |
-| `tools/verify/win64_phase1/win32_thread_stack_probe.c`, `win32_stack_page_probe.cc`, `win32_stack_page_fault_probe.S`, and `tools/verify/win64_phase4/run_thread_stack_probe.sh` | Implemented Stage A reservation/identity/lifetime gate plus Stage B synthetic selection, committed/reserved restoration, state-transition, and direct-fault gate |
+| `tools/verify/win64_phase1/win32_thread_stack_probe.c`, `win32_stack_page_probe.cc`, `win32_stack_page_fault_probe.S`, `win32_fault_record_probe.cc`, `win32_sigchain_probe.cc`, and Phase 4 probe scripts | Implemented Stage A reservation/identity/lifetime gate, Stage B synthetic selection/restore/direct-fault gate, and Stage C deterministic record plus live VEH/context gate |
 
 The exact split between `sigchain_windows.cc` and
 `fault_handler_windows.cc` is an implementation detail. There must still be
