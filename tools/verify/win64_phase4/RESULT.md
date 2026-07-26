@@ -24,6 +24,7 @@
 | P4_G6 GoldenApp regression | **PASS** | phase3 `run_goldenapp.sh` |
 | W-002 structural managed entries | **PASS** | `check_w002_managed_entries.py` |
 | W-003 quick boundary/trap parity | **PASS** | `check_w003_quick_boundaries.py` |
+| W-003 attributed frame families | **PASS, 8/8** | `run_w003_frame_probe.sh` |
 | W-003 XMM6-XMM11 sentinel | **PASS, 6/6** | `run_w003_xmm_sentinel.sh` |
 | W-002 OSR matrix | **PASS, 8/8** | `run_w002_osr_probe.sh` |
 | W-002 attached-thread matrix | **PASS, 8/8** | `run_w002_attach_probe.sh` |
@@ -50,6 +51,7 @@ PASS native_crash_aborts
 | W-002 OSR adapters | `quick_entrypoints_x86_64.S`; `mterp/x86_64ng/main.S` |
 | W-002 probes and native package | `run_w002_*.sh`; `package_win64_w002.sh` |
 | W-003 XMM boundary and structural gate | `quick_entrypoints_x86_64.S`; `check_w003_quick_boundaries.py` |
+| W-003 attributed frame-family gate | `w003_frame_probe/`; `run_w003_frame_probe.sh` |
 | W-003 XMM runtime sentinel | `w003_xmm_sentinel/`; `run_w003_xmm_sentinel.sh` |
 
 ## Host
@@ -78,7 +80,7 @@ JOBS=32 WINEDEBUG=-all \
 
 ## Next
 
-- Complete W-003 focused frame-family and native-Windows XMM sentinel acceptance
+- Complete W-003 native-Windows frame-family and XMM sentinel acceptance
 - Complete W-025 broader JIT-mapping native acceptance and hardening
 
 ## Multiplatform re-run (2026-07-17)

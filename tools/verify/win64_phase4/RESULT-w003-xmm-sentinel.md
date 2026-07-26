@@ -80,6 +80,7 @@ The JIT pair additionally records successful baseline compilation of
 ## Remaining acceptance
 
 Wine demonstrates the repaired adapter behavior and the sentinel itself.
-W-003 still requires the separate four-family managed-frame probe, broader
-regressions, and repeated Windows 10 version 1803-or-later native execution
-with fatal-marker and recursive dump scans before closure.
+The separate four-family managed-frame probe is now complete under Wine; see
+[RESULT-w003-frame-probe.md](RESULT-w003-frame-probe.md). W-003 still requires
+repeated Windows 10 version 1803-or-later native execution of both focused
+probes with fatal-marker and recursive dump scans before closure.

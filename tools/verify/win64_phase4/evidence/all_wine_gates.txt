@@ -1,3 +1,28 @@
+2026-07-26 aggregate re-run on agent01
+=====================================
+P4_W004_RUNTIME_LOAD PASS
+P4_W002_MANAGED_ENTRIES PASS
+P4_W003_QUICK_BOUNDARIES PASS (boundaries=3 trap_functions=212 traps=401)
+P4_W003_FRAME_FAMILIES PASS
+  int 2/2, switch 2/2, nterp 2/2, threshold-zero JIT 2/2
+  nterp and JIT each reached refs-only, refs-and-args, all-callee-saves,
+  and save-everything
+P4_W003_XMM_SENTINEL PASS
+  nterp 2/2, switch 2/2, threshold-zero JIT 2/2
+P4_W002_OSR PASS
+P4_W002_ATTACH PASS
+P4_W024_CLEANUP_SOURCE PASS
+P4_G1_GCSTRESS PASS
+P4_G2_THREADHEAVY PASS
+P4_G3_HANDLELEAK PASS
+P4_G4_PERFSMOKE PASS
+P4_G5_CRASHABORT PASS
+P4_G5b_CRASHNATIVE PASS
+P4_G6_GOLDEN_REG PASS
+PASS all wine Phase 4 gates
+
+Earlier detailed Phase 4 output retained below
+==============================================
 wrote /home/agent/Projects/dalvikvm-multiplatform/build/win64_phase1/run/gcstressprobe.jar 2820
 wrote /home/agent/Projects/dalvikvm-multiplatform/build/win64_phase1/run/threadheavyprobe.jar 3312
 wrote /home/agent/Projects/dalvikvm-multiplatform/build/win64_phase1/run/handleleakprobe.jar 3936

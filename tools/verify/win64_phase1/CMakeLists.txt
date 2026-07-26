@@ -34,6 +34,7 @@ endif()
 set(MDVM_ART_WIN_RUNTIME "${MDVM_ART_DIR}/runtime/multiplatform/windows" CACHE PATH "")
 set(MDVM_ART_WIN_STUBS "${MDVM_ART_DIR}/multiplatform/windows" CACHE PATH "")
 set(MDVM_ART_WIN_OPENJDKJVM "${MDVM_ART_DIR}/openjdkjvm" CACHE PATH "")
+option(MDVM_W003_FRAME_PROBE "Enable probe-only quick SETUP frame counters" OFF)
 
 file(MAKE_DIRECTORY "${MDVM_GENSRC_DIR}")
 
@@ -205,6 +206,11 @@ if(TARGET art)
     "${MDVM_ART_DIR}/runtime/arch/x86_64/quick_entrypoints_x86_64.S"
     "${MDVM_GENSRC_DIR}/art/asm/mterp/mterp_x86_64.S"
     APPEND PROPERTY OBJECT_DEPENDS "${_art_x86_64_asm_support_deps}")
+  if(MDVM_W003_FRAME_PROBE)
+    set_property(SOURCE
+      "${MDVM_ART_DIR}/runtime/arch/x86_64/quick_entrypoints_x86_64.S"
+      APPEND PROPERTY COMPILE_DEFINITIONS ART_W003_FRAME_PROBE=1)
+  endif()
 endif()
 if(TARGET sigchain)
   target_sources(sigchain PRIVATE

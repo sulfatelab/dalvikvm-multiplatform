@@ -1,6 +1,6 @@
 # W-003 quick callee-save frame analysis
 
-**Status:** BOUNDARY REPAIR AND STRUCTURAL GATE COMPLETE; focused acceptance remains
+**Status:** BOUNDARY, STRUCTURAL, AND WINE FOCUSED GATES COMPLETE; native acceptance remains
 
 **Date:** 2026-07-26
 
@@ -31,9 +31,9 @@ At the analysis boundary, W-003 remained open for two reasons:
 2. existing broad tests do not attribute execution to every frame family or
    permanently reject a future Windows-only SETUP trap.
 
-The implementation recorded below repairs item 1 and adds the permanent
-structural/trap portion of item 2. Focused runtime attribution and native
-acceptance remain.
+The implementation recorded below repairs item 1 and adds both the permanent
+structural/trap gate and focused Wine runtime attribution for item 2. Native
+Windows acceptance remains.
 
 ## Current frame contract
 
@@ -190,13 +190,13 @@ Add a W-003 checker that verifies:
 - expected r15 publication and Runtime singleton relocations remain; and
 - Linux invoke, OSR, and SETUP instruction paths are unchanged.
 
-### Stage C: focused runtime probes
+### Stage C: focused runtime probes (complete under Wine 2026-07-26)
 
 Create a managed probe with separate, named subtests for:
 
 - refs-only: allocation slow paths and contended monitor lock/unlock;
 - refs-and-args: quick-to-interpreter, resolution/proxy, and generic JNI;
-- all-callee-saves: caught class-cast, array-store, null, and bounds throws;
+- all-callee-saves: separately logged class-cast and array-store throws;
 - save-everything: suspend checks, deoptimization, and instrumentation hooks.
 
 Run it under `-Xint`, product-default nterp, forced switch interpreter, and
@@ -207,6 +207,13 @@ Add a native register-sentinel probe that places distinct values in
 XMM6-XMM11, invokes Java through JNI/quick invoke, and verifies every lane on
 return. Add a focused OSR boundary test or structural plus compiler-assisted
 sentinel test so OSR preservation is not inferred only from checksums.
+
+The landed frame-family probe uses bounds throws plus method tracing for
+save-everything attribution. It intentionally excludes nterp implicit-null
+faults: a null-only workload reproduces the same
+`nterp_op_invoke_virtual+0x3a` crash in the ordinary non-instrumented product,
+because the current diagnostic VEH does not translate ART implicit faults.
+That independent gap remains W-010; no W-003 product workaround was added.
 
 ### Stage D: acceptance
 
@@ -225,7 +232,7 @@ the Microsoft XMM nonvolatile sentinel passes.
 
 ## Implementation result (2026-07-26)
 
-Stages A and B are implemented:
+Stages A, B, and the Wine portion of Stage C are implemented:
 
 - `SAVE_WIN64_NATIVE_XMMS` and `RESTORE_WIN64_NATIVE_XMMS` reserve 96 bytes
   outside the ART managed frame and preserve full 128-bit XMM6-XMM11 values;
@@ -239,6 +246,12 @@ Stages A and B are implemented:
   instruction sequences, absence of the save area from the Linux functions,
   and the matched PE/ELF `int3` distribution; and
 - the Phase 4 aggregate now includes this W-003 structural gate.
+- the opt-in four-family counters preserve EFLAGS, are absent from product
+  PE/ELF artifacts, and pass twice in `-Xint`, switch, nterp, and JIT modes;
+- nterp and JIT each report positive refs-only, refs-and-args,
+  all-callee-saves, and save-everything counters; and
+- the runner enforces positive family thresholds and zero pending exception,
+  rather than accepting output format alone.
 
 Verification after rebuilding Win64 and Linux with `-j32`:
 
@@ -249,6 +262,7 @@ W-002 managed-entry structural check: PASS
 W-004 runtime load structural check: PASS
 CoreProbe quick-to-interpreter Wine smoke: PASS
 W-002 OSR dual/default, dual/switch, J-1/default, J-1/switch: PASS
+Full Phase 4 Wine aggregate, including W-003 frame and XMM probes: PASS
 ```
 
 The trap totals are recorded evidence for this matched build, not fixed
@@ -257,8 +271,11 @@ constants.
 The native-sentinel portion of Stage C is also complete under Wine: two
 repeats in nterp, switch, and threshold-zero JIT modes pass with a zero normal
 mask and exact `0x3f` intentional-clobber mask. See
-[RESULT-w003-xmm-sentinel.md](RESULT-w003-xmm-sentinel.md). The four-family
-managed probe and Stage D remain required before closing W-003.
+[RESULT-w003-xmm-sentinel.md](RESULT-w003-xmm-sentinel.md). The attributed
+counter design, representative counts, nterp null-fault isolation, and 8/8
+Wine result are recorded in
+[RESULT-w003-frame-probe.md](RESULT-w003-frame-probe.md). Native Windows Stage
+D remains required before closing W-003.
 
 ## Rejected directions
 
