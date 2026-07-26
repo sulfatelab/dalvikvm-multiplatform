@@ -1531,11 +1531,10 @@ Microsoft x64 entry and converts only inside its Windows prologue:
 
 The prologue preserves rdi and rsi because they are Microsoft nonvolatile
 registers, and the common save block preserves the native caller's r15 before
-publishing managed rSELF. The Windows CFA is 96 bytes; Linux retains its
-original 80-byte CFA and instruction path. This accepted W-002 repair proves
-the rSELF/OSR transition, but it does not preserve Microsoft XMM6-XMM11 across
-the default-C++-to-managed boundary. That separate ABI defect is now tracked
-under W-003.
+publishing managed rSELF. W-003 subsequently added a 96-byte boundary area
+for XMM6-XMM11, so the Windows conceptual CFA is now 192 bytes; Linux retains
+its original 80-byte CFA and instruction path. The accepted W-002 rSELF/OSR
+transition and the W-003 Microsoft-XMM repair are separate contracts.
 
 ### Nterp OSR
 
@@ -1603,8 +1602,8 @@ documented in
 
 ## 17.10 W-003 quick callee-save frames and native-boundary gap (2026-07-26)
 
-**Status:** SETUP implementation present; W-003 remains open for ABI repair and
-focused closure
+**Status:** SETUP and Microsoft-XMM boundary repair implemented; W-003 remains
+open for focused runtime/native closure
 
 All four x86-64 runtime callee-save frame families execute their shared
 non-Apple bodies on Windows. Only refs-only and all-callee-saves ever had a
@@ -1617,19 +1616,27 @@ registers, canonical x86-64 frame sizes/spill masks, r15 Thread addressing on
 Windows, and `sysv_abi` ART quick helpers. Microsoft ABI conversion belongs
 only at explicit platform boundaries.
 
-The remaining confirmed defect is at three such boundaries:
+The confirmed defect was at three such boundaries:
 `art_quick_invoke_stub`, `art_quick_invoke_static_stub`, and
 `art_quick_osr_stub`. They are ordinary Microsoft-x64 C++ entries and preserve
-the additional nonvolatile GPRs, but not XMM6-XMM11. Managed code may clobber
-those registers, and the invoke stubs directly use XMM6/XMM7 for managed
-arguments. Windows-only save/restore around the shared managed body is
-required before W-003 can close.
+the additional nonvolatile GPRs. They now also reserve a Windows-only 96-byte
+area and save the lower 128 bits of XMM6-XMM11 before argument setup or the
+managed OSR jump. Restoration occurs before the Microsoft-ABI return. The
+area stays outside canonical ART frames and preserves alignment; the Win64
+OSR conceptual CFA is 192 while Linux remains 80.
+
+`check_w003_quick_boundaries.py` permanently checks all four SETUP source
+contracts, each PE boundary sequence, absence of the save area in Linux
+objects, and the complete matched PE/ELF `int3` function/count multiset. The
+current rebuilt pair passes with 212 trap-bearing functions and 401 shared
+traps. The checker compares distributions rather than fixing those snapshot
+counts as constants.
 
 Existing Wine/native/JIT/JVMTI evidence exercises many consumers but does not
 attribute every frame family or seed Microsoft nonvolatile XMM registers.
-The close plan therefore adds a matched PE/ELF trap gate, object checks for
-the boundary save/restore sequence, a four-family managed probe, native XMM
-sentinels, Wine/Linux regressions, and repeated native Windows acceptance.
+The remaining close work is a four-family managed probe, a native XMM
+sentinel, broader Wine/Linux regressions, and repeated native Windows
+acceptance.
 
 PE assembly unwind metadata remains absent because CFI macros are disabled on
 Windows. ART managed unwinding is separate; W-010 must explicitly own the

@@ -3,6 +3,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$ROOT/../../.." && pwd)"
 export BUILD="${BUILD:-$REPO/build/win64_phase1}"
+export LINUX_BUILD="${LINUX_BUILD:-$REPO/build/native}"
 fail=0
 run() {
   local name="$1"; shift
@@ -16,6 +17,9 @@ run P4_W004_RUNTIME_LOAD python3 \
   "$REPO/tools/verify/win64_phase1/check_w004_runtime_load.py" --build "$BUILD"
 run P4_W002_MANAGED_ENTRIES python3 \
   "$REPO/tools/verify/win64_phase1/check_w002_managed_entries.py" --build "$BUILD"
+run P4_W003_QUICK_BOUNDARIES python3 \
+  "$REPO/tools/verify/win64_phase1/check_w003_quick_boundaries.py" \
+  --win-build "$BUILD" --linux-build "$LINUX_BUILD"
 run P4_W002_OSR bash "$ROOT/run_w002_osr_probe.sh"
 run P4_W002_ATTACH bash "$ROOT/run_w002_attach_probe.sh"
 run P4_W024_CLEANUP_SOURCE bash "$ROOT/run_w024_cleanup_check.sh"

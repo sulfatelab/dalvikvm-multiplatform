@@ -103,16 +103,18 @@ def check_source(repo: Path) -> None:
             "movq %r9, %rcx",
             "movq %r10, %r8",
             "movq %r11, %r9",
+            "SAVE_WIN64_NATIVE_XMMS",
             "PUSH r15",
             "movq %r9, %r15",
             "POP r15",
+            "RESTORE_WIN64_NATIVE_XMMS",
             "POP rsi",
             "POP rdi",
             "jmp *%rdx",
         ],
     )
-    if "CFI_RESTORE_STATE_AND_DEF_CFA rsp, 96" not in quick_osr:
-        fail("Win64 quick OSR CFA does not include the RDI/RSI saves")
+    if "CFI_RESTORE_STATE_AND_DEF_CFA rsp, 192" not in quick_osr:
+        fail("Win64 quick OSR CFA does not include the RDI/RSI and XMM saves")
     if "CFI_RESTORE_STATE_AND_DEF_CFA rsp, 80" not in quick_osr:
         fail("the Linux quick OSR CFA path changed")
 
@@ -189,9 +191,15 @@ def check_objects(repo: Path, build: Path, objdump: str, readobj: str) -> None:
             "movq\t%rdx, %rsi",
             "movq\t%r8, %rdx",
             "movq\t%r9, %rcx",
+            "subq\t$0x60, %rsp",
+            "movdqu\t%xmm6, (%rsp)",
+            "movdqu\t%xmm11, 0x50(%rsp)",
             "pushq\t%r15",
             "movq\t%r9, %r15",
             "popq\t%r15",
+            "movdqu\t(%rsp), %xmm6",
+            "movdqu\t0x50(%rsp), %xmm11",
+            "addq\t$0x60, %rsp",
             "popq\t%rsi",
             "popq\t%rdi",
             "jmpq\t*%rdx",

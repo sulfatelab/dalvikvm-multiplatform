@@ -1,6 +1,6 @@
 # W-003 quick callee-save frame analysis
 
-**Status:** ANALYSIS COMPLETE; W-003 remains open
+**Status:** BOUNDARY REPAIR AND STRUCTURAL GATE COMPLETE; focused acceptance remains
 
 **Date:** 2026-07-26
 
@@ -24,12 +24,16 @@ families were already shared with Linux. Commit `ace4da84b1` removed `_WIN32`
 from the first two guards, changed top-quick-frame publication to
 `THREAD_STORE_Q`, and retained Apple traps.
 
-W-003 remains open for two reasons:
+At the analysis boundary, W-003 remained open for two reasons:
 
 1. the ordinary Microsoft-x64 C++ boundaries into quick invoke and quick OSR
-   do not preserve XMM6-XMM11 before crossing into ART managed code; and
+   did not preserve XMM6-XMM11 before crossing into ART managed code; and
 2. existing broad tests do not attribute execution to every frame family or
    permanently reject a future Windows-only SETUP trap.
+
+The implementation recorded below repairs item 1 and adds the permanent
+structural/trap portion of item 2. Focused runtime attribution and native
+acceptance remain.
 
 ## Current frame contract
 
@@ -72,29 +76,31 @@ The symbol-by-symbol distribution is identical. These remaining instructions
 come from shared `UNIMPLEMENTED` entrypoints, `UNREACHABLE` tails after ART
 long jumps, and read-barrier assertions. They are not Windows-only SETUP
 stubs. The numeric counts depend on the configured entrypoint set and must not
-be hard-coded as permanent acceptance constants. A durable check should build
-matched configurations and compare the complete function/count multiset.
+be hard-coded as permanent acceptance constants. The implemented checker
+builds on matched configurations and compares the complete function/count
+multiset.
 
-## Confirmed ABI conflict
+## ABI conflict found by analysis and now repaired
 
 Microsoft x64 requires a callee to preserve rbx, rbp, rdi, rsi, r12-r15 and
 the lower 128 bits of XMM6-XMM15. ART's managed x86-64 convention instead
 treats only XMM12-XMM15 as floating-point callee-saves; XMM6-XMM11 may be
 clobbered by managed code.
 
-Three current functions are ordinary Microsoft-ABI C++ entries that cross
+Three functions are ordinary Microsoft-ABI C++ entries that cross
 into managed code:
 
 - `art_quick_invoke_stub`;
 - `art_quick_invoke_static_stub`; and
 - `art_quick_osr_stub`.
 
-Their Windows prologues correctly convert arguments, preserve rdi/rsi, save
-the native caller's r15, and publish managed rSELF. They do not preserve
-XMM6-XMM11. The invoke stubs directly load managed floating arguments into
-XMM6 and XMM7 before saving any FP state, and the invoked/OSR-compiled method
-may freely use XMM6-XMM11. Returning to a Microsoft-ABI C++ caller can
-therefore corrupt live nonvolatile registers.
+Before this stage, their Windows prologues correctly converted arguments,
+preserved rdi/rsi, saved the native caller's r15, and published managed rSELF,
+but did not preserve XMM6-XMM11. The invoke stubs directly load managed
+floating arguments into XMM6 and XMM7, and invoked/OSR-compiled methods may
+freely use XMM6-XMM11. Returning to a Microsoft-ABI C++ caller could therefore
+corrupt live nonvolatile registers. The implemented boundary save/restore
+macros repair this conflict without changing the managed frame layouts.
 
 Existing Java/JNI checksums do not disprove this defect: a caller only exposes
 it when the compiler keeps values live in those registers across the boundary.
@@ -161,7 +167,7 @@ nonvolatiles around the native-to-managed boundary.
 
 ## Required implementation plan
 
-### Stage A: boundary preservation
+### Stage A: boundary preservation (complete 2026-07-26)
 
 1. Add Windows-only save/restore helpers for XMM6-XMM11 using 16-byte slots.
 2. In both quick-invoke stubs, save before `LOOP_OVER_SHORTY_LOADING_XMMS`
@@ -172,7 +178,7 @@ nonvolatiles around the native-to-managed boundary.
 5. Recompute Windows-only stack/CFA constants and preserve 16-byte call
    alignment. Do not change canonical runtime frame sizes or spill masks.
 
-### Stage B: permanent structural gate
+### Stage B: permanent structural gate (complete 2026-07-26)
 
 Add a W-003 checker that verifies:
 
@@ -216,6 +222,37 @@ Run:
 
 Close W-003 only after all four frame families have attributed coverage and
 the Microsoft XMM nonvolatile sentinel passes.
+
+## Implementation result (2026-07-26)
+
+Stages A and B are implemented:
+
+- `SAVE_WIN64_NATIVE_XMMS` and `RESTORE_WIN64_NATIVE_XMMS` reserve 96 bytes
+  outside the ART managed frame and preserve full 128-bit XMM6-XMM11 values;
+- both quick-invoke stubs save before shorty-based XMM argument loading and
+  restore after the managed return;
+- quick OSR saves before entering compiled OSR code and restores after its
+  return;
+- adding 96 bytes keeps stack alignment unchanged and updates only the Win64
+  `.Losr_entry` conceptual CFA, from 96 to 192; the Linux CFA stays 80;
+- `check_w003_quick_boundaries.py` checks the source contracts, all three PE
+  instruction sequences, absence of the save area from the Linux functions,
+  and the matched PE/ELF `int3` distribution; and
+- the Phase 4 aggregate now includes this W-003 structural gate.
+
+Verification after rebuilding Win64 and Linux with `-j32`:
+
+```text
+W-003 quick-boundary structural check: PASS
+boundaries=3 trap_functions=212 traps=401
+W-002 managed-entry structural check: PASS
+W-004 runtime load structural check: PASS
+CoreProbe quick-to-interpreter Wine smoke: PASS
+W-002 OSR dual/default, dual/switch, J-1/default, J-1/switch: PASS
+```
+
+The trap totals are recorded evidence for this matched build, not fixed
+constants. Stages C and D remain required before closing W-003.
 
 ## Rejected directions
 

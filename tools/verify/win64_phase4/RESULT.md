@@ -1,7 +1,7 @@
 # Win64 Phase 4 — RESULT
 
 **Status:** **WINE COMPLETE** — A5–A8 and focused managed/native JIT hardening gates PASS under wine64; focused native acceptance remains where listed
-**Date:** 2026-07-25
+**Date:** 2026-07-26
 **Depends on:** Phase 3 complete (real Win10 G12 goldens)
 
 ## Scope (from win64_art_port §Phase 4)
@@ -23,6 +23,7 @@
 | P4_G5b Native AV + minidump | **PASS** | `run_crashnative.sh` (VEH+UEF+`.dmp`) |
 | P4_G6 GoldenApp regression | **PASS** | phase3 `run_goldenapp.sh` |
 | W-002 structural managed entries | **PASS** | `check_w002_managed_entries.py` |
+| W-003 quick boundary/trap parity | **PASS** | `check_w003_quick_boundaries.py` |
 | W-002 OSR matrix | **PASS, 8/8** | `run_w002_osr_probe.sh` |
 | W-002 attached-thread matrix | **PASS, 8/8** | `run_w002_attach_probe.sh` |
 | Full suite | **PASS** | `run_all_wine_gates.sh` |
@@ -47,6 +48,7 @@ PASS native_crash_aborts
 | Native AV JNI | `tools/win64/jni_stubs/win_runtime_natives.c` |
 | W-002 OSR adapters | `quick_entrypoints_x86_64.S`; `mterp/x86_64ng/main.S` |
 | W-002 probes and native package | `run_w002_*.sh`; `package_win64_w002.sh` |
+| W-003 XMM boundary and structural gate | `quick_entrypoints_x86_64.S`; `check_w003_quick_boundaries.py` |
 
 ## Host
 
@@ -74,6 +76,7 @@ JOBS=32 WINEDEBUG=-all \
 
 ## Next
 
+- Complete W-003 focused frame-family and native XMM sentinel acceptance
 - Complete W-025 broader JIT-mapping native acceptance and hardening
 
 ## Multiplatform re-run (2026-07-17)
