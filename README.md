@@ -149,11 +149,12 @@ current-work tracker.
 | [bp2cmake_linux_scope.md](bp2cmake_linux_scope.md) | Historical Linux scope, Android.bp-to-CMake converter design, and Linux native/runtime bring-up record |
 | [win64_art_port.md](win64_art_port.md) | Overall native Win64 architecture, toolchain policy, phased implementation record, and current platform position |
 | [win32_filesystem.md](win32_filesystem.md) | Implemented Option H Windows path/filesystem model, mixed-path rules, classpath separator policy, and NIO.2 boundary |
+| [win32_faults_and_stacks.md](win32_faults_and_stacks.md) | Authoritative W-010/W-014 design for Win64 VEH/sigchain adaptation, implicit managed faults, current-thread stack bounds, pthread reservation semantics, and ART's fixed protected page |
 | [win32_heap_memory.md](win32_heap_memory.md) | Closed W-013 design for ART-owned virtual memory, embedded dlmalloc, MoreCore, low-address policy, and native acceptance |
 | [win32_jit_memory.md](win32_jit_memory.md) | Current Win64 JIT memory design, unnamed pagefile-section dual view, historical failure analysis, and W-025 residual work |
 | [win32_libcore_os_natives.md](win32_libcore_os_natives.md) | Current implementation map for Win64 `libcore.io.Linux`/Os natives, including implemented and intentional ENOSYS methods |
 | [win32_open_items.md](win32_open_items.md) | Living authoritative tracker for open workarounds, product gaps, host-validation gaps, non-goals, and closed-item history |
-| [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md) | Implemented x86_64 TLS, managed ABI, quick invoke, nterp, and native/managed JIT contracts; W-010/W-014 managed-fault and Windows stack design; notes for other ISAs |
+| [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md) | Implemented x86_64 TLS, managed ABI, quick invoke, nterp, and native/managed JIT contracts; interaction with the separate managed-fault/stack design; notes for other ISAs |
 
 ## Migration history
 

@@ -322,7 +322,7 @@ win-arm64ec         x19 = Thread* (EC)         thread_local/Tls*    Arm64EC (+ x
 └────────────────────────────▲────────────────────────────────────┘
                              │ Win32 API
 ┌────────────────────────────┴────────────────────────────────────┐
-│ OS: TEB, TlsAlloc, VirtualProtect, VEH, CreateThread, …         │
+│ OS: TEB, TlsAlloc, VirtualProtect, VEH, OS thread creation, …   │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -335,7 +335,10 @@ Optional hardening:
 - Mirror into a process-global `TlsAlloc` index for tools that do not see C++ TLS (debuggers, some FFI).
 - Do **not** require `pthread_key` on pure Win32 builds long-term (pthread is a portability shim today).
 
-**Fibers:** default **unsupported** for v1 (document: ART threads ≡ OS threads). If fibers appear later, switch publishing path to FLS or reject attach on fiber mismatch.
+**Fibers:** default **unsupported** for v1 (ART threads are OS threads). W-014
+rejects `IsThreadAFiber() == TRUE` explicitly; stack-bound coincidence alone is
+not sufficient. If fibers are supported later, self publication must move to
+FLS and the complete stack/lifetime contract must be redesigned together.
 
 ### 6.3 Managed self on win-x86_64 (PRIMARY)
 
@@ -738,42 +741,31 @@ ART protect heap memory; it is not the product stack contract.
 
 #### 6.9.1 W-014 bounds and thread-creation contract
 
-Windows 10 provides the lower-divergence replacement directly:
+The authoritative contract is now
+[win32_faults_and_stacks.md](win32_faults_and_stacks.md) §8. In summary:
 
-| Source | W-014 use |
-|--------|-----------|
-| `GetCurrentThreadStackLimits()` | Authoritative low/high interval for the current system stack |
-| `VirtualQuery(SP)` | Validate that SP belongs to the interval and `AllocationBase` agrees with the low limit; inspect commit/protection regions |
-| `NtCurrentTeb()->NtTib.StackBase` | Diagnostic cross-check for the high boundary |
-| `NtCurrentTeb()->NtTib.StackLimit` | Diagnostic current committed low boundary; it moves during stack growth and is not the reservation low address |
-| TEB `DeallocationStack` | Do not use: undocumented/non-primary contract |
+- `IsThreadAFiber()` rejects fibers before bounds are accepted;
+- `GetCurrentThreadStackLimits()` supplies the current system allocation;
+- current SP containment, `VirtualQuery(SP)`, and a complete `[low, high)`
+  allocation walk must all agree before `Thread` publishes stack fields;
+- TEB `StackBase`/changing `StackLimit` are diagnostics only;
+- fiber/manual-stack attachment is rejected instead of clamped or guessed;
+- ART-created C/C++ threads use `_beginthreadex`, with non-zero stack sizes
+  passed as reservations;
+- Windows `pthread_t` must retain a real joinable handle rather than close it
+  and later reopen by reusable thread ID;
+- thread pools pass a requested reservation and do not allocate ignored custom
+  `MemMap` stacks;
+- non-null `pthread_attr_setstack()` addresses are unsupported and rejected.
 
-The project baseline is Windows 10 build 17134+ with
-`_WIN32_WINNT=0x0A00`, while `GetCurrentThreadStackLimits()` requires only
-Windows 8. W-014 therefore needs no Windows 7 fallback and no dynamic API
-resolution. If the returned interval is unaligned, too small, inconsistent
-with `VirtualQuery()`, or does not contain the current SP, attach must fail
-with bounded diagnostics instead of guessing. The existing `pthread_t`
-parameter is not a promise to inspect an arbitrary thread: `Thread::Init()`
-runs this operation on the thread being attached.
-
-The pthread compatibility layer currently records stack attributes and then
-discards them in `pthread_create()`. The completed contract is:
-
-- zero stack size uses the executable default;
-- a non-zero `pthread_attr_t::stacksize` is passed to `CreateThread()` with
-  `STACK_SIZE_PARAM_IS_A_RESERVATION`;
-- ART thread pools do not allocate custom `MemMap` stacks on Windows because
-  Win32 `CreateThread()` cannot start on a caller-provided stack address;
-- non-null `pthread_attr_setstack()` addresses are rejected rather than
-  silently ignored;
-- every OS thread that enters managed code still goes through normal ART
-  attach.
+These choices do not alter the rSELF publication order above. They ensure that
+the `Thread` being published describes the stack on which it is actually
+running.
 
 #### 6.9.2 W-014 fixed protected-page contract
 
-ART should keep the same conceptual layout as Linux while using Windows
-virtual-memory primitives:
+ART keeps the Linux conceptual layout while using Windows virtual-memory
+primitives:
 
 ```text
 high address / StackBase
@@ -782,23 +774,20 @@ stack_end
   ART reserved overflow gap (x86_64: 8 KiB)
 stack_begin
   ART fixed page: committed, PAGE_NOACCESS
-  one system-owned bottom page
+  measured excluded-low prefix:
+    lowest page plus adjacent bottom PAGE_NOACCESS/PAGE_GUARD regions
 low address / GetCurrentThreadStackLimits.LowLimit
 ```
 
-The fixed ART page is committed inside the validated stack reservation with
-`VirtualAlloc(MEM_COMMIT)` and protected with
-`VirtualProtect(PAGE_NOACCESS)`. `UnprotectStack()` restores read/write only
-for this page while ART constructs `StackOverflowError`, and `ProtectStack()`
-restores no-access afterward. Windows `PAGE_GUARD` is not suitable for the ART
-page because it is a one-shot stack-growth alarm that the OS clears after an
-access.
-
-The Windows installation path must not reuse Linux's failed-`mprotect`
-fallback that recursively touches a `VM_GROWSDOWN` stack, nor apply the common
-stack `madvise()` operation. Bounds, requested stack capacity, stack
-accounting, and this fixed page belong to W-014. Activation remains coupled to
-the W-010 fault adapter described next.
+W-014 never assumes `low + one page` is available. It preserves the measured
+bottom prefix, rejects a candidate that is already `PAGE_GUARD` or
+`PAGE_NOACCESS`, then records the first suitable reserved or ordinary
+committed-private read/write page and its original state in `Thread`. It
+commits that page read/write and changes it to `PAGE_NOACCESS`. The Windows
+path does not reuse Linux's recursive `VM_GROWSDOWN` touching or `madvise()`.
+It restores the original reserved/committed state when an externally created
+thread detaches and continues. Windows `PAGE_GUARD` remains the OS's moving
+one-shot stack-growth mechanism and is never ART's repeatable fixed page.
 
 ### 6.10 Exception delivery interaction
 
@@ -814,26 +803,27 @@ x86_64 optimizing backend and nterp still emit the normal unconditional
 uses explicit `Thread::stack_end_` comparisons. W-014 and W-010 must close this
 execution-mode split together.
 
-The W-010 stack-overflow adapter must recognize an access violation in an ART
-generated-code range, validate that the fault address is the expected
-`RSP - reserved_bytes`, adapt `EXCEPTION_POINTERS`/`CONTEXT` to the existing
-ART x86_64 fault-handler contract where practical, and redirect RIP to
-`art_quick_throw_stack_overflow`. Unrecognized faults continue through normal
-VEH/debugger/unhandled-filter chaining. Bridges must:
+The selected W-010 design is a narrow ART `SIGSEGV` facade over a first
+process-wide VEH. It filters only continuable access violations, passes a
+minimal `siginfo_t` plus a stack-local non-owning view of the real Win64
+`CONTEXT` and AV access kind into common `FaultManager`, and modifies
+`CONTEXT.Rip`/`Rsp` in place in the x86_64 handlers. Stack handling requires a
+read operation, `fault == Rsp - reserved_bytes`, and containment in W-014's
+recorded fixed page; null handling reuses ART's existing method/instruction
+validation and signal quick entrypoint. R15/rSELF and all untouched registers
+remain in the real OS context.
 
-- not clobber rSELF across VEH-unrelated calls;
-- use OS `CONTEXT` only for native/implicit faults; managed throws stay soft;
-- perform no allocation, logging, or complex locking on the recognized
-  overflow path;
-- account for the absence of `sigaltstack`: Windows VEH executes on the
-  faulting thread stack, so the existing 8 KiB reserved gap needs native stress
-  validation before any target-specific increase is considered.
+Native `EXCEPTION_STACK_OVERFLOW`, `EXCEPTION_GUARD_PAGE`, execute AV, and
+native/unregistered faults continue through Windows debugger/VEH/SEH policy.
+Expected implicit faults do not run first-chance logging or minidump code. The
+fatal UEF is separate and chains the previous process filter.
 
-The dormant Windows protected-page implementation may land before W-010, but
-`implicit_so_checks_` must remain disabled until the page, VEH translation,
-and switch/nterp/JIT repeated-overflow matrix pass together. See the complete
-stage and acceptance record under W-014 in
-[win32_open_items.md](win32_open_items.md).
+W-010 and W-014 activate atomically for the normal nterp/JIT product. The
+dormant page and adapter may land separately, but implicit null/SO flags stay
+off until handler installation, per-thread page state, repeated NPE/SOE, and
+native handler-stack measurements pass together. See the authoritative design
+and full matrix in [win32_faults_and_stacks.md](win32_faults_and_stacks.md),
+with state tracked in [win32_open_items.md](win32_open_items.md).
 
 JIT deopt flags (`THREAD_DEOPT_CHECK_REQUIRED_OFFSET`) stay Thread fields accessed via self base.
 
@@ -1756,9 +1746,10 @@ JIT logs explicitly confirm creation of the Windows pagefile-section J-2
 dual view before successful compilation.
 
 PE assembly unwind metadata remains absent because CFI macros are disabled on
-Windows. ART managed unwinding is separate; W-003 closes with W-010 explicitly
-owning the broader VEH/SEH/native-unwind decision and the absence of `.pdata`
-and `.xdata` for quick assembly.
+Windows. ART managed unwinding is separate. W-010 owns only the exact
+VEH/non-owning-`CONTEXT` managed-fault adapter and cooperative handler-chain
+policy. Missing `.pdata`/`.xdata` remains separate diagnostics hardening unless
+W-010 testing proves it necessary for correctness.
 
 See
 [RESULT-w003-quick-frames-analysis.md](tools/verify/win64_phase4/RESULT-w003-quick-frames-analysis.md)

@@ -144,9 +144,10 @@ walkers, or SEH unwinding through quick assembly nevertheless lack the PE
 metadata available for compiler-generated C++ functions.
 
 This must be an explicit policy decision. W-003 can close for managed-frame
-correctness if W-010 clearly owns the VEH/SEH/native-unwind limitation. It
-must not be described as full Windows unwind parity until PE unwind metadata
-exists and is validated.
+correctness while W-010 owns the exact VEH/context managed-fault transition.
+PE native-unwind metadata is separate diagnostics hardening unless managed
+fault testing proves it necessary for correctness. W-003 must not be described
+as full Windows unwind parity until that metadata exists and is validated.
 
 ## Existing coverage
 
