@@ -72,23 +72,31 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Area:** art / invoke
 - **Symptom / why:** Win64 used to force interpreter invoke until quick path was smoke-validated.
 - **Current behavior:** On `_WIN32`, invokable non-proxy methods use `art_quick_invoke_*` (MS entry → SysV body, rSELF=r15) by default, matching Linux. Opt-out with `ART_WIN64_QUICK_INVOKE=0` forces `EnterInterpreterFromInvoke`. Debugger/`-Xint` still force interpreter via normal ART paths.
-- **Proper fix:** Done for product default. Residual: broader host re-run; optional delete of the env force path later.
+- **Proper fix:** Done for product default. The separate Microsoft-nonvolatile XMM boundary gap is tracked under W-003; optional deletion of the env force path remains later cleanup.
 - **Code anchors:** `vendor/art/runtime/art_method.cc`; `quick_entrypoints_x86_64.S` Win prologues; [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md) §12b / §17.8
 - **Blocked on:** n/a (default ON as of 2026-07-19)
 - **Opened:** 2026-07-16 (Phase 2)
 - **Updated:** 2026-07-19 — product default ON (Linux-like); opt-out `ART_WIN64_QUICK_INVOKE=0`
 
 ### W-003 — Quick entrypoint SETUP frames `int3` on Windows
-- **State:** OPEN (partial — SETUP_SAVE_REFS_ONLY / ALL_CALLEE_SAVES un-int3'd on Win)
-- **Kind:** workaround (hard fail if other paths still stubbed)
-- **Area:** art / quick asm
-- **Symptom / why:** Apple still traps; Win now builds frames via shared SETUP with `THREAD_STORE` for top quick frame.
-- **Current behavior:** `SETUP_SAVE_REFS_ONLY_FRAME` / `SETUP_SAVE_ALL_CALLEE_SAVES_FRAME` no longer `int3` on `_WIN32`. C++ helpers called as `sysv_abi` (`ART_QUICK_ENTRYPOINT_ABI`).
-- **Proper fix:** Smoke the invoke→interpreter bridge; close when no Win SETUP path traps and product default uses quick invoke.
-- **Code anchors:** `asm_support_x86_64.S`; `ART_QUICK_ENTRYPOINT_ABI` in macros + entrypoints
-- **Depends on:** W-001 validation
+- **State:** OPEN (historical SETUP trap removed; focused closure and native-boundary ABI repair remain)
+- **Kind:** resolved frame stub / latent ABI defect / validation gap
+- **Area:** art / quick asm / Microsoft-to-managed boundaries
+- **Historical defect:** Upstream x86-64 deliberately trapped `_WIN32` in `SETUP_SAVE_REFS_ONLY_FRAME` and `SETUP_SAVE_ALL_CALLEE_SAVES_FRAME`. `SETUP_SAVE_REFS_AND_ARGS_FRAME` and `SETUP_SAVE_EVERYTHING_FRAME` were never Windows-trapped; they already shared the non-Apple body.
+- **Current frame behavior:** All four ART runtime callee-save families now use the Linux-shaped frame body on Windows. Only the Thread base and Runtime singleton load differ: `THREAD_STORE_Q` addresses through r15 and `LOAD_RUNTIME_INSTANCE` uses the direct PE same-image load. Shared frame sizes and spill masks remain unchanged. Apple still traps.
+- **Emitted-object finding:** With the current matched Linux/Win64 build configuration, the quick PE and ELF objects have the same `int3` distribution: 212 functions and 401 instructions. Remaining traps are shared `UNIMPLEMENTED`/`UNREACHABLE`/read-barrier assertions, not Windows-only SETUP expansions. Treat the counts as a snapshot, not permanent constants; a permanent gate should compare the symbol/instruction multiset between matched builds.
+- **Managed/helper ABI:** Quick assembly and JIT retain ART's Linux-shaped managed register convention. Assembly-called C++ helpers use `ART_QUICK_ENTRYPOINT_ABI` (`sysv_abi`) on Win64, so SETUP macros must not grow Microsoft shadow space or adopt Microsoft argument registers.
+- **Confirmed boundary conflict:** `art_quick_invoke_stub`, `art_quick_invoke_static_stub`, and `art_quick_osr_stub` are ordinary Microsoft-x64 C++ entries that cross into managed code. They preserve the additional Microsoft nonvolatile GPRs, but do not preserve XMM6–XMM11. ART managed code treats XMM6–XMM11 as volatile, and the invoke stubs directly load arguments into XMM6/XMM7, so the current boundary violates the Microsoft x64 callee-save contract even though existing functional probes pass. XMM12–XMM15 are already ART managed callee-saves.
+- **rSELF constraint:** r15 must remain the live Thread base until each frame publishes `top_quick_frame`. Runtime callee-save frames continue to spill/restore r15 in the shared canonical slot; optimizing Win64 code separately reserves r15 rather than allocating it as a general callee-save.
+- **Unwind conflict:** Win64 quick assembly currently emits only `.text`; CFI macros are disabled and no `.pdata`/`.xdata` is emitted for these functions. ART managed exceptions and stack walking use runtime method frames and long-jump contexts, so this is not evidence that SETUP frames are wrong. Native/SEH unwinding through quick assembly is nevertheless not Linux-equivalent and must be explicitly assigned to W-010 or implemented before claiming OS-unwind parity.
+- **Existing evidence:** Quick invoke is product-default (W-001 closed); historical `-Xint` Wine smoke and accepted W-002 switch/attach matrices exercise quick invoke into interpreter/managed code; Phase 4 native/JVMTI/JIT suites indirectly exercise refs-and-args, JNI, deoptimization, allocation, and suspend-related paths. Existing logs do not attribute execution to every SETUP family or verify Microsoft XMM nonvolatiles.
+- **Required work:** (1) preserve/restore XMM6–XMM11 at every default-Microsoft C++→managed boundary, before any managed-argument setup or jump; (2) update CFA/stack calculations and add source/PE structural checks for the preservation sequence; (3) add a focused quick-frame probe covering refs-only, refs-and-args, all-callee-saves, and everything paths under `-Xint`, switch, nterp, and JIT; (4) add a native register-sentinel probe around JNI/quick invoke and a focused OSR boundary check; (5) compare matched PE/ELF trap distributions and reject any Windows-only SETUP trap; (6) run Wine, Linux controls, and native Windows 10 acceptance with fatal/dump scans; (7) assign PE unwind metadata explicitly to W-010 or implement it.
+- **Close bar:** No Windows-only SETUP trap; XMM6–XMM11 preserved at ordinary Microsoft C++→managed boundaries; all four frame families have focused attributed coverage; Linux frame bodies remain unchanged; native Windows acceptance passes. The PE unwind ownership decision must be documented, but can remain under W-010 if ART managed unwinding is independently accepted.
+- **Evidence / analysis:** [RESULT-w003-quick-frames-analysis.md](tools/verify/win64_phase4/RESULT-w003-quick-frames-analysis.md)
+- **Code anchors:** `asm_support_x86_64.S`; `quick_entrypoints_x86_64.S`; `callee_save_frame_x86_64.h`; `art_method.cc`; `jit.cc`; `ART_QUICK_ENTRYPOINT_ABI` in `libartbase/base/macros.h` and quick helper declarations
+- **Depends on:** W-001 and W-002 are closed prerequisites; W-004 direct Runtime load is closed. W-010 owns the broader VEH/SEH policy decision.
 - **Opened:** 2026-07-16
-- **Updated:** 2026-07-18 — Win SETUP enabled
+- **Updated:** 2026-07-26 — all SETUP families confirmed enabled; Windows-only trap hypothesis retired; XMM6–XMM11 boundary defect and focused close plan recorded
 
 ### W-008 — Some product smoke still passes `-Xint` / imageless / `-Xno-sig-chain`
 - **State:** OPEN (partial — managed JIT suites run without `-Xint`; older product/diagnostic probes retain it)
@@ -347,7 +355,7 @@ Summary (details below; do not delete history):
 - **Area:** art / TLS
 - **Symptom / why:** Linux x86_64 uses `ARCH_SET_GS` so quick/nterp use `%gs:OFFSET`; Windows GS is the TEB and cannot be repurposed.
 - **Current behavior:** `InitCpu` correctly leaves GS untouched. Windows managed code uses r15 as rSELF while Linux retains GS. Quick invoke and OSR boundaries publish rSELF, and nterp N-1 retains rbp as rREFS.
-- **Quick OSR fix:** `art_quick_osr_stub` keeps its Microsoft-x64 C++ declaration. Its local Windows prologue converts six arguments to the shared SysV-shaped body, preserves Microsoft nonvolatile rdi/rsi/r15, and publishes the explicit `Thread*` in r15. Linux keeps its original instruction path.
+- **Quick OSR fix:** `art_quick_osr_stub` keeps its Microsoft-x64 C++ declaration. Its local Windows prologue converts six arguments to the shared SysV-shaped body, preserves Microsoft nonvolatile rdi/rsi/r15, and publishes the explicit `Thread*` in r15. Linux keeps its original instruction path. W-003 separately tracks the newly identified XMM6–XMM11 preservation gap at this default-C++ boundary; W-002 remains closed for the accepted rSELF/OSR transition contract.
 - **Nterp OSR fix:** Windows cleanup uses the `NterpFree` SysV-to-Microsoft bridge. A Windows return adapter keeps nterp's save block separate from the compiled OSR frame, then restores XMM12–XMM15 and rbx/rbp/r12–r15 after compiled code returns.
 - **Attach contract:** native regular and daemon threads establish ART C++ TLS without owning caller r15. JNI invocation crosses the existing quick boundary, which preserves native r15 and publishes managed rSELF. The probe pre-JITs the Java callback and validates allocation, daemon state, exact results, detach, and `JNI_EDETACHED`.
 - **Native R1:** package identity, structure, 8/8 attach, and 4/4 switch OSR passed with no fatal marker or dump. Four clean default-nterp runs missed the jump because the harness left warmup at 65535 and its 300,000-iteration loop finished before another post-compilation hotness check.
@@ -653,7 +661,7 @@ _No open design notes. Closed D- items live under §Closed._
 ## Suggested next closures (priority)
 
 1. ~~**D-001**~~ **CLOSED** — single shared boot.jar (runtime OS selection); dual-host FS smoke is not the close bar.  
-2. ~~**W-001**, **W-002**, **W-004**, **W-011**, **W-012**, and **W-024**~~ closed; **W-003** retains residual quick-entrypoint cleanup.
+2. ~~**W-001**, **W-002**, **W-004**, **W-011**, **W-012**, and **W-024**~~ closed; **W-003** next repairs Microsoft XMM6–XMM11 boundary preservation and adds focused four-family frame gates.
 3. ~~**L-001**~~ — **CLOSED** real PE libcore/openjdk/ICU hybrid; residual Linux TU/bridge growth optional.  
 4. **H-001** — host Phase-4 with multiplatform package.  
 5. ~~**L-005** — Linux Hello gate~~ **CLOSED**.
@@ -701,4 +709,4 @@ _No open design notes. Closed D- items live under §Closed._
 - **Updated:** 2026-07-24 — corrected pagefile-section dual view remains verified; threshold-zero and restored CriticalNative paths pass; per-method compile records are opt-in; temporary J-1 diagnostic opt-out and real-Windows acceptance remain
 
 
-*Last snapshot: 2026-07-26 — W-001/W-002/W-011/W-012/W-013/W-024 closed; Nterp ON; corrected pagefile-section dual view is the managed/native-JIT default (12/12 smoke, 14/14 matrix); D-1 complete; W-002 native R2 passes 21/21 records with 8/8 OSR, 8/8 attach, exact deterministic thresholds/checksum, and no fatal marker or dump; direct CriticalNative and 7/7 mixed/high-FP normal/FastNative matrices pass unresolved dlsym, rebinding, method tracing, and JVMTI forced interpretation; W-013 native R2 passes 56/56 with complete metrics, 20/20 repeated starts, large-heap pressure, J-1/default JIT, and no dumps; Math.ceil/floor and one common ELF/PE table are restored; interpreter.cc matches upstream; compile records are opt-in; `ART_WIN64_JIT_DUAL=0` temporarily retains J-1 for diagnosis; W-025 broader real-host acceptance remains; 6 OPEN workarounds remaining.*
+*Last snapshot: 2026-07-26 — W-001/W-002/W-011/W-012/W-013/W-024 closed; Nterp ON; corrected pagefile-section dual view is the managed/native-JIT default (12/12 smoke, 14/14 matrix); D-1 complete; W-002 native R2 passes 21/21 records with 8/8 OSR, 8/8 attach, exact deterministic thresholds/checksum, and no fatal marker or dump; W-003 analysis confirms all four SETUP families are enabled and matched PE/ELF objects have no Windows-only SETUP traps, but ordinary Microsoft C++→managed invoke/OSR boundaries still need XMM6–XMM11 preservation plus focused frame-family coverage; direct CriticalNative and 7/7 mixed/high-FP normal/FastNative matrices pass unresolved dlsym, rebinding, method tracing, and JVMTI forced interpretation; W-013 native R2 passes 56/56 with complete metrics, 20/20 repeated starts, large-heap pressure, J-1/default JIT, and no dumps; Math.ceil/floor and one common ELF/PE table are restored; interpreter.cc matches upstream; compile records are opt-in; `ART_WIN64_JIT_DUAL=0` temporarily retains J-1 for diagnosis; W-025 broader real-host acceptance remains; 6 OPEN workarounds remaining.*

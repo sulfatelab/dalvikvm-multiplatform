@@ -357,7 +357,7 @@ Consequences:
 
 1. **All** `movq %gs:OFF, …` become `movq OFF(%r15), …` under `#if defined(_WIN32)`.
 2. **All** managed prologues / transitions from C++ must **materialize r15** (from `Thread*` argument or `Thread::Current()`).
-3. Callee-save frame bitmaps for Windows must treat r15 as **reserved self**, not general spill (or always restore self after spills that included it — prefer reserved).
+3. Optimizing Win64 code treats r15 as **reserved self**, not a general allocated callee-save. Canonical runtime callee-save frames still spill and restore r15 in the shared x86-64 slot so ART stack visitors and long-jump contexts keep the Linux layout.
 4. Linux builds remain GS-based; use assembler macros:
 
 ```text
@@ -385,8 +385,13 @@ Quick entrypoints called from JIT:
 
 1. Assume r15 = self.
 2. Spill managed caller-saves as today.
-3. Place C++ args in **rcx, rdx, r8, r9** + shadow space (not rdi/rsi SysV).
-4. `call` helper; on return, restore and check `THREAD_EXCEPTION_OFFSET(r15)`.
+3. Call ART quick helpers through `ART_QUICK_ENTRYPOINT_ABI`, which is
+   `sysv_abi` on Win64, so the shared Linux-shaped register body and frame
+   layout remain intact.
+4. Use Microsoft registers and shadow space only in an explicit adapter that
+   calls an ordinary platform-ABI function, such as a JNI/native boundary.
+5. On return, restore the managed frame and check
+   `THREAD_EXCEPTION_OFFSET(r15)`.
 
 This is the bulk of “port quick_entrypoints_x86_64.S to Windows”.
 
@@ -406,7 +411,8 @@ AOSP managed code on amd64 is **not** “pure SysV C” either: it is an ART con
 |------|------|
 | JIT ↔ JIT | ART managed convention (per ISA), OS-independent except stack alignment / W^X |
 | JIT ↔ quick entrypoint asm | ART managed convention |
-| quick entrypoint asm ↔ C++ | **OS C++ ABI** (MS x64 / MS ARM64 / Arm64EC) |
+| quick entrypoint asm ↔ ART quick helper C++ | Managed helper ABI; `ART_QUICK_ENTRYPOINT_ABI=sysv_abi` on Win64 x86-64 |
+| explicit asm ↔ ordinary OS/library C++ | OS C++ ABI through a local adapter, including Microsoft shadow space/nonvolatiles |
 | JNI | JNIEnv* + Java args per JNI; underlying C++ is OS ABI |
 
 For **win-x86_64**, **Managed X64** convention (**LOCKED** self / nterp bases / Linux-like args):
@@ -1526,7 +1532,10 @@ Microsoft x64 entry and converts only inside its Windows prologue:
 The prologue preserves rdi and rsi because they are Microsoft nonvolatile
 registers, and the common save block preserves the native caller's r15 before
 publishing managed rSELF. The Windows CFA is 96 bytes; Linux retains its
-original 80-byte CFA and instruction path.
+original 80-byte CFA and instruction path. This accepted W-002 repair proves
+the rSELF/OSR transition, but it does not preserve Microsoft XMM6-XMM11 across
+the default-C++-to-managed boundary. That separate ABI defect is now tracked
+under W-003.
 
 ### Nterp OSR
 
@@ -1592,6 +1601,46 @@ documented in
 `tools/verify/win64_phase4/evidence/w002_host/ACCEPTANCE.md`.
 
 
+## 17.10 W-003 quick callee-save frames and native-boundary gap (2026-07-26)
+
+**Status:** SETUP implementation present; W-003 remains open for ABI repair and
+focused closure
+
+All four x86-64 runtime callee-save frame families execute their shared
+non-Apple bodies on Windows. Only refs-only and all-callee-saves ever had a
+Windows trap; refs-and-args and save-everything were already shared. Matched
+current PE and ELF objects have an identical `int3` symbol/count distribution,
+so no Windows-only SETUP trap remains.
+
+The managed frame design should stay unchanged: Linux-shaped ART argument
+registers, canonical x86-64 frame sizes/spill masks, r15 Thread addressing on
+Windows, and `sysv_abi` ART quick helpers. Microsoft ABI conversion belongs
+only at explicit platform boundaries.
+
+The remaining confirmed defect is at three such boundaries:
+`art_quick_invoke_stub`, `art_quick_invoke_static_stub`, and
+`art_quick_osr_stub`. They are ordinary Microsoft-x64 C++ entries and preserve
+the additional nonvolatile GPRs, but not XMM6-XMM11. Managed code may clobber
+those registers, and the invoke stubs directly use XMM6/XMM7 for managed
+arguments. Windows-only save/restore around the shared managed body is
+required before W-003 can close.
+
+Existing Wine/native/JIT/JVMTI evidence exercises many consumers but does not
+attribute every frame family or seed Microsoft nonvolatile XMM registers.
+The close plan therefore adds a matched PE/ELF trap gate, object checks for
+the boundary save/restore sequence, a four-family managed probe, native XMM
+sentinels, Wine/Linux regressions, and repeated native Windows acceptance.
+
+PE assembly unwind metadata remains absent because CFI macros are disabled on
+Windows. ART managed unwinding is separate; W-010 must explicitly own the
+broader VEH/SEH/native-unwind decision if W-003 closes without `.pdata` and
+`.xdata` for quick assembly.
+
+See
+[RESULT-w003-quick-frames-analysis.md](tools/verify/win64_phase4/RESULT-w003-quick-frames-analysis.md)
+for the evidence and staged implementation plan.
+
+
 ## 13. Appendix — evidence anchors in tree
 
 | Claim | Anchor |
@@ -1603,6 +1652,7 @@ documented in
 | QuickEntryPoints in Thread | `quick_entrypoints.h`, `Thread::QuickEntryPointOffset` |
 | Win quick-invoke policy | `vendor/art/runtime/art_method.cc` (default quick invoke with diagnostic opt-out) |
 | Win SETUP frames (was int3) | Ported off Win `int3`; Apple still traps |
+| W-003 frame/ABI analysis | §17.10; `tools/verify/win64_phase4/RESULT-w003-quick-frames-analysis.md` |
 | Direct PE Runtime singleton load | `LOAD_RUNTIME_INSTANCE` in `asm_support_x86_64.S`; §6.7 |
 | Nterp Win conflicts (GS + r15=rREFS) | `mterp/x86_64ng/main.S`; generated `mterp_x86_64.S`; §15 |
 | Nterp Win policy | `interpreter/mterp/nterp.cc` `IsNterpSupported` (default on; diagnostic opt-out) |
@@ -1614,4 +1664,4 @@ documented in
 
 ## 14. One-paragraph executive summary
 
-On Linux amd64, ART’s managed world is **GS-relative Thread TLS** layered on top of normal C++ `thread_local`, with quick entrypoints and JIT assuming SysV bridges; on Linux arm64, managed world is **x19 = Thread\***. Windows **cannot** reuse GS for Thread\* (TEB owns GS); **FS.base=Thread\*** is also **rejected** (§16: FSGSBASE/wine/CONTEXT portability), so managed self is a GPR. The WinNT design therefore adopts the **arm64-style explicit self register** on all Windows ISAs (**LOCKED and implemented: r15** on x86_64 with nterp **rREFS=rbp**; **x19** remains a design for ARM64/Arm64EC), keeps C++ `Thread::Current()` on `thread_local`/`TlsAlloc`, and isolates Microsoft C++ calling conventions at quick-invoke and OSR bridges. The Windows nterp OSR adapter preserves the deliberately different nterp and compiled save layouts. JIT code obeys the same self and entrypoint contracts and uses one unnamed pagefile-backed section with a low contiguous R/RX primary view plus an RW updater alias. **x86_64 implementation and Wine/Linux/native Windows verification are complete; W-002 is closed.** x86, arm64, and Arm64EC remain design-only so future work is not forced into a GS-shaped abstraction.
+On Linux amd64, ART’s managed world is **GS-relative Thread TLS** layered on top of normal C++ `thread_local`, with quick entrypoints and JIT assuming SysV bridges; on Linux arm64, managed world is **x19 = Thread\***. Windows **cannot** reuse GS for Thread\* (TEB owns GS); **FS.base=Thread\*** is also **rejected** (§16: FSGSBASE/wine/CONTEXT portability), so managed self is a GPR. The WinNT design therefore adopts the **arm64-style explicit self register** on all Windows ISAs (**LOCKED and implemented: r15** on x86_64 with nterp **rREFS=rbp**; **x19** remains a design for ARM64/Arm64EC), keeps C++ `Thread::Current()` on `thread_local`/`TlsAlloc`, and isolates Microsoft C++ calling conventions at explicit quick-invoke and OSR bridges. The Windows nterp OSR adapter preserves the deliberately different nterp and compiled save layouts. JIT code obeys the same self and entrypoint contracts and uses one unnamed pagefile-backed section with a low contiguous R/RX primary view plus an RW updater alias. **W-002's rSELF/OSR contract is accepted and closed; W-003 remains open for XMM6-XMM11 preservation at ordinary Microsoft C++→managed boundaries and focused frame-family coverage.** x86, arm64, and Arm64EC remain design-only so future work is not forced into a GS-shaped abstraction.
