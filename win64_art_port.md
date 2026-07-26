@@ -7,7 +7,7 @@ Product tree: **dalvikvm-multiplatform** (nested vendor + artmp_*).
 Status: historical feasibility and phased-port record; Phases 0–3 gate-complete,
 Phase 4 Wine-complete with focused native W-024/W-013 acceptance, and x86_64
 quick/nterp/managed/native JIT enabled by default
-Updated: 2026-07-25
+Updated: 2026-07-26
 
 **Living tracker (leftovers + temporary workarounds):** [win32_open_items.md](win32_open_items.md)
 Product goal (owner requirement): **full native Windows NT support** for this repo’s ART runtime — a real `dalvikvm.exe` + DLLs + `boot.jar` that runs plain Java on Win32/Win64 **without** Android platform APIs and **without** WSL/VM indirection.
@@ -505,10 +505,10 @@ New files under nested ART multipath paths (or injected via overlay `add_srcs`):
 
 | File | Role |
 |------|------|
-| `thread_windows.cc` | TLS attach, stack bounds, no sigaltstack |
+| `thread_windows.cc` | Windows thread OS hooks; no `sigaltstack`. Current W-014 stack discovery remains in common `thread.cc` pending a validated Windows helper. |
 | `runtime_windows.cc` | Init VEH, crash path, env |
 | `monitor_windows.cc` | Contention logging no-op / ETW later |
-| `fault_handler_windows.cc` | Map `EXCEPTION_ACCESS_VIOLATION` etc. → ART fault manager |
+| `fault_handler_windows.cc` | Planned W-010 adapter: map `EXCEPTION_ACCESS_VIOLATION` and related `EXCEPTION_POINTERS`/`CONTEXT` into ART fault handling. The current VEH is diagnostic-only. |
 | `os_windows.cc` | Replace `os_linux.cc` file ops with Win32/`_wsopen_s` UTF-8 bridge |
 | `sigchain_windows.cc` or stub | Sigchain cannot interpose CRT the Linux way; fold into VEH chain |
 | `win64/*.S` or `.asm` | Entrypoints / mterp as needed |
@@ -667,7 +667,10 @@ Each phase has a kill-or-continue gate. This is the execution roadmap when imple
 
 ### Phase 2 — Interpreter Hello (2–4 months) — **DONE (2026-07-16, wine64 A3)**
 
-- Fault handler MVP for null + stack overflow (enough for Hello).
+- Crash-diagnostic VEH was sufficient for the Phase-2 Hello path; managed
+  implicit-null and stack-overflow fault translation did not land and remains
+  W-010. Accurate Windows stack bounds, requested thread-stack sizing, and the
+  fixed ART protected region remain W-014.
 - MemMap extensions for heap + boot image optional (imageless OK).
 - Minimal JNI registration; **reduced boot.jar** if needed to reach Hello, then grow.
 - Win64: only required assembly stubs; expanded C++ `InterpreterJni` for PE shorties.
@@ -737,7 +740,8 @@ the feasibility record, not as a current schedule.
 
 | Risk | Severity | Mitigation |
 |------|----------|------------|
-| VEH ≠ Linux signals subtlety | Critical | VEH/minidump implementation is landed; keep H-001 native crash-path rerun open and compare with Linux behavior |
+| VEH ≠ Linux signals subtlety | Critical | Diagnostic VEH/minidump support is landed, but generated-code translation remains W-010. Couple W-014 fixed stack protection with the W-010 overflow adapter and validate debugger chaining plus repeated nterp/JIT overflow on native Windows. |
+| Windows stack discovery / growth differs from pthread stacks | Critical | W-014 replaces clamped `VirtualQuery` estimates with `GetCurrentThreadStackLimits()` plus validation, honors pthread reservation sizes through `CreateThread`, and keeps ART's fixed no-access page separate from Windows one-shot `PAGE_GUARD`. |
 | Win64 ABI assembly volume | Critical | x86_64 quick/nterp/JIT bridges are implemented; retain Linux/Win64 ABI matrices |
 | libcore native breadth | High | Product hybrid map tracks 82 implemented and 44 intentional ENOSYS methods |
 | Vendor submodule churn vs Windows patches | High | Nested `artmp_*` branches, small OS boundaries, and cross-host gates |

@@ -716,7 +716,7 @@ opt-out; normal Win64 execution does not require `-Xint`.
 
 ```text
 Thread::Init (on the native thread):
-  1. stack bounds (existing Win VirtualQuery path)
+  1. discover and validate the current system stack interval
   2. self_tls_ = this            # C++ Current()
   3. InitTlsEntryPoints()
   4. InitCpu()                   # verify policy; no GS write on Windows
@@ -730,14 +730,110 @@ Detach:
   rSELF must not be used after
 ```
 
-**CreateThread / pthread shim:** any OS thread that runs managed code must go through ART attach (existing model).
+The publish order is implemented, but step 1 remains W-014 debt. The current
+Win branch probes a stack local with one `VirtualQuery()`, clamps the resulting
+interval to 256 KiB–8 MiB, fabricates 1 MiB fallbacks, and always reports a
+4 KiB guard. This was a safety workaround for an earlier Wine result that made
+ART protect heap memory; it is not the product stack contract.
+
+#### 6.9.1 W-014 bounds and thread-creation contract
+
+Windows 10 provides the lower-divergence replacement directly:
+
+| Source | W-014 use |
+|--------|-----------|
+| `GetCurrentThreadStackLimits()` | Authoritative low/high interval for the current system stack |
+| `VirtualQuery(SP)` | Validate that SP belongs to the interval and `AllocationBase` agrees with the low limit; inspect commit/protection regions |
+| `NtCurrentTeb()->NtTib.StackBase` | Diagnostic cross-check for the high boundary |
+| `NtCurrentTeb()->NtTib.StackLimit` | Diagnostic current committed low boundary; it moves during stack growth and is not the reservation low address |
+| TEB `DeallocationStack` | Do not use: undocumented/non-primary contract |
+
+The project baseline is Windows 10 build 17134+ with
+`_WIN32_WINNT=0x0A00`, while `GetCurrentThreadStackLimits()` requires only
+Windows 8. W-014 therefore needs no Windows 7 fallback and no dynamic API
+resolution. If the returned interval is unaligned, too small, inconsistent
+with `VirtualQuery()`, or does not contain the current SP, attach must fail
+with bounded diagnostics instead of guessing. The existing `pthread_t`
+parameter is not a promise to inspect an arbitrary thread: `Thread::Init()`
+runs this operation on the thread being attached.
+
+The pthread compatibility layer currently records stack attributes and then
+discards them in `pthread_create()`. The completed contract is:
+
+- zero stack size uses the executable default;
+- a non-zero `pthread_attr_t::stacksize` is passed to `CreateThread()` with
+  `STACK_SIZE_PARAM_IS_A_RESERVATION`;
+- ART thread pools do not allocate custom `MemMap` stacks on Windows because
+  Win32 `CreateThread()` cannot start on a caller-provided stack address;
+- non-null `pthread_attr_setstack()` addresses are rejected rather than
+  silently ignored;
+- every OS thread that enters managed code still goes through normal ART
+  attach.
+
+#### 6.9.2 W-014 fixed protected-page contract
+
+ART should keep the same conceptual layout as Linux while using Windows
+virtual-memory primitives:
+
+```text
+high address / StackBase
+  normal native and managed frames
+stack_end
+  ART reserved overflow gap (x86_64: 8 KiB)
+stack_begin
+  ART fixed page: committed, PAGE_NOACCESS
+  one system-owned bottom page
+low address / GetCurrentThreadStackLimits.LowLimit
+```
+
+The fixed ART page is committed inside the validated stack reservation with
+`VirtualAlloc(MEM_COMMIT)` and protected with
+`VirtualProtect(PAGE_NOACCESS)`. `UnprotectStack()` restores read/write only
+for this page while ART constructs `StackOverflowError`, and `ProtectStack()`
+restores no-access afterward. Windows `PAGE_GUARD` is not suitable for the ART
+page because it is a one-shot stack-growth alarm that the OS clears after an
+access.
+
+The Windows installation path must not reuse Linux's failed-`mprotect`
+fallback that recursively touches a `VM_GROWSDOWN` stack, nor apply the common
+stack `madvise()` operation. Bounds, requested stack capacity, stack
+accounting, and this fixed page belong to W-014. Activation remains coupled to
+the W-010 fault adapter described next.
 
 ### 6.10 Exception delivery interaction
 
-VEH already used for Win64 crash paths. Managed exception delivery still uses ART’s `Thread::exception_` and delivery entrypoints. Bridges must:
+VEH is currently used only for Win64 crash diagnostics. It logs selected
+first-chance exceptions and returns `EXCEPTION_CONTINUE_SEARCH`; it does not
+yet translate generated-code faults. Managed soft throws still use ART's
+`Thread::exception_` and delivery entrypoints.
 
-- not clobber rSELF across VEH-unrelated calls,  
-- use OS CONTEXT only for **native** faults; managed throws stay soft.
+This creates a stack-overflow policy mismatch: runtime initialization disables
+Windows implicit SO checks and does not install the protected page, while the
+x86_64 optimizing backend and nterp still emit the normal unconditional
+`RSP - ART_STACK_OVERFLOW_GAP_x86_64` probe. The switch interpreter instead
+uses explicit `Thread::stack_end_` comparisons. W-014 and W-010 must close this
+execution-mode split together.
+
+The W-010 stack-overflow adapter must recognize an access violation in an ART
+generated-code range, validate that the fault address is the expected
+`RSP - reserved_bytes`, adapt `EXCEPTION_POINTERS`/`CONTEXT` to the existing
+ART x86_64 fault-handler contract where practical, and redirect RIP to
+`art_quick_throw_stack_overflow`. Unrecognized faults continue through normal
+VEH/debugger/unhandled-filter chaining. Bridges must:
+
+- not clobber rSELF across VEH-unrelated calls;
+- use OS `CONTEXT` only for native/implicit faults; managed throws stay soft;
+- perform no allocation, logging, or complex locking on the recognized
+  overflow path;
+- account for the absence of `sigaltstack`: Windows VEH executes on the
+  faulting thread stack, so the existing 8 KiB reserved gap needs native stress
+  validation before any target-specific increase is considered.
+
+The dormant Windows protected-page implementation may land before W-010, but
+`implicit_so_checks_` must remain disabled until the page, VEH translation,
+and switch/nterp/JIT repeated-overflow matrix pass together. See the complete
+stage and acceptance record under W-014 in
+[win32_open_items.md](win32_open_items.md).
 
 JIT deopt flags (`THREAD_DEOPT_CHECK_REQUIRED_OFFSET`) stay Thread fields accessed via self base.
 

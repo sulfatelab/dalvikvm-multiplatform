@@ -153,7 +153,7 @@ current-work tracker.
 | [win32_jit_memory.md](win32_jit_memory.md) | Current Win64 JIT memory design, unnamed pagefile-section dual view, historical failure analysis, and W-025 residual work |
 | [win32_libcore_os_natives.md](win32_libcore_os_natives.md) | Current implementation map for Win64 `libcore.io.Linux`/Os natives, including implemented and intentional ENOSYS methods |
 | [win32_open_items.md](win32_open_items.md) | Living authoritative tracker for open workarounds, product gaps, host-validation gaps, non-goals, and closed-item history |
-| [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md) | Implemented x86_64 TLS, managed ABI, quick invoke, nterp, and native/managed JIT contracts plus design notes for other ISAs |
+| [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md) | Implemented x86_64 TLS, managed ABI, quick invoke, nterp, and native/managed JIT contracts; W-010/W-014 managed-fault and Windows stack design; notes for other ISAs |
 
 ## Migration history
 
