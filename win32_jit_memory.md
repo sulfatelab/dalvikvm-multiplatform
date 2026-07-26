@@ -29,6 +29,11 @@ The selected end state is:
    real-Windows acceptance is complete, then remove the gate.
 6. Keep ART's ordinary single-view RWX-toggle path temporarily as a Windows
    diagnostic fallback; it is not the default product path.
+7. Keep CET user shadow stacks outside W-025. Current Win64 ART does not
+   support Hardware-enforced Stack Protection because its shared managed
+   exception/deoptimization long jump does not maintain CET's protected return
+   stack. The process must run with HSP completely disabled under W-010's
+   startup contract. CFG and dynamic-code policy remain separate W-025 work.
 
 The selected design creates no filesystem file. A Windows pagefile-backed
 section can be paged by the operating system, just as anonymous Linux memory can
@@ -414,7 +419,10 @@ emulation is added.
   split/remap transaction, or Windows-only 64 KiB JIT-capacity rule.
 - Remaining work is real-Windows repeated-start testing, dynamic-code/CFG
   policy testing, large `SEC_COMMIT` pressure measurement, and direct release
-  checks at the JIT-root and CodeInfo encoding sites.
+  checks at the JIT-root and CodeInfo encoding sites. CET user shadow-stack
+  support is not part of this residual: HSP must be disabled for the entire ART
+  process, and marking dynamic JIT ranges CET-compatible is forbidden as a
+  workaround.
 - Native JIT follows the common ART policy by default after W-024 cleanup.
   Native Windows 10 acceptance, Math.ceil/floor, and the common ELF/PE
   registration table are complete. Mixed/high-FP, unresolved app-JNI,
@@ -798,6 +806,11 @@ native-method gate and interpreter fallback expansion were removed after
 acceptance and post-change regressions. Broader P5 mapping-protection,
 mitigation, and code-cache-load acceptance remains under W-025.
 
+Native W-025 mitigation runs must record that Hardware-enforced Stack
+Protection is disabled. CFG may be enabled and tested independently. An
+HSP-enabled process is expected to be rejected by W-010's early startup guard,
+not treated as a JIT mapping failure and not allowed to reach generated code.
+
 ### 12.5 Threshold-zero stress resolution
 
 `FloatProbe -Xjitthreshold:0` now passes in both J-1 and the corrected dual-view
@@ -899,6 +912,10 @@ None of this justifies retaining the RWX J-1 path as the product default.
 |------|---------|
 | P5 mapping real-Windows acceptance | W-013 heap/JIT integration subset is complete: R2 protections, metrics, J-1/default JIT, and repeated starts pass. Broader mitigation/direct-encoding closure remains under W-025 |
 | Direct encoding checks | Add checks at JIT-root patch and CodeInfo construction sites |
+
+CET user shadow stacks are intentionally absent from this open table. They are
+unsupported for current Win64 ART rather than a pending W-025 feature; see
+[win32_faults_and_stacks.md](win32_faults_and_stacks.md).
 
 ### Current test summary
 

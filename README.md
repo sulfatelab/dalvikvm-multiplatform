@@ -118,6 +118,16 @@ evidence is required for product acceptance. See
 [win64_art_port.md](win64_art_port.md) for the complete toolchain and platform
 design.
 
+## Win64 process mitigation requirement
+
+Current x86_64 ART does not support Windows CET user shadow stacks, exposed by
+Windows as Hardware-enforced Stack Protection. The mitigation must be
+completely disabled for the entire `dalvikvm` or embedding process before it
+starts; compatibility, audit, and strict modes are unsupported. CFG is a
+separate mitigation and is not equivalent to CET shadow stacks. The exact
+build marker, startup rejection, and verification contract is documented in
+[win32_faults_and_stacks.md](win32_faults_and_stacks.md).
+
 ## Native source root
 
 Build harnesses default `MDVM_NATIVE_SRC_ROOT_DIR` to **`vendor/`** in this
@@ -149,7 +159,7 @@ current-work tracker.
 | [bp2cmake_linux_scope.md](bp2cmake_linux_scope.md) | Historical Linux scope, Android.bp-to-CMake converter design, and Linux native/runtime bring-up record |
 | [win64_art_port.md](win64_art_port.md) | Overall native Win64 architecture, toolchain policy, phased implementation record, and current platform position |
 | [win32_filesystem.md](win32_filesystem.md) | Implemented Option H Windows path/filesystem model, mixed-path rules, classpath separator policy, and NIO.2 boundary |
-| [win32_faults_and_stacks.md](win32_faults_and_stacks.md) | Authoritative W-010/W-014 design for Win64 VEH/sigchain adaptation, implicit managed faults, current-thread stack bounds, pthread reservation semantics, and ART's fixed protected page |
+| [win32_faults_and_stacks.md](win32_faults_and_stacks.md) | Authoritative W-010/W-014 design for Win64 VEH/sigchain adaptation, implicit managed faults, stack bounds/protection, and the required CET-shadow-stack-disabled process contract |
 | [win32_heap_memory.md](win32_heap_memory.md) | Closed W-013 design for ART-owned virtual memory, embedded dlmalloc, MoreCore, low-address policy, and native acceptance |
 | [win32_jit_memory.md](win32_jit_memory.md) | Current Win64 JIT memory design, unnamed pagefile-section dual view, historical failure analysis, and W-025 residual work |
 | [win32_libcore_os_natives.md](win32_libcore_os_natives.md) | Current implementation map for Win64 `libcore.io.Linux`/Os natives, including implemented and intentional ENOSYS methods |

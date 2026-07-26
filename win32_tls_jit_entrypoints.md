@@ -683,7 +683,8 @@ match the issued package byte for byte. Procedure and evidence:
 | Allocation | One unnamed pagefile-backed section mapped twice: contiguous low R/RX primary plus full RW alias |
 | Publish | Write through the RW alias; execute through RX; call `FlushInstructionCache` explicitly |
 | Free / collect | Existing ART JIT GC hooks; mapped views use `UnmapViewOfFile` and the section handle is closed |
-| CFG / CET | Basic real-host execution passes; broader mitigation/direct-encoding hardening remains W-025 |
+| CFG | Basic real-host execution passes; broader dynamic-code/direct-encoding hardening remains W-025 |
+| CET user shadow stack | **Unsupported.** Hardware-enforced Stack Protection must be completely disabled for the ART process; compatibility, audit, and strict modes are rejected under W-010's activation contract |
 | Antivirus | Expect false positives; keep cache private, avoid RWX long windows |
 
 #### Compiler backend
@@ -825,6 +826,20 @@ native handler-stack measurements pass together. See the authoritative design
 and full matrix in [win32_faults_and_stacks.md](win32_faults_and_stacks.md),
 with state tracked in [win32_open_items.md](win32_open_items.md).
 
+This exception design does not support CET user shadow stacks. The decisive
+conflict is the shared x86_64 `art_quick_do_long_jump`: it restores an older
+regular `RSP` and returns to a managed catch/deoptimization PC without
+restoring CET's protected return stack. Ordinary explicit exceptions,
+deoptimization, pending JNI exceptions, and W-010's implicit NPE/SOE path all
+use this mechanism. W-010 additionally modifies `CONTEXT.Rip` and, for null
+delivery, `CONTEXT.Rsp`, which conflicts with CET context-IP validation without
+a complete EH-continuation contract. Therefore every ART process must have
+Hardware-enforced Stack Protection completely disabled, every project PE link
+must explicitly use `/CETCOMPAT:NO`, and startup must reject every nonzero
+`ProcessUserShadowStackPolicy` before managed threads or JIT. CFG remains a
+separate W-025 mitigation; `/guard:ehcont`, dynamic JIT CET-range registration,
+IBT, and `-fcf-protection` do not repair ART's shadow-stack mismatch.
+
 JIT deopt flags (`THREAD_DEOPT_CHECK_REQUIRED_OFFSET`) stay Thread fields accessed via self base.
 
 ---
@@ -916,7 +931,11 @@ Quick entrypoint **asm prologues** are where these differences are centralized.
 2. **Exact rSELF register:** **CLOSED — r15** (nterp **rREFS=rbp**). Spill-bitmap/JNI audit is implementation work, not an open design choice.  
 3. **Nterp priority vs optimizing JIT:** **CLOSED for x86_64** — both are
    implemented and default-on.
-4. **CET / shadow stack / CFG policy:** residual hardening under W-025.
+4. **CET / shadow stack / CFG policy:** **CLOSED as a product contract.** CET
+   user shadow stacks are unsupported and Hardware-enforced Stack Protection
+   must be completely disabled for the ART process; compatibility, audit, and
+   strict modes are rejected. CFG and dynamic-code hardening remain separate
+   W-025 work.
 5. **Wine sufficiency:** **CLOSED as policy** — Wine is a development gate, not
    final product acceptance. Focused native W-024/W-013 matrices pass; broader
    host acceptance remains tracked separately.
@@ -1749,7 +1768,9 @@ PE assembly unwind metadata remains absent because CFI macros are disabled on
 Windows. ART managed unwinding is separate. W-010 owns only the exact
 VEH/non-owning-`CONTEXT` managed-fault adapter and cooperative handler-chain
 policy. Missing `.pdata`/`.xdata` remains separate diagnostics hardening unless
-W-010 testing proves it necessary for correctness.
+W-010 testing proves it necessary for correctness. That separation applies
+only under the required CET-shadow-stack-disabled process contract; missing
+unwind/EH-continuation metadata cannot be interpreted as latent CET support.
 
 See
 [RESULT-w003-quick-frames-analysis.md](tools/verify/win64_phase4/RESULT-w003-quick-frames-analysis.md)

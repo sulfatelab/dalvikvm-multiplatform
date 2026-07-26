@@ -77,6 +77,12 @@ A release is not “full” until all of the following pass on native Windows:
 | A8 | Crash path does not silent-corrupt; controlled abort or dump is possible (need not match Linux signal catcher UX). |
 | A9 | No dependency on WSL, Android device, or Android platform shared libraries at runtime. |
 
+The current x86_64 product additionally requires Windows CET user shadow
+stacks (Hardware-enforced Stack Protection) to be completely disabled for the
+ART process. Compatibility, audit, and strict modes are unsupported and must
+be rejected before managed execution. This is a platform prerequisite, not an
+unmet W-025 acceptance feature; CFG remains separate.
+
 The original plan allowed JIT/dex2oat to be a v1.1 gate. Current x86_64 quick,
 nterp, managed-JIT, and native-JIT entrypoints are correct and default-on;
 dex2oat/oat PE production remains deferred.
@@ -727,7 +733,9 @@ all product paths. Windows NIO.2 remains a non-goal.
 - The JIT code cache uses the corrected unnamed pagefile-section dual view with
   a low contiguous R/RX primary and a full RW updater alias.
 - W-013 native R2 passes J-1 and default dual-view integration; broader W-025
-  mitigation/direct-encoding hardening remains.
+  CFG/dynamic-code-policy and direct-encoding hardening remains. CET user
+  shadow stacks are explicitly unsupported and must be disabled for the ART
+  process under W-010's activation contract.
 - dex2oat/oat PE output remains deferred; the imageless interpreter+JIT product
   does not require it.
 
@@ -742,6 +750,7 @@ the feasibility record, not as a current schedule.
 | Risk | Severity | Mitigation |
 |------|----------|------------|
 | VEH ≠ Linux signals subtlety | Critical | Diagnostic VEH/minidump support is landed, but generated-code translation remains W-010. The selected design reuses common `FaultManager` through a narrow first VEH and a non-owning view of the real `CONTEXT` plus AV kind, chains every unrecognized exception, and activates only with W-014's page; validate debugger ordering, negative AVs, stack budget, and repeated nterp/JIT NPE/SOE on native Windows. |
+| CET user shadow-stack mismatch | Critical | Current x86_64 `art_quick_do_long_jump` restores the regular stack and returns without synchronizing CET's protected return stack; W-010 also redirects `CONTEXT.Rip`/`Rsp`. Mark every project PE `/CETCOMPAT:NO`, inspect packaged DLLs, and reject any nonzero process HSP policy before ART threads/JIT. Compatibility, audit, and strict modes are unsupported; CFG is separate. |
 | Windows stack discovery / growth differs from pthread stacks | Critical | W-014 rejects fibers, uses `GetCurrentThreadStackLimits()` plus a complete `VirtualQuery()` allocation walk, `_beginthreadex` reservation semantics and retained join handles, and dynamically selects a fixed `PAGE_NOACCESS` ART page above the preserved bottom exclusion/guard prefix; the moving one-shot Windows `PAGE_GUARD` is never reused. |
 | Win64 ABI assembly volume | Critical | x86_64 quick/nterp/JIT bridges are implemented; retain Linux/Win64 ABI matrices |
 | libcore native breadth | High | Product hybrid map tracks 82 implemented and 44 intentional ENOSYS methods |
@@ -775,6 +784,10 @@ Do **not** block all Windows design work on perfect Linux polish — but **do** 
 - Use MinGW-w64 headers or the `windows-gnu` triple instead of **Windows SDK / MSVC SDK headers**.
 - Omit the Windows SDK and hope Clang’s resource directory is enough for Win32 APIs.
 - Require Android framework libraries on Windows.
+- Support or run under CET user shadow stacks/Hardware-enforced Stack
+  Protection in the current Win64 ART ABI. The mitigation must be completely
+  disabled for the process; compatibility, audit, and strict modes are not
+  supported.
 - Promise month-scale full parity including JIT without the phase gates above.
 
 ---

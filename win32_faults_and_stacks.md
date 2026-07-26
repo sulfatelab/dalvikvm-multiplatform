@@ -71,6 +71,12 @@ The selected design is:
 12. Keep fatal crash diagnostics separate from managed fault translation.
     Expected faults do not log or dump. The unhandled-exception filter writes a
     best-effort dump, then chains to the previously installed filter.
+13. Do not support Windows CET user shadow stacks (Hardware-enforced Stack
+    Protection) in the current Win64 ART design. Every ART process must run
+    with that mitigation completely disabled; compatibility, audit, and strict
+    modes are all unsupported. Build every project Win64 PE explicitly with
+    `/CETCOMPAT:NO`, inspect packaged DLLs, and reject startup before managed
+    threads or JIT initialization if the process policy is active.
 
 ## 2. Scope and ownership
 
@@ -108,9 +114,15 @@ The selected design is:
   it, but all concrete acceptance in this draft is Win64 x86_64.
 - Perfect PE native unwinding through every quick assembly stub. Managed stack
   walking remains ART-owned; PE `.pdata`/`.xdata` is separate diagnostics
-  hardening unless testing proves it is required for correctness.
+  hardening unless testing proves it is required for correctness. This
+  separation is valid only under the required CET-shadow-stack-disabled
+  process contract.
 - Enabling implicit suspend checks on Win64 x86_64. Current ART enables that
   mechanism on Arm64, not x86_64.
+- Windows CET user shadow stacks, also exposed as Hardware-enforced Stack
+  Protection. This is an explicit unsupported product configuration, not an
+  open hardening task. ART interpreter `ShadowFrame` objects are unrelated to
+  the hardware return-address shadow stack.
 
 ## 3. Linux behavior that Windows must preserve
 
@@ -252,6 +264,75 @@ ART probe, or restore ART's stack accounting. The initial implementation
 should not depend on it. It may later be evaluated for fatal native-overflow
 diagnostics, separately from managed overflow correctness.
 
+### 5.9 CET user shadow stacks conflict with ART's non-local transfers
+
+The current Win64 ART runtime does not support CET user shadow stacks. The
+decisive conflict is ART's ordinary x86_64 managed exception and
+deoptimization transfer, not only W-010's proposed VEH context editing.
+
+`art_quick_do_long_jump` in
+`runtime/arch/x86_64/quick_entrypoints_x86_64.S` restores an older normal
+stack pointer with `popq %rsp` and then executes `ret`. The prepared ART
+context places the selected managed catch/deoptimization PC on that restored
+normal stack. CET maintains a separate protected return-address stack. This
+stub neither restores nor advances CET's shadow-stack pointer, so its final
+`ret` compares different return addresses and raises a control-protection
+fault.
+
+That long-jump path is shared by ordinary explicit managed throws, implicit
+NPE/SOE delivery, deoptimization, pending JNI exceptions, and runtime slow
+paths. Consequently none of these narrower changes can make CET safe:
+
+- disabling W-010 implicit-fault translation;
+- leaving `CONTEXT.Rsp` unchanged for stack-overflow redirection;
+- adding PE unwind metadata only to the VEH trampoline;
+- enabling Intel indirect-branch tracking or `-fcf-protection`/`ENDBR`;
+- registering only JIT continuation targets.
+
+W-010 adds another incompatibility. Null translation changes both
+`CONTEXT.Rip` and `CONTEXT.Rsp`, while stack translation changes
+`CONTEXT.Rip`. A process with `SetContextIpValidation` can validate modified
+instruction pointers during context restoration. ART's quick and JIT
+continuation targets currently have no complete `/guard:ehcont` contract, and
+Win64 quick assembly does not provide complete PE unwind metadata. These are
+additional rejection reasons, but fixing them alone would not repair
+`art_quick_do_long_jump`.
+
+The supported process contract is therefore exact:
+
+- `PROCESS_MITIGATION_USER_SHADOW_STACK_POLICY.Flags` must be zero whenever
+  `ProcessUserShadowStackPolicy` is available;
+- `EnableUserShadowStack`, `AuditUserShadowStack`,
+  `SetContextIpValidation`, `AuditSetContextIpValidation`, strict mode, and
+  every other current or future nonzero policy bit are rejected;
+- Windows compatibility mode is not accepted merely because non-CET modules
+  may be tolerated there;
+- every project Win64 executable and DLL link must explicitly pass
+  `/CETCOMPAT:NO`; packaged LLVM libc++ and other DLLs must also be inspected
+  for absence of `IMAGE_DLL_CHARACTERISTICS_EX_CET_COMPAT`;
+- the launcher or Windows Exploit Protection configuration must disable
+  Hardware-enforced Stack Protection before process creation. ART cannot
+  downgrade or disable an active policy with `SetProcessMitigationPolicy`;
+- CFG remains a separate mitigation. Supporting or testing CFG does not imply
+  CET shadow-stack support.
+
+Current artifacts happen to satisfy only the image-marker half of this rule.
+lld 21 defaults to `/CETCOMPAT:NO`, and inspection of the current
+`dalvikvm.exe`, `art.dll`, and `c++.dll` finds no
+`IMAGE_DLL_CHARACTERISTICS_EX_CET_COMPAT` and no Guard EH-continuation table.
+The repository does not yet pass `/CETCOMPAT:NO` explicitly and has no early
+process-policy check, so the current state is not a completed or enforceable
+contract.
+
+On Windows 10 version 2004/build 19041 and later, startup queries
+`GetProcessMitigationPolicy(GetCurrentProcess(),
+ProcessUserShadowStackPolicy, ...)` before creating ART threads or enabling
+nterp/JIT and rejects every nonzero result with a bounded diagnostic. On older
+supported Windows 10 builds, the documented policy class is unavailable; only
+the expected unsupported-policy result is accepted as evidence that HSP is
+unavailable. Unexpected query failures on systems that implement the policy
+fail closed.
+
 ## 6. Designs considered
 
 ### 6.1 Selected: VEH adapter over the existing `FaultManager`
@@ -315,6 +396,24 @@ Intercepting CRT `signal()`/`sigaction()`-like calls does not control Windows
 VEH or SEH registration. It would create an attractive but false portability
 layer. The Windows `sigchain` file should expose only the ART-internal bridge
 that current common code needs.
+
+### 6.7 Rejected: partial CET repair around VEH or the JIT cache
+
+`/guard:ehcont` and `SetProcessDynamicEHContinuationTargets()` address
+continuation-target validation; they do not synchronize the hardware shadow
+stack with ART's restored managed stack. Likewise,
+`SetProcessDynamicEnforcedCetCompatibleRanges()` would describe dynamic code
+as CET-compatible without repairing ART's non-local transfer and is not a
+valid workaround. The Windows port must not call either API to bypass the
+unsupported-process check.
+
+A future CET-support project would need to redesign every x86_64 managed
+exception/deoptimization/JNI non-local transfer, establish a shadow-stack-safe
+continuation protocol, emit complete static and dynamic continuation metadata,
+and prove VEH, SEH, JIT collection, and native unwinding together. That would
+be a distinct managed-ABI project with significant Windows divergence, not a
+small W-010 or W-025 patch. The current design instead requires CET shadow
+stacks to be disabled.
 
 ## 7. W-010 detailed exception design
 
@@ -877,7 +976,9 @@ artThrowStackOverflowFromCode(Thread*)
 ART long-jumps/delivers to the managed catch site
 ```
 
-No Windows SEH unwind is used for the managed transition.
+No Windows SEH unwind is used for the managed transition. This sequence is
+supported only with CET user shadow stacks disabled; its final ART long jump
+does not maintain a hardware shadow-stack pointer.
 
 ## 10. Activation and failure policy
 
@@ -886,7 +987,8 @@ activation. Define a conceptual capability:
 
 ```text
 win_managed_faults_ready =
-    VEH registered
+    CET user-shadow-stack policy completely disabled
+    && VEH registered
     && special SIGSEGV action published
     && x86_64 WindowsFaultContext adapter built
     && implicit null handler registered
@@ -895,6 +997,8 @@ win_managed_faults_ready =
 
 Then:
 
+- startup must query the process CET/HSP policy before creating ART threads or
+  enabling JIT and reject every supported nonzero policy value;
 - `implicit_null_checks_` may be true only when the capability is ready;
 - `implicit_so_checks_` may be true only when it is ready and each attached
   thread installs its fixed page;
@@ -939,6 +1043,31 @@ margin. Increase only the Windows x86_64 reserve if measurement proves it is
 necessary; do not increase it speculatively.
 
 ## 12. Implementation stages
+
+### Stage 0 — CET shadow-stack exclusion
+
+- Add explicit `/CETCOMPAT:NO` to every project Win64 executable and DLL link
+  target instead of relying on lld's current default.
+- Inspect every packaged PE, including LLVM libc++, and reject packaging if
+  `IMAGE_DLL_CHARACTERISTICS_EX_CET_COMPAT` is present.
+- Query `ProcessUserShadowStackPolicy` at the earliest runtime initialization
+  point, before managed thread creation, nterp publication, or JIT startup.
+- Accept only an all-zero policy on Windows versions that implement the query;
+  accept the expected unavailable-policy result on older supported Windows 10
+  builds; fail closed on unexpected query failures.
+- Emit a bounded diagnostic explaining that Hardware-enforced Stack Protection
+  must be disabled by the launcher or Windows Exploit Protection policy before
+  process creation.
+- Do not use `/guard:ehcont`, dynamic EH-continuation registration, or dynamic
+  CET-compatible-range registration as a substitute.
+
+Clean completion criteria:
+
+- generated and handwritten Win64 link commands contain `/CETCOMPAT:NO`;
+- packaged PE inspection finds no CET-compatible extended characteristic;
+- an HSP-disabled native process passes the startup guard;
+- compatibility, audit, and strict HSP policies are rejected before managed
+  execution, without relying on a late control-protection exception or dump.
 
 ### Stage A — bounds, creator, and pthread lifetime
 
@@ -1006,7 +1135,25 @@ Clean completion criteria:
 
 ## 13. Required verification matrix
 
-### 13.1 Stack bounds and creation
+### 13.1 CET/HSP process policy
+
+- Structural link-command check proves every Win64 PE link explicitly includes
+  `/CETCOMPAT:NO`.
+- `llvm-readobj --coff-debug-directory` or an equivalent PE parser proves
+  `dalvikvm.exe`, `art.dll`, `sigchain.dll`, LLVM libc++, quick/JIT support
+  DLLs, probe executables, and packaged copies omit
+  `IMAGE_DLL_CHARACTERISTICS_EX_CET_COMPAT`.
+- Native Windows with Hardware-enforced Stack Protection disabled starts and
+  reaches the ordinary product gates.
+- Forced compatibility, audit, and strict policies each fail during early
+  startup with the documented diagnostic, before a Java method or JIT worker
+  runs.
+- Rejection does not produce a `.dmp` and does not depend on
+  `STATUS_CONTROL_PROTECTION_VIOLATION` as the detection mechanism.
+- CFG-on tests remain a separate W-025 matrix and must not change this expected
+  CET rejection behavior.
+
+### 13.2 Stack bounds and creation
 
 - Main executable thread/default linker stack.
 - Java-created threads with 0 and representative requested sizes, recording
@@ -1021,7 +1168,7 @@ Clean completion criteria:
 - External thread attach, managed call, detach, continued native stack use,
   reattach, and exit.
 
-### 13.2 Implicit null
+### 13.3 Implicit null
 
 - Nterp implicit invoke-null path that currently fails.
 - JIT baseline and optimized implicit reads and writes.
@@ -1030,7 +1177,7 @@ Clean completion criteria:
 - Native AV at a low address is not translated.
 - AV in an unregistered executable range is not translated.
 
-### 13.3 Stack overflow
+### 13.4 Stack overflow
 
 - Switch interpreter explicit overflow as a reference.
 - Nterp and threshold-zero JIT overflow.
@@ -1043,7 +1190,7 @@ Clean completion criteria:
 - Deliberate generated-code AV with the wrong address remains unhandled.
 - Handler and pre-unprotect stack high-water measurements.
 
-### 13.4 Chain and fatal diagnostics
+### 13.5 Chain and fatal diagnostics
 
 - Foreign VEH registered before ART, after ART, and promoted by
   `EnsureFrontOfChain()`.
@@ -1057,7 +1204,7 @@ Clean completion criteria:
   illegal-instruction, and execute AV are not consumed by ART's managed VEH.
 - Runtime shutdown removes the VEH before `art.dll` can unload.
 
-### 13.5 Cross-platform regression
+### 13.6 Cross-platform regression
 
 - Linux `018-stack-overflow` and implicit-null tests.
 - Linux generated-code range registration/removal tests.
@@ -1065,7 +1212,7 @@ Clean completion criteria:
 - Win64 nterp/JIT ABI, XMM nonvolatile, JIT dual-view, W-002, W-003, W-004,
   W-013, and W-024 acceptance subsets remain green.
 
-### 13.6 Deterministic host-side tests
+### 13.7 Deterministic host-side tests
 
 Keep Win32 API acquisition separate from policy so the dangerous decisions
 are testable without deliberately crashing a product process:
@@ -1090,8 +1237,9 @@ and debugger evidence.
 
 | File | Planned responsibility |
 |------|------------------------|
+| `overlay/port_policy_windows.py` and Win64 CMake harnesses | Explicit `/CETCOMPAT:NO` on every generated and handwritten executable/DLL target; no accidental linker-default dependency |
 | `runtime/multiplatform/windows/sigchain_windows.cc` | ART special-SIGSEGV facade, VEH handle, promotion/removal, exact exception filter |
-| `runtime/multiplatform/windows/runtime_windows.cc` | Fatal UEF/minidump policy only; call platform fault initialization if needed |
+| `runtime/multiplatform/windows/runtime_windows.cc` | Earliest CET/HSP policy rejection plus fatal UEF/minidump policy; call platform fault initialization if needed |
 | `runtime/multiplatform/windows/fault_handler_windows.cc` | Optional split of dispatcher/adapter if `sigchain_windows.cc` becomes too broad |
 | `runtime/multiplatform/windows/fault_handler_windows.h` | Windows-only non-owning context view and documented AV-kind constants; no common-header Win32 leakage |
 | `runtime/arch/x86/fault_handler_x86.cc` | Win64 non-owning context view, real `CONTEXT` PC/SP access, AV-kind and protected-page checks |
@@ -1127,7 +1275,8 @@ fallbacks:
    not a reason to weaken ART's classifier.
 6. Is PE unwind metadata required for useful fatal minidumps through the two
    quick exception trampolines? It is not required merely to return
-   `EXCEPTION_CONTINUE_EXECUTION` with a modified context.
+   `EXCEPTION_CONTINUE_EXECUTION` with a modified context while CET user shadow
+   stacks are disabled. It cannot be used to infer CET compatibility.
 
 ## 16. Primary references and comparative implementation
 
@@ -1149,6 +1298,9 @@ Microsoft contracts:
 - [`VirtualProtect`](https://learn.microsoft.com/windows/win32/api/memoryapi/nf-memoryapi-virtualprotect)
 - [Creating guard pages](https://learn.microsoft.com/windows/win32/memory/creating-guard-pages)
 - [`SetThreadStackGuarantee`](https://learn.microsoft.com/windows/win32/api/processthreadsapi/nf-processthreadsapi-setthreadstackguarantee)
+- [`PROCESS_MITIGATION_USER_SHADOW_STACK_POLICY`](https://learn.microsoft.com/windows/win32/api/winnt/ns-winnt-process_mitigation_user_shadow_stack_policy)
+- [`GetProcessMitigationPolicy`](https://learn.microsoft.com/windows/win32/api/processthreadsapi/nf-processthreadsapi-getprocessmitigationpolicy)
+- [`/CETCOMPAT`](https://learn.microsoft.com/cpp/build/reference/cetcompat)
 
 Comparative implementation:
 
