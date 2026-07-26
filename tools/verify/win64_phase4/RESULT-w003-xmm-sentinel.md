@@ -1,6 +1,6 @@
 # W-003 Microsoft XMM nonvolatile sentinel
 
-**Status:** WINE COMPLETE; native Windows acceptance remains
+**Status:** NATIVE WINDOWS ACCEPTED — W-003 closed
 
 **Date:** 2026-07-26
 
@@ -77,10 +77,17 @@ main end exception=0
 The JIT pair additionally records successful baseline compilation of
 `W003XmmSentinelProbe.managedCallback(double, ... double)`.
 
-## Remaining acceptance
+## Native Windows acceptance
 
-Wine demonstrates the repaired adapter behavior and the sentinel itself.
-The separate four-family managed-frame probe is now complete under Wine; see
-[RESULT-w003-frame-probe.md](RESULT-w003-frame-probe.md). W-003 still requires
-repeated Windows 10 version 1803-or-later native execution of both focused
-probes with fatal-marker and recursive dump scans before closure.
+Windows 10 build 19044 passes the sentinel 2/2 in nterp, switch, and
+threshold-zero JIT modes. All six runs report a zero normal mismatch mask, the
+exact six-bit intentional-clobber mask, zero pending exception, and exit zero.
+Both JIT runs compile the twelve-double managed callback through the corrected
+Windows pagefile-section dual view.
+
+The separate four-family managed-frame probe also passes 8/8 on the same
+native host; see [RESULT-w003-frame-probe.md](RESULT-w003-frame-probe.md).
+Fatal-marker and recursive dump scans are clean. The complete accepted return
+is documented in
+[evidence/w003_host/ACCEPTANCE.md](evidence/w003_host/ACCEPTANCE.md), and W-003
+is closed.

@@ -1,6 +1,6 @@
 # Win64 Phase 4 — RESULT
 
-**Status:** **WINE COMPLETE** — A5–A8 and focused managed/native JIT hardening gates PASS under wine64; focused native acceptance remains where listed
+**Status:** **WINE COMPLETE; FOCUSED NATIVE SUBSETS ACCEPTED** — A5–A8 and managed/native JIT hardening gates pass; W-002, W-003, W-004, and W-024 native closure matrices are accepted
 **Date:** 2026-07-26
 **Depends on:** Phase 3 complete (real Win10 G12 goldens)
 
@@ -53,6 +53,7 @@ PASS native_crash_aborts
 | W-003 XMM boundary and structural gate | `quick_entrypoints_x86_64.S`; `check_w003_quick_boundaries.py` |
 | W-003 attributed frame-family gate | `w003_frame_probe/`; `run_w003_frame_probe.sh` |
 | W-003 XMM runtime sentinel | `w003_xmm_sentinel/`; `run_w003_xmm_sentinel.sh` |
+| W-003 native package and evidence | `package_win64_w003.sh`; `evidence/w003_host/ACCEPTANCE.md` |
 
 ## Host
 
@@ -72,6 +73,18 @@ JOBS=32 WINEDEBUG=-all \
 # Native PowerShell: .\scripts\RUN_W002_HOST.ps1
 ```
 
+Focused W-003 native acceptance:
+
+```bash
+JOBS=32 WINEDEBUG=-all \
+  bash tools/win64/host_package/package_win64_w003.sh
+# Native PowerShell: .\scripts\RUN_W003_HOST.ps1
+```
+
+The accepted Windows 10 build 19044 return has 19/19 PASS records over 14
+children, clean fatal/dump scans, 8/8 attributed frame runs, and 6/6 XMM
+sentinel runs. See `evidence/w003_host/ACCEPTANCE.md`.
+
 ## Non-goals
 
 - Windows NIO.2
@@ -80,7 +93,6 @@ JOBS=32 WINEDEBUG=-all \
 
 ## Next
 
-- Complete W-003 native-Windows frame-family and XMM sentinel acceptance
 - Complete W-025 broader JIT-mapping native acceptance and hardening
 
 ## Multiplatform re-run (2026-07-17)
@@ -140,3 +152,21 @@ tooling tests. Native Windows R2 then passes 21/21 records on build 19044:
 W-002 is closed. See
 [`RESULT-w002-managed-entry.md`](RESULT-w002-managed-entry.md) and
 [`evidence/w002_host/ACCEPTANCE.md`](evidence/w002_host/ACCEPTANCE.md).
+
+## W-003 quick-frame/XMM re-run (2026-07-26)
+
+All four quick callee-save frame families use the shared Linux-shaped body on
+Windows, while the explicit Microsoft C++-to-managed invoke/OSR boundaries
+preserve XMM6-XMM11 in a separate 96-byte native area. Structural inspection
+finds matched PE/ELF trap distributions and no probe symbols in product ART.
+
+Focused Wine acceptance passes 8/8 attributed frame processes and 6/6 XMM
+sentinel processes. Native Windows 10 build 19044 then passes exactly 19/19
+records over the same 14-process matrix. Nterp and threshold-zero JIT each
+attribute all four frame families; every XMM run reports
+`mask=0 selfTestMask=63 iterations=128`; JIT logs confirm the corrected
+pagefile-section J-2 dual view and successful compilation; and fatal/dump
+scans are clean. W-003 is closed. The independent nterp implicit-null and
+PE/SEH/native-unwind work remains W-010. See
+[`RESULT-w003-quick-frames-analysis.md`](RESULT-w003-quick-frames-analysis.md)
+and [`evidence/w003_host/ACCEPTANCE.md`](evidence/w003_host/ACCEPTANCE.md).

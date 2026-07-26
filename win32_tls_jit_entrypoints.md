@@ -6,8 +6,8 @@ implemented and product-default; other Windows ISAs remain design-only
 **Scope:** Record the cross-ISA design and the implemented x86_64 contracts.
 **Related:** [win64_art_port.md](win64_art_port.md) (product phases),
 [win32_jit_memory.md](win32_jit_memory.md) (implemented code-cache design), and
-[win32_open_items.md](win32_open_items.md) (W-002 closure plus remaining
-W-003/W-008/W-010/W-014/W-017 and W-025 work).
+[win32_open_items.md](win32_open_items.md) (W-002/W-003 closure plus remaining
+W-008/W-010/W-014/W-017 and W-025 work).
 
 ---
 
@@ -19,7 +19,7 @@ default-on. Win64 uses `r15` as rSELF and `rbp` as nterp rREFS; Linux keeps
 its GS-relative x86_64 Thread model. The default JIT cache is one unnamed
 pagefile-backed section with a contiguous low R/RX primary view and a complete
 RW updater alias. Native ABI, tracing, JVMTI forced-interpreter, and native
-Windows W-024/W-013 acceptance subsets pass.
+Windows W-002/W-003/W-004/W-013/W-024 acceptance subsets pass.
 
 The port required a **coherent design** of three layers that AOSP treats as one
 machine-specific package:
@@ -928,8 +928,9 @@ Design step 5 (**compiled Hello without forced `-Xint`**, still imageless) is **
 The checkpoint's quick-invoke, nterp, CoreProbe, W-012, W-024, and Phase-5 JIT
 items are complete. W-002's managed-entry implementation and Wine/Linux/native
 Windows verification are complete; deterministic R2 passes every OSR and
-attached-thread mode pair and closes W-002. Current residual work is
-W-003/W-008/W-010/W-014/W-017, broader W-025 hardening, and the other
+attached-thread mode pair and closes W-002. W-003's frame-family and native
+XMM boundary matrices also pass on Windows build 19044. Current residual work
+is W-008/W-010/W-014/W-017, broader W-025 hardening, and the other
 host-validation gaps in [win32_open_items.md](win32_open_items.md).
 
 ## 15. Nterp / mterp on WinNT x86_64 — analysis and design
@@ -1602,8 +1603,8 @@ documented in
 
 ## 17.10 W-003 quick callee-save frames and native-boundary gap (2026-07-26)
 
-**Status:** SETUP, Microsoft-XMM boundary repair, focused Wine gates, and
-native-host package implemented; W-003 remains open for native execution
+**Status:** CLOSED — SETUP, Microsoft-XMM boundary repair, focused Wine gates,
+and native Windows acceptance complete
 
 All four x86-64 runtime callee-save frame families execute their shared
 non-Apple bodies on Windows. Only refs-only and all-callee-saves ever had a
@@ -1649,17 +1650,19 @@ does not translate ART generated-code faults. W-003 excludes that one
 implicit-null subtest without adding a product fallback; explicit class-cast,
 array-store, and bounds paths remain covered.
 
-The focused native-host package now validates its PE/hash contract, smokes all
+The focused native-host package validates its PE/hash contract, smokes all
 seven modes under Wine, restores product `art.dll`, and ships without runtime
-logs, dumps, or traces. Its Windows PowerShell runner requires build 17134 or
-newer and executes 8 frame runs plus 6 XMM runs. The remaining W-003 close work
-is running that package on native Windows and returning exactly 19 PASS
-records, `OVERALL PASS`, and clean fatal-marker and recursive dump scans.
+logs, dumps, or traces. Windows 10 build 19044 returns exactly 19 PASS records
+and `OVERALL PASS` over 8 frame runs and 6 XMM runs. All children exit zero
+without timeout; nterp and JIT each attribute all four frame families; every
+XMM run reports `mask=0 selfTestMask=63`; and fatal/dump scans are clean. The
+JIT logs explicitly confirm creation of the Windows pagefile-section J-2
+dual view before successful compilation.
 
 PE assembly unwind metadata remains absent because CFI macros are disabled on
-Windows. ART managed unwinding is separate; W-010 must explicitly own the
-broader VEH/SEH/native-unwind decision if W-003 closes without `.pdata` and
-`.xdata` for quick assembly.
+Windows. ART managed unwinding is separate; W-003 closes with W-010 explicitly
+owning the broader VEH/SEH/native-unwind decision and the absence of `.pdata`
+and `.xdata` for quick assembly.
 
 See
 [RESULT-w003-quick-frames-analysis.md](tools/verify/win64_phase4/RESULT-w003-quick-frames-analysis.md)
@@ -1669,7 +1672,9 @@ and
 [RESULT-w003-xmm-sentinel.md](tools/verify/win64_phase4/RESULT-w003-xmm-sentinel.md)
 and
 [W003_HOST_CHECKLIST.md](tools/verify/win64_phase4/W003_HOST_CHECKLIST.md)
-for the evidence and staged implementation plan.
+and
+[native acceptance](tools/verify/win64_phase4/evidence/w003_host/ACCEPTANCE.md)
+for the design, staged implementation, and accepted evidence.
 
 
 ## 13. Appendix — evidence anchors in tree
@@ -1695,4 +1700,4 @@ for the evidence and staged implementation plan.
 
 ## 14. One-paragraph executive summary
 
-On Linux amd64, ART’s managed world is **GS-relative Thread TLS** layered on top of normal C++ `thread_local`, with quick entrypoints and JIT assuming SysV bridges; on Linux arm64, managed world is **x19 = Thread\***. Windows **cannot** reuse GS for Thread\* (TEB owns GS); **FS.base=Thread\*** is also **rejected** (§16: FSGSBASE/wine/CONTEXT portability), so managed self is a GPR. The WinNT design therefore adopts the **arm64-style explicit self register** on all Windows ISAs (**LOCKED and implemented: r15** on x86_64 with nterp **rREFS=rbp**; **x19** remains a design for ARM64/Arm64EC), keeps C++ `Thread::Current()` on `thread_local`/`TlsAlloc`, and isolates Microsoft C++ calling conventions at explicit quick-invoke and OSR bridges. The Windows nterp OSR adapter preserves the deliberately different nterp and compiled save layouts. JIT code obeys the same self and entrypoint contracts and uses one unnamed pagefile-backed section with a low contiguous R/RX primary view plus an RW updater alias. **W-002's rSELF/OSR contract is accepted and closed; W-003 has repaired and Wine-validated XMM6-XMM11 preservation plus all four quick-frame families, has a checked native-host package, and remains open only for its 19-record native execution.** x86, arm64, and Arm64EC remain design-only so future work is not forced into a GS-shaped abstraction.
+On Linux amd64, ART’s managed world is **GS-relative Thread TLS** layered on top of normal C++ `thread_local`, with quick entrypoints and JIT assuming SysV bridges; on Linux arm64, managed world is **x19 = Thread\***. Windows **cannot** reuse GS for Thread\* (TEB owns GS); **FS.base=Thread\*** is also **rejected** (§16: FSGSBASE/wine/CONTEXT portability), so managed self is a GPR. The WinNT design therefore adopts the **arm64-style explicit self register** on all Windows ISAs (**LOCKED and implemented: r15** on x86_64 with nterp **rREFS=rbp**; **x19** remains a design for ARM64/Arm64EC), keeps C++ `Thread::Current()` on `thread_local`/`TlsAlloc`, and isolates Microsoft C++ calling conventions at explicit quick-invoke and OSR bridges. The Windows nterp OSR adapter preserves the deliberately different nterp and compiled save layouts. JIT code obeys the same self and entrypoint contracts and uses one unnamed pagefile-backed section with a low contiguous R/RX primary view plus an RW updater alias. **W-002's rSELF/OSR contract and W-003's quick-frame/XMM boundary contract are both accepted and closed after native Windows repetition.** x86, arm64, and Arm64EC remain design-only so future work is not forced into a GS-shaped abstraction.

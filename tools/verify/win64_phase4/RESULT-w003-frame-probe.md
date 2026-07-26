@@ -1,6 +1,6 @@
 # W-003 attributed quick-frame family probe
 
-**Status:** WINE COMPLETE; native Windows acceptance package ready
+**Status:** NATIVE WINDOWS ACCEPTED — W-003 closed
 
 **Date:** 2026-07-26
 
@@ -153,14 +153,20 @@ or network connection. It runs 8 frame processes plus 6 XMM processes, scans
 all logs for fatal markers, recursively scans the package for dumps, and
 restores the product ART variant even on failure.
 
-Native acceptance requires exit 0, exactly 19 `PASS` records, `OVERALL PASS`,
-and `NO_DMP_FILES`. The native logs remain external evidence; they are not
-pre-populated in the issued archive.
+The accepted native run returns exit 0, exactly 19 `PASS` records,
+`OVERALL PASS`, and `NO_DMP_FILES`. The native logs remain external evidence;
+they are not pre-populated in the issued archive.
 
-## Remaining close work
+## Native Windows acceptance and closure
 
-The Wine frame-family gate and native-host package are complete. W-003 remains
-open until the packaged matrix passes on native Windows 10/11 and its returned
-logs satisfy the 19-record, fatal-marker, and recursive dump-scan contract. PE
-quick-assembly unwind ownership remains with W-010 as documented in the main
-W-003 analysis.
+Native Windows 10 build 19044 passes the complete packaged matrix: 8/8 frame
+processes, 6/6 XMM processes, 19/19 PASS records, clean fatal-marker scan, and
+`NO_DMP_FILES`. Nterp and JIT independently reach all four frame families; all
+six native XMM runs return `mask=0 selfTestMask=63 iterations=128`. The JIT
+logs explicitly confirm construction of the Windows pagefile-section J-2
+dual view and successful workload compilation.
+
+The accepted package and returned evidence are documented in
+[evidence/w003_host/ACCEPTANCE.md](evidence/w003_host/ACCEPTANCE.md). W-003 is
+closed. PE quick-assembly unwind and generated-fault translation remain with
+W-010 as documented in the main W-003 analysis.

@@ -1,7 +1,7 @@
 # Win64 JIT memory and codepath — current design and status
 
-**Status:** pagefile-backed dual mapping is the default; Wine gates and the
-W-013 native Windows heap/JIT integration subset pass; broader W-025 hardening remains
+**Status:** pagefile-backed dual mapping is the default; Wine gates plus the
+W-013 heap/JIT and W-003 boundary native subsets pass; broader W-025 hardening remains
 **Updated:** 2026-07-26
 **Target baseline:** Windows 10 version 1803 or later (NTDDI_WIN10_RS4)
 **Related:** [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md),
@@ -884,7 +884,7 @@ None of this justifies retaining the RWX J-1 path as the product default.
 | PE asm definitions | Windows-target generator test enforces `RUNTIME_INSTRUMENTATION_OFFSET=0x328` |
 | W-002 managed OSR entries | W-002 CLOSED: quick and nterp OSR adapters pass structural, Wine, Linux, and native R2 controls; native R2 returns 8/8 OSR with deterministic thresholds/checksum |
 | W-002 native attach entries | Regular and daemon native threads call a pre-JITed Java callback, allocate, validate daemon state and exact values, detach, and verify `JNI_EDETACHED` in both memory and interpreter modes |
-| W-003 quick-frame attribution | Opt-in counters compile out of product artifacts; nterp and threshold-zero JIT each reach refs-only, refs-and-args, all-callee-saves, and save-everything; complete Wine matrix passes 8/8 |
+| W-003 quick-frame/XMM boundary | CLOSED: opt-in counters compile out of product artifacts; nterp and threshold-zero JIT each reach all four frame families; native Windows build 19044 passes 8/8 frame runs and 6/6 XMM runs with 19/19 records, J-2 creation, and clean fatal/dump scans |
 | Threshold-zero CriticalNative | Direct visitor uses Win64 unified ordinals/home area; dlsym caller PC preserved; repeated J-1 and dual-view probes pass |
 | Unresolved CriticalNative dlsym | ART-owned `JVM_NativeLoad` bridge; mixed/spilled/scalar exported calls pass through both load APIs |
 | CriticalNative method tracing | Registered and unresolved suites pass during/after tracing in J-1 and dual-view modes; mode restores to zero and trace output is deleted |
@@ -959,6 +959,7 @@ None of this justifies retaining the RWX J-1 path as the product default.
 | 2026-07-26 | W-002 R2 pins warmup and optimize thresholds to 100, increases the exact-checksum loop to 2,000,000 iterations, accepts strict evidence-only returns, and passes unit, focused Wine, aggregate Wine, and Linux controls |
 | 2026-07-26 | W-002 native R2 passes 21/21 records on Windows 10 build 19044: 8/8 OSR, 8/8 attach, exact thresholds/checksum, clean fatal scan, and no dump; W-002 closes |
 | 2026-07-26 | W-003 opt-in frame attribution passes 8/8 under Wine; nterp and threshold-zero JIT each prove all four quick-frame families, while an independent implicit-null AV is assigned to W-010 |
+| 2026-07-26 | W-003 native R1 passes 19/19 records on Windows build 19044: 8/8 frame attribution, 6/6 XMM6-XMM11 sentinel, explicit pagefile-section J-2 creation, successful JIT compilation, and no fatal marker or dump; W-003 closes while implicit-fault translation remains W-010 |
 | 2026-07-24 | Native Windows 10 build 19044 tripwire matrix passes all nine cases with exact required native compile records and no crash dump; W-024 cleanup is authorized |
 | 2026-07-24 | ART `42a03f2ea0` restores exact upstream interpreter scope and common default native-JIT policy; final Win64 and Linux regressions pass and W-011/W-012/W-024 close |
 
@@ -976,7 +977,7 @@ None of this justifies retaining the RWX J-1 path as the product default.
 | CodeInfo offset | `vendor/art/runtime/oat/oat_quick_method_header.h` |
 | D-1 Thread-address helper | `vendor/art/compiler/utils/x86_64/assembler_x86_64.*` |
 | W-002 OSR entry adapters | `vendor/art/runtime/arch/x86_64/quick_entrypoints_x86_64.S`; `vendor/art/runtime/interpreter/mterp/x86_64ng/main.S` |
-| W-003 frame-family probe | `tools/verify/win64_phase4/run_w003_frame_probe.sh`; `tools/verify/win64_phase4/RESULT-w003-frame-probe.md` |
+| W-003 frame-family/XMM acceptance | `tools/verify/win64_phase4/run_w003_frame_probe.sh`; `tools/verify/win64_phase4/RESULT-w003-frame-probe.md`; `tools/verify/win64_phase4/evidence/w003_host/ACCEPTANCE.md` |
 | JNI XMM argument moves | `vendor/art/compiler/utils/x86_64/jni_macro_assembler_x86_64.cc`; `assembler_x86_64_test.cc` |
 | Native JIT gate | `vendor/art/runtime/jit/jit.cc` |
 | dlmalloc configuration | `vendor/art/runtime/gc/allocator/art-dlmalloc.cc` |
