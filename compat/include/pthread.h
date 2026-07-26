@@ -5,10 +5,16 @@
 #include <time.h>
 typedef CRITICAL_SECTION pthread_mutex_t;
 typedef int pthread_mutexattr_t;
-typedef DWORD pthread_t;
+struct mdvm_pthread_control;
+typedef struct mdvm_pthread_control* pthread_t;
 typedef DWORD pthread_key_t;
 typedef LONG pthread_once_t;
-typedef struct { int detachstate; void* stackaddr; size_t stacksize; size_t guardsize; } pthread_attr_t;
+typedef struct {
+  int detachstate;
+  void* stackaddr;
+  size_t stacksize;
+  size_t guardsize;
+} pthread_attr_t;
 typedef CONDITION_VARIABLE pthread_cond_t;
 typedef int pthread_condattr_t;
 /* Real shared/exclusive locks via SRWLOCK (W-009). exclusive_owner tracks
@@ -50,6 +56,7 @@ void* pthread_getspecific(pthread_key_t);
 int pthread_setspecific(pthread_key_t, const void*);
 pthread_t pthread_self(void);
 int pthread_equal(pthread_t, pthread_t);
+DWORD pthread_gettid_np(pthread_t);
 int pthread_once(pthread_once_t*, void (*)(void));
 int pthread_setname_np(pthread_t, const char*);
 int pthread_getname_np(pthread_t, char*, size_t);

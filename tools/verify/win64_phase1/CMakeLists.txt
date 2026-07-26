@@ -112,6 +112,9 @@ set_target_properties(win64_posix_stubs PROPERTIES POSITION_INDEPENDENT_CODE ON)
 add_executable(win64_pthread_once_probe EXCLUDE_FROM_ALL
   "${_repo}/tools/verify/win64_phase4/pthread_once_probe.c")
 
+add_executable(win32_thread_stack_probe EXCLUDE_FROM_ALL
+  "${CMAKE_CURRENT_SOURCE_DIR}/win32_thread_stack_probe.c")
+
 add_executable(win32_cet_policy_probe EXCLUDE_FROM_ALL
   "${CMAKE_CURRENT_SOURCE_DIR}/win32_cet_policy_probe.cc"
   "${MDVM_ART_WIN_RUNTIME}/cet_compat.cc")

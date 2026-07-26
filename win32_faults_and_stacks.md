@@ -1,6 +1,6 @@
 # Win64 managed faults and ART stack design
 
-**Status:** Stage 0 implemented and locally verified; W-010/W-014 Stages A-E remain design/implementation work
+**Status:** Stage 0 and W-014 Stage A implemented and locally verified; native Stage A acceptance and Stages B-E remain
 **Created:** 2026-07-26
 **Updated:** 2026-07-26
 **Target:** x86_64 Windows 10 build 17134+
@@ -156,9 +156,27 @@ Windows should preserve that sequence. The OS-specific differences are how
 the fault is delivered, how PC/SP are represented, and how the fixed page is
 created.
 
-## 4. Current Windows defects
+## 4. Current Windows state and remaining defects
 
-The current tree violates that contract in several independent ways:
+Stage A has removed the unsafe stack-bound and pthread-creation workarounds:
+
+- `GetThreadStack()` now accepts only the current non-fiber system stack,
+  obtains its exact interval from `GetCurrentThreadStackLimits()`, validates
+  current-SP containment and committed-private ownership, and walks the full
+  allocation with `VirtualQuery()` before publishing bounds. Its temporary
+  one-page `guardsize` report is not treated as an authoritative Windows guard
+  or excluded-low measurement while implicit stack checks remain disabled.
+- `pthread_create()` uses `_beginthreadex`; non-zero sizes use reservation
+  semantics, custom stack addresses are rejected, joinable handles and
+  callback results have real ownership, and detach closes the handle exactly
+  once.
+- ART-created Windows thread pools pass their requested reservation rather
+  than allocating an ignored `MemMap` stack.
+- Runtime teardown removes ART's diagnostic VEH while `art.dll` is still
+  loaded and restores the process UEF without overwriting a filter installed
+  after ART.
+
+The remaining tree still violates the complete managed-fault contract:
 
 - `runtime_windows.cc` installs a diagnostic VEH that logs selected
   first-chance exceptions and always continues the search.
@@ -166,24 +184,14 @@ The current tree violates that contract in several independent ways:
 - Runtime initialization forces implicit null, stack-overflow, and suspend
   flags off, but Win64 nterp and optimizing code still contain their normal
   implicit accesses.
-- `GetThreadStack()` derives an approximate interval from one
-  `VirtualQuery()`, clamps it to 256 KiB through 8 MiB, and fabricates 1 MiB
-  results.
-- `pthread_create()` discards all attributes and calls
-  `CreateThread(..., 0, ..., 0, ...)`.
-- `pthread_attr_setstack()` appears to succeed even though its address is never
-  used.
-- ART thread pools allocate custom `MemMap` stacks that the Windows shim then
-  ignores.
 - `ProtectStack()` and `UnprotectStack()` report success without changing page
   state.
-- Windows `pthread_t` is only a thread ID. `pthread_create()` closes the real
-  handle immediately and `pthread_join()` tries to reopen by ID, which is not a
-  sound join lifetime contract.
 
-These defects explain why nterp's implicit-null instruction can escape as a
-native AV and why the current unconditional stack probes cannot provide a
-managed overflow path.
+The remaining defects explain why nterp's implicit-null instruction can
+escape as a native AV and why the current unconditional stack probes still
+cannot provide a managed overflow path. Exact bounds now make stack accounting
+trustworthy, but Stage B must install the fixed page before W-010 can translate
+the probe.
 
 ## 5. Windows contracts and conclusions
 
@@ -656,6 +664,13 @@ it returns `EXCEPTION_CONTINUE_SEARCH`. The UEF is fatal diagnostics, not
 W-010 managed translation, and can be replaced by an embedding application
 later.
 
+Stage A already closes the basic unload hazard: runtime teardown removes the
+diagnostic VEH while `art.dll` is executable and restores ART's predecessor
+only if ART is still the current UEF. If an embedding application installed a
+later UEF, teardown preserves that later filter. The current fatal UEF still
+terminates through `EXCEPTION_EXECUTE_HANDLER`; chaining the predecessor after
+the best-effort dump remains part of Stage C's diagnostics separation.
+
 An opt-in diagnostic build may add a final observer VEH or a preallocated
 record ring, but it must be off by default and must not run before the managed
 translator.
@@ -679,7 +694,7 @@ Algorithm:
    - `low < high` with no wrap;
    - both bounds page-aligned;
    - `low < SP < high`;
-   - `high - low` exceeds ART's minimum stack formula.
+   - `high - low` fits in `size_t`.
 5. Call `VirtualQuery(SP)` and require:
    - success;
    - `MEM_COMMIT`;
@@ -690,13 +705,18 @@ Algorithm:
    contiguous coverage, no `MEM_FREE`, the same `AllocationBase`, and an exact
    end at `high`. Accept reserved and committed subregions because Windows
    grows stacks on demand.
-7. Read `NtCurrentTeb()->NtTib.StackBase` and `StackLimit` only for bounded
-   diagnostics. `StackBase` should agree with `high`; changing `StackLimit`
-   describes current commitment, not total reservation.
-8. Never read undocumented `DeallocationStack` for product logic.
+7. Let common `Thread::InitStack()` apply ART's minimum-stack formula before
+   publishing the attached thread.
+8. Optional probes may read documented `NT_TIB.StackBase` and changing
+   `StackLimit` for bounded diagnostics only. Neither participates in product
+   acceptance, and undocumented `DeallocationStack` is never read.
 
-Failure rejects attachment. There is no clamp, 1 MiB fallback, guessed guard,
-or attempt to protect a partially trusted address.
+Failure rejects attachment. There is no clamp, 1 MiB fallback, or attempt to
+protect a partially trusted address. Until Stage B measures the bottom layout,
+the pthread facade reports one page through `pthread_attr_getguardsize()` only
+as a compatibility value; implicit stack checks remain disabled and ART does
+not treat that value as the Windows moving guard or as a safe fixed-page
+location.
 
 ### 8.2 Fiber and manual-stack policy
 
@@ -859,20 +879,23 @@ Use `_beginthreadex` because the callback executes ART C/C++ and UCRT code.
 The callback stores the `void*` return value in the pthread control object
 before `_endthreadex`/return so `pthread_join(..., &result)` remains meaningful.
 
-The present `DWORD pthread_t` design must not remain. A clean implementation
-uses an opaque control object containing at least:
+Stage A replaces the former `DWORD pthread_t` with an opaque control pointer.
+Facade-created threads use a control object containing:
 
 - immutable Windows thread ID;
 - retained real handle for joinable threads;
-- joinable/detached/exited state;
+- joinable/detached/joined state;
 - callback result;
-- lifetime synchronization sufficient for create/exit/join/detach races.
+- lifetime synchronization for publication and for target exit racing with one
+  valid join or detach operation.
 
-The concrete ownership draft uses a creator/public reference and a child
-reference established before `_beginthreadex` can run. The trampoline records
-its control object in thread-local storage, calls the POSIX callback, stores
-the result, publishes `exited`, and releases the child reference. Join or
-detach atomically claims the one public completion right:
+The implemented ownership model establishes creator, public-completion, and
+child references before `_beginthreadex` can run. The new thread is created
+suspended so its immutable ID, handle, detach state, and callback fields are
+complete before the callback executes. The trampoline records its control
+object in a module-local TLS slot, calls the POSIX callback, stores the result,
+clears that slot, and releases the child reference. Join or detach atomically
+claims the one public completion right:
 
 - join waits on the retained handle, reads the published callback result,
   closes the handle exactly once, and releases the public reference;
@@ -880,28 +903,39 @@ detach atomically claims the one public completion right:
   the child reference keeps the object alive until exit;
 - a create failure releases all unpublished ownership without exposing a
   `pthread_t`;
-- conflicting second join/detach operations fail deterministically rather
-  than reopening a handle by a reusable thread ID.
+- a second join/detach operation attempted while the control remains live
+  fails deterministically rather than reopening a handle by a reusable thread
+  ID. As with POSIX, simultaneous competing join/detach calls or use after the
+  thread ID lifetime ends are not a supported contract.
 
 Waiting on the thread handle supplies the result-publication ordering for
 join. Detached callers have no right to inspect the result. The trampoline
 may return normally from the `_beginthreadex` callback; explicit
 `_endthreadex` is unnecessary unless an early non-returning path requires it.
 
-`pthread_self()` for threads not created by the shim uses a stable
-thread-local non-joinable identity with thread-exit cleanup. `pthread_equal()`
-compares control identity, not raw handles or a reopened thread ID. Thread
-naming uses a retained handle when available or a bounded `OpenThread` by a
-known-live ID; it does not turn an ID into join ownership.
+`pthread_self()` for a thread not created by the facade returns an
+allocation-free tagged token containing its live Windows thread ID. The token
+has no join ownership and becomes invalid when that thread exits, matching the
+normal lifetime rule for detached POSIX thread IDs. This avoids process-exit
+callbacks pointing into one of the many DLL-local copies of the static compat
+archive. An earlier FLS-control-object draft was rejected after Wine proved
+that loader teardown could call its destructor after `art.dll` had become
+non-executable, recursively faulting until native stack exhaustion.
 
-Changing the typedef requires a source audit, not only a shim edit. Pointer
-zero-initialization and direct identity comparison remain valid, but numeric
-format strings and integer casts do not. Stage A must replace `%lu` pthread
-diagnostics with a helper that exposes the immutable thread ID for logging,
-and audit ART/libcore users of `pthread_t`, `pthread_kill()`, static zero
-initializers, hashing, and native-thread tokens. The Windows-specific
-`sun.nio.ch.NativeThread` already uses a Windows thread ID rather than the
-pthread control pointer; that boundary must remain separate.
+`pthread_equal()` compares immutable Windows thread IDs, so a facade-created
+control object and an external tagged token for the same live thread compare
+equal even when they came from different DLL-local copies of the compat
+archive. `pthread_gettid_np()` is the only numeric extraction boundary.
+Thread naming uses a bounded `OpenThread` by that known-live ID; it does not
+turn the ID into join ownership.
+
+The Stage A source audit found no product numeric `pthread_t` formatting or
+hashing dependency. Existing zero initialization remains portable in the
+shared ART sources. The one build failure exposed an unrelated
+libunwindstack typo that constructed `optional<pthread_t>` for a
+`optional<pthread_key_t>` field; it is corrected to use `pthread_key_t`.
+The Windows-specific `sun.nio.ch.NativeThread` continues to use its separate
+Windows thread-ID token rather than exposing a pthread control pointer.
 
 This handle work belongs in the same Stage A as stack sizing: otherwise stack
 tests can pass while join remains vulnerable to termination/reuse races.
@@ -1100,9 +1134,9 @@ Implementation and local evidence (2026-07-26):
   a future/reserved bit, old-build unavailability, and failure cases. Under
   Wine it reports build 19043, zero flags, and `PASS`.
 - The structural/package verifier reports 9 CMake harnesses, 3 direct links,
-  5 enforced host packagers, 17 Ninja PE link targets, and 45 inspected PE
-  files with no CET-compatible marker. The selected Win64 build completed 321
-  steps and `dalvikvm
+  5 enforced host packagers, 18 Ninja PE link targets, and 18 built PE files
+  with no CET-compatible marker. The selected Win64 build completed 321 steps
+  and `dalvikvm
   -showversion` reports `ART version 2.1.0 x86_64` under Wine.
 - The complete Phase-4 Wine suite passes after the change, including W-002,
   W-003 frame/XMM matrices, GC/thread/handle stress, intentional crash gates,
@@ -1121,22 +1155,39 @@ Stage A because the build and early-runtime enforcement are now present.
 
 ### Stage A — bounds, creator, and pthread lifetime
 
-- Reject `IsThreadAFiber()` and out-of-system-stack attachment.
-- Add the authoritative current-stack helper and complete allocation walk.
-- Replace `CreateThread` with `_beginthreadex` and reservation semantics.
-- Implement joinable/detached handle lifetime and callback result storage.
-- Reject custom stack addresses.
-- Disable Windows custom `MemMap` thread-pool stacks.
-- Add native probes for requested versus actual reservations.
-- Keep all implicit Windows checks disabled.
+- **Implemented locally:** reject `IsThreadAFiber()` and out-of-system-stack
+  attachment; exact `GetCurrentThreadStackLimits()` bounds plus a complete
+  allocation walk; `_beginthreadex` reservation semantics; join/detach handle
+  ownership and callback result publication; custom-stack rejection; and
+  reservation-based Windows thread pools.
+- **Implemented probe:** `win32_thread_stack_probe` covers exact main/default,
+  1 MiB, and 2 MiB intervals; self and cross-thread identity; join results;
+  detach before and after exit; 512 create/join iterations; 128 detached
+  iterations; raw `CreateThread`; invalid/custom attributes; and fiber
+  rejection.
+- **Implementation finding:** DLL-local FLS destructor callbacks are unsafe
+  with a statically linked compat archive. External live threads therefore use
+  allocation-free tagged ID tokens; created threads retain opaque controls,
+  and equality compares immutable thread IDs across module boundaries.
+- **Adjacent lifecycle repair:** runtime teardown removes the diagnostic VEH
+  before `art.dll` unload and restores, rather than clobbers, a later host UEF.
+- Product implicit Windows checks remain disabled until Stages B-D complete.
 
-Clean completion criteria:
+Local evidence (2026-07-26):
 
-- Linux build/tests unchanged;
-- Win64 build passes with `-j32` where practical;
-- Wine validates default, 1 MiB, and 2 MiB API behavior;
-- native Windows validates 64 KiB, 256 KiB, 1 MiB, 2 MiB, and over-8-MiB
-  reservations plus join/detach races.
+- Win64 `art`, `dalvikvm`, and the focused probe build with `-j32`.
+- Wine reports exact 1 MiB default/explicit and exact 2 MiB reservations; the
+  focused probe passes all identity/lifetime/rejection stress.
+- Wine `Hello`, ThreadHeavy, every W-002 attach mode, and the complete Phase-4
+  suite pass with clean process exit after the VEH/FLS findings.
+- Linux rebuild and `dalvikvm -showversion` pass.
+
+Remaining Stage A acceptance is native Windows validation of 64 KiB,
+256 KiB, 1 MiB, 2 MiB, and over-8-MiB reservations, handle-count closure,
+fiber rejection, and exit-before/after-join-or-detach timing. It must also
+record Java's post-`FixStackSize()` reservations and representative ART pool
+threads. Wine's `GetProcessHandleCount()` result is unavailable and cannot
+close the native handle-lifetime proof point.
 
 ### Stage B — dormant fixed page
 
@@ -1158,7 +1209,8 @@ Clean completion criteria:
 
 ### Stage C — dormant W-010 adapter
 
-- Implement the `sigchain_windows` special-action facade and VEH lifecycle.
+- Implement the `sigchain_windows` special-action facade and managed VEH
+  registration/promotion lifecycle. Basic teardown removal is already landed.
 - Add the non-owning real-`CONTEXT` view to the x86_64 handler.
 - Add recursion protection and exact record filtering.
 - Run synthetic registered-range null/stack faults without enabling the full
@@ -1283,24 +1335,25 @@ are testable without deliberately crashing a product process:
 These tests complement rather than replace native Windows fault, guard-growth,
 and debugger evidence.
 
-## 14. Code placement draft
+## 14. Code placement and status
 
-| File | Planned responsibility |
+| File | Responsibility and current status |
 |------|------------------------|
 | `overlay/port_policy_windows.py`, `tools/bp2cmake`, and Win64 CMake/shell harnesses | Implemented explicit `/CETCOMPAT:NO` on every generated and handwritten executable/DLL target; static archives excluded |
 | `runtime/multiplatform/windows/cet_compat.{h,cc}` | Implemented process-policy observation and fail-closed decision logic, independently probeable |
 | `runtime/multiplatform/windows/sigchain_windows.cc` | ART special-SIGSEGV facade, VEH handle, promotion/removal, exact exception filter |
-| `runtime/multiplatform/windows/runtime_windows.cc` | Implemented earliest CET/HSP policy rejection; later fatal UEF/minidump separation and platform fault initialization |
+| `runtime/multiplatform/windows/runtime_windows.cc` | Implemented earliest CET/HSP policy rejection and diagnostic VEH/UEF teardown; later managed VEH initialization and fatal UEF chaining/separation |
 | `runtime/multiplatform/windows/fault_handler_windows.cc` | Optional split of dispatcher/adapter if `sigchain_windows.cc` becomes too broad |
 | `runtime/multiplatform/windows/fault_handler_windows.h` | Windows-only non-owning context view and documented AV-kind constants; no common-header Win32 leakage |
 | `runtime/arch/x86/fault_handler_x86.cc` | Win64 non-owning context view, real `CONTEXT` PC/SP access, AV-kind and protected-page checks |
-| `runtime/thread.cc` | Common stack accounting and small `_WIN32` installation branch; no Windows bounds guessing |
-| `runtime/multiplatform/windows/thread_windows.cc` | Current-stack helper, page commit/protection/restoration, no alternate signal stack |
-| `runtime/thread_pool.cc` | No caller-allocated stack on Windows; pass size attribute |
-| `compat/include/pthread.h` | Opaque Windows `pthread_t` and strict attribute contract |
-| `compat/src/win64_posix_stubs.c` | `_beginthreadex`, handle lifetime, join/detach, stack attributes |
-| `runtime/runtime.cc` | Atomic managed-fault capability and nterp/JIT activation policy |
+| `runtime/thread.cc` | Implemented exact current-stack acceptance and attach failure; later common accounting plus a small `_WIN32` fixed-page installation branch |
+| `runtime/multiplatform/windows/thread_windows.cc` | Planned fixed-page commit/protection/restoration helpers; no alternate signal stack |
+| `runtime/thread_pool.cc` | Implemented no-caller-allocated-stack Windows policy; requested reservation passes through pthread attributes |
+| `compat/include/pthread.h` | Implemented opaque Windows `pthread_t`, numeric-ID helper, and strict attribute contract |
+| `compat/src/win64_posix_stubs.c` | Implemented `_beginthreadex`, handle/result lifetime, join/detach, tagged external identity, exact current-stack bounds, and stack attributes |
+| `runtime/runtime.cc` | Implemented diagnostic handler shutdown; later atomic managed-fault capability and nterp/JIT activation policy |
 | `tools/verify/win64_phase1/check_win32_cet_contract.py` and `win32_cet_policy_probe.cc` | Implemented link/PE audit plus deterministic and actual-policy probe |
+| `tools/verify/win64_phase1/win32_thread_stack_probe.c` and `tools/verify/win64_phase4/run_thread_stack_probe.sh` | Implemented Stage A reservation, identity, join/detach, bounds, raw-thread, invalid-attribute, stress, and fiber gate |
 
 The exact split between `sigchain_windows.cc` and
 `fault_handler_windows.cc` is an implementation detail. There must still be

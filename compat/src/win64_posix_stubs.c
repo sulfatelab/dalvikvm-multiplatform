@@ -11,6 +11,7 @@
 #include <sys/mman.h>
 #include <sys/sendfile.h>
 #include <io.h>
+#include <process.h>
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
@@ -25,6 +26,12 @@
 #endif
 #ifndef ETIMEDOUT
 #define ETIMEDOUT 138
+#endif
+#ifndef ENOTSUP
+#define ENOTSUP 129
+#endif
+#ifndef EDEADLK
+#define EDEADLK 36
 #endif
 #include <stdint.h>
 #include <stddef.h>
@@ -52,12 +59,6 @@ struct FTW { int base; int level; };
 
 
 /* --- pthread --- */
-typedef CRITICAL_SECTION pthread_mutex_t;
-typedef int pthread_mutexattr_t;
-typedef DWORD pthread_t;
-typedef DWORD pthread_key_t;
-typedef LONG pthread_once_t;
-
 int pthread_mutex_init(pthread_mutex_t* m, const pthread_mutexattr_t* a) {
   (void)a; InitializeCriticalSection(m); return 0;
 }
@@ -76,8 +77,6 @@ void* pthread_getspecific(pthread_key_t k) { return TlsGetValue(k); }
 int pthread_setspecific(pthread_key_t k, const void* v) {
   return TlsSetValue(k, (LPVOID)v) ? 0 : EINVAL;
 }
-pthread_t pthread_self(void) { return GetCurrentThreadId(); }
-int pthread_equal(pthread_t a, pthread_t b) { return a == b; }
 int pthread_once(pthread_once_t* once, void (*init)(void)) {
   enum { kUninitialized = 0, kInitializing = 1, kInitialized = 2 };
   LONG state = InterlockedCompareExchange(once, kInitializing, kUninitialized);
@@ -145,8 +144,10 @@ int pthread_setname_np(pthread_t t, const char* name) {
     resolved = 1;
   }
   if (!pSet) return 0;
-  HANDLE th = OpenThread(THREAD_SET_LIMITED_INFORMATION, FALSE, (DWORD)t);
-  if (!th && (DWORD)t == GetCurrentThreadId()) {
+  DWORD tid = pthread_gettid_np(t);
+  if (tid == 0) return ESRCH;
+  HANDLE th = OpenThread(THREAD_SET_LIMITED_INFORMATION, FALSE, tid);
+  if (!th && tid == GetCurrentThreadId()) {
     th = GetCurrentThread();
   }
   if (!th) return 0;
@@ -648,104 +649,293 @@ int uname(struct utsname* buf) {
 
 
 /* --- threads / process (match pthread.h / link.h) --- */
-typedef struct {
+enum {
+  MDVM_PTHREAD_JOINABLE = 0,
+  MDVM_PTHREAD_DETACHED = 1,
+  MDVM_PTHREAD_JOINED = 2,
+};
+
+struct mdvm_pthread_control {
+  LONG refs;
+  LONG completion_state;
+  HANDLE handle;
+  DWORD thread_id;
   void* (*start)(void*);
   void* arg;
-} mdvm_thread_start_t;
+  void* result;
+};
 
-static DWORD WINAPI mdvm_thread_trampoline(void* p) {
-  mdvm_thread_start_t* s = (mdvm_thread_start_t*)p;
-  void* (*fn)(void*) = s->start;
-  void* arg = s->arg;
-  free(s);
-  fn(arg);
+static INIT_ONCE g_mdvm_pthread_self_once = INIT_ONCE_STATIC_INIT;
+static DWORD g_mdvm_pthread_self_tls = TLS_OUT_OF_INDEXES;
+
+static void mdvm_pthread_release(struct mdvm_pthread_control* control) {
+  if (control != NULL && InterlockedDecrement(&control->refs) == 0) {
+    free(control);
+  }
+}
+
+static HANDLE mdvm_pthread_take_handle(struct mdvm_pthread_control* control) {
+  return (HANDLE)InterlockedExchangePointer((PVOID volatile*)&control->handle, NULL);
+}
+
+static BOOL CALLBACK mdvm_init_pthread_self_tls(PINIT_ONCE once, PVOID parameter, PVOID* context) {
+  (void)once;
+  (void)parameter;
+  (void)context;
+  g_mdvm_pthread_self_tls = TlsAlloc();
+  return g_mdvm_pthread_self_tls != TLS_OUT_OF_INDEXES;
+}
+
+static DWORD mdvm_pthread_self_tls(void) {
+  if (!InitOnceExecuteOnce(&g_mdvm_pthread_self_once,
+                           mdvm_init_pthread_self_tls,
+                           NULL,
+                           NULL)) {
+    return TLS_OUT_OF_INDEXES;
+  }
+  return g_mdvm_pthread_self_tls;
+}
+
+static int mdvm_pthread_is_external(pthread_t thread) {
+  return (((uintptr_t)thread) & (uintptr_t)1) != 0;
+}
+
+static pthread_t mdvm_pthread_external_identity(DWORD thread_id) {
+  return (pthread_t)((((uintptr_t)thread_id) << 1) | (uintptr_t)1);
+}
+
+pthread_t pthread_self(void) {
+  DWORD slot = mdvm_pthread_self_tls();
+  if (slot != TLS_OUT_OF_INDEXES) {
+    struct mdvm_pthread_control* control =
+        (struct mdvm_pthread_control*)TlsGetValue(slot);
+    if (control != NULL) return control;
+  }
+  // Threads created outside this facade have no join ownership to retain.
+  // Their live Windows thread ID is a stable, allocation-free identity token;
+  // as with POSIX detached-thread IDs, it is invalid after thread exit.
+  return mdvm_pthread_external_identity(GetCurrentThreadId());
+}
+
+int pthread_equal(pthread_t a, pthread_t b) {
+  if (a == b) return 1;
+  if (a == NULL || b == NULL) return 0;
+  return pthread_gettid_np(a) == pthread_gettid_np(b);
+}
+
+DWORD pthread_gettid_np(pthread_t thread) {
+  if (thread == NULL) return 0;
+  if (mdvm_pthread_is_external(thread)) {
+    return (DWORD)(((uintptr_t)thread) >> 1);
+  }
+  return thread->thread_id;
+}
+
+static unsigned __stdcall mdvm_thread_trampoline(void* opaque) {
+  struct mdvm_pthread_control* control = (struct mdvm_pthread_control*)opaque;
+  DWORD slot = mdvm_pthread_self_tls();
+  BOOL identity_stored = slot != TLS_OUT_OF_INDEXES && TlsSetValue(slot, control);
+  control->result = control->start(control->arg);
+  if (identity_stored) (void)TlsSetValue(slot, NULL);
+  mdvm_pthread_release(control);  /* child reference */
   return 0;
 }
 
-int pthread_create(pthread_t* t, const pthread_attr_t* attr, void* (*start)(void*), void* arg) {
-  (void)attr;
-  mdvm_thread_start_t* s = (mdvm_thread_start_t*)malloc(sizeof(*s));
-  if (!s) return EAGAIN;
-  s->start = start; s->arg = arg;
-  DWORD tid = 0;
-  HANDLE h = CreateThread(NULL, 0, mdvm_thread_trampoline, s, 0, &tid);
-  if (!h) { free(s); return EAGAIN; }
-  if (t) *t = (pthread_t)tid;
-  CloseHandle(h);
+int pthread_create(pthread_t* thread,
+                   const pthread_attr_t* attr,
+                   void* (*start)(void*),
+                   void* arg) {
+  if (thread == NULL || start == NULL) return EINVAL;
+  *thread = NULL;
+
+  size_t stack_size = attr != NULL ? attr->stacksize : 0;
+  int detach_state = attr != NULL ? attr->detachstate : PTHREAD_CREATE_JOINABLE;
+  if (attr != NULL && attr->stackaddr != NULL) return ENOTSUP;
+  if (detach_state != PTHREAD_CREATE_JOINABLE &&
+      detach_state != PTHREAD_CREATE_DETACHED) {
+    return EINVAL;
+  }
+  if (stack_size != 0 &&
+      (stack_size < (size_t)PTHREAD_STACK_MIN || stack_size > (size_t)UINT_MAX)) {
+    return EINVAL;
+  }
+
+  struct mdvm_pthread_control* control =
+      (struct mdvm_pthread_control*)calloc(1, sizeof(*control));
+  if (control == NULL) return EAGAIN;
+  control->refs = 3;  /* creator/public/child */
+  control->completion_state = detach_state == PTHREAD_CREATE_DETACHED
+      ? MDVM_PTHREAD_DETACHED
+      : MDVM_PTHREAD_JOINABLE;
+  control->start = start;
+  control->arg = arg;
+
+  unsigned int thread_id = 0;
+  unsigned int init_flags = CREATE_SUSPENDED;
+  if (stack_size != 0) init_flags |= STACK_SIZE_PARAM_IS_A_RESERVATION;
+  uintptr_t raw_handle = _beginthreadex(NULL,
+                                        (unsigned int)stack_size,
+                                        mdvm_thread_trampoline,
+                                        control,
+                                        init_flags,
+                                        &thread_id);
+  if (raw_handle == 0) {
+    free(control);
+    return EAGAIN;
+  }
+  control->handle = (HANDLE)raw_handle;
+  control->thread_id = (DWORD)thread_id;
+  if (ResumeThread(control->handle) == (DWORD)-1) {
+    (void)TerminateThread(control->handle, 1);
+    (void)WaitForSingleObject(control->handle, INFINITE);
+    CloseHandle(control->handle);
+    free(control);
+    return EAGAIN;
+  }
+  *thread = control;
+
+  if (detach_state == PTHREAD_CREATE_DETACHED) {
+    HANDLE handle = mdvm_pthread_take_handle(control);
+    if (handle != NULL) CloseHandle(handle);
+    mdvm_pthread_release(control);  /* public completion reference */
+  }
+  mdvm_pthread_release(control);  /* creator reference */
   return 0;
 }
 
-int pthread_join(pthread_t t, void** retval) {
-  if (retval) *retval = NULL;
-  HANDLE h = OpenThread(SYNCHRONIZE, FALSE, (DWORD)t);
-  if (!h) return ESRCH;
-  WaitForSingleObject(h, INFINITE);
-  CloseHandle(h);
-  return 0;
+int pthread_join(pthread_t thread, void** retval) {
+  if (retval != NULL) *retval = NULL;
+  if (thread == NULL) return ESRCH;
+  if (pthread_gettid_np(thread) == GetCurrentThreadId()) return EDEADLK;
+  if (mdvm_pthread_is_external(thread)) return EINVAL;
+  if (InterlockedCompareExchange(&thread->completion_state,
+                                 MDVM_PTHREAD_JOINED,
+                                 MDVM_PTHREAD_JOINABLE) != MDVM_PTHREAD_JOINABLE) {
+    return EINVAL;
+  }
+
+  HANDLE handle = thread->handle;
+  DWORD wait_result = handle != NULL ? WaitForSingleObject(handle, INFINITE) : WAIT_FAILED;
+  if (wait_result == WAIT_OBJECT_0 && retval != NULL) {
+    *retval = thread->result;
+  }
+  handle = mdvm_pthread_take_handle(thread);
+  if (handle != NULL) CloseHandle(handle);
+  mdvm_pthread_release(thread);  /* public completion reference */
+  return wait_result == WAIT_OBJECT_0 ? 0 : EINVAL;
 }
 
-int pthread_detach(pthread_t t) { (void)t; return 0; }
+int pthread_detach(pthread_t thread) {
+  if (thread == NULL) return ESRCH;
+  if (mdvm_pthread_is_external(thread)) return EINVAL;
+  if (InterlockedCompareExchange(&thread->completion_state,
+                                 MDVM_PTHREAD_DETACHED,
+                                 MDVM_PTHREAD_JOINABLE) != MDVM_PTHREAD_JOINABLE) {
+    return EINVAL;
+  }
+  HANDLE handle = mdvm_pthread_take_handle(thread);
+  if (handle != NULL) CloseHandle(handle);
+  mdvm_pthread_release(thread);  /* public completion reference */
+  return 0;
+}
 
 int pthread_attr_init(pthread_attr_t* attr) {
   if (!attr) return EINVAL;
-  attr->detachstate = 0; attr->stackaddr = NULL; attr->stacksize = 0; attr->guardsize = 4096;
+  attr->detachstate = PTHREAD_CREATE_JOINABLE;
+  attr->stackaddr = NULL;
+  attr->stacksize = 0;
+  attr->guardsize = 0;
   return 0;
 }
-int pthread_attr_destroy(pthread_attr_t* attr) { (void)attr; return 0; }
+int pthread_attr_destroy(pthread_attr_t* attr) {
+  if (!attr) return EINVAL;
+  memset(attr, 0, sizeof(*attr));
+  return 0;
+}
 int pthread_attr_setdetachstate(pthread_attr_t* attr, int s) {
-  if (!attr) return EINVAL; attr->detachstate = s; return 0;
+  if (!attr || (s != PTHREAD_CREATE_JOINABLE && s != PTHREAD_CREATE_DETACHED)) return EINVAL;
+  attr->detachstate = s;
+  return 0;
 }
 int pthread_attr_setstack(pthread_attr_t* attr, void* stackaddr, size_t stacksize) {
+  (void)stackaddr;
+  (void)stacksize;
   if (!attr) return EINVAL;
-  attr->stackaddr = stackaddr; attr->stacksize = stacksize; return 0;
+  return ENOTSUP;
 }
 int pthread_attr_setstacksize(pthread_attr_t* attr, size_t stacksize) {
-  if (!attr) return EINVAL;
-  attr->stacksize = stacksize; return 0;
+  if (!attr || stacksize < (size_t)PTHREAD_STACK_MIN || stacksize > (size_t)UINT_MAX) {
+    return EINVAL;
+  }
+  attr->stacksize = stacksize;
+  return 0;
 }
 int pthread_attr_getstack(const pthread_attr_t* attr, void** stackaddr, size_t* stacksize) {
   if (!attr) return EINVAL;
   if (stackaddr) *stackaddr = attr->stackaddr;
-  if (stacksize) *stacksize = attr->stacksize ? attr->stacksize : (size_t)(1u << 20);
+  if (stacksize) *stacksize = attr->stacksize;
   return 0;
 }
 int pthread_attr_getguardsize(const pthread_attr_t* attr, size_t* guardsize) {
   if (!attr) return EINVAL;
-  if (guardsize) *guardsize = attr->guardsize ? attr->guardsize : 4096;
+  if (guardsize) *guardsize = attr->guardsize;
   return 0;
 }
-int pthread_getattr_np(pthread_t t, pthread_attr_t* attr) {
-  (void)t;
-  if (pthread_attr_init(attr) != 0) return EINVAL;
-  /* Estimate current thread stack via VirtualQuery of a stack local. */
+int pthread_getattr_np(pthread_t thread, pthread_attr_t* attr) {
+  if (!attr || thread == NULL) return EINVAL;
+  pthread_t self = pthread_self();
+  if (self == NULL || !pthread_equal(thread, self)) return ENOTSUP;
+  if (IsThreadAFiber()) return ENOTSUP;
+
+  ULONG_PTR low = 0;
+  ULONG_PTR high = 0;
+  GetCurrentThreadStackLimits(&low, &high);
+  SYSTEM_INFO system_info;
+  GetSystemInfo(&system_info);
+  size_t page_size = (size_t)system_info.dwPageSize;
   volatile char stack_probe;
-  MEMORY_BASIC_INFORMATION mbi;
-  if (VirtualQuery((LPCVOID)&stack_probe, &mbi, sizeof(mbi)) == 0) {
-    attr->stackaddr = NULL;
-    attr->stacksize = 1u << 20;
-    attr->guardsize = 4096;
-    return 0;
+  uintptr_t stack_pointer = (uintptr_t)&stack_probe;
+  if (page_size == 0 || low >= high ||
+      (low % page_size) != 0 || (high % page_size) != 0 ||
+      stack_pointer <= low || stack_pointer >= high ||
+      high - low > (ULONG_PTR)SIZE_MAX) {
+    return EINVAL;
   }
-  /* AllocationBase is low end of the reserved stack region; RegionSize from base
-     to high end of committed+reserved chain is incomplete — walk to end. */
-  char* base = (char*)mbi.AllocationBase;
-  size_t total = 0;
-  MEMORY_BASIC_INFORMATION cur;
-  char* p = base;
-  for (;;) {
-    if (VirtualQuery(p, &cur, sizeof(cur)) == 0) break;
-    if (cur.AllocationBase != mbi.AllocationBase) break;
-    total += cur.RegionSize;
-    p = (char*)cur.BaseAddress + cur.RegionSize;
-    if (total > (64u << 20)) break; /* safety */
+
+  MEMORY_BASIC_INFORMATION current;
+  if (VirtualQuery((LPCVOID)stack_pointer, &current, sizeof(current)) == 0 ||
+      current.State != MEM_COMMIT || current.Type != MEM_PRIVATE ||
+      (ULONG_PTR)current.AllocationBase != low ||
+      stack_pointer < (uintptr_t)current.BaseAddress ||
+      stack_pointer >= (uintptr_t)current.BaseAddress + current.RegionSize) {
+    return EINVAL;
   }
-  if (total < (256u << 10)) total = 1u << 20;
-  attr->stackaddr = base;
-  attr->stacksize = total;
-  attr->guardsize = 4096;
+
+  ULONG_PTR cursor = low;
+  while (cursor < high) {
+    MEMORY_BASIC_INFORMATION region;
+    if (VirtualQuery((LPCVOID)cursor, &region, sizeof(region)) == 0 ||
+        (ULONG_PTR)region.BaseAddress != cursor ||
+        (ULONG_PTR)region.AllocationBase != low ||
+        (region.State != MEM_RESERVE && region.State != MEM_COMMIT) ||
+        (region.State == MEM_COMMIT && region.Type != MEM_PRIVATE) ||
+        region.RegionSize == 0 || region.RegionSize > (SIZE_T)(high - cursor)) {
+      return EINVAL;
+    }
+    cursor += (ULONG_PTR)region.RegionSize;
+  }
+  if (cursor != high) return EINVAL;
+
+  pthread_attr_init(attr);
+  attr->stackaddr = (void*)low;
+  attr->stacksize = (size_t)(high - low);
+  attr->guardsize = page_size;
   return 0;
 }
-int pthread_kill(pthread_t t, int sig) { (void)t; (void)sig; return 0; }
+int pthread_kill(pthread_t thread, int sig) {
+  (void)sig;
+  return thread != NULL ? 0 : ESRCH;
+}
 int unshare(int flags) { (void)flags; errno = ENOSYS; return -1; }
 int getpriority(int which, int who) { (void)which; (void)who; return 0; }
 int setpriority(int which, int who, int prio) { (void)which; (void)who; (void)prio; return 0; }
@@ -852,8 +1042,10 @@ int pthread_getname_np(pthread_t t, char* buf, size_t len) {
   }
   buf[0] = 0;
   if (pGet) {
-    HANDLE th = OpenThread(THREAD_QUERY_LIMITED_INFORMATION, FALSE, (DWORD)t);
-    if (!th && (DWORD)t == GetCurrentThreadId()) th = GetCurrentThread();
+    DWORD tid = pthread_gettid_np(t);
+    if (tid == 0) return ESRCH;
+    HANDLE th = OpenThread(THREAD_QUERY_LIMITED_INFORMATION, FALSE, tid);
+    if (!th && tid == GetCurrentThreadId()) th = GetCurrentThread();
     if (th) {
       PWSTR wname = NULL;
       if (SUCCEEDED(pGet(th, &wname)) && wname) {

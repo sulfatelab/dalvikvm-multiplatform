@@ -4,6 +4,7 @@
 #else
 #include <stdint.h>
 #include <stddef.h>
+#include <pthread.h>
 #include <ucontext.h>
 
 typedef struct siginfo {
@@ -141,7 +142,7 @@ static inline int sigwaitinfo64(const sigset64_t* set, siginfo_t* info) {
 }
 int tgkill(int tgid, int tid, int sig);
 int kill(int pid, int sig);
-int pthread_kill(unsigned long thread, int sig);
+int pthread_kill(pthread_t thread, int sig);
 #ifdef __cplusplus
 }
 #endif

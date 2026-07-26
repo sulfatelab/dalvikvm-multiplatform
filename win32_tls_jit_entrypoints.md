@@ -734,11 +734,15 @@ Detach:
   rSELF must not be used after
 ```
 
-The publish order is implemented, but step 1 remains W-014 debt. The current
-Win branch probes a stack local with one `VirtualQuery()`, clamps the resulting
-interval to 256 KiB–8 MiB, fabricates 1 MiB fallbacks, and always reports a
-4 KiB guard. This was a safety workaround for an earlier Wine result that made
-ART protect heap memory; it is not the product stack contract.
+The publish order and Stage A of step 1 are implemented. The Win branch now
+accepts only the current non-fiber system stack, uses
+`GetCurrentThreadStackLimits()`, validates current-SP containment and the
+committed-private allocation base, and walks the complete reservation before
+publishing the bounds. Failure rejects attachment; there is no clamp or
+fabricated-size fallback. The current one-page pthread `guardsize` result is a
+compatibility value only while implicit stack checks remain disabled. Stage B
+must measure the excluded-low prefix and install the fixed ART page before the
+complete product stack contract is ready.
 
 #### 6.9.1 W-014 bounds and thread-creation contract
 
@@ -753,11 +757,19 @@ The authoritative contract is now
 - fiber/manual-stack attachment is rejected instead of clamped or guessed;
 - ART-created C/C++ threads use `_beginthreadex`, with non-zero stack sizes
   passed as reservations;
-- Windows `pthread_t` must retain a real joinable handle rather than close it
-  and later reopen by reusable thread ID;
+- Windows `pthread_t` retains a real joinable handle rather than closing it and
+  later reopening by reusable thread ID;
 - thread pools pass a requested reservation and do not allocate ignored custom
   `MemMap` stacks;
 - non-null `pthread_attr_setstack()` addresses are unsupported and rejected.
+
+The implemented opaque identity also accounts for the compat archive being
+copied into several DLLs. Facade-created threads retain a control object and
+temporarily publish it in module-local TLS. Externally created threads use an
+allocation-free tagged live thread-ID token; `pthread_equal()` compares the
+immutable Windows IDs across facade copies and `pthread_gettid_np()` is the
+numeric boundary. An FLS-destructor draft was rejected because Wine showed a
+loader-teardown callback entering an already non-executable `art.dll`.
 
 These choices do not alter the rSELF publication order above. They ensure that
 the `Thread` being published describes the stack on which it is actually
@@ -817,7 +829,10 @@ remain in the real OS context.
 Native `EXCEPTION_STACK_OVERFLOW`, `EXCEPTION_GUARD_PAGE`, execute AV, and
 native/unregistered faults continue through Windows debugger/VEH/SEH policy.
 Expected implicit faults do not run first-chance logging or minidump code. The
-fatal UEF is separate and chains the previous process filter.
+selected fatal UEF design is separate and chains the previous process filter.
+Stage A already removes the current diagnostic VEH before `art.dll` unload and
+restores ART's predecessor without clobbering a later host UEF; chaining from
+the current fatal UEF remains Stage C work.
 
 W-010 and W-014 activate atomically for the normal nterp/JIT product. The
 dormant page and adapter may land separately, but implicit null/SO flags stay
