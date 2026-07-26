@@ -1,0 +1,488 @@
+# Win32 MSVC-ABI Toolchain and Licensing Assessment
+
+Assessment date: 2026-07-26
+
+This note compares two Linux-to-Windows toolchain designs for the heavily
+modified ART port. Here, "Win32" means the Windows API family; the concrete
+target remains 64-bit Windows:
+
+```text
+x86_64-pc-windows-msvc
+```
+
+The GNU target and ABI are out of scope. Nothing proposed here changes the
+target to `x86_64-w64-windows-gnu`, introduces MinGW libstdc++, or uses the
+GNU/Itanium C++ ABI.
+
+This is an engineering and license-risk assessment, not legal advice. License
+terms can change, and the exact terms shipped with each downloaded package
+control. Obtain legal advice before public redistribution or relying on an
+ambiguous license interpretation.
+
+## Conclusion
+
+Two distinct goals must not be conflated:
+
+1. **No Microsoft SDK or Visual C++ package files on Linux CI:** feasible while
+   retaining Clang's MSVC ABI. Use MinGW-w64 declarations and open import
+   definitions, build open startup objects, and keep the target triple
+   `x86_64-pc-windows-msvc`.
+2. **No dependency on Microsoft runtime components on the target Windows
+   system:** much harder and currently experimental. Windows itself supplies
+   the Win32 API and normally the UCRT API-set DLLs. The lowest-risk alternative
+   still expects the Microsoft VC Redistributable for VCRuntime/MSVCP support,
+   installed on the target independently of Linux CI.
+
+The current xwin route has the lowest engineering risk, but it is not
+license-neutral: xwin is open source, while the headers, import libraries, and
+CRT objects that it downloads remain Microsoft-licensed. For a single natural
+person, a valid Visual Studio Community license makes personal development
+substantially easier to justify, but the exact xwin download/acceptance flow and
+the separate Windows SDK terms still deserve caution.
+
+The recommended direction is therefore:
+
+- retain the xwin build temporarily as the compatibility baseline;
+- develop the MinGW-w64-header route as an explicitly experimental second
+  toolchain;
+- promote the alternative only after it passes real-Windows ABI, exception,
+  TLS, startup, and import-audit gates; and
+- if the operational requirement is immediately "no Microsoft-EULA payloads on
+  Linux CI", run only the alternative on CI and use a separately licensed
+  Windows machine to compare its output and behavior against the baseline.
+
+## Comparison
+
+| Property | Current: xwin + Microsoft SDK/CRT | Draft: MinGW-w64 declarations + open import definitions |
+| --- | --- | --- |
+| Compiler ABI target | `x86_64-pc-windows-msvc` | `x86_64-pc-windows-msvc` |
+| C++ ABI/code generation | Microsoft ABI from Clang target | Microsoft ABI from Clang target |
+| Linker | LLD/`lld-link` | LLD/`lld-link` |
+| Win32/UCRT headers on CI | Microsoft Windows SDK and CRT headers | MinGW-w64 headers, patched/wrapped for the MSVC target |
+| Import libraries on CI | Microsoft `.lib` files | MinGW-w64 `.a`, or `.lib` generated from open `.def` files |
+| C runtime on Windows | UCRT/MSVCRT and VCRuntime as selected by the link | Normally OS UCRT plus target-installed VCRuntime/MSVCP |
+| Startup objects | Microsoft CRT library members | Rebuilt/adapted MinGW-w64 startup sources |
+| Microsoft SDK/CRT EULA applies to CI inputs | Yes | No, if CI is kept free of all copied Microsoft package files |
+| Engineering maturity | Current working route | Feasible prototype; not yet production-qualified |
+| Principal risk | License/provenance and redistribution compliance | Header compatibility, startup, EH/RTTI/TLS, and runtime ABI coverage |
+
+## Route 1: current xwin and Windows SDK approach
+
+### Technical composition
+
+The current build uses Clang and LLD on Linux with the target
+`x86_64-pc-windows-msvc`. xwin downloads Microsoft packages and expands a
+Linux-friendly tree containing, among other inputs:
+
+- Windows SDK shared, UM, WinRT, and UCRT headers;
+- MSVC CRT headers;
+- Windows SDK import libraries, including `onecore.lib`;
+- `ucrt.lib`, `msvcrt.lib`, `vcruntime.lib`, and `msvcprt.lib`; and
+- other Win32 import libraries such as `kernel32.lib` and `uuid.lib`.
+
+`onecore.lib` is currently used for `MapViewOfFile3`. The cross-built libc++ is
+configured around the Microsoft VCRuntime ABI and currently relies on
+`msvcprt.lib` for the Windows `exception_ptr` entry points. This is still a
+libc++ standard library: its `std::string` and container ABI is not the
+Microsoft STL ABI, even though Clang emits Microsoft object, mangling, layout,
+RTTI, and exception-handling conventions. Do not pass libc++ STL objects across
+a DLL boundary whose other side uses the Microsoft STL.
+
+This route works and offers the broadest compatibility with the declarations
+and runtime libraries against which Windows software is normally built. It is
+the lowest technical-risk reference build.
+
+### What xwin does and does not license
+
+xwin 0.9.0 itself is offered under MIT or Apache-2.0. That license covers the
+xwin program, not the Microsoft payloads it downloads. Downloading through an
+open-source tool does not relicense Windows SDK headers, SDK import libraries,
+MSVC CRT headers, or CRT object/library files.
+
+The locally installed xwin 0.9.0 always prompts for the license at
+`LinkId=2086102`, which currently resolves to the Visual Studio 2019 diagnostic
+and build-tools terms. The packages in the local cache are Visual Studio 2022
+17.14 and Windows 11 SDK 10.0.26100 packages. Their manifest identifies a
+different Visual Studio 2022 build-tools license. This version mismatch creates
+an acceptance and provenance ambiguity: accepting xwin's prompt is not strong
+evidence that the actual 2022 package terms, or the separately applicable
+Windows SDK terms, were presented and accepted.
+
+At the assessment date, the local xwin cache retained the selected SDK header
+and library MSIs but not the separately listed Windows SDK EULA MSI, and the
+splatted tree did not retain a general SDK license file. That makes it especially
+important not to infer the SDK terms from xwin's single Build Tools prompt.
+
+The risk can be reduced, but not erased, by recording all of the following in
+the toolchain provenance:
+
+- xwin version and source revision;
+- exact Visual Studio and SDK package identifiers and hashes;
+- the license URL and a dated copy of every controlling term shipped or linked
+  with those exact packages;
+- who accepted the terms and under which Visual Studio license; and
+- where the CI build device is hosted and who owns or exclusively controls it.
+
+Do not treat `--accept-license` or `XWIN_ACCEPT_LICENSE=1` as a substitute for
+reviewing and satisfying the controlling terms.
+
+### Effect of being one natural person
+
+The Visual Studio Community 2022 terms grant an individual working on the
+individual's own applications the right to use Community to develop and test
+those applications, whether sold or used for another purpose. They also contain
+a "Build Devices and Visual Studio Build Tools" clause.
+
+The March 2024 Visual Studio 2022 build-tools terms are more specific:
+
+- use normally requires a valid license to a Visual Studio product;
+- with such a license, the build tools may also be used to develop, build, and
+  test applications with Visual Studio Code;
+- files may be installed on described build devices to compile, build, verify,
+  and test qualifying applications; and
+- without a Visual Studio-product license, there is a narrow allowance to build
+  third-party OSI-approved "Open Source Dependencies", but development/testing
+  is limited to minor modifications that do not significantly change their
+  functionality or structure.
+
+A heavily modified ART should not rely on that last, license-free dependency
+exception. The explicit "minor modifications" limit does not fit this project.
+The more defensible Microsoft route for a single natural person is to hold and
+comply with a valid Visual Studio Community license and ensure the project and
+build-device usage fit the Community and build-tools terms. Using Visual Studio
+Code for development also aligns more directly with language in the current
+build-tools license than relying on an unrelated editor-only workflow.
+
+The reviewed clauses describe physical machines, VMs, and containers that are
+owned by the licensee, hosted on Azure for the licensee, or dedicated solely to
+the licensee. A self-hosted or genuinely dedicated private runner is therefore
+lower risk than assuming that a generic shared hosted-CI worker is a qualifying
+build device. The terms reviewed do not expressly discuss xwin, unpacking MSI
+or VSIX files on Linux, or cross-compilation without Microsoft's installer.
+That absence is an interpretation risk, not an automatic prohibition or an
+automatic permission.
+
+### Windows SDK and redistribution risks
+
+The Visual Studio terms state that included Microsoft-platform components can
+be governed by separate agreements. Consequently, the Build Tools acceptance
+alone should not be assumed to settle the Windows SDK/UCRT license. The exact
+Windows SDK package terms must also be retained and reviewed.
+
+The current route is most defensible for private compilation when the SDK cache
+is access-controlled and is not republished. Avoid:
+
+- checking xwin's splatted Microsoft headers or libraries into this repository;
+- placing the SDK/CRT tree in a public CI cache or downloadable artifact;
+- publishing a container image that contains the extracted SDK/CRT;
+- distributing Microsoft import/static libraries as part of a developer kit;
+  or
+- assuming every member pulled from a Microsoft `.lib` is redistributable.
+
+Import libraries generally cause a PE file to name a Windows DLL and symbol;
+they usually do not embed the DLL implementation. Some CRT libraries also
+contain real object-code members, however. The final link map and object-member
+provenance must be audited. Microsoft code incorporated into a distributed ART
+binary must be on the applicable Visual Studio/SDK redistributable list and
+must satisfy its distribution conditions.
+
+This assessment finds no clear clause saying that a licensed individual may
+never cross-compile on Linux. It nevertheless does **not** conclude that the
+xwin extraction mechanism is affirmatively blessed by Microsoft. The current
+route is technically good and legally plausible for properly licensed private
+use, but it carries avoidable license-acceptance, package-provenance, CI-device,
+and redistribution risks.
+
+## Route 2: MinGW-w64 declarations with the MSVC ABI
+
+### The key distinction
+
+Headers and import-library file formats do not select the C++ ABI. The compiler
+target and runtime implementation do.
+
+It is possible to use MinGW-w64's UCRT and Win32 headers as declarations while
+Clang continues to target:
+
+```text
+x86_64-pc-windows-msvc
+```
+
+Clang then continues to emit Microsoft-compatible COFF, name mangling, class
+layout, calling conventions, RTTI descriptors, structured exception metadata,
+and C++ exception machinery. LLD links the resulting COFF objects as PE files.
+This is not the `*-windows-gnu` target and must never silently fall back to it.
+
+Open import archives can be consumed directly when LLD accepts them, or PE/COFF
+`.lib` files can be generated from open `.def` files with `llvm-dlltool`. The
+archive's origin does not change the ABI of the compiled ART code.
+
+### Proposed component map
+
+| Need | Proposed open build-time input | Result on target Windows |
+| --- | --- | --- |
+| Win32 and UCRT declarations | MinGW-w64 UCRT/Win32 headers | Calls normal Windows APIs |
+| Basic Win32 imports | MinGW-w64 import archives or `.lib` generated from its `.def` files | Imports Windows system DLLs/API sets |
+| `MapViewOfFile3` | MinGW-w64 `libonecore.a` or the open `api-ms-win-core-memory-l1-1-6.def` | Imports the OneCore memory API set |
+| UCRT calls | MinGW-w64 `libucrt.a` or generated import library | Imports `api-ms-win-crt-*` DLLs supplied by supported Windows |
+| VCRuntime symbols | Open MinGW-w64 `vcruntime140` definitions | Normally imports target-installed `VCRUNTIME140.dll` |
+| libc++ `exception_ptr` symbols | Import definition derived under the applicable license from Wine's `msvcp140.spec`, or an independently maintained definition | Imports target-installed `MSVCP140.dll` |
+| Compiler builtins | LLVM compiler-rt built for the MSVC target | Statically supplied builtins as configured |
+| EXE/DLL startup | Rebuilt/adapted MinGW-w64 `crtexe.c` and `crtdll.c` plus audited support objects | Runs constructors, TLS, termination, and security initialization |
+| C++ standard library | libc++ built for the MSVC target | libc++ ABI, not Microsoft STL and not GNU libstdc++ |
+
+MinGW-w64 already supplies an import archive for OneCore, including the API set
+that provides `MapViewOfFile3`, and a UCRT import archive that names the Windows
+UCRT API-set DLLs. It also contains open `vcruntime140` definitions. Wine's open
+`msvcp140.spec` identifies the ten `exception_ptr` exports currently imported
+by the cross-built libc++. These sources remove the need to copy Microsoft's
+`onecore.lib`, `ucrt.lib`, `vcruntime.lib`, or `msvcprt.lib` onto Linux CI.
+
+### Header compatibility is real work
+
+MinGW-w64 headers are not currently drop-in headers for Clang's MSVC target.
+They assume a set of GNU compatibility macros and compiler behaviors. A local
+probe compiled only after making the headers see `__GNUC__`-style conditions.
+
+Do not globally define `__GNUC__` for all of ART. That can select incorrect code
+paths in ART and its dependencies. Prefer a small, maintained, upstreamable
+MinGW-w64 compatibility patch or a tightly controlled wrapper layer that is
+active only while processing the affected platform headers.
+
+The compatibility work must audit at least:
+
+- GNU attributes, `asm` labels, and symbol aliases;
+- structure packing and bit-field layout;
+- `__declspec`, calling conventions, and callback types;
+- `long double`, `va_list`, and variadic functions;
+- `wchar_t` and C/C++ language-mode differences;
+- COM declarations, UUIDs, `__uuidof`, and interface layout; and
+- macro paths that differ between MinGW and `_MSC_VER` environments.
+
+The build should assert the Clang target triple and inspect emitted symbols so
+that a future toolchain update cannot silently switch to GNU ABI behavior.
+
+### libc++ and the C++ ABI library
+
+A useful starting configuration for the alternative libc++ build is:
+
+```text
+LIBCXX_NO_VCRUNTIME=ON
+LIBCXX_CXX_ABI=none
+LIBCXX_USE_COMPILER_RT=ON
+LIBCXX_ENABLE_NEW_DELETE_DEFINITIONS=ON
+```
+
+`LIBCXX_CXX_ABI=none` does not select the Itanium ABI. With the MSVC target,
+Clang still controls Microsoft mangling, object layout, RTTI, and EH code
+generation. The option instead prevents libc++ from automatically selecting an
+external C++ ABI library such as Microsoft's VCRuntime integration.
+
+This configuration is a starting point, not proof that every runtime symbol is
+resolved. Audit libc++ and every ART DLL's undefined symbols after each build.
+In particular, the existing libc++ uses ten Windows `exception_ptr` functions
+normally resolved through `msvcprt.lib`/`MSVCP140.dll`. An open import library
+may name those exports without placing Microsoft's `.lib` on CI, but the target
+then still needs a compatible `MSVCP140.dll`, normally installed through the VC
+Redistributable.
+
+Do not exchange libc++ containers, strings, iostream objects, allocators, or
+exceptions that own libc++ internals with DLLs compiled against Microsoft STL.
+Plain C interfaces, Win32 handles, fixed-layout POD data, and carefully owned
+buffers are safer ABI boundaries.
+
+### Compiler-rt is not UCRT and is not crt0
+
+LLVM compiler-rt supplies compiler support routines and optional runtime
+families such as sanitizers and profiling. Depending on how it is built, it can
+also supply low-level arithmetic helpers and stack-probe support needed by
+Clang-generated code.
+
+It does **not** replace the UCRT. It does not provide the normal Windows C
+library implementation for allocation, stdio, locale, time, environment,
+threads, and the other C interfaces used by ART and its dependencies.
+
+It also does **not** provide a complete Windows `crt0`. A production ART build
+needs startup/termination behavior including:
+
+- `mainCRTStartup` for executables;
+- `DllMainCRTStartup` for DLLs;
+- walking the `.CRT$X*` initializer and terminator ranges;
+- process and DLL thread-local-storage initialization and teardown;
+- `atexit`/termination integration;
+- security-cookie initialization and checking; and
+- command-line, `argv`, environment, and other process initialization required
+  by the chosen executable model.
+
+MinGW-w64's open `crtexe.c` and `crtdll.c` are the recommended starting sources,
+rebuilt for and adapted to the MSVC target. ART DLLs use global constructors,
+destructors, TLS, and exception state, so `/noentry` is not a safe general
+substitute.
+
+The alternative startup/runtime support must also resolve or deliberately
+configure away code-generation dependencies such as:
+
+```text
+_fltused
+__security_cookie
+__security_init_cookie
+__security_check_cookie
+```
+
+Whether a particular compiler-rt build supplies a low-level symbol must be
+verified from that build's archive; it must not be assumed. Compiler-rt does not
+provide the complete initialization policy surrounding these symbols.
+
+### Exception handling and `__CxxFrameHandler4`
+
+Clang 21's normal x86-64 MSVC-target output in the local probes used
+`__CxxFrameHandler3`. The MSVC-only `/d2FH4` switch was ignored. Existing
+`__CxxFrameHandler4` imports were traced to Microsoft object members selected
+from `MSVCRT.lib`, including EH/security-handler, dynamic-TLS, and new/delete
+support objects.
+
+Replacing those Microsoft startup and allocation objects with audited open
+support should remove that incidental FH4 dependency from Clang-built code.
+This must be verified from the final DLL imports and link map; it is not safe to
+assume that source-level compiler options alone eliminate it.
+
+### Local feasibility probes
+
+Read-only experiments outside this repository used Clang 21.1.8 and MinGW-w64
+UCRT 13.0.0 while retaining the MSVC target.
+
+A C DLL compiled against MinGW-w64 `windows.h` and `stdio.h` imported:
+
+```text
+api-ms-win-core-memory-l1-1-6.dll!MapViewOfFile3
+api-ms-win-crt-stdio-l1-1-0.dll
+KERNEL32.dll
+```
+
+A C++ object emitted Microsoft ABI symbols including:
+
+```text
+_CxxThrowException
+__CxxFrameHandler3
+__RTDynamicCast
+??_7type_info@@6B@
+```
+
+It did not emit a GNU/Itanium personality. A minimal throw/catch and
+`dynamic_cast` executable linked from open import definitions and ran under
+Wine with exit status 0.
+
+These results establish feasibility, not production readiness. Wine is useful
+for CI smoke tests but cannot prove compatibility with Microsoft's loader,
+UCRT, VCRuntime, MSVCP, SEH, or cross-DLL exception behavior. Final gates must
+run on supported real Windows versions.
+
+## Runtime deployment choices for the alternative
+
+### Recommended first milestone
+
+Keep Linux CI free of Microsoft SDK/CRT files, but require on target Windows:
+
+- the UCRT supplied by supported Windows 10/11 through its API sets; and
+- a modern, independently installed VC Redistributable providing compatible
+  `VCRUNTIME140.dll` and `MSVCP140.dll`.
+
+Linux CI generates its import libraries from open definitions and neither
+downloads nor redistributes the VC Redistributable. This satisfies the narrow
+goal of removing Microsoft-EULA package inputs from CI, while leaving the
+normal Microsoft runtime installation and license on the target machine.
+
+### Experimental VC-Redistributable-free direction
+
+The legacy Windows `msvcrt.dll` exports `_CxxThrowException`,
+`__CxxFrameHandler3`, RTTI helpers, and exception-pointer-related functions. A
+small prototype using open import definitions ran under Wine. This is not a
+production recommendation.
+
+Risks include:
+
+- `std::uncaught_exceptions` and nested-exception semantics;
+- C++ exceptions crossing DLL boundaries;
+- per-thread exception state and dynamic TLS;
+- allocator ownership and new/delete pairing;
+- function-local static guards;
+- interaction between C++ EH and Windows SEH; and
+- differences between Wine's implementation and supported Windows releases.
+
+Building replacement VCRuntime/MSVCP behavior from Wine- or ReactOS-derived
+code would be a separate runtime project, not a linker tweak. It would bring
+LGPL or other source-specific compliance duties, integration costs, and a large
+Windows compatibility test obligation.
+
+## Licensing of the open-input route
+
+"No Microsoft EULA on Linux CI" does not mean "no licenses". The alternative
+must maintain a source-level license inventory and notices:
+
+- **MinGW-w64:** primarily Zope Public License 2.1 and public-domain material,
+  with separately identified permissive and LGPL portions. Preserve the
+  applicable `COPYING` files. When distributing statically linked runtime
+  pieces, include `COPYING.MinGW-w64-runtime.txt`; mark modifications to
+  ZPL-covered files as required by that license.
+- **Wine-derived definitions or code:** treat material derived from Wine's
+  `msvcp140.spec` or implementation as LGPL-covered unless a documented legal
+  review establishes otherwise. Preserve notices, provide the required source
+  and relinking rights where applicable, and avoid copying implementation code
+  casually into a differently licensed runtime.
+- **LLVM, libc++, compiler-rt, and LLD:** Apache-2.0 WITH LLVM exception. Keep
+  the required notices and source provenance.
+- **Generated import libraries:** a library generated solely from appropriately
+  licensed open `.def`/spec inputs does not require copying Microsoft's import
+  library. Naming a Windows DLL and its exported API is not the same act as
+  redistributing that DLL or Microsoft's SDK `.lib`; nevertheless, the input
+  definition's own license still applies.
+- **Target Windows and VC Redistributable:** remain Microsoft-licensed even when
+  CI contains no Microsoft package. Installation should be performed by the
+  target owner or an approved deployment process under the applicable terms.
+
+For an EULA-clean CI claim, start from a clean image and enforce a provenance
+allowlist. It should reject xwin caches, Windows SDK/MSVC include paths,
+Microsoft `.lib` inputs, copied VC DLLs, and container layers inherited from
+the current toolchain.
+
+## Qualification gates
+
+Do not replace the current baseline until all of these pass:
+
+1. **Target lock:** every compile records `x86_64-pc-windows-msvc`; COFF symbols,
+   EH personalities, RTTI, and calling conventions are checked for MSVC ABI.
+2. **No-payload audit:** CI input hashes and the final link map show no files
+   sourced from xwin, Windows SDK, MSVC CRT, or VC Redistributable packages.
+3. **PE import audit:** final EXEs/DLLs import only the approved Windows API
+   sets/system DLLs and the explicitly selected target runtime DLLs.
+4. **Startup:** EXE and DLL constructors/destructors, repeated load/unload,
+   `atexit`, dynamic TLS, and thread attach/detach behave correctly.
+5. **C++ ABI:** throw/catch, rethrow, nested exceptions, `exception_ptr`,
+   `dynamic_cast`, type identity, virtual inheritance, and unwinding through ART
+   frames pass on real Windows.
+6. **Cross-DLL behavior:** tests cover ART/JNI/plugin boundaries, allocation and
+   deallocation ownership, callbacks, SEH/C++ EH interaction, and unload.
+7. **C/UCRT behavior:** stdio, locale, time, environment, filesystem paths,
+   aligned allocation, and variadic calls pass on every supported Windows
+   version.
+8. **Security and release modes:** stack probes, security cookies, CFG or other
+   selected hardening, LTO, debug information, and optimized builds are tested.
+9. **License package:** SBOM, source revisions, modifications, notices, and
+   corresponding-source obligations are reproducible from a clean checkout.
+
+## Sources
+
+- [xwin repository and documentation](https://github.com/Jake-Shadle/xwin)
+- [xwin 0.9.0 license-prompt implementation](https://github.com/Jake-Shadle/xwin/blob/0.9.0/src/main.rs#L264-L278)
+- [Visual Studio Community 2022 license terms](https://visualstudio.microsoft.com/license-terms/vs2022-ga-community/)
+- [Visual Studio 2022 diagnostic/build-tools license terms](https://visualstudio.microsoft.com/license-terms/vs2022-ga-diagnosticbuildtools/)
+- [License URL hard-coded by xwin 0.9.0](https://go.microsoft.com/fwlink/?LinkId=2086102)
+- [Windows SDK downloads](https://developer.microsoft.com/en-us/windows/downloads/windows-sdk/)
+- [MinGW-w64 licensing overview](https://github.com/mingw-w64/mingw-w64/blob/master/COPYING)
+- [MinGW-w64 runtime license notice](https://github.com/mingw-w64/mingw-w64/blob/master/COPYING.MinGW-w64-runtime/COPYING.MinGW-w64-runtime.txt)
+- [MinGW-w64 OneCore memory API definition](https://github.com/mingw-w64/mingw-w64/blob/master/mingw-w64-crt/lib-common/api-ms-win-core-memory-l1-1-6.def)
+- [MinGW-w64 VCRuntime 140 definitions](https://github.com/mingw-w64/mingw-w64/blob/master/mingw-w64-crt/lib-common/vcruntime140-common.def.in)
+- [Wine MSVCP 140 export specification](https://github.com/wine-mirror/wine/blob/master/dlls/msvcp140/msvcp140.spec)
+- [Clang Microsoft compatibility](https://clang.llvm.org/docs/MSVCCompatibility.html)
+- [libc++ user documentation](https://github.com/llvm/llvm-project/blob/llvmorg-21.1.8/libcxx/docs/UserDocumentation.rst)
+- [LLVM compiler-rt documentation](https://compiler-rt.llvm.org/)
+- [Microsoft UCRT deployment documentation](https://learn.microsoft.com/en-us/cpp/windows/universal-crt-deployment?view=msvc-170)
