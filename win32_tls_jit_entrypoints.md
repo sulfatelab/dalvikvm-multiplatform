@@ -1634,9 +1634,13 @@ counts as constants.
 
 Existing Wine/native/JIT/JVMTI evidence exercises many consumers but does not
 attribute every frame family or seed Microsoft nonvolatile XMM registers.
-The remaining close work is a four-family managed probe, a native XMM
-sentinel, broader Wine/Linux regressions, and repeated native Windows
-acceptance.
+The dedicated native sentinel now saves and seeds XMM6-XMM11, invokes a
+twelve-double Java callback through JNI quick invoke, compares all 96 bytes,
+and restores the native caller. It passes 6/6 nterp/switch/JIT Wine processes;
+an intentional-clobber self-test returns the exact six-bit mask `0x3f`.
+
+The remaining close work is a four-family managed probe, broader Wine/Linux
+regressions, and repeated native Windows acceptance.
 
 PE assembly unwind metadata remains absent because CFI macros are disabled on
 Windows. ART managed unwinding is separate; W-010 must explicitly own the
@@ -1645,6 +1649,8 @@ broader VEH/SEH/native-unwind decision if W-003 closes without `.pdata` and
 
 See
 [RESULT-w003-quick-frames-analysis.md](tools/verify/win64_phase4/RESULT-w003-quick-frames-analysis.md)
+and
+[RESULT-w003-xmm-sentinel.md](tools/verify/win64_phase4/RESULT-w003-xmm-sentinel.md)
 for the evidence and staged implementation plan.
 
 
@@ -1671,4 +1677,4 @@ for the evidence and staged implementation plan.
 
 ## 14. One-paragraph executive summary
 
-On Linux amd64, ART’s managed world is **GS-relative Thread TLS** layered on top of normal C++ `thread_local`, with quick entrypoints and JIT assuming SysV bridges; on Linux arm64, managed world is **x19 = Thread\***. Windows **cannot** reuse GS for Thread\* (TEB owns GS); **FS.base=Thread\*** is also **rejected** (§16: FSGSBASE/wine/CONTEXT portability), so managed self is a GPR. The WinNT design therefore adopts the **arm64-style explicit self register** on all Windows ISAs (**LOCKED and implemented: r15** on x86_64 with nterp **rREFS=rbp**; **x19** remains a design for ARM64/Arm64EC), keeps C++ `Thread::Current()` on `thread_local`/`TlsAlloc`, and isolates Microsoft C++ calling conventions at explicit quick-invoke and OSR bridges. The Windows nterp OSR adapter preserves the deliberately different nterp and compiled save layouts. JIT code obeys the same self and entrypoint contracts and uses one unnamed pagefile-backed section with a low contiguous R/RX primary view plus an RW updater alias. **W-002's rSELF/OSR contract is accepted and closed; W-003 remains open for XMM6-XMM11 preservation at ordinary Microsoft C++→managed boundaries and focused frame-family coverage.** x86, arm64, and Arm64EC remain design-only so future work is not forced into a GS-shaped abstraction.
+On Linux amd64, ART’s managed world is **GS-relative Thread TLS** layered on top of normal C++ `thread_local`, with quick entrypoints and JIT assuming SysV bridges; on Linux arm64, managed world is **x19 = Thread\***. Windows **cannot** reuse GS for Thread\* (TEB owns GS); **FS.base=Thread\*** is also **rejected** (§16: FSGSBASE/wine/CONTEXT portability), so managed self is a GPR. The WinNT design therefore adopts the **arm64-style explicit self register** on all Windows ISAs (**LOCKED and implemented: r15** on x86_64 with nterp **rREFS=rbp**; **x19** remains a design for ARM64/Arm64EC), keeps C++ `Thread::Current()` on `thread_local`/`TlsAlloc`, and isolates Microsoft C++ calling conventions at explicit quick-invoke and OSR bridges. The Windows nterp OSR adapter preserves the deliberately different nterp and compiled save layouts. JIT code obeys the same self and entrypoint contracts and uses one unnamed pagefile-backed section with a low contiguous R/RX primary view plus an RW updater alias. **W-002's rSELF/OSR contract is accepted and closed; W-003 has repaired and Wine-validated XMM6-XMM11 preservation at ordinary Microsoft C++→managed boundaries and remains open for focused frame-family and native-host acceptance.** x86, arm64, and Arm64EC remain design-only so future work is not forced into a GS-shaped abstraction.

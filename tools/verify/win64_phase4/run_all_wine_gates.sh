@@ -20,6 +20,7 @@ run P4_W002_MANAGED_ENTRIES python3 \
 run P4_W003_QUICK_BOUNDARIES python3 \
   "$REPO/tools/verify/win64_phase1/check_w003_quick_boundaries.py" \
   --win-build "$BUILD" --linux-build "$LINUX_BUILD"
+run P4_W003_XMM_SENTINEL bash "$ROOT/run_w003_xmm_sentinel.sh"
 run P4_W002_OSR bash "$ROOT/run_w002_osr_probe.sh"
 run P4_W002_ATTACH bash "$ROOT/run_w002_attach_probe.sh"
 run P4_W024_CLEANUP_SOURCE bash "$ROOT/run_w024_cleanup_check.sh"

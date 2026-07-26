@@ -252,7 +252,13 @@ W-002 OSR dual/default, dual/switch, J-1/default, J-1/switch: PASS
 ```
 
 The trap totals are recorded evidence for this matched build, not fixed
-constants. Stages C and D remain required before closing W-003.
+constants.
+
+The native-sentinel portion of Stage C is also complete under Wine: two
+repeats in nterp, switch, and threshold-zero JIT modes pass with a zero normal
+mask and exact `0x3f` intentional-clobber mask. See
+[RESULT-w003-xmm-sentinel.md](RESULT-w003-xmm-sentinel.md). The four-family
+managed probe and Stage D remain required before closing W-003.
 
 ## Rejected directions
 
