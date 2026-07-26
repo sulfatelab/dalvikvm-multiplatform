@@ -1,7 +1,6 @@
 # W-002 managed-entry repair
 
-**Status:** IMPLEMENTATION PASS; WINE AND LINUX PASS; NATIVE WINDOWS R1
-PARTIAL PASS; DETERMINISTIC NTERP-OSR R2 PENDING
+**Status:** PASS — NATIVE WINDOWS R2 ACCEPTED; W-002 CLOSED
 
 **Date:** 2026-07-26
 
@@ -23,10 +22,10 @@ The repaired paths now preserve the normal ART/Linux structure:
 - native attached threads publish rSELF only when they cross the existing
   quick-invoke boundary.
 
-W-002 remains open for a revised native Windows 10 acceptance run. Native R1
-accepted the package, structure, attached-thread path, and switch OSR path, but
-the default-nterp workload completed before it deterministically jumped into
-the asynchronously compiled OSR method.
+Native R2 accepts the complete managed-entry contract on Windows 10 build
+19044. The deterministic default-nterp workload now enters compiled OSR in
+both JIT memory modes, while switch OSR and attached-thread entry retain their
+previously passing behavior. W-002 is closed.
 
 ## Quick/switch OSR root cause and fix
 
@@ -213,8 +212,8 @@ python3 tools/verify/win64_phase4/review_w002_host_result.py \
   /path/to/returned.zip --issued dist/win64_w002_host
 ```
 
-The expected native result has 21 PASS records over 16 child processes and
-ends in `OVERALL PASS`. Until that evidence returns, W-002 remains open.
+The accepted native result has 21 PASS records over 16 child processes and
+ends in `OVERALL PASS`.
 
 ## Native Windows R1 result
 
@@ -295,5 +294,50 @@ The revised pre-issue verification passes:
 
 R2 does not alter ART runtime code or the Windows/Linux managed-entry design.
 It removes nondeterminism from the acceptance workload and fixes the offline
-evidence transport contract. W-002 remains open until the issued R2 returns
-21 PASS records and `OVERALL PASS` on native Windows.
+evidence transport contract.
+
+## Native Windows R2 acceptance
+
+The accepted run started at `2026-07-26 14:37:55` on Windows 10 Enterprise
+LTSC x64 build 19044 with Windows PowerShell 5.1.19041.7548. It used issued
+root commit `5cc3e2b52834b42f2f9b135ce2bbb2fd5dcd43ec` and ART commit
+`0bc7b10e1ca53df2e0c3bd9bbc3291c6513862e2`.
+
+`RESULT_W002.txt` contains 21 PASS records, zero FAIL records, and final
+`OVERALL PASS`:
+
+- host OS, package integrity, and the artifact-bound structural report pass;
+- all 8/8 OSR processes exit zero without timeout;
+- all four default-nterp runs report thresholds 100/100, baseline and OSR
+  compilation, the OSR jump, checksum `65553463744`, and clean return without
+  the switch completion marker;
+- all four switch runs report the same common markers plus their required
+  switch completion marker;
+- all 8/8 attach processes compile the callback, complete 16 regular/daemon
+  thread lifecycles each, and return cleanly;
+- fatal-marker scanning passes; and
+- recursive dump scanning reports `NO_DMP_FILES`.
+
+The returned archive `/tmp/w002-r2-log.zip` has SHA-256
+`2c49fe7161f96e98ae74dcd4e610eee775dfff21234673c902c7d4bf58e5df7e` and
+passes ZIP integrity testing. It omitted the root `MANIFEST.json` while the
+evidence files were copied, so the unchanged strict reviewer correctly
+reported the missing identity file. This is a transport omission rather than
+a host-run failure:
+
+- `PASS package_integrity` proves the manifest existed and matched its issued
+  hash during the native run;
+- returned `BUILD_INFO.txt`, `SHA256SUMS.txt`, and
+  `W002_STRUCTURAL_REPORT.txt` are byte-identical to the issued package;
+- the exact returned sums record manifest SHA-256
+  `e48211612ce16c84acca6af1aca3f749b4c88112f99e31d76b0ace2bd519e125`;
+  and
+- adding only that retained byte-identical manifest produces
+  `/tmp/w002-r2-log-normalized.zip`, SHA-256
+  `8aea7af225f154678d50ea7b329ce8574242c2e8cea8c947170c4a58f916bc03`,
+  which passes ZIP integrity and the unchanged strict reviewer as an
+  evidence-only return.
+
+No runtime log or result record was altered during normalization. See
+[`evidence/w002_host/ACCEPTANCE.md`](evidence/w002_host/ACCEPTANCE.md).
+This evidence satisfies the final native-host gate and closes W-002.

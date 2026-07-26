@@ -882,7 +882,7 @@ None of this justifies retaining the RWX J-1 path as the product default.
 | dlmalloc and `MemMap` ownership | W-013 CLOSED: Stages A–E plus native R2 mapping, ownership, discard, pressure, metrics, and repeated-start acceptance pass |
 | Root-cause correction | JIT-root signed displacement plus latent CodeInfo overflow |
 | PE asm definitions | Windows-target generator test enforces `RUNTIME_INSTRUMENTATION_OFFSET=0x328` |
-| W-002 managed OSR entries | Quick OSR bridges Microsoft C++ arguments to the shared body and publishes r15; nterp OSR uses a separate return adapter plus `NterpFree`; structural, Wine, and Linux controls pass; native R1 accepts switch OSR and exposes a default-nterp harness-timing gap rather than a crash |
+| W-002 managed OSR entries | W-002 CLOSED: quick and nterp OSR adapters pass structural, Wine, Linux, and native R2 controls; native R2 returns 8/8 OSR with deterministic thresholds/checksum |
 | W-002 native attach entries | Regular and daemon native threads call a pre-JITed Java callback, allocate, validate daemon state and exact values, detach, and verify `JNI_EDETACHED` in both memory and interpreter modes |
 | Threshold-zero CriticalNative | Direct visitor uses Win64 unified ordinals/home area; dlsym caller PC preserved; repeated J-1 and dual-view probes pass |
 | Unresolved CriticalNative dlsym | ART-owned `JVM_NativeLoad` bridge; mixed/spilled/scalar exported calls pass through both load APIs |
@@ -896,7 +896,6 @@ None of this justifies retaining the RWX J-1 path as the product default.
 
 | Item | Blocker |
 |------|---------|
-| W-002 managed-entry native acceptance | Native R1 passes identity/structure, 8/8 attach, and 4/4 switch OSR; deterministic R2 pins warmup/optimize thresholds to 100 and awaits the native default-nterp transition result |
 | P5 mapping real-Windows acceptance | W-013 heap/JIT integration subset is complete: R2 protections, metrics, J-1/default JIT, and repeated starts pass. Broader mitigation/direct-encoding closure remains under W-025 |
 | Direct encoding checks | Add checks at JIT-root patch and CodeInfo construction sites |
 
@@ -915,10 +914,10 @@ None of this justifies retaining the RWX J-1 path as the product default.
 | FastNative ABI probe, default native JIT | PASS, three binding phases, 7/7 compiled once | PASS, three binding phases, 7/7 compiled once |
 | FastNative method tracing | PASS, mode `0 -> 1 -> 0`, no trace file | PASS, mode `0 -> 1 -> 0`, no trace file |
 | JVMTI forced interpreter | PASS, 3/3; all six calls exact; two normal/FastNative compile records | PASS, 3/3; all six calls exact; two normal/FastNative compile records |
-| Managed OSR, default nterp | PASS, 2/2 | PASS, 2/2 |
-| Managed OSR, switch interpreter | PASS, 2/2 | PASS, 2/2 |
-| Attached-thread JNI, default nterp | PASS, 2/2; 16 threads/run | PASS, 2/2; 16 threads/run |
-| Attached-thread JNI, switch interpreter | PASS, 2/2; 16 threads/run | PASS, 2/2; 16 threads/run |
+| Managed OSR, default nterp | PASS, 2/2 Wine + 2/2 native R2 | PASS, 2/2 Wine + 2/2 native R2 |
+| Managed OSR, switch interpreter | PASS, 2/2 Wine + 2/2 native R2 | PASS, 2/2 Wine + 2/2 native R2 |
+| Attached-thread JNI, default nterp | PASS, 2/2 Wine + 2/2 native R2; 16 threads/run | PASS, 2/2 Wine + 2/2 native R2; 16 threads/run |
+| Attached-thread JNI, switch interpreter | PASS, 2/2 Wine + 2/2 native R2; 16 threads/run | PASS, 2/2 Wine + 2/2 native R2; 16 threads/run |
 | Restored Math ceil/floor | PASS, 3/3 threshold-zero and 3/3 `-Xint` | PASS, 3/3 threshold-zero and 3/3 `-Xint` |
 
 ## 14. Decision log
@@ -957,6 +956,7 @@ None of this justifies retaining the RWX J-1 path as the product default.
 | 2026-07-25 | W-002 OSR and attached-thread JNI pass 2/2 in all dual/J-1 and default-nterp/switch combinations; Linux OSR and full builds pass; native Windows acceptance is packaged |
 | 2026-07-26 | W-002 native R1 passes package identity, structure, 8/8 attach, and 4/4 switch OSR with no fatal marker or dump; all four clean default-nterp runs finish before the required OSR jump because warmup remained 65535 |
 | 2026-07-26 | W-002 R2 pins warmup and optimize thresholds to 100, increases the exact-checksum loop to 2,000,000 iterations, accepts strict evidence-only returns, and passes unit, focused Wine, aggregate Wine, and Linux controls |
+| 2026-07-26 | W-002 native R2 passes 21/21 records on Windows 10 build 19044: 8/8 OSR, 8/8 attach, exact thresholds/checksum, clean fatal scan, and no dump; W-002 closes |
 | 2026-07-24 | Native Windows 10 build 19044 tripwire matrix passes all nine cases with exact required native compile records and no crash dump; W-024 cleanup is authorized |
 | 2026-07-24 | ART `42a03f2ea0` restores exact upstream interpreter scope and common default native-JIT policy; final Win64 and Linux regressions pass and W-011/W-012/W-024 close |
 

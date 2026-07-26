@@ -2,7 +2,12 @@
 
 **Target:** Windows 10 version 1803 (RS4, build 17134) or later, x64
 
-**State:** R2 READY FOR NATIVE ACCEPTANCE
+**State:** ACCEPTED on Windows 10 build 19044; W-002 closed
+
+The accepted `2026-07-26 14:37:55` R2 run produced 21 PASS records, zero
+failures, `OVERALL PASS`, and `NO_DMP_FILES`. All OSR and attached-thread mode
+pairs passed twice. See
+[`evidence/w002_host/ACCEPTANCE.md`](evidence/w002_host/ACCEPTANCE.md).
 
 ## Purpose
 
@@ -94,5 +99,7 @@ python3 tools/verify/win64_phase4/review_w002_host_result.py \
   /path/to/returned.zip --issued dist/win64_w002_host
 ```
 
-W-002 remains open until this review passes on native Windows. Wine results are
-strong pre-issue coverage but are not a substitute for this host gate.
+The originally returned evidence ZIP omitted the unchanged root
+`MANIFEST.json`. The acceptance record documents the omission and the strict
+review of a normalized archive containing only the retained byte-identical
+issued manifest plus the original evidence. W-002 is closed.

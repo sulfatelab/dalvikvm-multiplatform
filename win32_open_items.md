@@ -57,7 +57,7 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 | Phases 0–3 | **Gate-complete** (P3 G12 real Win10 + wine) |
 | Phase 4 | **Wine complete**; host re-run still recommended |
 | PE libcore/ICU/openjdk | **Product-default real PE** (icu/javacore/openjdk); NIO.2 non-goal; NetProbe OK |
-| Quick/JIT/TLS | **Managed and native JIT ON with the corrected dual view by default:** rSELF=r15; nterp N-1 default ON; D-1 complete (37/37 Thread sites); W-002 native R1 passes package identity, structural checks, all attached-thread cases, and all switch-OSR cases; deterministic R2 pins both JIT thresholds to 100 for the remaining default-nterp transition; JIT smoke 12/12; JIT matrix 14/14; W-004 direct Runtime singleton load native-accepted; compile records opt-in |
+| Quick/JIT/TLS | **Managed and native JIT ON with the corrected dual view by default:** rSELF=r15; nterp N-1 default ON; D-1 complete (37/37 Thread sites); W-002 CLOSED after native R2 passes 21/21 records, including all default-nterp/switch OSR and attached-thread cases; JIT smoke 12/12; JIT matrix 14/14; W-004 direct Runtime singleton load native-accepted; compile records opt-in |
 | Memory | One unnamed pagefile section is mapped as a contiguous low R/RX primary view plus a full RW alias; J-1 remains only as the temporary `ART_WIN64_JIT_DUAL=0` diagnostic opt-out |
 | Heap memory | **W-013 CLOSED:** explicit MoreCore-only dlmalloc, direct mspace owners, constrained `VirtualAlloc2`, page-state operations, Linux-like metadata placement, and native R2 pressure/JIT/repeated-start acceptance PASS |
 | Linux multiplatform | Native build and L-005 imageless Hello PASS using the exact Win64-staged shared multipath `boot.jar` bytes |
@@ -77,25 +77,6 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Blocked on:** n/a (default ON as of 2026-07-19)
 - **Opened:** 2026-07-16 (Phase 2)
 - **Updated:** 2026-07-19 — product default ON (Linux-like); opt-out `ART_WIN64_QUICK_INVOKE=0`
-
-### W-002 — No managed GS / Thread base on Windows (`InitCpu` no-op for GS)
-- **State:** OPEN (implementation and Wine/Linux verification complete; native R1 partially accepted; deterministic R2 issued for native acceptance)
-- **Kind:** host-validation and test-determinism gap (managed-entry ABI defects fixed)
-- **Area:** art / TLS
-- **Symptom / why:** Linux x86_64 uses `ARCH_SET_GS` so quick/nterp use `%gs:OFFSET`. Windows GS is TEB.
-- **Current behavior:** `InitCpu` does **not** touch GS (correct). Asm uses `THREAD_*` macros: r15 base on `_WIN32`, GS on Linux. rSELF is published at quick invoke and OSR managed entries. Nterp N-1 (`rREFS=rbp`) remains the product default.
-- **Fixed quick OSR defect:** `art_quick_osr_stub` retains its normal Microsoft-x64 C++ ABI declaration. Its Windows prologue converts the six arguments to the SysV-shaped assembly body, preserves Microsoft nonvolatile rdi/rsi/r15, and publishes the explicit `Thread*` argument into r15. The Linux instruction path remains unchanged.
-- **Fixed nterp OSR defects:** Windows cleanup calls the existing `NterpFree` SysV-to-Microsoft bridge. A Windows return adapter also separates nterp's saved-register block from the compiled OSR frame; compiled code returns to the adapter, which restores XMM12–XMM15 and rbx/rbp/r12–r15 before returning to the original caller. This is required because pinning r15 means the Windows nterp save layout cannot masquerade as the compiled callee-save layout.
-- **Attach model and coverage:** `AttachCurrentThread` establishes `Thread::Current()` TLS without reserving or overwriting the native caller's r15. JNI `Call*Method` routes through `ArtMethod::Invoke`, whose Win64 quick-invoke boundary saves caller r15 and publishes managed rSELF. The focused probe covers regular and daemon attach, calls a pre-JITed Java method, allocates, checks exact values and daemon state, detaches, and verifies `JNI_EDETACHED`.
-- **Native R1 result:** `/tmp/w002-run1.zip` has SHA-256 `0a1fa8ac02a3eba7d536d539c8fc77ad7c596e93e85c3bbc07191ba66e6e6b81`. Windows 10 build 19044 passed package identity, the artifact-bound structural report, all 8/8 attached-thread processes, all 4/4 switch-OSR processes, fatal-log scanning, and recursive dump scanning (`NO_DMP_FILES`). All 16 children exited zero. The 4/4 default-nterp OSR processes produced the exact checksum and clean runtime exit, but did not emit the required OSR jump marker; three had already completed OSR compilation and one completed only baseline compilation.
-- **R1 interpretation:** this does not demonstrate a runtime crash, corrupt return adapter, or checksum failure. The runner set only `-Xjitthreshold:100`, leaving nterp's warmup threshold at 65535. The 300,000-iteration loop finished on the fast native host before asynchronous OSR installation was followed by another successful hotness check. Wine was slow enough to hide this race. The immediate blocker is therefore deterministic native nterp-OSR test timing.
-- **R2 correction:** every OSR runner now supplies `-Xjitwarmupthreshold:100` together with `-Xjitthreshold:100`, requires the runtime to report both thresholds as 100, and runs 2,000,000 iterations with exact checksum `65553463744`. This repeatedly returns nterp to `NterpHotMethod` while asynchronous compilation completes. The revised Wine matrix passes 8/8 OSR and 8/8 attach processes, Linux nterp OSR passes with the same threshold/checksum contract, and reviewer unit tests cover evidence-only, complete, partial, changed-identity, and changed-payload returns.
-- **Close gate:** Run the issued R2 package and obtain 4/4 default-nterp OSR jumps while retaining 4/4 switch OSR and 8/8 attached-thread results on native Windows 10 RS4+. The reviewer accepts either a complete return or an evidence-only return whose four root identity files exactly match the issued package. Wine and Linux are complete and are not substitutes for this final host result.
-- **Evidence:** `tools/verify/win64_phase4/RESULT-w002-managed-entry.md`; `tools/verify/win64_phase4/W002_HOST_CHECKLIST.md`
-- **Code anchors:** `jit.cc` `art_quick_osr_stub`; `quick_entrypoints_x86_64.S`; `mterp/x86_64ng/main.S` `NterpHotnessCheck`; `nterp.cc` `NterpFree`; `thread_x86_64.cc`; `asm_support_x86_64.S` `THREAD_*`; design §6 / §12b / §15 / §16 / **§17** / **§17.8** / **§17.9**
-- **Opened:** 2026-07-16
-- **Updated:** 2026-07-26 — native R1 passes identity/structure, 8/8 attach, and 4/4 switch OSR with no fatal markers or dumps; deterministic R2 pins both JIT thresholds to 100, lengthens the loop, passes focused/aggregate Wine and Linux controls, and is issued for the remaining native run
-- **Design:** [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md) **§15 N-1 LOCKED**, **§17** register-map lock; FS-self **§16** reject; **§17.8** defaults ON; **§17.9** OSR/attach repair
 
 ### W-003 — Quick entrypoint SETUP frames `int3` on Windows
 - **State:** OPEN (partial — SETUP_SAVE_REFS_ONLY / ALL_CALLEE_SAVES un-int3'd on Win)
@@ -331,6 +312,7 @@ If product reopens a non-goal, add an **L-** item and link the decision.
 
 Summary (details below; do not delete history):
 
+- **W-002** — No managed GS / Thread base on Windows (2026-07-26) — r15 managed-self design, OSR adapters, and attached-thread entry accepted on native Windows R2
 - **W-004** — `LOAD_RUNTIME_INSTANCE` direct PE singleton load (2026-07-25) — helper removed; direct same-image load passes structural, Wine, Linux, and native Windows acceptance
 - **W-005** — Combined PE JNI stub DLL aliased as libjavacore/libopenjdk/libicu_jni (2026-07-17) — product packaging uses stage_native_modules.sh (real PE only); libcombined is legacy non-product
 - **W-006** — Minimal NativeConverter / ICU version shims (not full ICU4C) (2026-07-17) — product uses real icu_jni NativeConverter + icuuc/icui18n + icudt; native_converter.c obsolete and removed from libcombined; charset stub no longer product path
@@ -357,6 +339,26 @@ Summary (details below; do not delete history):
 - **D-001** — Shared boot.jar via runtime OS selection (2026-07-17)
 
 <!-- keep full CLOSED item bodies for history -->
+
+
+### W-002 — No managed GS / Thread base on Windows (`InitCpu` no-op for GS)
+- **State:** CLOSED (2026-07-26) — managed-entry implementation and native Windows R2 acceptance complete
+- **Kind:** resolved managed-entry ABI, TLS, OSR, and host-validation gap
+- **Area:** art / TLS
+- **Symptom / why:** Linux x86_64 uses `ARCH_SET_GS` so quick/nterp use `%gs:OFFSET`; Windows GS is the TEB and cannot be repurposed.
+- **Current behavior:** `InitCpu` correctly leaves GS untouched. Windows managed code uses r15 as rSELF while Linux retains GS. Quick invoke and OSR boundaries publish rSELF, and nterp N-1 retains rbp as rREFS.
+- **Quick OSR fix:** `art_quick_osr_stub` keeps its Microsoft-x64 C++ declaration. Its local Windows prologue converts six arguments to the shared SysV-shaped body, preserves Microsoft nonvolatile rdi/rsi/r15, and publishes the explicit `Thread*` in r15. Linux keeps its original instruction path.
+- **Nterp OSR fix:** Windows cleanup uses the `NterpFree` SysV-to-Microsoft bridge. A Windows return adapter keeps nterp's save block separate from the compiled OSR frame, then restores XMM12–XMM15 and rbx/rbp/r12–r15 after compiled code returns.
+- **Attach contract:** native regular and daemon threads establish ART C++ TLS without owning caller r15. JNI invocation crosses the existing quick boundary, which preserves native r15 and publishes managed rSELF. The probe pre-JITs the Java callback and validates allocation, daemon state, exact results, detach, and `JNI_EDETACHED`.
+- **Native R1:** package identity, structure, 8/8 attach, and 4/4 switch OSR passed with no fatal marker or dump. Four clean default-nterp runs missed the jump because the harness left warmup at 65535 and its 300,000-iteration loop finished before another post-compilation hotness check.
+- **Deterministic R2:** every OSR runner pins warmup and optimize thresholds to 100, verifies the reported values, and runs 2,000,000 iterations with checksum `65553463744`. Unit tests, focused Wine, Phase 3/4 Wine aggregates, and Linux Hello/GC/OSR controls pass.
+- **Native R2 acceptance:** Windows 10 build 19044 returns 21 PASS records and `OVERALL PASS`. All 16 children exit zero without timeout; OSR passes 8/8 across dual/J-1 and default-nterp/switch; attach passes 8/8; fatal and dump scans pass with `NO_DMP_FILES`.
+- **Evidence transport note:** `/tmp/w002-r2-log.zip` omitted root `MANIFEST.json` while copying evidence. The host-side `PASS package_integrity` proves it existed and matched during the run; returned `BUILD_INFO.txt`, `SHA256SUMS.txt`, and both structural reports exactly match the issued package, and the exact returned sums record the retained manifest hash. A normalized copy adds only that byte-identical retained manifest and passes the unchanged strict reviewer. No runtime log was changed.
+- **Evidence:** [RESULT-w002-managed-entry.md](tools/verify/win64_phase4/RESULT-w002-managed-entry.md), [W002_HOST_CHECKLIST.md](tools/verify/win64_phase4/W002_HOST_CHECKLIST.md), and [native acceptance](tools/verify/win64_phase4/evidence/w002_host/ACCEPTANCE.md)
+- **Code anchors:** `jit.cc` `art_quick_osr_stub`; `quick_entrypoints_x86_64.S`; `mterp/x86_64ng/main.S` `NterpHotnessCheck`; `nterp.cc` `NterpFree`; `thread_x86_64.cc`; `asm_support_x86_64.S` `THREAD_*`
+- **Design:** [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md) §15, §17, and §17.9
+- **Opened:** 2026-07-16
+- **Closed:** 2026-07-26 — deterministic native R2 acceptance plus final evidence review
 
 
 ### W-004 — `LOAD_RUNTIME_INSTANCE` direct PE singleton load
@@ -651,7 +653,7 @@ _No open design notes. Closed D- items live under §Closed._
 ## Suggested next closures (priority)
 
 1. ~~**D-001**~~ **CLOSED** — single shared boot.jar (runtime OS selection); dual-host FS smoke is not the close bar.  
-2. ~~**W-001**, **W-004**, **W-011**, **W-012**, and **W-024**~~ closed; **W-002** awaits the issued deterministic native R2 result after partial R1 acceptance, while **W-003** retains residual quick-entrypoint cleanup.
+2. ~~**W-001**, **W-002**, **W-004**, **W-011**, **W-012**, and **W-024**~~ closed; **W-003** retains residual quick-entrypoint cleanup.
 3. ~~**L-001**~~ — **CLOSED** real PE libcore/openjdk/ICU hybrid; residual Linux TU/bridge growth optional.  
 4. **H-001** — host Phase-4 with multiplatform package.  
 5. ~~**L-005** — Linux Hello gate~~ **CLOSED**.
@@ -699,4 +701,4 @@ _No open design notes. Closed D- items live under §Closed._
 - **Updated:** 2026-07-24 — corrected pagefile-section dual view remains verified; threshold-zero and restored CriticalNative paths pass; per-method compile records are opt-in; temporary J-1 diagnostic opt-out and real-Windows acceptance remain
 
 
-*Last snapshot: 2026-07-26 — W-001/W-011/W-012/W-013/W-024 closed; Nterp ON; corrected pagefile-section dual view is the managed/native-JIT default (12/12 smoke, 14/14 matrix); D-1 complete; W-002 implementation passes structural, focused/aggregate Wine, and Linux controls; native R1 accepts identity/structure, 8/8 attach, and 4/4 switch OSR, and deterministic R2 now pins both JIT thresholds to 100 and is issued for the remaining default-nterp native transition; direct CriticalNative and 7/7 mixed/high-FP normal/FastNative matrices pass unresolved dlsym, rebinding, method tracing, and JVMTI forced interpretation; W-013 native R2 passes 56/56 with complete metrics, 20/20 repeated starts, large-heap pressure, J-1/default JIT, and no dumps; Math.ceil/floor and one common ELF/PE table are restored; interpreter.cc matches upstream; compile records are opt-in; `ART_WIN64_JIT_DUAL=0` temporarily retains J-1 for diagnosis; W-025 broader real-host acceptance remains; 7 OPEN workarounds remaining.*
+*Last snapshot: 2026-07-26 — W-001/W-002/W-011/W-012/W-013/W-024 closed; Nterp ON; corrected pagefile-section dual view is the managed/native-JIT default (12/12 smoke, 14/14 matrix); D-1 complete; W-002 native R2 passes 21/21 records with 8/8 OSR, 8/8 attach, exact deterministic thresholds/checksum, and no fatal marker or dump; direct CriticalNative and 7/7 mixed/high-FP normal/FastNative matrices pass unresolved dlsym, rebinding, method tracing, and JVMTI forced interpretation; W-013 native R2 passes 56/56 with complete metrics, 20/20 repeated starts, large-heap pressure, J-1/default JIT, and no dumps; Math.ceil/floor and one common ELF/PE table are restored; interpreter.cc matches upstream; compile records are opt-in; `ART_WIN64_JIT_DUAL=0` temporarily retains J-1 for diagnosis; W-025 broader real-host acceptance remains; 6 OPEN workarounds remaining.*
