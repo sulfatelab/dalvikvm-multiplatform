@@ -115,6 +115,13 @@ add_executable(win64_pthread_once_probe EXCLUDE_FROM_ALL
 add_executable(win32_thread_stack_probe EXCLUDE_FROM_ALL
   "${CMAKE_CURRENT_SOURCE_DIR}/win32_thread_stack_probe.c")
 
+add_executable(win32_stack_page_probe EXCLUDE_FROM_ALL
+  "${CMAKE_CURRENT_SOURCE_DIR}/win32_stack_page_probe.cc"
+  "${CMAKE_CURRENT_SOURCE_DIR}/win32_stack_page_fault_probe.S"
+  "${MDVM_ART_WIN_RUNTIME}/stack_windows.cc")
+target_include_directories(win32_stack_page_probe PRIVATE
+  "${MDVM_ART_WIN_RUNTIME}")
+
 add_executable(win32_cet_policy_probe EXCLUDE_FROM_ALL
   "${CMAKE_CURRENT_SOURCE_DIR}/win32_cet_policy_probe.cc"
   "${MDVM_ART_WIN_RUNTIME}/cet_compat.cc")
@@ -199,6 +206,7 @@ endif()
 if(TARGET art)
   target_sources(art PRIVATE
     "${MDVM_ART_WIN_RUNTIME}/thread_windows.cc"
+    "${MDVM_ART_WIN_RUNTIME}/stack_windows.cc"
     "${MDVM_ART_WIN_RUNTIME}/cet_compat.cc"
     "${MDVM_ART_WIN_RUNTIME}/runtime_windows.cc"
     "${MDVM_ART_WIN_RUNTIME}/monitor_windows.cc"

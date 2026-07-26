@@ -86,7 +86,7 @@ native caller's r15. JNI `CallStaticLongMethod` enters through
 `ArtMethod::Invoke`, whose Win64 quick boundary preserves native r15 and
 publishes the attached `Thread*` for managed code.
 
-Each attach process:
+Each current attach process:
 
 - warms and JIT-compiles `W002AttachProbe.attachedCallback`;
 - creates eight regular and eight daemon Win32 threads;
@@ -95,8 +95,17 @@ Each attach process:
 - verifies `Thread.currentThread()` and daemon state;
 - allocates Java objects;
 - validates an exact 64-bit return value;
-- detaches; and
-- requires `GetEnv == JNI_EDETACHED`.
+- detaches and requires `GetEnv == JNI_EDETACHED`;
+- consumes about 16 KiB through recursive native stack frames on the detached
+  raw `CreateThread` thread;
+- reattaches through the same regular/daemon API, repeats the compiled managed
+  callback, and detaches a second time.
+
+The second lifecycle was added with W-014 Stage B. It proves that ART restores
+the fixed page sufficiently for continued native stack use and reinstallation
+on Wine. The accepted W-002 native R2 archive predates this extension, so it
+remains W-002 managed-entry evidence rather than native W-014 restoration
+acceptance.
 
 ## Permanent gates
 
@@ -152,9 +161,11 @@ must not use that return path.
 | J-1 diagnostic | Switch | 2/2 |
 
 All eight processes compile the callback, report
-`W002AttachProbe OK completed=16`, and finish with no exception. This is 128
-successful native-thread attach/callback/detach lifecycles across the focused
-matrix: 64 regular and 64 daemon.
+`W002AttachProbe OK completed=16`, and finish with no exception. The current
+Wine gate performs 256 successful attach/callback/detach cycles across the
+focused matrix: two cycles on each of 128 raw threads, split evenly between
+regular and daemon attachment. Native R2's historical count remains 128
+single-cycle lifecycles.
 
 ## Broader regression results
 

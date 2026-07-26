@@ -513,7 +513,7 @@ New files under nested ART multipath paths (or injected via overlay `add_srcs`):
 
 | File | Role |
 |------|------|
-| `thread_windows.cc` | Windows thread OS hooks; no `sigaltstack`; selected W-014 home for fixed-page VM operations after Stage A's current-stack acceptance in the pthread facade/common thread path |
+| `stack_windows.{h,cc}` / `thread_windows.cc` | Implemented W-014 fixed-page selection/state/restoration plus bounded `Thread` integration; no `sigaltstack` |
 | `runtime_windows.cc` | Runtime platform initialization plus fatal UEF/minidump policy; expected managed faults must not use the diagnostic path |
 | `monitor_windows.cc` | Contention logging no-op / ETW later |
 | `fault_handler_windows.cc` | Optional split for the selected W-010 exact access-violation/non-owning-`CONTEXT` adapter if it is not kept with the Windows sigchain facade |
@@ -677,10 +677,11 @@ Each phase has a kill-or-continue gate. This is the execution roadmap when imple
 
 - Crash-diagnostic VEH was sufficient for the Phase-2 Hello path; managed
   implicit-null and stack-overflow fault translation did not land and remains
-  W-010. W-014 Stage A has since implemented accurate Windows stack bounds,
-  requested reservation sizing, and pthread lifetime; native Stage A
-  acceptance and the fixed ART protected region remain. Their selected coupled
-  design is [win32_faults_and_stacks.md](win32_faults_and_stacks.md).
+  W-010. W-014 Stages A-B have since implemented accurate Windows stack
+  bounds, requested reservation sizing, pthread lifetime, measured excluded-low
+  accounting, the fixed ART protected page, and detach restoration. Native
+  A-B acceptance and W-010 Stages C-D remain. Their selected coupled design is
+  [win32_faults_and_stacks.md](win32_faults_and_stacks.md).
 - MemMap extensions for heap + boot image optional (imageless OK).
 - Minimal JNI registration; **reduced boot.jar** if needed to reach Hello, then grow.
 - Win64: only required assembly stubs; expanded C++ `InterpreterJni` for PE shorties.
@@ -754,7 +755,7 @@ the feasibility record, not as a current schedule.
 |------|----------|------------|
 | VEH ≠ Linux signals subtlety | Critical | Diagnostic VEH/minidump support is landed, but generated-code translation remains W-010. The selected design reuses common `FaultManager` through a narrow first VEH and a non-owning view of the real `CONTEXT` plus AV kind, chains every unrecognized exception, and activates only with W-014's page; validate debugger ordering, negative AVs, stack budget, and repeated nterp/JIT NPE/SOE on native Windows. |
 | CET user shadow-stack mismatch | Critical | Current x86_64 `art_quick_do_long_jump` restores the regular stack and returns without synchronizing CET's protected return stack; W-010 also redirects `CONTEXT.Rip`/`Rsp`. Stage 0 now marks every project PE `/CETCOMPAT:NO`, audits packaged DLLs, and rejects any nonzero process HSP policy before memory/thread/JIT startup. Compatibility, audit, and strict modes are unsupported; native forced-policy acceptance remains and CFG is separate. |
-| Windows stack discovery / growth differs from pthread stacks | Critical | W-014 Stage A now rejects fibers, uses `GetCurrentThreadStackLimits()` plus a complete `VirtualQuery()` allocation walk, applies `_beginthreadex` reservation semantics with retained join handles/tagged external identities, and passes thread-pool reservation sizes. Stage B must still measure the bottom exclusion and install the fixed `PAGE_NOACCESS` ART page without reusing Windows' moving one-shot `PAGE_GUARD`; native Stage A acceptance also remains. |
+| Windows stack discovery / growth differs from pthread stacks | Critical | W-014 Stages A-B reject fibers, use `GetCurrentThreadStackLimits()` plus a complete `VirtualQuery()` allocation walk, apply `_beginthreadex` reservation semantics with retained join handles/tagged external identities, pass thread-pool reservation sizes, measure the bottom exclusion, and install/restore a verified fixed `PAGE_NOACCESS` page without adopting Windows' moving one-shot `PAGE_GUARD`. Native small/default/large reservation, guard-growth, and detach/reattach acceptance remains. |
 | Win64 ABI assembly volume | Critical | x86_64 quick/nterp/JIT bridges are implemented; retain Linux/Win64 ABI matrices |
 | libcore native breadth | High | Product hybrid map tracks 82 implemented and 44 intentional ENOSYS methods |
 | Vendor submodule churn vs Windows patches | High | Nested `artmp_*` branches, small OS boundaries, and cross-host gates |
@@ -818,11 +819,12 @@ See `tools/verify/win64_phase2/RESULT.md` and `tools/verify/win64_phase1/hello_a
   allowed for the historical Phase-2 interpreter path. The W-010 product
   design permits it only with a mode that cannot execute nterp/JIT implicit
   faults.
-- W-014 Stage A exact current-stack validation, `_beginthreadex` reservation
+- W-014 Stages A-B exact current-stack validation, `_beginthreadex` reservation
   semantics, opaque join/detach/result lifetime, tagged external thread
-  identity, Windows thread-pool sizing, and diagnostic VEH/UEF teardown are
-  locally implemented and Wine/Linux verified; native acceptance and the
-  fixed ART protected page remain.
+  identity, Windows thread-pool sizing, measured excluded-low accounting,
+  fixed-page state/restoration, and diagnostic VEH/UEF teardown are locally
+  implemented. Focused Wine page/reattach and product gates pass; native A-B
+  acceptance remains.
 - **SysV vs MSVC ABI:**
   - Win64 `ArtMethod::Invoke` → `EnterInterpreterFromInvoke` (skip quick invoke stubs).
   - `ExecuteSwitchImplAsm`: `sysv_abi` call from C++; `RDI→RCX` before calling C++ impl.

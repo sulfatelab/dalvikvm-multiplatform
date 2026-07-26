@@ -734,15 +734,16 @@ Detach:
   rSELF must not be used after
 ```
 
-The publish order and Stage A of step 1 are implemented. The Win branch now
+The publish order and W-014 Stages A-B of step 1 are implemented. The Win branch now
 accepts only the current non-fiber system stack, uses
 `GetCurrentThreadStackLimits()`, validates current-SP containment and the
 committed-private allocation base, and walks the complete reservation before
 publishing the bounds. Failure rejects attachment; there is no clamp or
-fabricated-size fallback. The current one-page pthread `guardsize` result is a
-compatibility value only while implicit stack checks remain disabled. Stage B
-must measure the excluded-low prefix and install the fixed ART page before the
-complete product stack contract is ready.
+fabricated-size fallback. The one-page pthread `guardsize` result remains a
+facade compatibility value; the Stage B platform helper replaces it with the
+measured excluded-low prefix, installs the fixed ART page, and publishes the
+adjusted bounds before managed execution. W-010 translation and atomic product
+activation remain incomplete.
 
 #### 6.9.1 W-014 bounds and thread-creation contract
 
@@ -792,15 +793,26 @@ stack_begin
 low address / GetCurrentThreadStackLimits.LowLimit
 ```
 
-W-014 never assumes `low + one page` is available. It preserves the measured
-bottom prefix, rejects a candidate that is already `PAGE_GUARD` or
-`PAGE_NOACCESS`, then records the first suitable reserved or ordinary
-committed-private read/write page and its original state in `Thread`. It
-commits that page read/write and changes it to `PAGE_NOACCESS`. The Windows
-path does not reuse Linux's recursive `VM_GROWSDOWN` touching or `madvise()`.
-It restores the original reserved/committed state when an externally created
-thread detaches and continues. Windows `PAGE_GUARD` remains the OS's moving
-one-shot stack-growth mechanism and is never ART's repeatable fixed page.
+The implemented W-014 path never assumes `low + one page` is available. It
+preserves the measured bottom prefix, rejects a candidate that is already
+`PAGE_GUARD` or `PAGE_NOACCESS`, then records the first suitable reserved or
+ordinary committed-private read/write page and its original state in `Thread`.
+It commits a reserved candidate read/write, leaves an already committed
+candidate and its contents intact, then changes the selected page to
+`PAGE_NOACCESS`.
+The Windows path does not reuse Linux's recursive `VM_GROWSDOWN` touching or
+`madvise()`. Protect/unprotect and direct detach restoration verify the exact
+allocation, type, state, and protection. An externally created thread returns
+to its original reserved/committed state before detach completes. Windows
+`PAGE_GUARD` remains the OS's moving one-shot stack-growth mechanism and is
+never ART's repeatable fixed page.
+
+The local permanent probe now covers eight deterministic layouts, actual Wine
+main/pthread stack pages, 64 committed restore cycles, 64 real reserved
+commit/decommit cycles, and exact direct fault delivery. The W-002 raw-thread
+matrix additionally detaches, consumes native stack, reattaches, and detaches
+again on the same thread. Native Windows bottom-layout and guard-growth
+acceptance remains open.
 
 ### 6.10 Exception delivery interaction
 
@@ -809,12 +821,14 @@ first-chance exceptions and returns `EXCEPTION_CONTINUE_SEARCH`; it does not
 yet translate generated-code faults. Managed soft throws still use ART's
 `Thread::exception_` and delivery entrypoints.
 
-This creates a stack-overflow policy mismatch: runtime initialization disables
-Windows implicit SO checks and does not install the protected page, while the
-x86_64 optimizing backend and nterp still emit the normal unconditional
-`RSP - ART_STACK_OVERFLOW_GAP_x86_64` probe. The switch interpreter instead
-uses explicit `Thread::stack_end_` comparisons. W-014 and W-010 must close this
-execution-mode split together.
+This still creates a stack-overflow policy mismatch: runtime initialization
+disables Windows implicit SO checks, while the x86_64 optimizing backend and
+nterp emit the normal unconditional
+`RSP - ART_STACK_OVERFLOW_GAP_x86_64` probe. W-014 Stage B now installs the
+fixed page and makes that eventual low-stack fault deterministic, but the
+diagnostic-only VEH cannot translate it. The switch interpreter instead uses
+explicit `Thread::stack_end_` comparisons. W-010 Stages C-D must close this
+execution-mode split before deep generated recursion is a supported path.
 
 The selected W-010 design is a narrow ART `SIGSEGV` facade over a first
 process-wide VEH. It filters only continuable access violations, passes a

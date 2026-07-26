@@ -27,8 +27,8 @@
 | W-003 attributed frame families | **PASS, 8/8** | `run_w003_frame_probe.sh` |
 | W-003 XMM6-XMM11 sentinel | **PASS, 6/6** | `run_w003_xmm_sentinel.sh` |
 | W-002 OSR matrix | **PASS, 8/8** | `run_w002_osr_probe.sh` |
-| W-002 attached-thread matrix | **PASS, 8/8** | `run_w002_attach_probe.sh` |
-| W-014 thread reservation/lifetime | **PASS** | `run_thread_stack_probe.sh` |
+| W-002 attached-thread matrix | **PASS, 8/8** | `run_w002_attach_probe.sh`; each raw thread now detaches, uses native stack, and reattaches |
+| W-014 thread reservation/lifetime/fixed page | **PASS** | `run_thread_stack_probe.sh` |
 | Full suite | **PASS** | `run_all_wine_gates.sh` |
 
 Evidence: `evidence/all_wine_gates.txt`, `evidence/crashnative.txt`
@@ -55,7 +55,7 @@ PASS native_crash_aborts
 | W-003 attributed frame-family gate | `w003_frame_probe/`; `run_w003_frame_probe.sh` |
 | W-003 XMM runtime sentinel | `w003_xmm_sentinel/`; `run_w003_xmm_sentinel.sh` |
 | W-003 native package and evidence | `package_win64_w003.sh`; `evidence/w003_host/ACCEPTANCE.md` |
-| W-014 Stage A stack/pthread gate | `../win64_phase1/win32_thread_stack_probe.c`; `run_thread_stack_probe.sh` |
+| W-014 Stages A-B stack/pthread/page gate | `../win64_phase1/win32_thread_stack_probe.c`; `../win64_phase1/win32_stack_page_probe.cc`; `../win64_phase1/win32_stack_page_fault_probe.S`; `run_thread_stack_probe.sh` |
 
 ## Host
 
@@ -95,8 +95,8 @@ sentinel runs. See `evidence/w003_host/ACCEPTANCE.md`.
 
 ## Next
 
-- Complete W-014 Stage A native acceptance and then implement its dormant
-  fixed-page Stage B.
+- Complete W-014 Stages A-B native acceptance, then implement the dormant
+  W-010 VEH/context adapter in Stage C.
 - Complete W-025 broader JIT-mapping native acceptance and hardening
 
 ## Multiplatform re-run (2026-07-17)

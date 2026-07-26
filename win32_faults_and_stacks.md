@@ -1,6 +1,7 @@
 # Win64 managed faults and ART stack design
 
-**Status:** Stage 0 and W-014 Stage A implemented and locally verified; native Stage A acceptance and Stages B-E remain
+**Status:** Stage 0 and W-014 Stages A-B implemented and locally verified;
+native A-B acceptance and Stages C-E remain
 **Created:** 2026-07-26
 **Updated:** 2026-07-26
 **Target:** x86_64 Windows 10 build 17134+
@@ -158,7 +159,8 @@ created.
 
 ## 4. Current Windows state and remaining defects
 
-Stage A has removed the unsafe stack-bound and pthread-creation workarounds:
+Stages A-B have removed the unsafe stack-bound, pthread-creation, and
+no-op-protection workarounds:
 
 - `GetThreadStack()` now accepts only the current non-fiber system stack,
   obtains its exact interval from `GetCurrentThreadStackLimits()`, validates
@@ -175,6 +177,14 @@ Stage A has removed the unsafe stack-bound and pthread-creation workarounds:
 - Runtime teardown removes ART's diagnostic VEH while `art.dll` is still
   loaded and restores the process UEF without overwriting a filter installed
   after ART.
+- Every attached non-AOT Windows thread now measures the excluded-low prefix,
+  selects a suitable page, records its original state, installs and verifies
+  a fixed `PAGE_NOACCESS` page, and accounts for that page in ART's published
+  stack bounds. Reserved originals are committed only for the ART lifetime;
+  committed-private read/write originals retain their contents.
+- `ProtectStack()` and `UnprotectStack()` now implement verified state
+  transitions. `Thread` teardown directly restores and verifies the original
+  reserved or committed state before an external native thread can continue.
 
 The remaining tree still violates the complete managed-fault contract:
 
@@ -184,14 +194,12 @@ The remaining tree still violates the complete managed-fault contract:
 - Runtime initialization forces implicit null, stack-overflow, and suspend
   flags off, but Win64 nterp and optimizing code still contain their normal
   implicit accesses.
-- `ProtectStack()` and `UnprotectStack()` report success without changing page
-  state.
 
 The remaining defects explain why nterp's implicit-null instruction can
 escape as a native AV and why the current unconditional stack probes still
-cannot provide a managed overflow path. Exact bounds now make stack accounting
-trustworthy, but Stage B must install the fixed page before W-010 can translate
-the probe.
+cannot provide a managed overflow path. The fixed page now makes the eventual
+stack fault deterministic and classifiable, but Stage C must add the dormant
+W-010 adapter before Stage D can translate or activate that probe.
 
 ## 5. Windows contracts and conclusions
 
@@ -247,13 +255,17 @@ policy for fibers and manual stacks.
 
 ### 5.6 Commit and protection are separate operations
 
-`VirtualAlloc(address, size, MEM_COMMIT, protection)` can commit pages inside
-an existing reservation, including already committed pages. `VirtualProtect`
-works only on committed pages. The fixed-page installation sequence can
-therefore be deterministic:
+`VirtualAlloc(address, size, MEM_COMMIT, protection)` commits pages inside an
+existing reservation. `VirtualProtect` works only on committed pages. The
+implemented selector also accepts an already committed private
+`PAGE_READWRITE` page, whose contents and original protection must survive
+detach. The fixed-page installation sequence is therefore deterministic:
 
 ```text
-validate reservation -> MEM_COMMIT/PAGE_READWRITE -> PAGE_NOACCESS
+reserved original:
+  validate -> MEM_COMMIT/PAGE_READWRITE -> PAGE_NOACCESS
+committed original:
+  validate exact MEM_PRIVATE/PAGE_READWRITE -> PAGE_NOACCESS
 ```
 
 ### 5.7 `_beginthreadex` is the correct creator for ART threads
@@ -712,11 +724,11 @@ Algorithm:
    acceptance, and undocumented `DeallocationStack` is never read.
 
 Failure rejects attachment. There is no clamp, 1 MiB fallback, or attempt to
-protect a partially trusted address. Until Stage B measures the bottom layout,
-the pthread facade reports one page through `pthread_attr_getguardsize()` only
-as a compatibility value; implicit stack checks remain disabled and ART does
-not treat that value as the Windows moving guard or as a safe fixed-page
-location.
+protect a partially trusted address. The pthread facade still reports one page
+through `pthread_attr_getguardsize()` as a compatibility value, but Stage B's
+platform helper replaces that input with the measured excluded-low prefix
+before common ART stack accounting. ART never treats the facade value as the
+Windows moving guard or as a fixed-page location.
 
 ### 8.2 Fiber and manual-stack policy
 
@@ -803,13 +815,20 @@ For the exact target range:
 2. Require that it is not `PAGE_GUARD` or `PAGE_NOACCESS`, then record its
    original `VirtualQuery()` state, type, and protection for detach/fatal
    diagnostics.
-3. Commit it with
+3. If the original page is reserved, commit it with
    `VirtualAlloc(begin, size, MEM_COMMIT, PAGE_READWRITE)` and require the exact
-   returned address.
+   returned address. Leave an already committed-private read/write candidate
+   committed and preserve its contents.
 4. Change it to `PAGE_NOACCESS` with `VirtualProtect()`.
 5. Query it again and require `MEM_COMMIT`, the expected allocation base, and
    `PAGE_NOACCESS` without `PAGE_GUARD`.
 6. Publish the page address and `Protected` state in the owning `Thread`.
+
+If protection fails after a reserved page was committed, installation restores
+and verifies the original page state before rejecting attachment. If rollback
+itself cannot be verified, the populated record is retained so thread teardown
+can retry direct restoration; the implementation never clears ownership of an
+unrestored page.
 
 The Windows path returns immediately after this platform operation. It does
 not run Linux's recursive `VM_GROWSDOWN` touching and does not `madvise()` the
@@ -829,7 +848,8 @@ NotInstalled
 `UnprotectStack()` is legal only for the current thread while ART is handling
 its overflow. It changes exactly the recorded page to `PAGE_READWRITE`.
 `ProtectStack()` changes exactly that page back to `PAGE_NOACCESS`. Both verify
-the old protection in debug/probe builds.
+the old protection and query the exact allocation, range, private type, and
+new protection before publishing the state transition.
 
 A failed transition is not recoverable by continuing through generated code:
 
@@ -855,11 +875,24 @@ the ART page before deleting its `Thread`:
 - never leave ART `PAGE_NOACCESS` state on a continuing detached native
   thread.
 
+Restoration is a direct transition from either `Protected` or
+`WritableForStackOverflow` to the recorded original state. It does not require
+an unnecessary intermediate unprotect: `VirtualFree(MEM_DECOMMIT)` can restore
+a reserved original directly, and `VirtualProtect()` can restore a committed
+original directly. The result is then verified with `VirtualQuery()` before
+the record is cleared.
+
 Native tests must cover attach, managed execution, detach, continued native
 stack use, reattach, and a second detach. If exact restoration proves unsafe
 after Windows guard movement, the supported policy must instead require an
 attached native thread to remain attached until exit; silently leaving the
 page is not acceptable.
+
+The local Wine W-002 gate now performs that lifecycle twice on each of sixteen
+raw `CreateThread` threads in every mode: attach, managed JIT callback, detach,
+about 16 KiB of recursive native stack use, reattach, a second callback, and a
+second detach. This proves the implemented restoration/reattach path under
+Wine; native Windows guard-growth acceptance remains required.
 
 ### 8.7 Thread creation and pthread attributes
 
@@ -953,7 +986,11 @@ reservation. Tests record:
 - Windows allocation-granularity rounding.
 
 This distinction is important because ART adds historical native headroom and
-overflow overhead before `pthread_create()`.
+overflow overhead before `pthread_create()`. While W-010 remains dormant, the
+Windows branch also adds one protected-page capacity so installing the new
+ART-owned page does not silently debit the requested stack budget. The
+measured excluded-low prefix belongs to the Windows system-stack reservation
+layout and is not guessed or added as another ART-owned page.
 
 For thread pools:
 
@@ -1134,8 +1171,9 @@ Implementation and local evidence (2026-07-26):
   a future/reserved bit, old-build unavailability, and failure cases. Under
   Wine it reports build 19043, zero flags, and `PASS`.
 - The structural/package verifier reports 9 CMake harnesses, 3 direct links,
-  5 enforced host packagers, 18 Ninja PE link targets, and 18 built PE files
-  with no CET-compatible marker. The selected Win64 build completed 321 steps
+  5 enforced host packagers, 19 Ninja PE link targets, and 20 inspected PE
+  files including external LLVM `c++.dll`, all with no CET-compatible marker.
+  The selected Win64 build completed 321 steps
   and `dalvikvm
   -showversion` reports `ART version 2.1.0 x86_64` under Wine.
 - The complete Phase-4 Wine suite passes after the change, including W-002,
@@ -1189,23 +1227,36 @@ record Java's post-`FixStackSize()` reservations and representative ART pool
 threads. Wine's `GetProcessHandleCount()` result is unavailable and cannot
 close the native handle-lifetime proof point.
 
-### Stage B — dormant fixed page
+### Stage B — dormant fixed page — implemented locally
 
-- Add excluded-low measurement and protected-page fields/state to `Thread`.
-- Select a reserved or ordinary committed page without consuming an existing
-  `PAGE_GUARD`/`PAGE_NOACCESS` region.
-- Install/verify the page during attach.
-- Implement unprotect/reprotect and external detach restoration.
-- Bypass Linux recursion and `madvise()` on Windows.
-- Exercise direct page faults with a probe while product implicit checks stay
-  disabled.
+- `stack_windows.{h,cc}` separates allocation-free selection policy from
+  Win32 memory operations. It preserves the lowest page and complete adjacent
+  bottom no-access/guard regions, accepts only a reserved page or exact
+  committed-private `PAGE_READWRITE` page, rejects malformed geometry and
+  insufficient remaining stack, and supports the normal one-system-page ART
+  protected size.
+- `Thread` records the selection and state below the native-code-visible TLS
+  layout. Non-AOT Windows attachment installs the page before publication,
+  common stack accounting uses the measured excluded-low bytes plus the fixed
+  page, and the dormant `FixStackSize()` path compensates for the ART page.
+- Protect, unprotect, install rollback, and detach restoration verify the
+  resulting `VirtualQuery()` state. Reserved originals return to
+  `MEM_RESERVE`; committed originals return to their exact type/protection.
+- Windows bypasses Linux's `VM_GROWSDOWN` recursion and stack `madvise()`.
+- The focused probe covers eight synthetic layout decisions, 64 cycles on the
+  actual committed Wine main-stack page, 64 cycles on a real reserved
+  allocation, a 2 MiB pthread stack, and 258 exact assembly-load access
+  violations redirected by a tiny probe-only VEH.
+- The W-002 attached-thread gate now proves detach, continued native stack
+  use, reattach, and second detach on the same raw thread in all eight Wine
+  mode/repeat processes. Win64 Hello, the complete Phase-4 Wine suite, the
+  Linux full rebuild, `dalvikvm -showversion`, and shared-boot imageless Hello
+  remain green with the Windows-only state below native-visible TLS offsets.
 
-Clean completion criteria:
-
-- bounds and page state match exact `VirtualQuery()` records;
-- repeated protect/unprotect cycles pass;
-- normal stack growth and detach/reattach pass;
-- no heap or adjacent allocation can be modified by a bad bound.
+Local completion criteria are met. Native A-B acceptance still must capture
+real Windows bottom layouts, small/default/large reservations, guard growth,
+reserved-page restoration, stack budgets, and detach/reattach behavior. That
+evidence belongs to Stage E and is not implied by Wine.
 
 ### Stage C — dormant W-010 adapter
 
@@ -1347,13 +1398,14 @@ and debugger evidence.
 | `runtime/multiplatform/windows/fault_handler_windows.h` | Windows-only non-owning context view and documented AV-kind constants; no common-header Win32 leakage |
 | `runtime/arch/x86/fault_handler_x86.cc` | Win64 non-owning context view, real `CONTEXT` PC/SP access, AV-kind and protected-page checks |
 | `runtime/thread.cc` | Implemented exact current-stack acceptance and attach failure; later common accounting plus a small `_WIN32` fixed-page installation branch |
-| `runtime/multiplatform/windows/thread_windows.cc` | Planned fixed-page commit/protection/restoration helpers; no alternate signal stack |
+| `runtime/multiplatform/windows/stack_windows.{h,cc}` | Implemented Stage B selection, commit/protect state machine, verified rollback, and exact original-state restoration |
+| `runtime/multiplatform/windows/thread_windows.cc` | Implemented bounded `Thread` integration for Stage B; no alternate signal stack |
 | `runtime/thread_pool.cc` | Implemented no-caller-allocated-stack Windows policy; requested reservation passes through pthread attributes |
 | `compat/include/pthread.h` | Implemented opaque Windows `pthread_t`, numeric-ID helper, and strict attribute contract |
 | `compat/src/win64_posix_stubs.c` | Implemented `_beginthreadex`, handle/result lifetime, join/detach, tagged external identity, exact current-stack bounds, and stack attributes |
 | `runtime/runtime.cc` | Implemented diagnostic handler shutdown; later atomic managed-fault capability and nterp/JIT activation policy |
 | `tools/verify/win64_phase1/check_win32_cet_contract.py` and `win32_cet_policy_probe.cc` | Implemented link/PE audit plus deterministic and actual-policy probe |
-| `tools/verify/win64_phase1/win32_thread_stack_probe.c` and `tools/verify/win64_phase4/run_thread_stack_probe.sh` | Implemented Stage A reservation, identity, join/detach, bounds, raw-thread, invalid-attribute, stress, and fiber gate |
+| `tools/verify/win64_phase1/win32_thread_stack_probe.c`, `win32_stack_page_probe.cc`, `win32_stack_page_fault_probe.S`, and `tools/verify/win64_phase4/run_thread_stack_probe.sh` | Implemented Stage A reservation/identity/lifetime gate plus Stage B synthetic selection, committed/reserved restoration, state-transition, and direct-fault gate |
 
 The exact split between `sigchain_windows.cc` and
 `fault_handler_windows.cc` is an implementation detail. There must still be
@@ -1372,9 +1424,10 @@ fallbacks:
    builds?
 3. Does committing the dynamically selected page leave ordinary moving-guard
    growth intact for small, default, and large reservations?
-4. Can external detach restore the original page state safely after deep
-   managed recursion, or must the supported contract require attachment until
-   thread exit?
+4. Native Windows must confirm the locally passing external detach, continued
+   native stack use, reattach, and second-detach path remains safe after real
+   guard movement and deep managed recursion. If it does not, the supported
+   contract must require attachment until thread exit.
 5. Does a security product or debugger used in acceptance install a first VEH
    that consumes expected AVs? If so, this is an embedding compatibility issue,
    not a reason to weaken ART's classifier.

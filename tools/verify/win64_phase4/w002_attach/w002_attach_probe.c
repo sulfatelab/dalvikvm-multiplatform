@@ -13,8 +13,17 @@ typedef struct WorkerArgs {
   int status;
 } WorkerArgs;
 
-static DWORD WINAPI RunAttachedThread(LPVOID opaque) {
-  WorkerArgs* args = (WorkerArgs*)opaque;
+__declspec(noinline) static uintptr_t UseNativeStack(unsigned depth, uintptr_t seed) {
+  volatile uint8_t frame[512];
+  frame[0] = (uint8_t)(seed + depth);
+  frame[sizeof(frame) - 1] = (uint8_t)((seed >> 8) ^ depth);
+  if (depth != 0) {
+    seed ^= UseNativeStack(depth - 1, seed + UINT64_C(0x9e3779b97f4a7c15));
+  }
+  return seed + frame[0] + frame[sizeof(frame) - 1];
+}
+
+static int RunAttachCycle(WorkerArgs* args) {
   JNIEnv* env = NULL;
   JavaVMAttachArgs attach_args;
   attach_args.version = JNI_VERSION_1_6;
@@ -28,29 +37,44 @@ static DWORD WINAPI RunAttachedThread(LPVOID opaque) {
     rc = (*g_vm)->AttachCurrentThread(g_vm, &env, &attach_args);
   }
   if (rc != JNI_OK || env == NULL) {
-    args->status = 10 + rc;
-    return 0;
+    return 10 + rc;
   }
 
   const jlong expected = INT64_C(0x1234567800000000) +
       (args->daemon ? INT64_C(0x01000000) : 0) + args->iteration;
   const jlong actual = (*env)->CallStaticLongMethod(
       env, args->probe_class, args->callback, args->daemon ? JNI_TRUE : JNI_FALSE, args->iteration);
+  int status = 0;
   if ((*env)->ExceptionCheck(env)) {
     (*env)->ExceptionDescribe(env);
     (*env)->ExceptionClear(env);
-    args->status = 20;
+    status = 20;
   } else if (actual != expected) {
-    args->status = 21;
+    status = 21;
   }
 
-  if ((*g_vm)->DetachCurrentThread(g_vm) != JNI_OK && args->status == 0) {
-    args->status = 30;
+  if ((*g_vm)->DetachCurrentThread(g_vm) != JNI_OK && status == 0) {
+    status = 30;
   }
   env = NULL;
-  if ((*g_vm)->GetEnv(g_vm, (void**)&env, JNI_VERSION_1_6) != JNI_EDETACHED &&
-      args->status == 0) {
-    args->status = 31;
+  if ((*g_vm)->GetEnv(g_vm, (void**)&env, JNI_VERSION_1_6) != JNI_EDETACHED && status == 0) {
+    status = 31;
+  }
+  return status;
+}
+
+static DWORD WINAPI RunAttachedThread(LPVOID opaque) {
+  WorkerArgs* args = (WorkerArgs*)opaque;
+  args->status = RunAttachCycle(args);
+  if (args->status == 0) {
+    uintptr_t stack_result = UseNativeStack(
+        32u, (uintptr_t)(args->iteration + 1u + (args->daemon ? 0x100u : 0u)));
+    if (stack_result == 0u) {
+      args->status = 40;
+    }
+  }
+  if (args->status == 0) {
+    args->status = RunAttachCycle(args);
   }
   return 0;
 }
