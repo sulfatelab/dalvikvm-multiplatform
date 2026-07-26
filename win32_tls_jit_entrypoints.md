@@ -1602,8 +1602,8 @@ documented in
 
 ## 17.10 W-003 quick callee-save frames and native-boundary gap (2026-07-26)
 
-**Status:** SETUP, Microsoft-XMM boundary repair, and focused Wine gates
-implemented; W-003 remains open for native-host closure
+**Status:** SETUP, Microsoft-XMM boundary repair, focused Wine gates, and
+native-host package implemented; W-003 remains open for native execution
 
 All four x86-64 runtime callee-save frame families execute their shared
 non-Apple bodies on Windows. Only refs-only and all-callee-saves ever had a
@@ -1649,8 +1649,12 @@ does not translate ART generated-code faults. W-003 excludes that one
 implicit-null subtest without adding a product fallback; explicit class-cast,
 array-store, and bounds paths remain covered.
 
-The remaining W-003 close work is repeated native Windows acceptance of the
-frame-family probe and XMM sentinel with fatal-marker and dump scans.
+The focused native-host package now validates its PE/hash contract, smokes all
+seven modes under Wine, restores product `art.dll`, and ships without runtime
+logs, dumps, or traces. Its Windows PowerShell runner requires build 17134 or
+newer and executes 8 frame runs plus 6 XMM runs. The remaining W-003 close work
+is running that package on native Windows and returning exactly 19 PASS
+records, `OVERALL PASS`, and clean fatal-marker and recursive dump scans.
 
 PE assembly unwind metadata remains absent because CFI macros are disabled on
 Windows. ART managed unwinding is separate; W-010 must explicitly own the
@@ -1663,6 +1667,8 @@ and
 [RESULT-w003-frame-probe.md](tools/verify/win64_phase4/RESULT-w003-frame-probe.md)
 and
 [RESULT-w003-xmm-sentinel.md](tools/verify/win64_phase4/RESULT-w003-xmm-sentinel.md)
+and
+[W003_HOST_CHECKLIST.md](tools/verify/win64_phase4/W003_HOST_CHECKLIST.md)
 for the evidence and staged implementation plan.
 
 
@@ -1689,4 +1695,4 @@ for the evidence and staged implementation plan.
 
 ## 14. One-paragraph executive summary
 
-On Linux amd64, ART’s managed world is **GS-relative Thread TLS** layered on top of normal C++ `thread_local`, with quick entrypoints and JIT assuming SysV bridges; on Linux arm64, managed world is **x19 = Thread\***. Windows **cannot** reuse GS for Thread\* (TEB owns GS); **FS.base=Thread\*** is also **rejected** (§16: FSGSBASE/wine/CONTEXT portability), so managed self is a GPR. The WinNT design therefore adopts the **arm64-style explicit self register** on all Windows ISAs (**LOCKED and implemented: r15** on x86_64 with nterp **rREFS=rbp**; **x19** remains a design for ARM64/Arm64EC), keeps C++ `Thread::Current()` on `thread_local`/`TlsAlloc`, and isolates Microsoft C++ calling conventions at explicit quick-invoke and OSR bridges. The Windows nterp OSR adapter preserves the deliberately different nterp and compiled save layouts. JIT code obeys the same self and entrypoint contracts and uses one unnamed pagefile-backed section with a low contiguous R/RX primary view plus an RW updater alias. **W-002's rSELF/OSR contract is accepted and closed; W-003 has repaired and Wine-validated XMM6-XMM11 preservation plus all four quick-frame families and remains open only for native-host acceptance.** x86, arm64, and Arm64EC remain design-only so future work is not forced into a GS-shaped abstraction.
+On Linux amd64, ART’s managed world is **GS-relative Thread TLS** layered on top of normal C++ `thread_local`, with quick entrypoints and JIT assuming SysV bridges; on Linux arm64, managed world is **x19 = Thread\***. Windows **cannot** reuse GS for Thread\* (TEB owns GS); **FS.base=Thread\*** is also **rejected** (§16: FSGSBASE/wine/CONTEXT portability), so managed self is a GPR. The WinNT design therefore adopts the **arm64-style explicit self register** on all Windows ISAs (**LOCKED and implemented: r15** on x86_64 with nterp **rREFS=rbp**; **x19** remains a design for ARM64/Arm64EC), keeps C++ `Thread::Current()` on `thread_local`/`TlsAlloc`, and isolates Microsoft C++ calling conventions at explicit quick-invoke and OSR bridges. The Windows nterp OSR adapter preserves the deliberately different nterp and compiled save layouts. JIT code obeys the same self and entrypoint contracts and uses one unnamed pagefile-backed section with a low contiguous R/RX primary view plus an RW updater alias. **W-002's rSELF/OSR contract is accepted and closed; W-003 has repaired and Wine-validated XMM6-XMM11 preservation plus all four quick-frame families, has a checked native-host package, and remains open only for its 19-record native execution.** x86, arm64, and Arm64EC remain design-only so future work is not forced into a GS-shaped abstraction.

@@ -1,6 +1,6 @@
 # W-003 attributed quick-frame family probe
 
-**Status:** WINE COMPLETE; native Windows acceptance remains
+**Status:** WINE COMPLETE; native Windows acceptance package ready
 
 **Date:** 2026-07-26
 
@@ -124,9 +124,43 @@ W-003 XMM sentinel: PASS, 2/2 nterp + 2/2 switch + 2/2 JIT
 Full Phase 4 Wine aggregate: PASS
 ```
 
+## Native Windows package
+
+The focused native-host package is built and verified with:
+
+```bash
+JOBS=32 WINEDEBUG=-all \
+  bash tools/win64/host_package/package_win64_w003.sh
+```
+
+The pipeline reruns the structural checker, the 8-process frame matrix, and
+the 6-process XMM matrix before staging. It then checks package hashes and PE
+exports, runs one independent Wine smoke per mode from the staged tree,
+restores the product `art.dll`, removes runtime output, rebuilds the manifests,
+and checks the final package again. The completed pipeline reports:
+
+```text
+W-003 host package check: PASS
+W-003 host package Wine smoke: PASS
+W003_HOST_PACKAGE_PASS path=.../dist/win64_w003_host.zip
+```
+
+The package carries `art.product.dll`, the opt-in `art.frame-probe.dll`, both
+JNI probe DLLs and jars, a precomputed structural report, full SHA-256
+manifests, and [W003_HOST_CHECKLIST.md](W003_HOST_CHECKLIST.md). Its PowerShell
+runner requires Windows build 17134 or newer and no compiler, JDK, LLVM tools,
+or network connection. It runs 8 frame processes plus 6 XMM processes, scans
+all logs for fatal markers, recursively scans the package for dumps, and
+restores the product ART variant even on failure.
+
+Native acceptance requires exit 0, exactly 19 `PASS` records, `OVERALL PASS`,
+and `NO_DMP_FILES`. The native logs remain external evidence; they are not
+pre-populated in the issued archive.
+
 ## Remaining close work
 
-The Wine frame-family gate is complete. W-003 remains open for repeated native
-Windows 10 acceptance of the frame probe and XMM sentinel, plus fatal-marker
-and recursive dump scans. PE quick-assembly unwind ownership remains with
-W-010 as documented in the main W-003 analysis.
+The Wine frame-family gate and native-host package are complete. W-003 remains
+open until the packaged matrix passes on native Windows 10/11 and its returned
+logs satisfy the 19-record, fatal-marker, and recursive dump-scan contract. PE
+quick-assembly unwind ownership remains with W-010 as documented in the main
+W-003 analysis.
