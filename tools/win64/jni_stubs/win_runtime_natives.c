@@ -1,7 +1,9 @@
 /* java.lang.Runtime free/total/max memory + nativeGc for Win64 PE stubs. */
 #include <jni.h>
 #include <windows.h>
+#include <limits.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 typedef jlong (*jvm_long_fn)(void);
 typedef void (*jvm_void_fn)(void);
@@ -62,6 +64,16 @@ __declspec(dllexport) void Java_java_lang_Runtime_nativeGc__(JNIEnv* env, jobjec
 /* Phase 4 A8: deliberate AV for crash-path smoke (not used in product paths). */
 __declspec(dllexport) void Java_CrashNativeProbe_nativeSegfault(JNIEnv* env, jclass cls) {
   (void)env; (void)cls;
+  const char* warmup_value = getenv("ART_WIN64_CRASH_NATIVE_WARMUP");
+  if (warmup_value != NULL) {
+    char* end = NULL;
+    unsigned long warmup_calls = strtoul(warmup_value, &end, 10);
+    static LONG call_count;
+    if (end != warmup_value && *end == '\0' && warmup_calls <= LONG_MAX &&
+        InterlockedIncrement(&call_count) <= (LONG)warmup_calls) {
+      return;
+    }
+  }
   volatile int* p = (volatile int*)0;
   *p = 0x41414141;
 }

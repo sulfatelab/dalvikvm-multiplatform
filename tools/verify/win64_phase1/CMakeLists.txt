@@ -149,6 +149,30 @@ target_include_directories(win32_jit_unwind_info_probe PRIVATE
 
 include(${CMAKE_CURRENT_SOURCE_DIR}/phase1.cmake)
 
+add_executable(win32_jit_unwind_registry_probe EXCLUDE_FROM_ALL
+  "${CMAKE_CURRENT_SOURCE_DIR}/win32_jit_unwind_registry_probe.cc"
+  "${MDVM_ART_WIN_RUNTIME}/jit_unwind_windows.cc")
+target_include_directories(win32_jit_unwind_registry_probe PRIVATE
+  "${MDVM_ART_DIR}"
+  "${MDVM_ART_DIR}/compiler"
+  "${MDVM_ART_DIR}/libartbase")
+target_link_libraries(win32_jit_unwind_registry_probe artbase base log)
+
+add_library(jitunwindlifecycleprobe SHARED EXCLUDE_FROM_ALL
+  "${CMAKE_CURRENT_SOURCE_DIR}/win32_jit_unwind_lifecycle_probe.cc")
+target_compile_options(jitunwindlifecycleprobe PRIVATE
+  -fno-rtti
+  -Wno-thread-safety
+  -Wno-unused-command-line-argument
+  -Wno-microsoft-cast
+  -Wno-invalid-offsetof)
+target_compile_definitions(jitunwindlifecycleprobe PRIVATE ART_CONSUMING_LIBART)
+target_link_libraries(jitunwindlifecycleprobe art)
+set_target_properties(jitunwindlifecycleprobe PROPERTIES
+  PREFIX "lib"
+  OUTPUT_NAME "jitunwindlifecycleprobe"
+  WINDOWS_EXPORT_ALL_SYMBOLS ON)
+
 add_executable(win64_w013_mem_map_probe EXCLUDE_FROM_ALL
   "${_repo}/tools/verify/win64_w013/W013MemMapPolicyProbe.cc")
 target_include_directories(win64_w013_mem_map_probe PRIVATE
@@ -227,6 +251,7 @@ if(TARGET art)
     "${MDVM_ART_WIN_RUNTIME}/thread_windows.cc"
     "${MDVM_ART_WIN_RUNTIME}/stack_windows.cc"
     "${MDVM_ART_WIN_RUNTIME}/cet_compat.cc"
+    "${MDVM_ART_WIN_RUNTIME}/jit_unwind_windows.cc"
     "${MDVM_ART_WIN_RUNTIME}/runtime_windows.cc"
     "${MDVM_ART_WIN_RUNTIME}/monitor_windows.cc"
     "${MDVM_ART_WIN_OPENJDKJVM}/openjdkjvm_memory_windows.cc")

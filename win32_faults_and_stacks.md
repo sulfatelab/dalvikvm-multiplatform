@@ -1,10 +1,11 @@
 # Win64 managed faults and ART stack design
 
 **Status:** W-010 Stages 0/C/D and W-014 Stages A-B implemented and locally
-verified under Wine and Linux; the static fatal-unwind boundaries are locally
-implemented; the dynamic-JIT compiler anchors and PE serializer are locally
-implemented, while xdata placement, runtime registration, and lifecycle remain;
-native Windows Stage E acceptance remains
+verified under Wine and Linux; static fatal boundaries plus dynamic-JIT frame
+anchors, PE serialization, xdata placement, runtime registration, collection
+lifecycle, and threshold-zero fatal dispatch are locally implemented and
+verified; native Windows Stage E, OSR-stub unwind, and full XMM6-XMM15 boundary
+acceptance remain
 **Created:** 2026-07-26
 **Updated:** 2026-07-27
 **Target:** x86_64 Windows 10 build 17134+
@@ -84,11 +85,11 @@ The selected design is:
     threads or JIT initialization if the process policy is active.
 14. Provide correctness-grade Win64 unwind descriptions wherever Windows may
     dispatch a fatal exception across ART-managed frames. Static invoke/JNI
-    boundary records are implemented. The first dynamic-JIT compiler slice is
-    also implemented: Windows-JIT-only fixed `RBP` anchors and explicit compact
-    PE unwind bytes for optimizing and JNI code. Section 7.9's remaining
-    runtime work is one immutable `RtlAddFunctionTable` registration per code
-    allocation, owned by the JIT code cache.
+    boundary records are implemented. Dynamic optimizing/JNI code uses
+    Windows-JIT-only fixed `RBP` anchors or a fixed-RSP CriticalNative shape,
+    explicit compact PE unwind bytes, xdata in the existing JIT data
+    allocation, and one immutable `RtlAddFunctionTable` registration per code
+    allocation owned by the JIT code cache.
 
 ## 2. Scope and ownership
 
@@ -231,22 +232,30 @@ The current tree now has the active W-010 product capability:
   extend every such native boundary to XMM6-XMM15 because ART's managed scalar
   preservation of XMM12-XMM15 is only 64 bits while the Microsoft ABI requires
   128 bits.
-- That result is not universal fatal-dispatch support. A threshold-zero JIT
-  native AV reaches dynamically emitted managed code for which Windows has no
-  runtime-function entry. `RtlVirtualUnwind2` then applies leaf unwinding to
-  managed frame contents, eventually presents a stale JIT `RBP` to the static
-  invoke-stub record, and Wine rejects the resulting exception frame before
-  UEF dispatch. Section 7.9's compiler half now emits the selected frame anchors
-  and opaque unwind bytes, but those bytes are not yet allocated in JIT data or
-  registered with Windows. Per-allocation registration and lifecycle ownership
-  therefore remain open.
+- Dynamic optimizing and JNI JIT allocations now append DWORD-aligned unwind
+  bytes after roots and `CodeInfo`, write them through the data RW alias, and
+  expose them through the primary read-only low-4-GiB view. `JitCodeCache`
+  owns a stable one-entry runtime-function table per allocation, registers it
+  before any method map or entrypoint publication, unregisters before debug-
+  info removal and mspace reuse, and clears all registrations before mapping
+  teardown.
+- Focused J-2 and J-1 lifecycle gates prove initial lookup, invalidation while
+  metadata remains live, real code-cache collection, lookup disappearance,
+  exact code-address reuse, re-registration at that address, and successful
+  execution of the replacement method. The standalone registry gate also
+  proves `RtlVirtualUnwind()` restores RBP, RSP, and RIP from a generated frame.
+- A threshold-zero optimizing caller through a JIT JNI stub now reaches the
+  diagnostic VEH and UEF and creates a new valid `MDMP` dump in both J-2 and
+  J-1. This proves fatal exception dispatch across the exercised dynamic JIT
+  chain. It does not yet prove debugger-quality minidump stack reconstruction,
+  concurrent sampling under large-table churn, or the separate OSR-stub path.
 
-Stage D is therefore locally complete. The static-boundary and dynamic compiler
-metadata parts of Stage E are implemented locally. Stage E must still reproduce
-the generated-fault, handler-chain, debugger, stack-budget, static fatal-UEF,
-and HSP policy matrix on native Windows 10/current Windows, and must implement
-and accept dynamic-JIT runtime-function registration before claiming arbitrary
-JIT-origin fatal dispatch.
+Stage D and the selected dynamic-JIT runtime-function implementation are
+therefore locally complete. Stage E must still reproduce the generated-fault,
+handler-chain, debugger, stack-budget, fatal-UEF, HSP policy, and dynamic-table
+stress matrix on native Windows 10/current Windows. It must also add and accept
+the OSR stub's static record and full-width XMM6-XMM15 preservation before
+claiming all native-to-managed fatal paths.
 
 ## 5. Windows contracts and conclusions
 
@@ -753,14 +762,13 @@ The first locally implemented boundary set is deliberately small:
   `.xdata` records instead of trusting assembly source annotations.
 
 Those records make the static `-Xint` JNI crash path reach the UEF and produce
-a valid minidump. They do not describe dynamically generated JIT methods. A
-threshold-zero JIT fatal probe still reaches a JIT PC with no Windows
-runtime-function entry, so leaf unwinding corrupts the dispatch walk before
-the static invoke record can help. Section 7.9 selects range-accurate one-entry
-`RtlAddFunctionTable` records and ties their publication and removal to the
-code-cache allocation lifetime. Dumping directly from the diagnostic VEH would
-provide an emergency artifact but would not restore foreign frame-based SEH
-semantics and is not the product fix.
+a valid minidump. Section 7.9 now complements them with range-accurate one-entry
+`RtlAddFunctionTable` records for dynamically generated optimizing and JNI JIT
+methods, tied to the code-cache allocation lifetime. The threshold-zero J-2 and
+J-1 fatal gates now cross the exercised dynamic chain, reach UEF, and create a
+valid dump. Dumping directly from the diagnostic VEH remains unnecessary and
+would not restore foreign frame-based SEH semantics; debugger-quality dump
+stack reconstruction and the separate OSR-stub path still require acceptance.
 
 An opt-in diagnostic build may add a final observer VEH or a preallocated
 record ring, but it must be off by default and must not run before the managed
@@ -926,14 +934,12 @@ frame facts.
 
 #### 7.9.6 Placement and relative-address base
 
-The compiler-side predecessor to this placement is implemented. The x86_64
-assembler serializes an SDK-independent byte vector, optimizing JIT code forces
-and establishes the selected `RBP` anchor, normal/FastNative JIT JNI stubs use
-the same anchor, and CriticalNative emits the fixed-RSP descriptor. Invalid or
-missing enabled metadata rejects compilation before `Reserve()`. The vector is
-carried by `JniCompiledMethod` and exposed through the common assembler API.
-It is not yet passed to `Reserve()` or `Commit()`, so no xdata tail or dynamic
-function table exists in a running process at this stage.
+The placement is implemented end to end. The x86_64 assembler serializes an
+SDK-independent byte vector, optimizing JIT code forces and establishes the
+selected `RBP` anchor, normal/FastNative JIT JNI stubs use the same anchor, and
+CriticalNative emits the fixed-RSP descriptor. Invalid or missing enabled
+metadata rejects compilation before `Reserve()`. The vector is carried by
+`JniCompiledMethod` or the common assembler API into `Reserve()` and `Commit()`.
 
 The corrected J-2 layout already provides the topology PE unwind needs:
 
@@ -971,7 +977,7 @@ registered base-relative address until deletion completes.
 
 #### 7.9.7 Registration ownership and publication order
 
-The selected first complete implementation uses one immutable, one-entry
+The implemented design uses one immutable, one-entry
 `RtlAddFunctionTable()` registration per JIT code allocation. A one-entry
 array is trivially sorted. The exact table pointer is retained because
 `RtlDeleteFunctionTable()` requires the pointer originally registered.
@@ -1034,6 +1040,11 @@ for deletion. The Windows API supplies its own dynamic-table synchronization;
 ART does not add a callback-time lock or attempt to unregister code that can
 still execute.
 
+The focused lifecycle gate exercises this product collection funnel in both
+J-2 and J-1. It verifies that invalidation alone retains the lookup, collection
+removes it, the mspace allocator reuses the exact code address, and recompilation
+installs a resolvable replacement record before the method executes.
+
 #### 7.9.9 Alternatives considered
 
 `RtlAddGrowableFunctionTable()` is not selected. Its entries must remain
@@ -1074,21 +1085,29 @@ frame-based SEH dispatch, predecessor UEF behavior, or debugger unwinding.
 
 #### 7.9.10 Verification gates
 
-Implementation is not complete until all of these pass in default J-2 and the
-temporary J-1 diagnostic mode:
+The following local J-2 and J-1 checks pass:
 
 - serialization tests for empty/small/large frames, every pushed GPR subset,
   zero-offset RBP anchors, normal/FastNative JNI, and fixed-RSP CriticalNative
   JNI;
+- standalone add/lookup/`RtlVirtualUnwind`/delete/re-register coverage;
+- production code-cache invalidation, collection, lookup disappearance, exact
+  mspace address reuse, re-registration, and replacement-code execution;
+- threshold-zero fatal dispatch through an optimizing caller and JIT JNI stub
+  to VEH, UEF, and a new valid minidump; and
+- normal/FastNative and CriticalNative ABI regressions plus Linux compiler and
+  runtime rebuilds.
+
+The remaining acceptance and stress gates are:
+
 - compiler tests containing direct CriticalNative, FP remainder, SIMD swaps,
   and scratch spills, proving every temporary `RSP` interval unwinds from the
   fixed RBP anchor;
 - a production-no-debug-info run proving PE unwind bytes do not depend on
   DWARF CFI generation;
-- `RtlLookupFunctionEntry()` checks for every published test method, including
-  base address, method range, and unwind-info alignment;
-- recursive `RtlVirtualUnwind2()` from the fatal native AV through the JIT JNI
-  stub, optimizing callers, static invoke boundary, and outer native frame;
+- broader `RtlLookupFunctionEntry()` sampling across many published methods;
+- recursive `RtlVirtualUnwind2()` tracing through the complete fatal native AV
+  chain, including the static invoke boundary and outer native frame;
 - structural and live unwind checks for the OSR stub's static runtime-function
   record, including the variable copied-stack interval;
 - a foreign frame-based SEH wrapper around a threshold-zero invocation, plus
@@ -1735,20 +1754,21 @@ evidence belongs to Stage E and is not implied by Wine.
   and generic JNI trampoline, a structural emitted-record audit, and a
   hardened static `-Xint` JNI crash gate that requires VEH, UEF, minidump
   marker, and a newly created valid `MDMP` file.
-- **Dynamic compiler slice implemented:** the x86_64 assembler now serializes
+- **Dynamic compiler/runtime implementation:** the x86_64 assembler serializes
   version-1 PE unwind bytes independently of DWARF CFI, optimizing Win64 JIT
   methods reserve and force-spill `RBP` then establish it after the fixed
   allocation, normal/FastNative JNI stubs use the same anchor without assigning
   RBP/R15 as scratch, and CriticalNative retains a fixed-RSP descriptor. The
   serializer rejects invalid prologues and JIT compilation rejects missing or
-  invalid enabled metadata before allocation.
-- **Still open:** place those bytes in the aligned JIT data tail, register and
-  own one immutable `RtlAddFunctionTable` entry per allocation, enforce the
-  unregister-before-reuse lifecycle, add the OSR static unwind record, extend
-  native-to-managed boundary full-width XMM preservation from XMM6-XMM11 to
-  XMM6-XMM15, and pass the dynamic fatal, frame-SEH, collection, and sampling
-  gates. Until then, arbitrary threshold-zero JIT-origin fatal AVs are not
-  guaranteed to reach frame-based SEH or the UEF.
+  invalid enabled metadata before allocation. The runtime stores aligned xdata
+  in the existing data allocation, registers one stable table before
+  publication, unregisters before reuse, and clears before teardown. Focused
+  J-2/J-1 registry, collection/reuse, and threshold-zero fatal UEF/minidump
+  gates pass.
+- **Still open:** add the OSR static unwind record, extend native-to-managed
+  boundary full-width XMM preservation from XMM6-XMM11 to XMM6-XMM15, and pass
+  native foreign-frame SEH, debugger, large-table churn/sampling, rollback-
+  injection, and debugger-quality dump-stack gates.
 - Run the complete matrix below on Windows 10 build 17134+ and a current
   Windows release.
 - Keep Wine as a development oracle and Linux as the behavior oracle.
@@ -1827,9 +1847,9 @@ evidence belongs to Stage E and is not implied by Wine.
 - A static/`-Xint` unhandled JNI native AV produces the expected initial VEH,
   UEF, predecessor-chain behavior, and a newly created valid `MDMP` minidump.
 - A threshold-zero JIT-origin unhandled JNI native AV crosses registered JIT
-  runtime-function data, reaches foreign frame-based SEH and the UEF, and
-  produces the same valid dump. This case remains open; the current build has
-  no dynamic-JIT runtime-function entries and must not be reported as passing.
+  runtime-function data, reaches the UEF, and produces the same valid dump.
+  This passes locally in J-2 and J-1. A foreign frame-based SEH wrapper and
+  debugger-quality reconstruction of that dump remain native acceptance items.
 - `EXCEPTION_GUARD_PAGE`, `EXCEPTION_STACK_OVERFLOW`, breakpoint, single-step,
   illegal-instruction, and execute AV are not consumed by ART's managed VEH.
 - Runtime shutdown removes the VEH before `art.dll` can unload.
@@ -1877,8 +1897,8 @@ and debugger evidence.
 | `runtime/arch/x86_64/quick_entrypoints_x86_64.S` | Implemented PE unwind records for the two native invoke stubs and generic JNI trampoline; Stage E still needs an OSR record and full-width XMM12-XMM15 preservation across all invoke/OSR native-to-managed boundaries |
 | `compiler/utils/x86_64/win64_unwind_info.h`, `assembler_x86_64.*`, and `compiler/optimizing/code_generator_x86_64.{h,cc}` | Implemented SDK-independent version-1 PE serializer plus Windows-JIT-only forced `RBP` anchor; Linux and non-JIT code paths unchanged |
 | `compiler/jni/quick/jni_compiler.*`, calling-convention files, and `compiler/utils/x86_64/jni_macro_assembler_x86_64.*` | Implemented RBP-anchored normal/FastNative JIT stubs, fixed-RSP CriticalNative descriptors, reserved-frame scratch selection, and opaque metadata carry independent of DWARF CFI |
-| `runtime/multiplatform/windows/jit_unwind_windows.{h,cc}` and `runtime/jit/jit_code_cache.*` | Planned one-entry dynamic-function registry, publish-after-register rule, and unregister-before-free/teardown ownership |
-| `runtime/jit/jit_memory_region.*` | Planned aligned xdata tail in each existing data allocation, written through the RW alias and referenced through the primary low-4-GiB view |
+| `runtime/multiplatform/windows/jit_unwind_windows.{h,cc}` and `runtime/jit/jit_code_cache.*` | Implemented stable one-entry dynamic-function registry, publish-after-register rule, exact deletion, unregister-before-free/reuse, and clear-before-teardown ownership |
+| `runtime/jit/jit_memory_region.*` | Implemented overflow-checked aligned xdata tail in each existing data allocation, written through the RW alias and referenced through the primary low-4-GiB view |
 | `runtime/thread.cc` | Implemented exact current-stack acceptance and attach failure; later common accounting plus a small `_WIN32` fixed-page installation branch |
 | `runtime/multiplatform/windows/stack_windows.{h,cc}` | Implemented Stage B selection, commit/protect state machine, verified rollback, and exact original-state restoration |
 | `runtime/multiplatform/windows/thread_windows.cc` | Implemented bounded `Thread` integration for Stage B; no alternate signal stack |
@@ -1888,7 +1908,7 @@ and debugger evidence.
 | `runtime/runtime.cc` | Implemented diagnostic handler shutdown, common implicit null/SO activation, Linux-like started-runtime sigchain invariant, and early nterp range registration |
 | `tools/verify/win64_phase1/check_win32_cet_contract.py` and `win32_cet_policy_probe.cc` | Implemented link/PE audit plus deterministic and actual-policy probe |
 | `tools/verify/win64_phase1/check_win32_boundary_unwind.py` and `tools/verify/win64_phase4/run_crashnative.sh` | Implemented emitted boundary-record audit and hardened static JNI fatal gate requiring a new valid minidump |
-| `tools/verify/win64_phase1/win32_thread_stack_probe.c`, `win32_stack_page_probe.cc`, `win32_stack_page_fault_probe.S`, `win32_fault_record_probe.cc`, `win32_sigchain_probe.cc`, `win32_jit_unwind_info_probe.cc`, and Phase 4 probe scripts | Implemented Stage A reservation/identity/lifetime gate, Stage B synthetic selection/restore/direct-fault gate, Stage C deterministic record/live VEH gate, Stage D nterp/JIT managed-fault stress, and Stage E unwind serialization/validation coverage |
+| `tools/verify/win64_phase1/win32_thread_stack_probe.c`, `win32_stack_page_probe.cc`, `win32_stack_page_fault_probe.S`, `win32_fault_record_probe.cc`, `win32_sigchain_probe.cc`, `win32_jit_unwind_info_probe.cc`, `win32_jit_unwind_registry_probe.cc`, and Phase 4 probe scripts | Implemented Stage A reservation/identity/lifetime gate, Stage B synthetic selection/restore/direct-fault gate, Stage C deterministic record/live VEH gate, Stage D nterp/JIT managed-fault stress, and Stage E serialization, runtime registry, collection/reuse lifecycle, and threshold-zero fatal-dispatch coverage |
 
 The exact split between `sigchain_windows.cc` and
 `fault_handler_windows.cc` is an implementation detail. There must still be

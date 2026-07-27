@@ -1,6 +1,6 @@
 # Win64 Phase 4 — RESULT
 
-**Status:** **WINE COMPLETE; FOCUSED NATIVE SUBSETS ACCEPTED** — A5–A8 and managed/native JIT hardening gates pass; W-002, W-003, W-004, and W-024 native closure matrices are accepted; W-010 Stages C-D are focused-Wine verified and product implicit null/SO translation is active
+**Status:** **WINE COMPLETE; FOCUSED NATIVE SUBSETS ACCEPTED** — A5–A8 and managed/native JIT hardening gates pass; W-002, W-003, W-004, and W-024 native closure matrices are accepted; W-010 Stages C-D plus dynamic-JIT registration/lifecycle/fatal dispatch are focused-Wine verified and product implicit null/SO translation is active
 **Date:** 2026-07-27
 **Depends on:** Phase 3 complete (real Win10 G12 goldens)
 
@@ -30,7 +30,11 @@
 | W-002 attached-thread matrix | **PASS, 8/8** | `run_w002_attach_probe.sh`; each raw thread now detaches, uses native stack, and reattaches |
 | W-014 thread reservation/lifetime/fixed page | **PASS** | `run_thread_stack_probe.sh` |
 | W-010 fault record/context adapter | **PASS** | `run_fault_adapter_probe.sh` (`failures=0 cases=8`; live probe `calls=2 first=0 second=0`) |
+| W-010 JIT unwind serializer | **PASS, 6/6** | `run_jit_unwind_info_probe.sh` |
+| W-010 JIT runtime registry | **PASS** | `run_jit_unwind_registry_probe.sh` (lookup, virtual unwind, delete, re-register) |
+| W-010 JIT collection/reuse lifecycle | **PASS, J-2/J-1** | `run_jit_unwind_lifecycle.sh` (real collection, lookup disappearance, exact address reuse) |
 | W-010 active nterp/JIT managed faults | **PASS** | `run_w010_managed_fault_probe.sh` (started-runtime no-chain rejection; 64 read + 64 write NPEs; repeated main/child SOEs in nterp and threshold-zero JIT; no handled-fault diagnostics/dump change) |
+| W-010 threshold-zero JIT fatal dispatch | **PASS, J-2/J-1** | `run_jit_fatal_unwind.sh` (VEH, UEF, changed/new valid `MDMP`) |
 | Full suite | **PASS** | `run_all_wine_gates.sh` |
 
 Evidence: `evidence/all_wine_gates.txt`, `evidence/crashnative.txt`
@@ -60,6 +64,7 @@ PASS native_crash_aborts
 | W-014 Stages A-B stack/pthread/page gate | `../win64_phase1/win32_thread_stack_probe.c`; `../win64_phase1/win32_stack_page_probe.cc`; `../win64_phase1/win32_stack_page_fault_probe.S`; `run_thread_stack_probe.sh` |
 | W-010 Stage C adapter and probes | `../win64_phase1/win32_fault_record_probe.cc`; `../win64_phase1/win32_sigchain_probe.cc`; `run_fault_adapter_probe.sh`; `vendor/art/runtime/multiplatform/windows/sigchain_windows.cc` |
 | W-010 Stage D activation and stress | `src/W010ManagedFaultProbe.java`; `run_w010_managed_fault_probe.sh`; common runtime null/SO flags and early nterp range registration |
+| W-010 dynamic-JIT PE unwind | `runtime/multiplatform/windows/jit_unwind_windows.*`; `runtime/jit/{jit_code_cache,jit_memory_region}.*`; `run_jit_unwind_{info,registry,lifecycle}.sh`; `run_jit_fatal_unwind.sh` |
 
 ## Host
 
@@ -102,7 +107,9 @@ sentinel runs. See `evidence/w003_host/ACCEPTANCE.md`.
 - Complete W-014 Stages A-B/E native acceptance and W-010 native Stage E
   acceptance on Windows 10/current Windows: generated nterp/JIT NPE/SOE,
   foreign VEH/SEH/debugger ordering, stack-budget measurements, fatal
-  predecessor-UEF/dump behavior, and HSP-disabled/forced-policy cases.
+  predecessor-UEF/dump behavior, dynamic-table churn/sampling, and
+  HSP-disabled/forced-policy cases. Add OSR-stub unwind and full XMM6-XMM15
+  native-boundary preservation.
 - Complete W-025 broader JIT-mapping native acceptance and hardening
 
 ## W-010 Stage D activation re-run (2026-07-27)

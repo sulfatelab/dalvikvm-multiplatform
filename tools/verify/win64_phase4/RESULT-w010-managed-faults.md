@@ -1,9 +1,9 @@
 # W-010 Stage D managed-fault activation
 
-**Status:** focused Wine and Linux managed-fault verification PASS; static
-fatal-unwind boundaries PASS locally; dynamic-JIT frame anchoring and PE
-serialization PASS locally; runtime registration and native Windows Stage E
-acceptance remain
+**Status:** focused Wine and Linux managed-fault verification PASS; static and
+dynamic JIT fatal-unwind dispatch PASS locally; dynamic-JIT frame anchoring,
+PE serialization, xdata placement, runtime registration, collection/reuse
+lifecycle, and J-2/J-1 fatal dispatch PASS; native Windows Stage E remains
 **Date:** 2026-07-27
 
 ## Product behavior
@@ -74,6 +74,13 @@ requires no change.
   minimum empty record, small and both large allocation forms, every legal
   nonvolatile GPR, an RBP-anchored frame, fixed-RSP CriticalNative shape,
   descending offsets, padding, and invalid-input rejection.
+- Win64 runtime registry probe: add, exact lookup/base/range/xdata validation,
+  generated-code execution, `RtlVirtualUnwind` control-state restoration,
+  deletion, lookup disappearance, re-registration, and clear PASS.
+- Win64 product lifecycle probe in J-2 and J-1: initial lookup, invalidation
+  with metadata retained, one real code-cache collection, lookup disappearance,
+  exact mspace code-address reuse, replacement registration, and replacement
+  execution PASS.
 - Complete Phase-4 Wine aggregate, including the new serializer gate and the
   strengthened W-002 R15/RBP plus W-003 inline-XMM structural checks: PASS.
 - Foreign-VEH ordering before/after ART, best-effort promotion, continue-search
@@ -81,6 +88,9 @@ requires no change.
 - Static `-Xint` JNI native AV: emitted unwind audit passes for the two invoke
   stubs and generic JNI trampoline; the crash reaches initial VEH and UEF and
   creates a new valid `MDMP` minidump.
+- Threshold-zero JIT JNI native AV: the optimizing caller and JNI stub compile,
+  both J-2 and J-1 reach initial VEH and UEF, and each run creates a changed or
+  new valid `MDMP` minidump.
 - JIT smoke: 12/12 PASS.
 - Normal/FastNative mixed/high-FP compiled-JNI ABI: 7/7 targets PASS in both
   default and instrumentation modes after reserving RBP/R15 from JNI scratch.
@@ -99,27 +109,29 @@ continue, foreign VEH before/after/promotion, frame-based SEH for unrecognized
 AV, exact wrong-address negatives, handler stack high-water, fatal predecessor
 UEF/minidump behavior, and the HSP-disabled plus forced-policy matrix.
 
-The static fatal result is not universal JIT-origin crash support. The first
-compiler slice of the selected implementation is now present: optimizing
-Win64 JIT methods force-spill and reserve RBP, establish it after their fixed
-allocation, normal/FastNative JNI stubs use the same anchor, CriticalNative
-keeps a fixed-RSP descriptor, and the assembler emits explicit version-1 PE
+The selected dynamic implementation is now present. Optimizing Win64 JIT
+methods force-spill and reserve RBP and establish it after their fixed
+allocation; normal/FastNative JNI stubs use the same anchor; CriticalNative
+keeps a fixed-RSP descriptor; and the assembler emits explicit version-1 PE
 unwind bytes independently of debug CFI. Invalid or missing enabled metadata
-rejects compilation before JIT allocation. `JniCompiledMethod` carries the
-opaque bytes for the next stage.
+rejects compilation before JIT allocation.
 
-Those bytes are not yet included in `JitCodeCache::Reserve()` data sizing or
-registered with `RtlAddFunctionTable()`. Recursive `RtlVirtualUnwind2` tracing
-therefore still sees no Windows runtime-function entry for threshold-zero JIT
-code; leaf unwinding can corrupt the dispatch walk before UEF. The complete
-design is documented in
+`JitCodeCache::Reserve()` now sizes a DWORD-aligned xdata tail after roots and
+stack maps. `Commit()` writes it through the RW data alias and registers one
+stable immutable `RUNTIME_FUNCTION` before publishing any map or entrypoint.
+`FreeLocked()` deletes that exact table before native debug-info removal and
+mspace reuse; teardown clears every remaining registration before unmapping.
+The complete design is documented in
 [win32_faults_and_stacks.md](../../../win32_faults_and_stacks.md#79-dynamic-jit-pe-unwind-design):
 a Windows-JIT-only fixed RBP anchor, explicit PE unwind bytes in the primary
 JIT data view, one immutable `RtlAddFunctionTable()` entry per code allocation,
 publication only after registration, and deletion before mspace reuse or
-mapping teardown. Stage E must finish and stress the runtime half. It must also
+mapping teardown.
+
+The threshold-zero gate proves Windows fatal dispatch reaches UEF and produces
+a valid dump across the exercised optimizing/JIT-JNI path. It does not prove
+debugger-quality minidump stack reconstruction or concurrent native sampling
+under large dynamic-table churn. Stage E must cover those on native Windows,
 extend native-to-managed boundary preservation from full-width XMM6-XMM11 to
-XMM6-XMM15; ART's managed scalar XMM12-XMM15 preservation is only 64 bits and
-does not by itself satisfy the Microsoft 128-bit nonvolatile contract. The OSR
-stub also needs a static runtime-function record before fatal dispatch through
-its variable copied-stack interval is supported.
+XMM6-XMM15, and add the OSR stub's static runtime-function record before fatal
+dispatch through its variable copied-stack interval is supported.
