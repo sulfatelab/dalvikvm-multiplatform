@@ -5,12 +5,14 @@ Windows 10 build-19044 diagnostics now invalidate the fixed-page recursive SOE
 mechanism and rule out UEF replacement. Windows commits/reprotects the fixed
 page as ordinary `PAGE_READWRITE` during stack growth, then raises
 `STATUS_STACK_OVERFLOW`; fatal JNI AV reaches ART's VEH while ART still owns
-the UEF slot, but top-level UEF dispatch is not reached. Managed SOE delivery
-must be redesigned. A realistic GenericJNI virtual unwind then exposed and
-repaired an RDI save-offset defect; native JNI-raised/JNI-hardware/native-worker
-exception isolation is the next fatal-dispatch gate.
+the UEF slot, but top-level UEF dispatch is not reached through a JNI/managed
+caller chain. Managed SOE delivery must be redesigned. A realistic GenericJNI
+virtual unwind exposed and repaired an RDI save-offset defect, but native run 4
+proves that repair is insufficient: JNI hardware and raised AVs still miss UEF,
+while a JNI-created native worker reaches both UEFs and writes a valid dump.
+Bounded live unwind tracing above GenericJNI is the next fatal-dispatch gate.
 **Created:** 2026-07-26
-**Updated:** 2026-07-27
+**Updated:** 2026-07-28
 **Target:** x86_64 Windows 10 build 17134+
 **Product model:** imageless ART with nterp and JIT; MSVC ABI artifacts built by
 Clang/lld with LLVM libc++
@@ -402,8 +404,46 @@ evidence is still needed before calling it the complete UEF root cause.
 The follow-up package adds JNI `RaiseException`, JNI hardware AV, and a
 JNI-created `_beginthreadex` worker AV. Local Wine reaches late UEF, ART UEF,
 and minidump creation in all three shapes; the continuable software-raised AV
-then resumes under Wine and is recorded as an observation. Native comparison
-of those shapes is the next proof.
+then resumes under Wine and is recorded as an observation. Native run 4 below
+provides the comparison.
+
+### 4.3 Fourth native diagnostic result
+
+`/tmp/diag_w010_w014_host-run4.zip` exactly matches the issued repaired-
+GenericJNI package. The stack-growth rows repeat run 3, including the committed
+`PAGE_READWRITE` terminal region and successful pre-reset re-protection. The
+standalone frame-SEH/main/chained/worker UEF rows also repeat run 3.
+
+The three ART exception shapes isolate the remaining fatal boundary:
+
+- the JNI hardware AV and continuable JNI
+  `RaiseException(EXCEPTION_ACCESS_VIOLATION)` both report ART as the installed
+  predecessor, reach `ART Win64 VEH`, then exit with
+  `STATUS_ACCESS_VIOLATION` without entering either late or ART UEF and without
+  creating a dump;
+- the JNI-created `_beginthreadex` worker reports creation and entry, reaches
+  the same ART VEH, then enters the late UEF and ART UEF and writes one valid
+  648,619-byte minidump; and
+- no debugger is attached, and the same package, process initialization, JNI
+  library, UEF chain, dump directory, and dump API are used.
+
+The distinction is therefore not hardware versus software exception shape,
+ART startup state, UEF ownership, runner/debugger behavior, or dump creation.
+It is the presence of the ART managed/GenericJNI caller chain on the crashing
+thread. The repaired GenericJNI record remains a real correctness fix but is
+not the complete dispatch boundary.
+
+The next diagnostic is a bounded, opt-in recursive native unwind trace from a
+copy of the live VEH `CONTEXT`. For each frame it must record PC/RSP, the
+`RtlLookupFunctionEntry()` result, image base and runtime-function/unwind RVAs,
+then use `RtlVirtualUnwind()` or a validated leaf pop. It must stop on invalid
+stack memory, no progress, zero PC, or a small fixed frame limit, and it must
+not change dispatch. This should identify the first frame after GenericJNI
+that Windows cannot traverse. `art_jni_dlsym_lookup_stub` currently has no PE
+record, but it restores its complete temporary frame and tail-jumps to the
+resolved native method. Its address in captured stack memory may therefore be
+function-pointer data rather than an active frame; do not add metadata without
+the recursive trace proving it is traversed.
 
 ## 5. Windows contracts and conclusions
 
@@ -956,8 +996,9 @@ that `.seh_savereg %rdi, 0` addressed the bottom of the reserved area even
 though RDI is physically saved 5120 bytes above R12. The corrected record uses
 offset `0x1400` and restores caller RIP/RSP plus RBP/RDI/RSI/RBX/R12-R15.
 Structural inspection now requires the exact RDI offset. This closes the
-GenericJNI virtual-unwind coverage gap, but native exception dispatch still
-must show whether the defect caused the missing UEF.
+isolated GenericJNI virtual-unwind coverage gap. Native run 4 nevertheless
+shows the two JNI-thread exception shapes still miss UEF while the native
+worker reaches it, so another frame or boundary above GenericJNI remains.
 
 An opt-in diagnostic build may add a final observer VEH or a preallocated
 record ring, but it must be off by default and must not run before the managed
@@ -2089,10 +2130,16 @@ not as the final managed-overflow mechanism.
   R12 frame base). Structural and live Wine checks pass. The diagnostic runner
   now compares continuable JNI `RaiseException`, JNI hardware AV, and a
   JNI-created native-worker hardware AV; all three reach UEF/dump under Wine.
+- **Fourth native diagnostic result:** JNI hardware and raised AVs both stop
+  after ART's VEH without entering either UEF, while the JNI-created native
+  worker reaches both UEFs and creates a valid dump. Hardware/software shape,
+  ART process state, UEF ownership, runner/debugger behavior, and dump creation
+  are ruled out. The repaired GenericJNI record is insufficient; bounded live
+  recursive unwind tracing above it is the next diagnostic.
 - **Still open:** repeat the static ranges, full-width XMM6-XMM15
   exception-unwind sentinel and fatal paths after UEF dispatch is repaired,
-  return the three GenericJNI/native-worker exception shapes from native
-  Windows, redesign managed SOE delivery, and pass native debugger,
+  identify the first failing live unwind frame above GenericJNI, redesign
+  managed SOE delivery, and pass native debugger,
   large-table churn/sampling, rollback-injection, and debugger-quality
   dump-stack gates. Native normal-return XMM, OSR live unwind, and foreign
   VEH/frame-SEH already pass in the second run.
@@ -2276,12 +2323,14 @@ fallbacks:
 7. Does the locally implemented full-width XMM6-XMM15 adapter survive native
    Windows normal managed return and exception unwind through several
    optimizing and JNI frames?
-8. On native Windows, do JNI `RaiseException(EXCEPTION_ACCESS_VIOLATION)`, a JNI hardware AV, and
-   an AV on a JNI-created `_beginthreadex` worker differ in UEF dispatch? Use
-   that matrix to separate exception-shape effects from traversal across the
-   common GenericJNI/managed boundary. ART UEF replacement, standalone Windows
-   UEF behavior, debugger attachment, and dump creation are already ruled out.
-   The repaired GenericJNI record now passes realistic `RtlVirtualUnwind()`.
+8. Which first frame after the repaired GenericJNI record prevents live
+   Windows exception traversal? Native run 4 proves JNI raised and hardware
+   AVs fail identically while a JNI-created native worker reaches UEF/dump.
+   Capture a bounded recursive `RtlVirtualUnwind()` trace from the live VEH
+   context; do not infer active frames from unstructured stack words. ART UEF
+   replacement, standalone UEF behavior, debugger/runner effects, dump
+   creation, exception shape, and process-wide ART startup state are already
+   ruled out.
 
 ## 16. Primary references and comparative implementation
 

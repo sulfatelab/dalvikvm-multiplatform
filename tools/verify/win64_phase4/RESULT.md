@@ -1,7 +1,7 @@
 # Win64 Phase 4 — RESULT
 
-**Status:** **WINE COMPLETE; FOCUSED NATIVE SUBSETS ACCEPTED; W-010/W-014 REDESIGN/DIAGNOSIS ACTIVE** — W-002, W-003, W-004, and W-024 native matrices are accepted. Run 3 invalidates fixed-page recursive SOE delivery and rules out UEF replacement. A realistic GenericJNI unwind found and repaired RDI's save offset from zero to `0x1400`; caller RIP/RSP and all nonvolatile GPRs now restore. JNI-raised, JNI-hardware, and JNI-created native-worker fatal modes pass the complete UEF/minidump path under Wine and are packaged for native isolation.
-**Date:** 2026-07-27
+**Status:** **WINE COMPLETE; FOCUSED NATIVE SUBSETS ACCEPTED; W-010/W-014 REDESIGN/DIAGNOSIS ACTIVE** — W-002, W-003, W-004, and W-024 native matrices are accepted. Run 3 invalidates fixed-page recursive SOE delivery and rules out UEF replacement. Run 4 proves the repaired GenericJNI RDI metadata is necessary but insufficient: JNI hardware and raised AVs still stop after ART's VEH, while a JNI-created native worker reaches both UEFs and writes a valid dump. Fatal diagnosis is now limited to exception traversal through the ART managed/GenericJNI caller chain.
+**Date:** 2026-07-28
 **Depends on:** Phase 3 complete (real Win10 G12 goldens)
 
 ## Scope (from win64_art_port §Phase 4)
@@ -39,7 +39,7 @@
 | W-010 threshold-zero JIT fatal dispatch | **PASS, J-2/J-1** | `run_jit_fatal_unwind.sh` (VEH, UEF, changed/new valid `MDMP`) |
 | W-010 OSR-origin fatal dispatch | **PASS, J-2/J-1** | `run_osr_fatal_unwind.sh` (real switch OSR jump, VEH, UEF, new valid `MDMP`) |
 | W-010/W-014 native package preflight | **PASS under Wine** | `package_win64_w010_w014.sh` (unchanged 30-record acceptance runner plus separate stack-growth/UEF diagnostics) |
-| W-010/W-014 isolated failure diagnostics | **PASS on native build 19044** | run 3: baseline/protected/writable/direct stack state; frame-SEH/main/chain/worker UEF; late ART predecessor ownership. Fixed-page SOE invalidated; UEF replacement ruled out. |
+| W-010/W-014 isolated failure diagnostics | **PASS on native build 19044** | runs 3-4: fixed-page SOE invalidated; UEF replacement ruled out; JNI hardware/raised AVs miss UEF while the JNI-created native worker reaches UEF/dump, isolating traversal through managed/GenericJNI frames. |
 | Full suite | **PASS** | `run_all_wine_gates.sh` |
 
 Evidence: `evidence/all_wine_gates.txt`, `evidence/crashnative.txt`
@@ -157,6 +157,21 @@ the crashing thread. All three reach late UEF, ART UEF, and a valid minidump
 under Wine. The software-raised case then resumes under Wine and its exit shape
 is recorded rather than treated as infrastructure failure.
 
+The fourth returned diagnostic archive,
+`/tmp/diag_w010_w014_host-run4.zip`, exactly matches that issued package. Its
+stack and standalone UEF results repeat run 3. The JNI hardware and JNI-raised
+AVs both report ART as the predecessor, reach ART's VEH, then exit with
+`STATUS_ACCESS_VIOLATION` without entering either late or ART UEF and without
+creating a dump. The JNI-created native worker reports its creation and entry,
+then reaches the late UEF, ART UEF, and creates one valid 648,619-byte
+minidump. Thus hardware versus software exception shape, process-wide ART
+startup interaction, UEF ownership, debugger/runner behavior, and dump
+creation are not the distinction. The failure requires the ART
+managed/GenericJNI caller chain. The RDI repair remains correct but is not the
+complete dispatch fix; the next package must trace bounded recursive native
+unwind progress from the live VEH context before any further product metadata
+change.
+
 ## Non-goals
 
 - Windows NIO.2
@@ -165,8 +180,8 @@ is recorded rather than treated as infrastructure failure.
 
 ## Next
 
-- Return the repaired GenericJNI JNI-raised/JNI-hardware/native-worker
-  exception-dispatch matrix from native Windows. Design a replacement Windows SOE delivery mechanism that
+- Add and return a bounded live-VEH recursive unwind trace that identifies the
+  first invalid/no-progress frame after GenericJNI. Design a replacement Windows SOE delivery mechanism that
   does not rely on retaining a fixed no-access page inside the system stack.
   Then repeat the repaired SOE and static/JIT/OSR
   fatal matrix, debugger/stack-budget work, forced named-incompatible CET

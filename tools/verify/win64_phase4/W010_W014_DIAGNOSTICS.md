@@ -4,16 +4,20 @@ These probes distinguish the two failure classes first observed in the
 Windows 10 build-19044 Stage E run. They are evidence tools, not acceptance
 tests, and do not change the 30-record `RUN_W010_W014_HOST.ps1` contract.
 
-The returned run-3 diagnostics already establish two facts:
+The returned run-3 and run-4 diagnostics establish three facts:
 
 - recursive protected growth commits/reprotects ART's selected page as
   ordinary `PAGE_READWRITE` before `STATUS_STACK_OVERFLOW`; and
 - standalone UEF dispatch works and ART still owns the process UEF slot
   immediately before the JNI crash, but neither the late filter nor ART's UEF
-  is dispatched after ART's VEH marker.
+  is dispatched after ART's VEH marker on a JNI/managed caller chain; and
+- the same initialized ART process reaches the late UEF, ART UEF, and
+  minidump path when a JNI-created native worker faults without ART frames on
+  the crashing thread.
 
-The current package retains those probes for repetition and adds a repaired,
-realistic GenericJNI virtual-unwind gate plus three exception-shape cases.
+The current package retains those probes for repetition and includes the
+repaired, realistic GenericJNI virtual-unwind gate plus three exception-shape
+cases.
 
 Run from the unpacked package root in PowerShell 5.1 or later:
 
@@ -137,5 +141,39 @@ The first version of this test found that RDI was physically saved at
 `R12 + 5120` while `.xdata` described offset zero. The assembly metadata now
 uses `SAVE_NONVOL RDI, offset=0x1400`; structural inspection and the realistic
 virtual unwind both pass. This is a concrete correctness repair. Native
-exception-shape results are still required to determine whether it also
-repairs top-level fatal dispatch.
+run 4 proves it does not by itself repair top-level fatal dispatch.
+
+## Native run-4 result
+
+`/tmp/diag_w010_w014_host-run4.zip` matches the issued E3 GenericJNI package
+identity. Its archive SHA-256 is
+`9f9a4cbaea3cb7cc030b44db47a4275f97b8d39026fa2fb1cb59b7a8ac405aa7`.
+The returned worker dump is a valid 648,619-byte minidump with SHA-256
+`b14377fc0670a496d11960d818c387e243f500588033fd6d7238b1655f703086`.
+
+The stack-growth and standalone UEF rows repeat run 3. The three ART rows are
+decisive:
+
+| Mode | ART VEH | late UEF | ART UEF | new dump |
+|---|---:|---:|---:|---:|
+| JNI hardware AV | 1 | 0 | 0 | 0 |
+| JNI raised AV | 1 | 0 | 0 | 0 |
+| JNI-created native-worker hardware AV | 1 | 1 | 1 | 1 |
+
+ART is the predecessor UEF in all three modes. Both JNI-thread cases exit with
+`STATUS_ACCESS_VIOLATION` after ART's VEH and before either UEF. Hardware and
+software-raised AVs therefore have the same failed dispatch shape. The native
+worker, created by the same JNI library after ART startup, reaches both UEFs
+and writes the valid dump.
+
+This rules out exception hardware/software shape, process-wide ART startup
+state, UEF ownership, debugger/PowerShell dispatch, and dump API/path as the
+remaining distinction. The failure is specific to Windows exception traversal
+through the ART managed/GenericJNI caller chain. The repaired GenericJNI
+record passes isolated `RtlVirtualUnwind()`, so it is not the complete boundary.
+The next diagnostic must capture a bounded recursive `RtlVirtualUnwind()` trace
+from the live VEH `CONTEXT` and identify the first frame after GenericJNI that
+does not make valid progress. Do not add metadata to
+`art_jni_dlsym_lookup_stub` merely because its address appears in raw stack
+memory: it restores its temporary frame and tail-jumps to the resolved native
+method, so that value is not yet a proven active frame.
