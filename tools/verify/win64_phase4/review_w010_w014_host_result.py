@@ -244,6 +244,8 @@ def review(returned: Path, issued: Path) -> None:
     if windows_build >= 19041:
         if "actual=disabled" not in cet_text:
             fail("Windows build 19041+ did not prove disabled user shadow stacks")
+        if "known_incompatible=0x00000000" not in cet_text:
+            fail("Windows build 19041+ reported an incompatible named shadow-stack policy field")
     elif not any(
         marker in cet_text
         for marker in ("actual=disabled", "actual=unavailable-on-older-windows")

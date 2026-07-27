@@ -80,12 +80,14 @@ A release is not “full” until all of the following pass on native Windows:
 | A9 | No dependency on WSL, Android device, or Android platform shared libraries at runtime. |
 
 The current x86_64 product additionally requires Windows CET user shadow
-stacks (Hardware-enforced Stack Protection) to be completely disabled for the
-ART process. Compatibility, audit, and strict modes are unsupported and must
-be rejected before managed execution. Explicit PE marking and the early
-fail-closed startup guard are implemented and locally verified; native
-forced-policy rejection remains pending acceptance. This is a platform
-prerequisite, not an unmet W-025 feature; CFG remains separate.
+stacks (Hardware-enforced Stack Protection) and context-IP validation to be
+disabled for the ART process. The startup guard rejects the defined
+shadow-stack, audit, strict, context-validation, and non-CET-binary fields,
+but permits `CetDynamicApisOutOfProcOnly` and ignores `ReservedFlags` because
+neither is evidence that HSP is enabled. Explicit PE marking and the early
+fail-closed query guard are implemented; forced incompatible-policy rejection
+remains pending native acceptance. This is a platform prerequisite, not an
+unmet W-025 feature; CFG remains separate.
 
 The original plan allowed JIT/dex2oat to be a v1.1 gate. Current x86_64 quick,
 nterp, managed-JIT, and native-JIT entrypoints are correct and default-on;
@@ -760,7 +762,7 @@ the feasibility record, not as a current schedule.
 | Risk | Severity | Mitigation |
 |------|----------|------------|
 | VEH ≠ Linux signals subtlety | Critical | Diagnostic VEH/minidump support and the active W-010 exact-record/non-owning-`CONTEXT` adapter are landed and Wine-verified. Common `FaultManager` now translates repeated nterp/JIT NPE/SOE while validating R15 and the W-014 page; every unrecognized exception still continues search. Native Windows debugger/foreign-VEH/SEH ordering, negative AVs, stack budget, fatal predecessor-UEF behavior, and repeated NPE/SOE remain required. |
-| CET user shadow-stack mismatch | Critical | Current x86_64 `art_quick_do_long_jump` restores the regular stack and returns without synchronizing CET's protected return stack; W-010 also redirects `CONTEXT.Rip`/`Rsp`. Stage 0 now marks every project PE `/CETCOMPAT:NO`, audits packaged DLLs, and rejects any nonzero process HSP policy before memory/thread/JIT startup. Compatibility, audit, and strict modes are unsupported; native forced-policy acceptance remains and CFG is separate. |
+| CET user shadow-stack mismatch | Critical | Current x86_64 `art_quick_do_long_jump` restores the regular stack and returns without synchronizing CET's protected return stack; W-010 also redirects `CONTEXT.Rip`/`Rsp`. Stage 0 marks every project PE `/CETCOMPAT:NO`, audits packaged DLLs, and rejects every defined incompatible `ProcessUserShadowStackPolicy` field before memory/thread/JIT startup. `CetDynamicApisOutOfProcOnly` is compatible and reserved fields are not interpreted. Native forced-policy acceptance remains; CFG is separate. |
 | Windows stack discovery / growth differs from pthread stacks | Critical | W-014 Stages A-B reject fibers, use `GetCurrentThreadStackLimits()` plus a complete `VirtualQuery()` allocation walk, apply `_beginthreadex` reservation semantics with retained join handles/tagged external identities, pass thread-pool reservation sizes, measure the bottom exclusion, and install/restore a verified fixed `PAGE_NOACCESS` page without adopting Windows' moving one-shot `PAGE_GUARD`. Native small/default/large reservation, guard-growth, and detach/reattach acceptance remains. |
 | Win64 ABI assembly volume | Critical | x86_64 quick/nterp/JIT bridges are implemented; retain Linux/Win64 ABI matrices |
 | libcore native breadth | High | Product hybrid map tracks 82 implemented and 44 intentional ENOSYS methods |
@@ -795,9 +797,10 @@ Do **not** block all Windows design work on perfect Linux polish — but **do** 
 - Omit the Windows SDK and hope Clang’s resource directory is enough for Win32 APIs.
 - Require Android framework libraries on Windows.
 - Support or run under CET user shadow stacks/Hardware-enforced Stack
-  Protection in the current Win64 ART ABI. The mitigation must be completely
-  disabled for the process; compatibility, audit, and strict modes are not
-  supported.
+  Protection in the current Win64 ART ABI. All defined incompatible HSP and
+  context-IP-validation fields must be disabled; compatibility, audit, and
+  strict modes are not supported. `CetDynamicApisOutOfProcOnly` is not HSP
+  enablement, and reserved policy fields are not classified as features.
 - Promise month-scale full parity including JIT without the phase gates above.
 
 ---

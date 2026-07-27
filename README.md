@@ -121,13 +121,14 @@ design.
 ## Win64 process mitigation requirement
 
 Current x86_64 ART does not support Windows CET user shadow stacks, exposed by
-Windows as Hardware-enforced Stack Protection. The mitigation must be
-completely disabled for the entire `dalvikvm` or embedding process before it
-starts; compatibility, audit, and strict modes are unsupported. CFG is a
-separate mitigation and is not equivalent to CET shadow stacks. The exact
-build marker and early startup rejection are implemented and locally verified;
-native forced-policy acceptance remains pending. The exact contract is
-documented in [win32_faults_and_stacks.md](win32_faults_and_stacks.md).
+Windows as Hardware-enforced Stack Protection. All defined shadow-stack,
+audit, context-IP-validation, strict, and non-CET-binary policy fields must be
+disabled for the entire `dalvikvm` or embedding process before it starts. The
+startup guard classifies the named Windows SDK fields: it permits
+`CetDynamicApisOutOfProcOnly`, which does not enable HSP, and does not assign
+meaning to `ReservedFlags`. CFG is separate and is not equivalent to CET
+shadow stacks. The exact contract is documented in
+[win32_faults_and_stacks.md](win32_faults_and_stacks.md).
 
 ## Native source root
 

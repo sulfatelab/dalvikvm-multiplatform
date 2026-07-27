@@ -32,8 +32,10 @@ The selected end state is:
 7. Keep CET user shadow stacks outside W-025. Current Win64 ART does not
    support Hardware-enforced Stack Protection because its shared managed
    exception/deoptimization long jump does not maintain CET's protected return
-   stack. The process must run with HSP completely disabled under W-010's
-   startup contract. CFG and dynamic-code policy remain separate W-025 work.
+   stack. All defined incompatible HSP/context-validation fields must be
+   disabled under W-010's startup contract; `CetDynamicApisOutOfProcOnly` and
+   reserved fields do not imply HSP. CFG and dynamic-code policy remain
+   separate W-025 work.
 
 The selected design creates no filesystem file. A Windows pagefile-backed
 section can be paged by the operating system, just as anonymous Linux memory can
@@ -420,9 +422,11 @@ emulation is added.
 - Remaining work is real-Windows repeated-start testing, dynamic-code/CFG
   policy testing, large `SEC_COMMIT` pressure measurement, and direct release
   checks at the JIT-root and CodeInfo encoding sites. CET user shadow-stack
-  support is not part of this residual: HSP must be disabled for the entire ART
-  process, and marking dynamic JIT ranges CET-compatible is forbidden as a
-  workaround.
+  support is not part of this residual: all named incompatible HSP fields must
+  be disabled for the ART process, and marking dynamic JIT ranges CET-
+  compatible is forbidden as a workaround. The unrelated
+  `CetDynamicApisOutOfProcOnly` field and reserved bits are classified under
+  W-010, not as JIT-memory failures.
 - Native JIT follows the common ART policy by default after W-024 cleanup.
   Native Windows 10 acceptance, Math.ceil/floor, and the common ELF/PE
   registration table are complete. Mixed/high-FP, unresolved app-JNI,

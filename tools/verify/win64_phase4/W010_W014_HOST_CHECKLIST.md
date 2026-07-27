@@ -24,8 +24,10 @@ These items are tracked as the remaining forced-policy and embedding matrix.
 - Windows build must be at least 17134.
 - Hardware-enforced Stack Protection must be disabled for the ART process.
   On build 19041 or later, the runner requires the process policy probe to
-  report `actual=disabled`. Older supported builds may report that the policy
-  query is unavailable.
+  report `actual=disabled` and `known_incompatible=0x00000000`. The raw flags
+  may still contain `CetDynamicApisOutOfProcOnly` or reserved bits; neither is
+  HSP enablement. Older supported builds may report that the policy query is
+  unavailable.
 - Do not enable compatibility, audit, strict, or context-IP-validation shadow-
   stack policies for the ordinary acceptance run.
 - Allow each fatal native AV case to terminate and write a minidump under
@@ -60,8 +62,10 @@ The runner verifies:
   threshold-zero JIT native-to-managed boundary;
 - actual user shadow-stack policy observation;
 - main/default, 64 KiB, 256 KiB, 1 MiB, 2 MiB, and 9 MiB requested pthread
-  reservations, including the Windows rule that sub-default requests retain
-  the executable default reservation;
+  reservations. A nonzero `_beginthreadex` request uses
+  `STACK_SIZE_PARAM_IS_A_RESERVATION` and is checked against that request after
+  allocation-granularity rounding; it is not clamped to the executable
+  default;
 - join/detach handle stress, raw `CreateThread`, and fiber rejection;
 - deterministic protected-page selection plus committed/reserved restoration;
 - exact exception-record filtering;
@@ -97,7 +101,9 @@ OVERALL PASS
 
 It must contain 30 PASS records and no FAIL record. Key evidence includes:
 
-- `logs\cet_policy.log` with `WIN32_CET_POLICY_PROBE PASS`;
+- `logs\cet_policy.log` with `WIN32_CET_POLICY_PROBE PASS`,
+  `actual=disabled`, and `known_incompatible=0x00000000`; a nonzero raw
+  `flags=` value is allowed when it contains no named incompatible field;
 - `logs\osr_unwind.log` with `win32_osr_unwind_probe failures=0`,
   `entry_frame_register=R12 compiled_frame_register=RBP`, the zero-offset
   entry frame, zero-prologue return range, `fixed_frame=248`,
@@ -156,8 +162,10 @@ The following are still required before W-010/W-014 close:
 
 - repeat the package on Windows 10 build 17134+ and a current Windows release;
 - debugger first-chance stop followed by continue for managed NPE/SOE;
-- forced compatibility, audit, strict, and context-IP-validation policy
-  rejection before Java/JIT, with no control-protection dump;
+- forced compatibility, audit, strict, context-IP-validation, and other named
+  incompatible policy rejection before Java/JIT, with no control-protection
+  dump; `CetDynamicApisOutOfProcOnly` must remain accepted and reserved fields
+  must not be assigned policy meaning;
 - exact handler/pre-unprotect stack high-water measurements in release and
   debug builds;
 - wrong-address and unsupported exception-kind native negatives; and

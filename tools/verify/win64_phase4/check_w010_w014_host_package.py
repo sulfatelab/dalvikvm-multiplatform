@@ -170,6 +170,7 @@ def check_package(root: Path) -> None:
         "entry_frame_offset=0 return_prologue=0 fixed_frame=248 "
         "xmm_count=10 invoke_records=2 variable_rsp_delta=256",
         "actual=disabled",
+        "known_incompatible=0x00000000",
         "requested=65536",
         "requested=9437184",
         "action_calls=3 foreign_before=2 foreign_after=2",

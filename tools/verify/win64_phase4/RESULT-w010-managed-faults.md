@@ -125,7 +125,9 @@ Wine is development evidence, not native acceptance. Native Windows 10/current
 Windows must still cover repeated nterp/JIT NPE/SOE, debugger first-chance
 continue, foreign VEH before/after/promotion, frame-based SEH for unrecognized
 AV, exact wrong-address negatives, handler stack high-water, fatal predecessor
-UEF/minidump behavior, and the HSP-disabled plus forced-policy matrix.
+UEF/minidump behavior, and the HSP-disabled plus forced named-incompatible
+policy matrix. `CetDynamicApisOutOfProcOnly` and reserved policy fields must
+remain accepted by the startup classifier.
 
 The selected dynamic implementation is now present. Optimizing Win64 JIT
 methods force-spill and reserve RBP and establish it after their fixed

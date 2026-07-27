@@ -684,7 +684,7 @@ match the issued package byte for byte. Procedure and evidence:
 | Publish | Write through the RW alias; execute through RX; call `FlushInstructionCache` explicitly |
 | Free / collect | Existing ART JIT GC hooks; mapped views use `UnmapViewOfFile` and the section handle is closed |
 | CFG | Basic real-host execution passes; broader dynamic-code/direct-encoding hardening remains W-025 |
-| CET user shadow stack | **Unsupported.** Hardware-enforced Stack Protection must be completely disabled for the ART process; compatibility, audit, and strict modes are rejected under W-010's activation contract |
+| CET user shadow stack | **Unsupported.** All defined incompatible HSP/context-validation fields must be disabled; compatibility, audit, and strict fields are rejected, while `CetDynamicApisOutOfProcOnly` and `ReservedFlags` do not imply HSP under W-010's activation contract |
 | Antivirus | Expect false positives; keep cache private, avoid RWX long windows |
 
 #### Compiler backend
@@ -869,17 +869,23 @@ restoring CET's protected return stack. Ordinary explicit exceptions,
 deoptimization, pending JNI exceptions, and W-010's implicit NPE/SOE path all
 use this mechanism. W-010 additionally modifies `CONTEXT.Rip` and, for null
 delivery, `CONTEXT.Rsp`, which conflicts with CET context-IP validation without
-a complete EH-continuation contract. Therefore every ART process must have
-Hardware-enforced Stack Protection completely disabled, every project PE link
-must explicitly use `/CETCOMPAT:NO`, and startup must reject every nonzero
-`ProcessUserShadowStackPolicy` before managed threads or JIT. CFG remains a
+a complete EH-continuation contract. Therefore every ART process must have all
+defined incompatible Hardware-enforced Stack Protection and context-IP-
+validation fields disabled, every project PE link must explicitly use
+`/CETCOMPAT:NO`, and startup must inspect named
+`ProcessUserShadowStackPolicy` fields before managed threads or JIT. It rejects
+shadow-stack/audit/strict/context-validation/non-CET-binary fields, permits
+`CetDynamicApisOutOfProcOnly`, and ignores `ReservedFlags`. CFG remains a
 separate W-025 mitigation; `/guard:ehcont`, dynamic JIT CET-range registration,
 IBT, and `-fcf-protection` do not repair ART's shadow-stack mismatch.
 
 The Stage 0 enforcement is implemented: all generated and handwritten project
 PE links use explicit `/CETCOMPAT:NO`, the selected package/LLVM libc++ scan
 finds no CET-compatible marker, and `Runtime::Init()` fails closed on every
-nonzero or unexpectedly unavailable policy before memory/thread/JIT startup.
+named incompatible field or unexpectedly unavailable policy before
+memory/thread/JIT startup. The raw word is logged, but safe
+`CetDynamicApisOutOfProcOnly` and reserved fields do not enter the
+incompatibility mask.
 Stage C focused Wine evidence also passes: the deterministic record probe
 passes all eight cases, and the live VEH/context probe forwards two real page
 faults, redirects `Rip`, returns `Rax == 0`, survives promotion, and removes
@@ -982,10 +988,12 @@ Quick entrypoint **asm prologues** are where these differences are centralized.
    implemented and default-on.
 4. **CET / shadow stack / CFG policy:** **CLOSED as a product contract.** CET
    user shadow stacks are unsupported and Hardware-enforced Stack Protection
-   must be completely disabled for the ART process; compatibility, audit, and
-   strict modes are rejected. Build and startup enforcement is implemented;
-   native forced-policy acceptance remains pending. CFG and dynamic-code
-   hardening remain separate W-025 work.
+   plus context-IP validation must remain disabled for the ART process;
+   compatibility, audit, and strict fields are rejected. The guard classifies
+   named SDK fields, permits `CetDynamicApisOutOfProcOnly`, and ignores
+   `ReservedFlags`. Build and startup enforcement is implemented; native
+   forced-policy acceptance remains pending. CFG and dynamic-code hardening
+   remain separate W-025 work.
 5. **Wine sufficiency:** **CLOSED as policy** — Wine is a development gate, not
    final product acceptance. Focused native W-024/W-013 matrices pass; broader
    host acceptance remains tracked separately.

@@ -126,7 +126,9 @@ required; a Wine package smoke is not native acceptance.
   acceptance on Windows 10/current Windows: generated nterp/JIT NPE/SOE,
   foreign VEH/SEH/debugger ordering, stack-budget measurements, fatal
   predecessor-UEF/dump behavior, dynamic-table churn/sampling, and
-  HSP-disabled/forced-policy cases. Repeat the split OSR/invoke unwind, full
+  HSP-disabled/forced named-incompatible policy cases while accepting
+  `CetDynamicApisOutOfProcOnly` and reserved fields. Repeat the split
+  OSR/invoke unwind, full
   XMM6-XMM15 normal-return probes, JIT-origin fatal path, and OSR-origin fatal
   path on native Windows.
 - Complete W-025 broader JIT-mapping native acceptance and hardening

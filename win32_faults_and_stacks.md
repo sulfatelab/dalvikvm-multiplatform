@@ -79,11 +79,12 @@ The selected design is:
     Expected faults do not log or dump. The unhandled-exception filter writes a
     best-effort dump, then chains to the previously installed filter.
 13. Do not support Windows CET user shadow stacks (Hardware-enforced Stack
-    Protection) in the current Win64 ART design. Every ART process must run
-    with that mitigation completely disabled; compatibility, audit, and strict
-    modes are all unsupported. Build every project Win64 PE explicitly with
-    `/CETCOMPAT:NO`, inspect packaged DLLs, and reject startup before managed
-    threads or JIT initialization if the process policy is active.
+    Protection) in the current Win64 ART design. Every defined incompatible
+    shadow-stack and context-IP-validation field must be disabled;
+    compatibility, audit, and strict modes are unsupported. Classify named SDK
+    fields rather than treating the raw policy word as a Boolean. Build every
+    project Win64 PE explicitly with `/CETCOMPAT:NO`, inspect packaged DLLs,
+    and reject an incompatible policy before managed threads or JIT startup.
 14. Provide correctness-grade Win64 unwind descriptions wherever Windows may
     dispatch a fatal exception across ART-managed frames. Static invoke/JNI
     boundary records and the split OSR entry/return records are implemented.
@@ -391,13 +392,22 @@ Win64 quick assembly does not provide complete PE unwind metadata. These are
 additional rejection reasons, but fixing them alone would not repair
 `art_quick_do_long_jump`.
 
-The supported process contract is therefore exact:
+The supported process contract is therefore field-based, not a raw
+`Flags == 0` test:
 
-- `PROCESS_MITIGATION_USER_SHADOW_STACK_POLICY.Flags` must be zero whenever
-  `ProcessUserShadowStackPolicy` is available;
-- `EnableUserShadowStack`, `AuditUserShadowStack`,
-  `SetContextIpValidation`, `AuditSetContextIpValidation`, strict mode, and
-  every other current or future nonzero policy bit are rejected;
+| SDK field group | ART decision | Reason |
+|---|---|---|
+| `EnableUserShadowStack`, `AuditUserShadowStack`, `EnableUserShadowStackStrictMode` | Reject | Current ART non-local transfers do not maintain the protected return stack. |
+| `SetContextIpValidation`, `AuditSetContextIpValidation`, `SetContextIpValidationRelaxedMode` | Reject | W-010 edits saved instruction/stack pointers without a complete EH-continuation contract. |
+| `BlockNonCetBinaries`, `BlockNonCetBinariesNonEhcont`, `AuditBlockNonCetBinaries` | Reject | These compatibility/audit fields belong to the unsupported CET process configuration. |
+| `CetDynamicApisOutOfProcOnly` | Allow | This only restricts out-of-process use of the dynamic EH-continuation and dynamically enforced CET-compatible-range APIs; ART uses neither API. It does not enable HSP or context-IP validation. |
+| `ReservedFlags` | Ignore | Reserved bits have no defined policy meaning. Treating them as HSP would repeat the raw-word bug. When a future SDK gives a bit a named field, the classifier and probe must explicitly review it. |
+
+Consequently:
+
+- startup rejects any defined incompatible field listed above, including an
+  incompatible field mixed with `CetDynamicApisOutOfProcOnly` or reserved
+  bits;
 - Windows compatibility mode is not accepted merely because non-CET modules
   may be tolerated there;
 - every project Win64 executable and DLL link must explicitly pass
@@ -416,7 +426,9 @@ sources and Ninja link commands, then scans the selected build/package trees
 and LLVM libc++ for the CET-compatible extended characteristic. The runtime
 queries the process policy immediately after selecting the logger and before
 `MemMap::Init()`, ART thread startup, nterp publication, or JIT initialization.
-Every nonzero flag and every unexpected query/version failure is rejected.
+Every named incompatible field and every unexpected query/version failure is
+rejected. `CetDynamicApisOutOfProcOnly` and `ReservedFlags` do not contribute
+to the incompatibility mask.
 
 Local completion is intentionally not described as native acceptance. Wine
 reports the policy as disabled and exercises the allow path, but it cannot
@@ -427,11 +439,12 @@ and prove early bounded failure with no managed execution or dump.
 On Windows 10 version 2004/build 19041 and later, startup queries
 `GetProcessMitigationPolicy(GetCurrentProcess(),
 ProcessUserShadowStackPolicy, ...)` before creating ART threads or enabling
-nterp/JIT and rejects every nonzero result with a bounded diagnostic. On older
-supported Windows 10 builds, the documented policy class is unavailable; only
-the expected unsupported-policy result is accepted as evidence that HSP is
-unavailable. Unexpected query failures on systems that implement the policy
-fail closed.
+nterp/JIT and rejects any result containing a defined incompatible field, with
+a bounded diagnostic containing both the raw flags and the extracted
+incompatible mask. On older supported Windows 10 builds, the documented
+policy class is unavailable; only the expected unsupported-policy result is
+accepted as evidence that HSP is unavailable. Unexpected query failures on
+systems that implement the policy fail closed.
 
 ## 6. Designs considered
 
@@ -1595,7 +1608,7 @@ activation. Define a conceptual capability:
 
 ```text
 win_managed_faults_ready =
-    CET user-shadow-stack policy completely disabled
+    no defined incompatible CET user-shadow-stack policy field enabled
     && VEH registered
     && special SIGSEGV action published
     && x86_64 WindowsFaultContext adapter built
@@ -1606,7 +1619,7 @@ win_managed_faults_ready =
 Then:
 
 - startup must query the process CET/HSP policy before creating ART threads or
-  enabling JIT and reject every supported nonzero policy value;
+  enabling JIT and reject every defined incompatible policy field;
 - `implicit_null_checks_` may be true only when the capability is ready;
 - `implicit_so_checks_` may be true only when it is ready and each attached
   thread installs its fixed page;
@@ -1660,9 +1673,11 @@ necessary; do not increase it speculatively.
   `IMAGE_DLL_CHARACTERISTICS_EX_CET_COMPAT` is present.
 - Query `ProcessUserShadowStackPolicy` at the earliest runtime initialization
   point, before managed thread creation, nterp publication, or JIT startup.
-- Accept only an all-zero policy on Windows versions that implement the query;
-  accept the expected unavailable-policy result on older supported Windows 10
-  builds; fail closed on unexpected query failures.
+- Inspect the policy through fields named by the selected Windows SDK. Reject
+  the defined shadow-stack, audit, context-IP-validation, strict, and
+  non-CET-binary fields. Permit `CetDynamicApisOutOfProcOnly`; ignore
+  `ReservedFlags`; accept the expected unavailable-policy result on older
+  supported Windows 10 builds; fail closed on unexpected query failures.
 - Emit a bounded diagnostic explaining that Hardware-enforced Stack Protection
   must be disabled by the launcher or Windows Exploit Protection policy before
   process creation.
@@ -1677,7 +1692,7 @@ Clean completion criteria:
 - compatibility, audit, and strict HSP policies are rejected before managed
   execution, without relying on a late control-protection exception or dump.
 
-Implementation and local evidence (2026-07-26):
+Implementation and local evidence (2026-07-27):
 
 - `GlobalPolicy.add_ldflags` injects `LINKER:/CETCOMPAT:NO` into every
   generated non-static target; static archives intentionally receive no link
@@ -1688,17 +1703,20 @@ Implementation and local evidence (2026-07-26):
   packagers invoke the PE audit before writing their final manifests/archives.
   A synthetic `/CETCOMPAT` PE is rejected by the same package scan.
 - `cet_compat.cc` separates Win32 API observation from a deterministic policy
-  decision. It obtains the real build number through `RtlGetVersion`, accepts
-  only zero flags, accepts `ERROR_INVALID_PARAMETER` only below build 19041,
-  and fails closed for unknown versions, future nonzero bits, or unexpected
-  query failures.
+  decision. It obtains the real build number through `RtlGetVersion`, copies
+  only the named incompatible SDK fields into an incompatibility mask, accepts
+  `CetDynamicApisOutOfProcOnly` and reserved bits, accepts
+  `ERROR_INVALID_PARAMETER` only below build 19041, and fails closed for
+  unknown versions or unexpected query failures.
 - `Runtime::Init()` runs the guard after logger selection and before
   `MemMap::Init()` and thread/JIT initialization. Rejection returns normal
   startup failure rather than deliberately triggering a control-protection
   exception.
-- The focused policy probe covers disabled, every current policy-bit family,
-  a future/reserved bit, old-build unavailability, and failure cases. Under
-  Wine it reports build 19043, zero flags, and `PASS`.
+- The focused policy probe rejects every named incompatible field separately,
+  accepts `CetDynamicApisOutOfProcOnly`, accepts low/high/all reserved bits,
+  rejects an incompatible field mixed with safe/reserved bits, and covers
+  old-build unavailability plus failure cases. Under Wine it reports build
+  19043, `known_incompatible=0x00000000`, and `PASS`.
 - The structural/package verifier reports 9 CMake harnesses, 3 direct links,
   6 enforced host packagers, and 25 Ninja PE link targets. It inspects 25 PE
   files in the build tree and 54 when the focused W-010/W-014 staged package
@@ -1713,10 +1731,20 @@ Implementation and local evidence (2026-07-26):
 
 Remaining Stage 0 acceptance:
 
-- run the package on native Windows 10 build 19041+ with HSP disabled;
-- force compatibility, audit, strict, context-IP-validation, and representative
-  future/nonzero policy states in child processes and verify early rejection;
+- rerun the corrected package on native Windows 10 build 19041+ with HSP
+  disabled, allowing a nonzero raw word when its named incompatible mask is
+  zero;
+- force compatibility, audit, strict, context-IP-validation, and other named
+  incompatible policy fields in child processes and verify early rejection;
 - prove rejected starts create no `.dmp` and execute no Java/JIT work.
+
+The first native candidate on Windows build 19044 returned raw
+`flags=0x00000100`. The old raw-word check rejected startup, but bit 8 is the
+documented `CetDynamicApisOutOfProcOnly` field, not HSP enablement. That run is
+evidence for the classifier defect, not a failed HSP configuration. The
+corrected implementation reports both raw flags and `known_incompatible`; a
+native rerun is required. Reserved fields are not acceptance cases to force or
+interpret because Windows defines no semantics for them.
 
 Those native checks are the acceptance blocker. They do not block starting
 Stage A because the build and early-runtime enforcement are now present.
@@ -1892,10 +1920,15 @@ evidence belongs to Stage E and is not implied by Wine.
   DLLs, probe executables, and packaged copies omit
   `IMAGE_DLL_CHARACTERISTICS_EX_CET_COMPAT`.
 - Native Windows with Hardware-enforced Stack Protection disabled starts and
-  reaches the ordinary product gates.
+  reaches the ordinary product gates even if the raw policy word contains only
+  `CetDynamicApisOutOfProcOnly` or reserved bits; the log must report
+  `known_incompatible=0x00000000`.
 - Forced compatibility, audit, and strict policies each fail during early
   startup with the documented diagnostic, before a Java method or JIT worker
   runs.
+- Forced context-IP-validation and other named incompatible fields likewise
+  fail. Unit/probe coverage must accept `CetDynamicApisOutOfProcOnly` and
+  reserved fields, and reject mixtures containing any incompatible field.
 - Rejection does not produce a `.dmp` and does not depend on
   `STATUS_CONTROL_PROTECTION_VIOLATION` as the detection mechanism.
 - CFG-on tests remain a separate W-025 matrix and must not change this expected

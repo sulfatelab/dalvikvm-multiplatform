@@ -304,6 +304,9 @@ try {
         if (-not (Select-String -LiteralPath $cetLog -SimpleMatch 'actual=disabled' -Quiet)) {
             throw 'Windows 10 build 19041+ did not report a disabled user shadow-stack policy'
         }
+        if (-not (Select-String -LiteralPath $cetLog -SimpleMatch 'known_incompatible=0x00000000' -Quiet)) {
+            throw 'Windows 10 build 19041+ reported an incompatible named user shadow-stack policy field'
+        }
     } elseif (-not (
         (Select-String -LiteralPath $cetLog -SimpleMatch 'actual=disabled' -Quiet) -or
         (Select-String -LiteralPath $cetLog -SimpleMatch 'actual=unavailable-on-older-windows' -Quiet)
