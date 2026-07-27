@@ -186,7 +186,7 @@ area while leaving its Linux/SysV path unchanged.
 
 The exact-commit E4 package preflight passes the structural checker, all
 handled-fault and ABI gates, all three traced late-UEF modes, static/JIT/OSR
-fatal dispatch, 15 valid Wine minidumps, final dump cleanup, manifest/hash
+fatal dispatch, 14-15 valid Wine minidumps across two complete runs, final dump cleanup, manifest/hash
 regeneration, and the final clean-package checker. This is package readiness,
 not native proof of the candidate frame.
 

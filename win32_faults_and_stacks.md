@@ -465,7 +465,7 @@ structural lookup and realistic `RtlVirtualUnwind()` tests.
 
 The complete E4 package builds with `-j32` and passes the structural checker
 and Wine smoke. All three late-UEF modes emit bounded trace begin/frame/end
-records; the full fatal smoke preserves 15 valid minidumps before final cleanup
+records; two full fatal smokes preserve 14-15 valid minidumps before final cleanup
 and clean manifest regeneration. This verifies the diagnostic transport and
 non-regression surface, not the candidate frame on native Windows.
 
