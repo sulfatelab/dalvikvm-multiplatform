@@ -213,16 +213,18 @@ int main() {
   Expect(version == 1u, "OSR unwind info uses version 1");
   Expect(prologue_size != 0u && function_begin + prologue_size < function_end,
          "OSR unwind prologue size is in range");
-  Expect(frame_register == 5u, "OSR unwind frame register is RBP");
+  Expect(frame_register == 12u, "OSR unwind frame register is R12");
   Expect(frame_offset == 0u, "OSR unwind frame offset is zero");
 
   // Select an instruction after the variable RSP subtraction. This proves the
-  // PE record recovers the fixed frame through RBP instead of trusting RSP.
+  // PE record recovers the fixed frame through R12 instead of trusting RSP or
+  // the RBP value reserved for the copied JIT frame.
   constexpr uint8_t kVariableBody[] = {
       0x83u, 0xe9u, 0x08u,              // sub ecx, 8
       0x48u, 0x29u, 0xccu,              // sub rsp, rcx
       0x48u, 0x89u, 0xe7u,              // mov rdi, rsp
       0xf3u, 0xa4u,                     // rep movsb
+      0x48u, 0x89u, 0xe5u,              // mov rbp, rsp
       0xffu, 0xe2u,                     // jmp rdx
   };
   uint8_t* variable_body = FindBytes(function_begin, function_end, kVariableBody);
@@ -320,10 +322,11 @@ int main() {
 
   CONTEXT context = {};
   context.ContextFlags = CONTEXT_FULL;
-  context.Rip = reinterpret_cast<DWORD64>(variable_body + 9u);
+  context.Rip = reinterpret_cast<DWORD64>(variable_body + 11u);
   context.Rsp = variable_rsp;
-  context.Rbp = fixed_rsp;
-  context.Rbx = context.R12 = context.R13 = context.R14 = context.R15 = UINT64_C(0xcccccccccccccccc);
+  context.Rbp = UINT64_C(0xbbbbbbbbbbbbbbbb);
+  context.R12 = fixed_rsp;
+  context.Rbx = context.R13 = context.R14 = context.R15 = UINT64_C(0xcccccccccccccccc);
   context.Rdi = context.Rsi = UINT64_C(0xdddddddddddddddd);
   context.Rcx = kVolatileRcx;
   context.R8 = kVolatileR8;
@@ -464,6 +467,8 @@ int main() {
 
   std::cout << "win32_osr_unwind_probe failures=" << g_failures
             << " prologue=" << static_cast<unsigned>(prologue_size)
+            << " entry_frame_register=R12"
+            << " compiled_frame_register=RBP"
             << " entry_frame_offset=" << static_cast<unsigned>(frame_offset) * 16u
             << " return_prologue=0"
             << " fixed_frame=248"

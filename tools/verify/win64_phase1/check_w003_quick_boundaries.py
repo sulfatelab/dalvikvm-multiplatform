@@ -231,12 +231,14 @@ def check_boundary_source(quick: str) -> None:
             ".seh_pushreg %r15",
             "pushq LITERAL(0)",
             ".seh_stackalloc 8",
-            "movq %rsp, %rbp",
-            ".seh_setframe %rbp, 0",
+            "movq %rsp, %r12",
+            ".seh_setframe %r12, 0",
             ".seh_endprologue",
             "jmp .Losr_call",
             ".Losr_entry:",
             "CFI_RESTORE_STATE_AND_DEF_CFA rsp, 256",
+            "CFI_DEF_CFA_REGISTER(r12)",
+            "movq %rsp, %rbp",
             "jmp *%rdx",
             ".Losr_call:",
             "call .Losr_entry",
@@ -249,6 +251,17 @@ def check_boundary_source(quick: str) -> None:
             "jmp *%rdx",
         ],
     )
+    if re.search(
+        r"\.Losr_entry:\s*\n"
+        r"\s*CFI_RESTORE_STATE_AND_DEF_CFA rsp, 256\s*\n"
+        r"#if defined\(_WIN32\)\s*\n"
+        r"\s*CFI_DEF_CFA_REGISTER\(r12\)\s*\n"
+        r"#else\s*\n"
+        r"\s*CFI_DEF_CFA_REGISTER\(rbp\)\s*\n"
+        r"#endif",
+        osr,
+    ) is None:
+        fail("OSR CFA register must remain R12 on Win64 and RBP on Linux")
     osr_return = source_region(quick, ".Losr_return:", ".seh_endproc")
     require_ordered(
         osr_return,
@@ -347,10 +360,11 @@ def check_boundary_objects(win_dis: str, linux_dis: str) -> None:
             "pushq\t%rdi",
             "pushq\t%rsi",
             *save_tokens(),
-            "movq\t%rsp, %rbp",
+            "movq\t%rsp, %r12",
             "jmp\t",
             "subq\t%rcx, %rsp",
             "rep\t\tmovsb",
+            "movq\t%rsp, %rbp",
             "jmpq\t*%rdx",
             "callq\t",
             "movq\t0x8(%rsp), %r15",

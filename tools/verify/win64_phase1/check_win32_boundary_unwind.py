@@ -44,9 +44,9 @@ BOUNDARIES = {
         *FULL_XMM_UNWIND,
     ),
     "art_quick_osr_stub": (
-        "FrameRegister: RBP",
+        "FrameRegister: R12",
         "FrameOffset: 0x0",
-        "SET_FPREG reg=RBP, offset=0x0",
+        "SET_FPREG reg=R12, offset=0x0",
         "ALLOC_LARGE size=160",
         "PUSH_NONVOL reg=RDI",
         "PUSH_NONVOL reg=RSI",

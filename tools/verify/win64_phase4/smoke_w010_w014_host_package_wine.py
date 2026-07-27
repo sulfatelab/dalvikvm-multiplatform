@@ -43,6 +43,7 @@ def run_case(
         "ART_WIN64_JIT_LOG_COMPILES",
         "ART_WIN64_NTERP",
         "ART_WIN64_QUICK_INVOKE",
+        "ART_WIN64_CRASH_NATIVE_WARMUP",
     ):
         env.pop(key, None)
     if env_extra:
@@ -66,6 +67,45 @@ def run_case(
         if marker in output:
             fail(f"{name} contains forbidden marker {marker!r}\n{output[-12000:]}")
     print(f"PASS {name} exit={result.returncode}")
+    return output
+
+
+def run_fatal_case(
+    root: Path,
+    name: str,
+    command: list[str],
+    *,
+    markers: tuple[str, ...],
+    forbidden: tuple[str, ...] = (),
+    env_extra: dict[str, str] | None = None,
+) -> str:
+    crash = root / "run/crash"
+    before = {
+        path: (path.stat().st_size, path.stat().st_mtime_ns)
+        for path in crash.glob("*.dmp")
+    }
+    output = run_case(
+        root,
+        name,
+        command,
+        markers=markers,
+        forbidden=forbidden,
+        env_extra=env_extra,
+        require_nonzero=True,
+    )
+    valid = []
+    for path in crash.glob("*.dmp"):
+        state = (path.stat().st_size, path.stat().st_mtime_ns)
+        if before.get(path) == state or path.stat().st_size <= 32:
+            continue
+        if path.read_bytes()[:4] == b"MDMP":
+            preserved = crash / f"{name}-{path.name}"
+            if preserved.exists():
+                fail(f"{name} minidump preservation path already exists: {preserved}")
+            path.replace(preserved)
+            valid.append(preserved)
+    if not valid:
+        fail(f"{name} did not create a new valid minidump")
     return output
 
 
@@ -104,6 +144,7 @@ def main() -> int:
         [wine, "./win32_osr_unwind_probe.exe"],
         markers=(
             "win32_osr_unwind_probe failures=0",
+            "entry_frame_register=R12 compiled_frame_register=RBP",
             "entry_frame_offset=0 return_prologue=0 fixed_frame=248 "
             "xmm_count=10 invoke_records=2 variable_rsp_delta=256",
             "win32_osr_unwind_probe OK",
@@ -305,7 +346,7 @@ def main() -> int:
         fail(f"handled package smoke produced dumps: {handled_dumps}")
     print("PASS handled_dump_scan NO_HANDLED_DMP_FILES")
 
-    run_case(
+    run_fatal_case(
         root,
         "crashnative",
         [
@@ -322,11 +363,92 @@ def main() -> int:
             "minidump written",
         ),
         forbidden=("CrashNativeProbe.unexpected_continue",),
-        require_nonzero=True,
     )
+
+    for mode in ("j2", "j1"):
+        forbidden = ("CrashNativeProbe.unexpected_continue",)
+        markers = (
+            "CrashNativeProbe.jit_ready calls=20000",
+            "Win64 CompileMethod done success=1 method=void CrashNativeProbe.jitCrashCaller(int)",
+            "Win64 CompileMethod done success=1 method=void CrashNativeProbe.nativeSegfault()",
+            "ART Win64 VEH: exception 0xc0000005",
+            "ART Win64 UEF: exception 0xc0000005",
+            "minidump written",
+        )
+        if mode == "j2":
+            markers += ("Win64 JIT dual-view (J-2) created",)
+        else:
+            forbidden += ("Win64 JIT dual-view (J-2) created",)
+        run_fatal_case(
+            root,
+            f"jit_fatal_{mode}",
+            [
+                *common,
+                "-verbose:jit",
+                "-Xjitwarmupthreshold:0",
+                "-Xjitthreshold:0",
+                "-cp",
+                "run/crashnativeprobe.jar",
+                "CrashNativeProbe",
+                "jit",
+            ],
+            markers=markers,
+            forbidden=forbidden,
+            env_extra={
+                "ART_WIN64_CRASH_NATIVE_WARMUP": "20000",
+                "ART_WIN64_JIT_DUAL": "1" if mode == "j2" else "0",
+                "ART_WIN64_JIT_FILTER": "CrashNativeProbe",
+                "ART_WIN64_JIT_LOG_COMPILES": "1",
+            },
+        )
+
+    for mode in ("j2", "j1"):
+        forbidden = (
+            "Done running OSR code for long CrashNativeProbe.osrCrashLoop(int)",
+            "CrashNativeProbe.osr_unexpected_return",
+            "CrashNativeProbe.unexpected_continue",
+        )
+        markers = (
+            "CrashNativeProbe.osr_armed count=2000000",
+            "warmup_threshold=100, optimize_threshold=100",
+            "kind=Baseline",
+            "kind=Osr",
+            "Win64 CompileMethod done success=1 method=long CrashNativeProbe.osrCrashLoop(int)",
+            "Jumping to long CrashNativeProbe.osrCrashLoop(int)",
+            "ART Win64 VEH: exception 0xc0000005",
+            "ART Win64 UEF: exception 0xc0000005",
+            "minidump written",
+        )
+        if mode == "j2":
+            markers += ("Win64 JIT dual-view (J-2) created",)
+        else:
+            forbidden += ("Win64 JIT dual-view (J-2) created",)
+        run_fatal_case(
+            root,
+            f"osr_fatal_{mode}",
+            [
+                *common,
+                "-verbose:jit",
+                "-Xjitwarmupthreshold:100",
+                "-Xjitthreshold:100",
+                "-cp",
+                "run/crashnativeprobe.jar",
+                "CrashNativeProbe",
+                "osr",
+            ],
+            markers=markers,
+            forbidden=forbidden,
+            env_extra={
+                "ART_WIN64_NTERP": "0",
+                "ART_WIN64_JIT_DUAL": "1" if mode == "j2" else "0",
+                "ART_WIN64_JIT_FILTER": "CrashNativeProbe.osrCrashLoop",
+                "ART_WIN64_JIT_LOG_COMPILES": "1",
+            },
+        )
+
     fatal_dumps = list(crash.glob("*.dmp"))
-    if not fatal_dumps:
-        fail("fatal package smoke did not produce a minidump")
+    if len(fatal_dumps) < 5:
+        fail(f"fatal package smoke produced fewer than five minidumps: {fatal_dumps}")
     for dump in fatal_dumps:
         if dump.stat().st_size < 4096 or dump.read_bytes()[:4] != b"MDMP":
             fail(f"invalid minidump: {dump}")

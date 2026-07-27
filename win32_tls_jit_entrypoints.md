@@ -1690,14 +1690,16 @@ registers, and the common save block preserves the native caller's r15 before
 publishing managed rSELF. W-003 initially added a 96-byte boundary area for
 XMM6-XMM11. The W-010 full-width follow-up expands only that Windows adapter
 to 160 bytes for XMM6-XMM15, so the Windows conceptual CFA is now 256 bytes;
-Linux retains its original 80-byte CFA and instruction path. W-010 also added two
-contiguous PE unwind ranges: an RBP-anchored entry/variable-copy range and an
-RSP-based inherited-frame return range, because OSR return reconstructs
-managed RBP. The emitted XMM unwind offsets are 64 through 208 relative to the
-completed 248-byte fixed frame, not 0 through 144 relative to the temporary
-store RSP. The accepted W-002 rSELF/OSR transition, W-003 Microsoft-XMM
-normal-return repair, and W-010 exception-unwind records are separate
-contracts.
+Linux retains its original 80-byte CFA and instruction path. W-010 also added
+two contiguous PE unwind ranges: an R12-anchored entry/variable-copy range and
+an RSP-based inherited-frame return range. Immediately before the JIT handoff,
+the entry path sets RBP to the copied RSP, reproducing the dynamic Win64 JIT
+frame anchor that OSR skips. The return record does not trust R12 or RBP because
+OSR code reconstructs managed state before returning. The emitted XMM unwind
+offsets are 64 through 208 relative to the completed 248-byte fixed frame, not
+0 through 144 relative to the temporary store RSP. The accepted W-002
+rSELF/OSR transition, W-003 Microsoft-XMM normal-return repair, and W-010
+exception-unwind records are separate contracts.
 
 ### Nterp OSR
 

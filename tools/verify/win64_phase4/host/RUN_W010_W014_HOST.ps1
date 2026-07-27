@@ -33,6 +33,7 @@ function Clear-ArtEnvironment {
         'ART_WIN64_JIT_LOG_COMPILES'
         'ART_WIN64_NTERP'
         'ART_WIN64_QUICK_INVOKE'
+        'ART_WIN64_CRASH_NATIVE_WARMUP'
     ) | ForEach-Object {
         Remove-Item -Path ('Env:' + $_) -ErrorAction SilentlyContinue
     }
@@ -70,7 +71,7 @@ function Test-StructuralReport {
         '^status=PASS$'
         '^cet_contract=WIN32_CET_CONTRACT PASS '
         '^boundary_unwind=win32_boundary_unwind OK '
-        '^osr_unwind=win32_osr_unwind_probe failures=0 prologue=[0-9]+ entry_frame_offset=0 return_prologue=0 fixed_frame=248 xmm_count=10 invoke_records=2 variable_rsp_delta=256$'
+        '^osr_unwind=win32_osr_unwind_probe failures=0 prologue=[0-9]+ entry_frame_register=R12 compiled_frame_register=RBP entry_frame_offset=0 return_prologue=0 fixed_frame=248 xmm_count=10 invoke_records=2 variable_rsp_delta=256$'
         '^windows_minimum_build=17134$'
         '^requested_stack_sizes=0,65536,262144,1048576,2097152,9437184$'
         '^sigchain_action_calls=3$'
@@ -83,6 +84,8 @@ function Test-StructuralReport {
         '^managed_so_child_rounds=2$'
         '^xmm_boundary_registers=10$'
         '^xmm_self_test_mask=1023$'
+        '^fatal_dispatch_modes=static,jit-j2,jit-j1,osr-j2,osr-j1$'
+        '^fatal_minidumps_required=5$'
         '^host_llvm_tools_required=no$'
     )
     foreach ($pattern in $required) {
@@ -122,6 +125,7 @@ function Invoke-CheckedProcess {
         [string[]]$ForbiddenMarkers = @(),
         [int[]]$ExpectedExitCodes = @(0),
         [switch]$RequireNonZero,
+        [switch]$RequireNewMinidump,
         [int]$TimeoutSeconds = 180
     )
 
@@ -133,6 +137,13 @@ function Invoke-CheckedProcess {
     $launchError = $null
     $timedOut = $false
     $exitCode = -1
+    $beforeDumps = @{}
+    if ($RequireNewMinidump) {
+        Get-ChildItem -Path $Crash -File -Filter '*.dmp' -ErrorAction SilentlyContinue |
+            ForEach-Object {
+                $beforeDumps[$_.FullName] = "$($_.Length):$($_.LastWriteTimeUtc.Ticks)"
+            }
+    }
     $startParameters = @{
         FilePath = Join-Path $Root $Executable
         WorkingDirectory = $Root
@@ -181,8 +192,52 @@ function Invoke-CheckedProcess {
         Get-Content -LiteralPath $stderr | Add-Content -LiteralPath $combined
     }
 
+    $minidumpOk = $true
+    if ($RequireNewMinidump) {
+        $newDumps = @(
+            Get-ChildItem -Path $Crash -File -Filter '*.dmp' -ErrorAction SilentlyContinue |
+                Where-Object {
+                    $signature = "$($_.Length):$($_.LastWriteTimeUtc.Ticks)"
+                    (-not $beforeDumps.ContainsKey($_.FullName)) -or
+                        $beforeDumps[$_.FullName] -ne $signature
+                }
+        )
+        $validNewDumps = @()
+        foreach ($dump in $newDumps) {
+            $header = New-Object byte[] 4
+            $stream = $null
+            try {
+                $stream = [System.IO.File]::OpenRead($dump.FullName)
+                $read = $stream.Read($header, 0, $header.Length)
+            } finally {
+                if ($null -ne $stream) {
+                    $stream.Dispose()
+                }
+            }
+            $magic = if ($read -eq 4) { [System.Text.Encoding]::ASCII.GetString($header) } else { '' }
+            if ($dump.Length -gt 32 -and $magic -eq 'MDMP') {
+                $dumpBytes = $dump.Length
+                $preservedPath = Join-Path $Crash ($Name + '-' + $dump.Name)
+                if (Test-Path -LiteralPath $preservedPath) {
+                    "minidump_error=preserved path already exists: $preservedPath" |
+                        Add-Content -LiteralPath $combined
+                    $minidumpOk = $false
+                } else {
+                    Move-Item -LiteralPath $dump.FullName -Destination $preservedPath
+                    $validNewDumps += Get-Item -LiteralPath $preservedPath
+                    "new_minidump=$preservedPath bytes=$dumpBytes" |
+                        Add-Content -LiteralPath $combined
+                }
+            }
+        }
+        if ($validNewDumps.Count -eq 0) {
+            'minidump_error=no valid new MDMP file' | Add-Content -LiteralPath $combined
+            $minidumpOk = $false
+        }
+    }
+
     $exitOk = if ($RequireNonZero) { $exitCode -ne 0 } else { $ExpectedExitCodes -contains $exitCode }
-    $ok = ($null -eq $launchError) -and (-not $timedOut) -and $exitOk
+    $ok = ($null -eq $launchError) -and (-not $timedOut) -and $exitOk -and $minidumpOk
     foreach ($marker in $Markers) {
         if (-not (Select-String -LiteralPath $combined -SimpleMatch $marker -Quiet)) {
             $ok = $false
@@ -264,6 +319,7 @@ try {
 
 Invoke-CheckedProcess -Name 'osr_unwind' -Executable 'win32_osr_unwind_probe.exe' -Markers @(
     'win32_osr_unwind_probe failures=0'
+    'entry_frame_register=R12 compiled_frame_register=RBP'
     'entry_frame_offset=0 return_prologue=0 fixed_frame=248 xmm_count=10 invoke_records=2 variable_rsp_delta=256'
     'win32_osr_unwind_probe OK'
 )
@@ -395,10 +451,64 @@ if ($handledDumps.Count -eq 0) {
 }
 
 Clear-ArtEnvironment
-Invoke-CheckedProcess -Name 'crashnative' -Executable 'dalvikvm.exe' -Arguments "$Common -Xint -cp run\crashnativeprobe.jar CrashNativeProbe" -Markers @('CrashNativeProbe.start', 'ART Win64 VEH: exception 0xc0000005', 'ART Win64 UEF: exception 0xc0000005', 'minidump written') -ForbiddenMarkers @('CrashNativeProbe.unexpected_continue') -RequireNonZero -TimeoutSeconds 120
+Invoke-CheckedProcess -Name 'crashnative' -Executable 'dalvikvm.exe' -Arguments "$Common -Xint -cp run\crashnativeprobe.jar CrashNativeProbe" -Markers @('CrashNativeProbe.start', 'ART Win64 VEH: exception 0xc0000005', 'ART Win64 UEF: exception 0xc0000005', 'minidump written') -ForbiddenMarkers @('CrashNativeProbe.unexpected_continue') -RequireNonZero -RequireNewMinidump -TimeoutSeconds 120
+
+foreach ($fatalMode in @('j2', 'j1')) {
+    Clear-ArtEnvironment
+    $env:ART_WIN64_CRASH_NATIVE_WARMUP = '20000'
+    $env:ART_WIN64_JIT_DUAL = if ($fatalMode -eq 'j2') { '1' } else { '0' }
+    $env:ART_WIN64_JIT_FILTER = 'CrashNativeProbe'
+    $env:ART_WIN64_JIT_LOG_COMPILES = '1'
+    $markers = @(
+        'CrashNativeProbe.jit_ready calls=20000'
+        'Win64 CompileMethod done success=1 method=void CrashNativeProbe.jitCrashCaller(int)'
+        'Win64 CompileMethod done success=1 method=void CrashNativeProbe.nativeSegfault()'
+        'ART Win64 VEH: exception 0xc0000005'
+        'ART Win64 UEF: exception 0xc0000005'
+        'minidump written'
+    )
+    $forbidden = @('CrashNativeProbe.unexpected_continue')
+    if ($fatalMode -eq 'j2') {
+        $markers += 'Win64 JIT dual-view (J-2) created'
+    } else {
+        $forbidden += 'Win64 JIT dual-view (J-2) created'
+    }
+    Invoke-CheckedProcess -Name "jit_fatal_$fatalMode" -Executable 'dalvikvm.exe' -Arguments "$Common -verbose:jit -Xjitwarmupthreshold:0 -Xjitthreshold:0 -cp run\crashnativeprobe.jar CrashNativeProbe jit" -Markers $markers -ForbiddenMarkers $forbidden -RequireNonZero -RequireNewMinidump -TimeoutSeconds 120
+}
+
+foreach ($fatalMode in @('j2', 'j1')) {
+    Clear-ArtEnvironment
+    $env:ART_WIN64_NTERP = '0'
+    $env:ART_WIN64_JIT_DUAL = if ($fatalMode -eq 'j2') { '1' } else { '0' }
+    $env:ART_WIN64_JIT_FILTER = 'CrashNativeProbe.osrCrashLoop'
+    $env:ART_WIN64_JIT_LOG_COMPILES = '1'
+    $markers = @(
+        'CrashNativeProbe.osr_armed count=2000000'
+        'warmup_threshold=100, optimize_threshold=100'
+        'kind=Baseline'
+        'kind=Osr'
+        'Win64 CompileMethod done success=1 method=long CrashNativeProbe.osrCrashLoop(int)'
+        'Jumping to long CrashNativeProbe.osrCrashLoop(int)'
+        'ART Win64 VEH: exception 0xc0000005'
+        'ART Win64 UEF: exception 0xc0000005'
+        'minidump written'
+    )
+    $forbidden = @(
+        'Done running OSR code for long CrashNativeProbe.osrCrashLoop(int)'
+        'CrashNativeProbe.osr_unexpected_return'
+        'CrashNativeProbe.unexpected_continue'
+    )
+    if ($fatalMode -eq 'j2') {
+        $markers += 'Win64 JIT dual-view (J-2) created'
+    } else {
+        $forbidden += 'Win64 JIT dual-view (J-2) created'
+    }
+    Invoke-CheckedProcess -Name "osr_fatal_$fatalMode" -Executable 'dalvikvm.exe' -Arguments "$Common -verbose:jit -Xjitwarmupthreshold:100 -Xjitthreshold:100 -cp run\crashnativeprobe.jar CrashNativeProbe osr" -Markers $markers -ForbiddenMarkers $forbidden -RequireNonZero -RequireNewMinidump -TimeoutSeconds 180
+}
+Clear-ArtEnvironment
 
 $fatalDumps = @(Get-ChildItem -Path $Crash -File -Filter '*.dmp' -ErrorAction SilentlyContinue)
-if ($fatalDumps.Count -ge 1) {
+if ($fatalDumps.Count -ge 5) {
     $fatalDumps | ForEach-Object {
         $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant()
         "path=$($_.FullName) bytes=$($_.Length) sha256=$hash"
@@ -406,7 +516,7 @@ if ($fatalDumps.Count -ge 1) {
     Add-Result "PASS fatal_dump_scan count=$($fatalDumps.Count)"
 } else {
     'NO_FATAL_DMP_FILES' | Set-Content (Join-Path $Logs 'FATAL_DMP_SCAN.txt')
-    Add-Result 'FAIL fatal_dump_scan count=0'
+    Add-Result "FAIL fatal_dump_scan count=$($fatalDumps.Count) expected_minimum=5"
     $script:Failed = $true
 }
 

@@ -99,7 +99,8 @@ class OsrUnwindLogTest(unittest.TestCase):
     def test_rejects_missing_split_range_invariants(self) -> None:
         self.write_log(
             REVIEWER.OSR_UNWIND_MARKERS[0],
-            REVIEWER.OSR_UNWIND_MARKERS[2],
+            REVIEWER.OSR_UNWIND_MARKERS[1],
+            REVIEWER.OSR_UNWIND_MARKERS[3],
             "exit=0",
             "timed_out=False",
         )
@@ -125,8 +126,8 @@ class OsrUnwindLogTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "nonzero exit=5"):
             REVIEWER.review_osr_log(self.logs)
 
-    def test_native_result_contract_has_twenty_six_records(self) -> None:
-        self.assertEqual(REVIEWER.EXPECTED_PASS_RECORDS, 26)
+    def test_native_result_contract_has_thirty_records(self) -> None:
+        self.assertEqual(REVIEWER.EXPECTED_PASS_RECORDS, 30)
 
 
 class XmmLogTest(unittest.TestCase):

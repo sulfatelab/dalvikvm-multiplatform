@@ -19,6 +19,8 @@ cmake --build "$BUILD" --target \
   -j"$JOBS"
 
 bash "$REPO/tools/verify/win64_phase4/build_one.sh" W010ManagedFaultProbe
+bash "$REPO/tools/verify/win64_phase4/build_one.sh" CrashNativeProbe
+cp -a "$BUILD/art.dll" "$BUILD/run/art.dll"
 WINEDEBUG="$WINEDEBUG" "$REPO/tools/verify/win64_phase4/run_thread_stack_probe.sh"
 WINEDEBUG="$WINEDEBUG" "$REPO/tools/verify/win64_phase4/run_fault_adapter_probe.sh"
 osr_unwind_output="$(
@@ -32,6 +34,8 @@ osr_unwind_summary="$(
 WINEDEBUG="$WINEDEBUG" "$REPO/tools/verify/win64_phase4/run_w010_managed_fault_probe.sh"
 WINEDEBUG="$WINEDEBUG" REPEATS=2 \
   "$REPO/tools/verify/win64_phase4/run_w003_xmm_sentinel.sh"
+WINEDEBUG="$WINEDEBUG" "$REPO/tools/verify/win64_phase4/run_jit_fatal_unwind.sh"
+WINEDEBUG="$WINEDEBUG" "$REPO/tools/verify/win64_phase4/run_osr_fatal_unwind.sh"
 
 cet_output="$(
   python3 "$REPO/tools/verify/win64_phase1/check_win32_cet_contract.py" \
@@ -107,6 +111,8 @@ managed_so_child_rounds=2
 managed_recovery=stack-trace,nanoTime,identityHashCode,System.gc
 xmm_boundary_registers=10
 xmm_self_test_mask=1023
+fatal_dispatch_modes=static,jit-j2,jit-j1,osr-j2,osr-j1
+fatal_minidumps_required=5
 host_llvm_tools_required=no
 dalvikvm_sha256=$(sha256sum "$OUT/dalvikvm.exe" | awk '{print $1}')
 art_sha256=$(sha256sum "$OUT/art.dll" | awk '{print $1}')
@@ -126,7 +132,7 @@ art_branch=$(git -C "$REPO/vendor/art" branch --show-current)
 art_commit=$(git -C "$REPO/vendor/art" rev-parse HEAD)
 win64_build=$BUILD
 windows_minimum_build=17134
-stage=E1-native-acceptance-candidate
+stage=E2-native-fatal-acceptance-candidate
 EOF
 
 clean_runtime_outputs() {

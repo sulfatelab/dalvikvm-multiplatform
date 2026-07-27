@@ -9,7 +9,8 @@
 This package exercises the automatable native subset of the coupled W-010
 managed-fault and W-014 thread-stack design. Wine and Linux are already green;
 the native run must establish that the real Windows loader, exception
-dispatcher, moving stack guard, and minidump path preserve the same contracts.
+dispatcher, moving stack guard, static boundaries, dynamic JIT tables, and
+minidump path preserve the same contracts.
 
 The package intentionally does not claim to close every Stage E item. Debugger
 first-chance behavior, forced Hardware-enforced Stack Protection policies,
@@ -27,7 +28,7 @@ These items are tracked as the remaining forced-policy and embedding matrix.
   query is unavailable.
 - Do not enable compatibility, audit, strict, or context-IP-validation shadow-
   stack policies for the ordinary acceptance run.
-- Allow the fatal native AV case to terminate and write one minidump under
+- Allow each fatal native AV case to terminate and write a minidump under
   `run\crash`. If Windows Error Reporting asks to debug the process, decline
   debugging and allow the process to terminate.
 
@@ -42,8 +43,9 @@ Set-ExecutionPolicy -Scope Process Bypass
 
 The path may contain spaces. The script resolves the package root from its own
 location, validates all issued hashes before execution, removes old test dumps,
-and writes its evidence under `logs` plus the expected fatal dump under
-`run\crash`.
+and writes its evidence under `logs` plus the expected fatal dumps under
+`run\crash`. Each valid new dump is immediately renamed with its fatal case
+name so ART's one-second timestamp filenames cannot collide across cases.
 
 ## Automated matrix
 
@@ -74,12 +76,16 @@ The runner verifies:
 - no diagnostic VEH/UEF marker and `NO_HANDLED_DMP_FILES` for every handled
   path; and
 - one static `-Xint` fatal JNI native AV reaching diagnostic VEH, UEF, nonzero
-  termination, and a real `MDMP` file.
-
-The package does not yet exercise fatal dispatch from dynamically emitted JIT
-code or from the OSR copied-stack interval. Dynamic registration/removal is
-implemented and locally Wine-verified; those fatal native paths remain
-separate Stage E acceptance items.
+  termination, and a new real `MDMP` file;
+- one threshold-zero JIT-origin fatal AV in each J-2 and J-1 memory mode,
+  including the optimizing caller and JIT JNI stub; and
+- one switch-interpreter OSR-origin fatal AV in each J-2 and J-1 memory mode,
+  including Baseline/Osr compilation, the real OSR jump, the copied-stack RBP
+  handoff, and a new `MDMP` file.
+The package still does not claim debugger-quality stack reconstruction or
+large-table sampling; those remain separate Stage E evidence.
+The automated fatal subset explicitly covers JIT-origin and OSR-origin fatal
+dispatch in both J-2 and J-1 memory modes.
 
 ## Required result
 
@@ -89,11 +95,12 @@ separate Stage E acceptance items.
 OVERALL PASS
 ```
 
-It must contain 26 PASS records and no FAIL record. Key evidence includes:
+It must contain 30 PASS records and no FAIL record. Key evidence includes:
 
 - `logs\cet_policy.log` with `WIN32_CET_POLICY_PROBE PASS`;
-- `logs\osr_unwind.log` with `win32_osr_unwind_probe failures=0`, the
-  zero-offset entry frame, zero-prologue return range, `fixed_frame=248`,
+- `logs\osr_unwind.log` with `win32_osr_unwind_probe failures=0`,
+  `entry_frame_register=R12 compiled_frame_register=RBP`, the zero-offset
+  entry frame, zero-prologue return range, `fixed_frame=248`,
   `xmm_count=10`, two invoke records, and the `OK` marker;
 - six `logs\xmm_full_*_run*.log` files with `mask=0`,
   `fullSelfTestMask=1023`, and `W003XmmSentinelProbe OK`. The retained
@@ -109,9 +116,15 @@ It must contain 26 PASS records and no FAIL record. Key evidence includes:
 - managed NPE records with `read=64 write=64 recovery=128 gc=16`;
 - managed SOE records with `main=2 child=2 recovery=4 gc=4`;
 - `logs\HANDLED_DMP_SCAN.txt` containing `NO_HANDLED_DMP_FILES`;
-- `logs\crashnative.log` containing the native AV VEH, UEF, and minidump
-  markers; and
-- `logs\FATAL_DMP_SCAN.txt` listing at least one dump with byte count and
+- `logs\crashnative.log` containing the native AV VEH, UEF, minidump, and
+  `new_minidump=` markers;
+- `logs\jit_fatal_j2.log` and `logs\jit_fatal_j1.log` containing the
+  optimizing caller/JNI compile records, VEH, UEF, J-2/J-1 selection, and
+  `new_minidump=`;
+- `logs\osr_fatal_j2.log` and `logs\osr_fatal_j1.log` containing Baseline/Osr
+  records, the real OSR jump, VEH, UEF, J-2/J-1 selection, and
+  `new_minidump=`; and
+- `logs\FATAL_DMP_SCAN.txt` listing at least five dumps with byte count and
   SHA-256.
 
 ## Return evidence
@@ -125,9 +138,10 @@ Return either the complete package directory or a ZIP preserving:
 - `SHA256SUMS.txt`; and
 - `W010_W014_STRUCTURAL_REPORT.txt`.
 
-Do not return screenshots alone. Do not delete or rename the dump. The reviewer
-checks the `MDMP` signature, dump size, returned metadata identity, exact
-managed/native markers, and Windows build.
+Do not return screenshots alone. After the runner finishes, do not delete or
+rename its case-prefixed dump files. The reviewer checks the `MDMP` signature,
+dump size, returned metadata identity, exact managed/native markers, and
+Windows build.
 
 Linux-side review command:
 
@@ -147,5 +161,7 @@ The following are still required before W-010/W-014 close:
 - exact handler/pre-unprotect stack high-water measurements in release and
   debug builds;
 - wrong-address and unsupported exception-kind native negatives; and
-- predecessor UEF invocation and runtime unload behavior in an embedding host.
-- threshold-zero JIT-origin and OSR-origin fatal dispatch on native Windows.
+- predecessor UEF invocation and runtime unload behavior in an embedding host;
+  and
+- successful review of the automated native J-2/J-1 JIT-origin and OSR-origin
+  fatal evidence included in this package.

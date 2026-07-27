@@ -24,7 +24,7 @@
 | P4_G6 GoldenApp regression | **PASS** | phase3 `run_goldenapp.sh` |
 | W-002 structural managed entries | **PASS** | `check_w002_managed_entries.py` |
 | W-003 quick boundary/trap parity | **PASS** | `check_w003_quick_boundaries.py` |
-| W-010 static OSR/invoke lookup and virtual unwind | **PASS** | `run_osr_unwind_probe.sh` (variable RSP, managed-clobbered RBP return, GPR plus XMM6-XMM15 restore, invoke records, epilogue) |
+| W-010 static OSR/invoke lookup and virtual unwind | **PASS** | `run_osr_unwind_probe.sh` (R12-anchored variable RSP entry, explicit RBP JIT handoff, managed-clobbered RBP return, GPR plus XMM6-XMM15 restore, invoke records, epilogue) |
 | W-003 attributed frame families | **PASS, 8/8** | `run_w003_frame_probe.sh` |
 | W-003 historical XMM6-XMM11 / W-010 full XMM6-XMM15 sentinel | **PASS, 6/6** | `run_w003_xmm_sentinel.sh` (`selfTestMask=63`, `fullSelfTestMask=1023`) |
 | W-002 OSR matrix | **PASS, 8/8** | `run_w002_osr_probe.sh` |
@@ -36,6 +36,8 @@
 | W-010 JIT collection/reuse lifecycle | **PASS, J-2/J-1** | `run_jit_unwind_lifecycle.sh` (real collection, lookup disappearance, exact address reuse) |
 | W-010 active nterp/JIT managed faults | **PASS** | `run_w010_managed_fault_probe.sh` (started-runtime no-chain rejection; 64 read + 64 write NPEs; repeated main/child SOEs in nterp and threshold-zero JIT; no handled-fault diagnostics/dump change) |
 | W-010 threshold-zero JIT fatal dispatch | **PASS, J-2/J-1** | `run_jit_fatal_unwind.sh` (VEH, UEF, changed/new valid `MDMP`) |
+| W-010 OSR-origin fatal dispatch | **PASS, J-2/J-1** | `run_osr_fatal_unwind.sh` (real switch OSR jump, VEH, UEF, new valid `MDMP`) |
+| W-010/W-014 native package preflight | **PASS under Wine** | `package_win64_w010_w014.sh` (30-record runner, five fatal origins, per-case dump preservation, final package checker) |
 | Full suite | **PASS** | `run_all_wine_gates.sh` |
 
 Evidence: `evidence/all_wine_gates.txt`, `evidence/crashnative.txt`
@@ -67,6 +69,7 @@ PASS native_crash_aborts
 | W-010 Stage D activation and stress | `src/W010ManagedFaultProbe.java`; `run_w010_managed_fault_probe.sh`; common runtime null/SO flags and early nterp range registration |
 | W-010 dynamic-JIT PE unwind | `runtime/multiplatform/windows/jit_unwind_windows.*`; `runtime/jit/{jit_code_cache,jit_memory_region}.*`; `run_jit_unwind_{info,registry,lifecycle}.sh`; `run_jit_fatal_unwind.sh` |
 | W-010 static OSR PE unwind | `quick_entrypoints_x86_64.S`; `../win64_phase1/win32_osr_unwind_probe.cc`; `run_osr_unwind_probe.sh`; `check_win32_boundary_unwind.py` |
+| W-010/W-014 native Stage E package | `package_win64_w010_w014.sh`; `host/RUN_W010_W014_HOST.ps1`; `check_w010_w014_host_package.py`; `review_w010_w014_host_result.py`; `W010_W014_HOST_CHECKLIST.md` |
 
 ## Host
 
@@ -98,6 +101,19 @@ The accepted Windows 10 build 19044 return has 19/19 PASS records over 14
 children, clean fatal/dump scans, 8/8 attributed frame runs, and 6/6 XMM
 sentinel runs. See `evidence/w003_host/ACCEPTANCE.md`.
 
+Focused W-010/W-014 native Stage E candidate:
+
+```bash
+JOBS=32 WINEDEBUG=-all \
+  bash tools/win64/host_package/package_win64_w010_w014.sh
+# Native PowerShell: .\scripts\RUN_W010_W014_HOST.ps1
+```
+
+The Linux-side preflight passes package integrity, the complete Wine matrix,
+all five fatal origins, per-case preservation of valid minidumps, and the final
+clean-package checker. Native execution and returned-evidence review remain
+required; a Wine package smoke is not native acceptance.
+
 ## Non-goals
 
 - Windows NIO.2
@@ -110,9 +126,9 @@ sentinel runs. See `evidence/w003_host/ACCEPTANCE.md`.
   acceptance on Windows 10/current Windows: generated nterp/JIT NPE/SOE,
   foreign VEH/SEH/debugger ordering, stack-budget measurements, fatal
   predecessor-UEF/dump behavior, dynamic-table churn/sampling, and
-  HSP-disabled/forced-policy cases. Repeat the split OSR/invoke unwind and full
-  XMM6-XMM15 normal-return probes on native Windows, and add a native OSR fatal
-  path.
+  HSP-disabled/forced-policy cases. Repeat the split OSR/invoke unwind, full
+  XMM6-XMM15 normal-return probes, JIT-origin fatal path, and OSR-origin fatal
+  path on native Windows.
 - Complete W-025 broader JIT-mapping native acceptance and hardening
 
 ## W-010 Stage D activation re-run (2026-07-27)
@@ -141,22 +157,24 @@ development evidence; native Windows Stage E remains required. See
 ## W-010 static OSR unwind re-run (2026-07-27)
 
 `art_quick_osr_stub` now has two contiguous static PE runtime-function ranges.
-The first uses fixed-bottom RBP while the copy body moves RSP downward. The
-second describes the inherited 248-byte fixed frame directly from RSP because
-returned OSR code reconstructs managed RBP rather than preserving the stub's
-temporary native anchor. The return record uses exact GPR/XMM save offsets and
-ends in `add rsp,248; ret`.
+The first uses fixed-bottom R12 while the copy body moves RSP downward, then
+sets RBP to the copied RSP immediately before the OSR jump. This reproduces the
+normal Win64 JIT frame anchor without changing generated JIT code. The second
+describes the inherited 248-byte fixed frame directly from RSP because returned
+OSR code reconstructs managed state rather than preserving either stub anchor.
+The return record uses exact GPR/XMM save offsets and ends in `add rsp,248; ret`.
 
 The emitted audit verifies both records and the corrected completed-frame
 XMM6-XMM15 offsets for OSR and the two invoke stubs. The live Wine probe
 restores all nonvolatile GPRs and XMM6-XMM15 from a variable-depth entry
-context, a return context with RBP deliberately clobbered, and the return
-epilogue, and synthetically unwinds both invoke records. The actual W-002 OSR
-matrix passes 8/8 across dual/J-1 and
-default-nterp/switch. J-2/J-1 fatal-unwind gates and the full Phase-4 aggregate
-also pass. The full normal-return sentinel passes 2/2 in nterp, switch, and
-threshold-zero JIT with `fullSelfTestMask=1023`. Native Windows must repeat
-these lookups/unwinds and full-width sentinel runs and add an OSR fatal path.
+context with R12 anchoring, a return context with RBP deliberately clobbered,
+and the return epilogue, and synthetically unwinds both invoke records. The
+actual W-002 OSR matrix passes 8/8 across dual/J-1 and default-nterp/switch.
+J-2/J-1 JIT-origin and OSR-origin fatal-unwind gates and the full Phase-4
+aggregate also pass. The full normal-return sentinel passes 2/2 in nterp,
+switch, and threshold-zero JIT with `fullSelfTestMask=1023`. Native Windows
+must repeat these lookups/unwinds, full-width sentinel runs, and both fatal
+paths.
 
 ## Multiplatform re-run (2026-07-17)
 

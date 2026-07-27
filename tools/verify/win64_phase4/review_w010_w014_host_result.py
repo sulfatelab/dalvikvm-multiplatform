@@ -19,7 +19,7 @@ IDENTITY_FILES = (
     "W010_W014_STRUCTURAL_REPORT.txt",
 )
 
-EXPECTED_PASS_RECORDS = 26
+EXPECTED_PASS_RECORDS = 30
 HANDLED_FAULT_FORBIDDEN = (
     "ART Win64 VEH",
     "ART Win64 UEF",
@@ -28,6 +28,7 @@ HANDLED_FAULT_FORBIDDEN = (
 )
 OSR_UNWIND_MARKERS = (
     "win32_osr_unwind_probe failures=0",
+    "entry_frame_register=R12 compiled_frame_register=RBP",
     "entry_frame_offset=0 return_prologue=0 fixed_frame=248 xmm_count=10 "
     "invoke_records=2 "
     "variable_rsp_delta=256",
@@ -208,6 +209,10 @@ def review(returned: Path, issued: Path) -> None:
         "PASS handled_log_scan",
         "PASS handled_dump_scan NO_HANDLED_DMP_FILES",
         "PASS crashnative exit=",
+        "PASS jit_fatal_j2 exit=",
+        "PASS jit_fatal_j1 exit=",
+        "PASS osr_fatal_j2 exit=",
+        "PASS osr_fatal_j1 exit=",
         "PASS fatal_dump_scan count=",
     )
     for prefix in required_result_prefixes:
@@ -347,32 +352,76 @@ def review(returned: Path, issued: Path) -> None:
             "ART Win64 VEH: exception 0xc0000005",
             "ART Win64 UEF: exception 0xc0000005",
             "minidump written",
+            "new_minidump=",
         ),
         ("CrashNativeProbe.unexpected_continue",),
     )
     require_exit(fatal_text, nonzero=True)
 
+    for mode in ("j2", "j1"):
+        jit_markers = (
+            "CrashNativeProbe.jit_ready calls=20000",
+            "Win64 CompileMethod done success=1 method=void CrashNativeProbe.jitCrashCaller(int)",
+            "Win64 CompileMethod done success=1 method=void CrashNativeProbe.nativeSegfault()",
+            "ART Win64 VEH: exception 0xc0000005",
+            "ART Win64 UEF: exception 0xc0000005",
+            "minidump written",
+            "new_minidump=",
+        )
+        jit_forbidden = ("CrashNativeProbe.unexpected_continue",)
+        if mode == "j2":
+            jit_markers = (*jit_markers, "Win64 JIT dual-view (J-2) created")
+        else:
+            jit_forbidden = (*jit_forbidden, "Win64 JIT dual-view (J-2) created")
+        text = require_markers(
+            logs / f"jit_fatal_{mode}.log", jit_markers, jit_forbidden
+        )
+        require_exit(text, nonzero=True)
+
+        osr_markers = (
+            "CrashNativeProbe.osr_armed count=2000000",
+            "warmup_threshold=100, optimize_threshold=100",
+            "kind=Baseline",
+            "kind=Osr",
+            "Win64 CompileMethod done success=1 method=long CrashNativeProbe.osrCrashLoop(int)",
+            "Jumping to long CrashNativeProbe.osrCrashLoop(int)",
+            "ART Win64 VEH: exception 0xc0000005",
+            "ART Win64 UEF: exception 0xc0000005",
+            "minidump written",
+            "new_minidump=",
+        )
+        osr_forbidden = (
+            "Done running OSR code for long CrashNativeProbe.osrCrashLoop(int)",
+            "CrashNativeProbe.osr_unexpected_return",
+            "CrashNativeProbe.unexpected_continue",
+        )
+        if mode == "j2":
+            osr_markers = (*osr_markers, "Win64 JIT dual-view (J-2) created")
+        else:
+            osr_forbidden = (*osr_forbidden, "Win64 JIT dual-view (J-2) created")
+        text = require_markers(
+            logs / f"osr_fatal_{mode}.log", osr_markers, osr_forbidden
+        )
+        require_exit(text, nonzero=True)
+
     scan_text = require_markers(logs / "FATAL_DMP_SCAN.txt", ("path=", "bytes=", "sha256="))
-    scan_records: set[tuple[int, str]] = set()
+    scan_records: list[tuple[int, str]] = []
     for line in scan_text.splitlines():
         match = re.search(r"bytes=(\d+)\s+sha256=([0-9a-f]{64})", line)
         if match:
-            scan_records.add((int(match.group(1)), match.group(2)))
-    if not scan_records:
-        fail("FATAL_DMP_SCAN.txt contains no parseable dump record")
+            scan_records.append((int(match.group(1)), match.group(2)))
+    if len(scan_records) < 5:
+        fail("FATAL_DMP_SCAN.txt contains fewer than five dump records")
 
     dumps = sorted(returned.rglob("*.dmp"))
-    if not dumps:
-        fail("returned evidence contains no fatal minidump")
-    matched_dump = False
+    if len(dumps) < 5:
+        fail("returned evidence contains fewer than five fatal minidumps")
     for dump in dumps:
         if dump.stat().st_size < 4096 or dump.read_bytes()[:4] != b"MDMP":
             fail(f"returned dump is not a valid minidump: {dump}")
         record = (dump.stat().st_size, sha256(dump))
-        if record in scan_records:
-            matched_dump = True
-    if not matched_dump:
-        fail("no returned minidump matches FATAL_DMP_SCAN.txt")
+        if record not in scan_records:
+            fail(f"returned minidump is absent from FATAL_DMP_SCAN.txt: {dump}")
 
     print(
         "W-010/W-014 native Stage E result: PASS "

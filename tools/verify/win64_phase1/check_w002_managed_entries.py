@@ -113,11 +113,13 @@ def check_source(repo: Path) -> None:
             ".seh_savexmm %xmm15, 208",
             "PUSH r15",
             "movq %r9, %r15",
-            "movq %rsp, %rbp",
-            ".seh_setframe %rbp, 0",
+            "movq %rsp, %r12",
+            ".seh_setframe %r12, 0",
             "jmp .Losr_call",
             ".Losr_entry:",
             "CFI_RESTORE_STATE_AND_DEF_CFA rsp, 256",
+            "CFI_DEF_CFA_REGISTER(r12)",
+            "movq %rsp, %rbp",
             "jmp *%rdx",
             ".Losr_call:",
             "call .Losr_entry",
@@ -150,6 +152,17 @@ def check_source(repo: Path) -> None:
         fail("Win64 quick OSR CFA does not include the RDI/RSI and XMM saves")
     if "CFI_RESTORE_STATE_AND_DEF_CFA rsp, 80" not in quick_osr:
         fail("the Linux quick OSR CFA path changed")
+    if re.search(
+        r"\.Losr_entry:\s*\n"
+        r"\s*CFI_RESTORE_STATE_AND_DEF_CFA rsp, 256\s*\n"
+        r"#if defined\(_WIN32\)\s*\n"
+        r"\s*CFI_DEF_CFA_REGISTER\(r12\)\s*\n"
+        r"#else\s*\n"
+        r"\s*CFI_DEF_CFA_REGISTER\(rbp\)\s*\n"
+        r"#endif",
+        quick_osr,
+    ) is None:
+        fail("quick OSR CFA register must remain R12 on Win64 and RBP on Linux")
 
     nterp = (
         art / "runtime/interpreter/mterp/x86_64ng/main.S"
@@ -249,9 +262,10 @@ def check_objects(repo: Path, build: Path, objdump: str, readobj: str) -> None:
             "movdqu\t%xmm15, 0x90(%rsp)",
             "pushq\t%r15",
             "movq\t%r9, %r15",
-            "movq\t%rsp, %rbp",
+            "movq\t%rsp, %r12",
             "jmp\t",
             "subq\t%rcx, %rsp",
+            "movq\t%rsp, %rbp",
             "jmpq\t*%rdx",
             "callq\t",
             "movq\t0x8(%rsp), %r15",

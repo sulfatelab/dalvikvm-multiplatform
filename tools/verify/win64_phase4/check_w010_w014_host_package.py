@@ -43,6 +43,8 @@ def parse_report(path: Path) -> dict[str, str]:
         "managed_so_child_rounds": "2",
         "xmm_boundary_registers": "10",
         "xmm_self_test_mask": "1023",
+        "fatal_dispatch_modes": "static,jit-j2,jit-j1,osr-j2,osr-j1",
+        "fatal_minidumps_required": "5",
         "host_llvm_tools_required": "no",
     }
     for key, expected in required.items():
@@ -56,6 +58,7 @@ def parse_report(path: Path) -> dict[str, str]:
         fail("structural report does not contain the boundary unwind PASS marker")
     if not re.fullmatch(
         r"win32_osr_unwind_probe failures=0 prologue=\d+ "
+        r"entry_frame_register=R12 compiled_frame_register=RBP "
         r"entry_frame_offset=0 return_prologue=0 fixed_frame=248 "
         r"xmm_count=10 invoke_records=2 variable_rsp_delta=256",
         values.get("osr_unwind", ""),
@@ -163,6 +166,7 @@ def check_package(root: Path) -> None:
         "Test-StructuralReport",
         "win32_cet_policy_probe.exe",
         "win32_osr_unwind_probe.exe",
+        "entry_frame_register=R12 compiled_frame_register=RBP",
         "entry_frame_offset=0 return_prologue=0 fixed_frame=248 "
         "xmm_count=10 invoke_records=2 variable_rsp_delta=256",
         "actual=disabled",
@@ -182,6 +186,10 @@ def check_package(root: Path) -> None:
         "success=1 method=int W003XmmSentinelProbe.managedCallback(",
         "HANDLED_DMP_SCAN.txt",
         "FATAL_DMP_SCAN.txt",
+        "jit_fatal_$fatalMode",
+        "osr_fatal_$fatalMode",
+        "RequireNewMinidump",
+        "CrashNativeProbe.osr_armed count=2000000",
         "ART Win64 UEF: exception 0xc0000005",
         "OVERALL PASS",
     ]
@@ -199,7 +207,7 @@ def check_package(root: Path) -> None:
         "static `-Xint` fatal JNI native AV",
         "live split OSR lookup and virtual unwind",
         "full XMM6-XMM15",
-        "dynamically emitted JIT code",
+        "JIT-origin and OSR-origin fatal dispatch",
         "debugger",
         "forced-policy",
         "review_w010_w014_host_result.py",

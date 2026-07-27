@@ -89,13 +89,14 @@ requires no change.
 - Static `-Xint` JNI native AV: emitted unwind audit passes for the two invoke
   stubs and generic JNI trampoline; the crash reaches initial VEH and UEF and
   creates a new valid `MDMP` minidump.
-- Static OSR unwind: the emitted audit verifies the RBP-anchored entry range
-  and its contiguous zero-prologue RSP-based return range, including exact
-  completed-frame XMM offsets. `run_osr_unwind_probe.sh` resolves both records,
-  virtually unwinds from 256 bytes below the fixed frame, restores
-  RBP/RDI/RSI/RBX/R12-R15 and XMM6-XMM15, repeats return unwinding with managed
-  RBP deliberately clobbered, synthetically unwinds both invoke records, and
-  verifies the canonical `add rsp,248; ret` epilogue. The real W-002 dual/J-1
+- Static OSR unwind: the emitted audit verifies the R12-anchored entry range,
+  explicit RBP-to-copied-RSP handoff, and its contiguous zero-prologue RSP-based
+  return range, including exact completed-frame XMM offsets.
+  `run_osr_unwind_probe.sh` resolves both records, virtually unwinds from 256
+  bytes below the fixed frame with RBP clobbered, restores RBP/RDI/RSI/RBX/R12-R15
+  and XMM6-XMM15, repeats return unwinding with managed RBP deliberately
+  clobbered, synthetically unwinds both invoke records, and verifies the
+  canonical `add rsp,248; ret` epilogue. The real W-002 dual/J-1
   default/switch OSR matrix passes 8/8.
 - Full-width Microsoft-XMM boundary sentinel: the Windows-only save area is
   160 bytes outside canonical ART frames; nterp, switch, and threshold-zero JIT
@@ -104,13 +105,17 @@ requires no change.
 - Threshold-zero JIT JNI native AV: the optimizing caller and JNI stub compile,
   both J-2 and J-1 reach initial VEH and UEF, and each run creates a changed or
   new valid `MDMP` minidump.
+- OSR-origin native AV: switch-interpreter execution compiles Baseline and Osr
+  versions, logs the real OSR jump, reaches the deliberate native AV after the
+  copied-stack handoff, and both J-2 and J-1 reach VEH/UEF with a new valid
+  `MDMP` dump. No OSR completion or unexpected-return marker appears.
 - JIT smoke: 12/12 PASS.
 - Normal/FastNative mixed/high-FP compiled-JNI ABI: 7/7 targets PASS in both
   default and instrumentation modes after reserving RBP/R15 from JNI scratch.
 - Focused CriticalNative regression with one repeat: J-2, J-1, `-Xint`, Linux
   interpreter, and Linux JIT PASS.
 - Phase-3 GoldenApp: PASS.
-- Linux `art` and `art-compiler` incremental build with `-j32`: PASS.
+- Linux `art`, `art-compiler`, and `dalvikvm` incremental build with `-j32`: PASS.
 - Linux `dalvikvm -showversion`: PASS.
 - Linux shared-boot imageless Hello: PASS.
 
@@ -141,11 +146,10 @@ JIT data view, one immutable `RtlAddFunctionTable()` entry per code allocation,
 publication only after registration, and deletion before mspace reuse or
 mapping teardown.
 
-The threshold-zero gate proves Windows fatal dispatch reaches UEF and produces
-a valid dump across the exercised optimizing/JIT-JNI path. It does not prove
-debugger-quality minidump stack reconstruction or concurrent native sampling
-under large dynamic-table churn. Stage E must cover those on native Windows,
-repeat full-width XMM6-XMM15 normal-return and exception-unwind sentinels,
-repeat both OSR runtime-function lookups/unwinds, and accept an OSR fatal path
-before native fatal dispatch through its variable copied-stack interval is
-supported.
+The threshold-zero JIT-origin and switch-OSR-origin gates prove Windows fatal
+dispatch reaches UEF and produces a new valid dump across both exercised
+dynamic chains. They do not prove debugger-quality minidump stack
+reconstruction or concurrent native sampling under large dynamic-table churn.
+Stage E must cover those on native Windows, repeat full-width XMM6-XMM15
+normal-return and exception-unwind sentinels, and repeat both fatal paths and
+their static runtime-function lookups.
