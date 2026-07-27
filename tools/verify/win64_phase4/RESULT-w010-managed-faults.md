@@ -1,8 +1,8 @@
 # W-010 Stage D managed-fault activation
 
 **Status:** focused Wine and Linux managed-fault verification PASS; static
-fatal-unwind boundaries PASS locally; dynamic-JIT PE unwind and native Windows
-Stage E acceptance remain
+fatal-unwind boundaries PASS locally; dynamic-JIT PE unwind is designed but
+not implemented; native Windows Stage E acceptance remains
 **Date:** 2026-07-27
 
 ## Product behavior
@@ -92,6 +92,14 @@ UEF/minidump behavior, and the HSP-disabled plus forced-policy matrix.
 The static fatal result is not universal JIT-origin crash support. Recursive
 `RtlVirtualUnwind2` tracing shows that threshold-zero JIT code currently has no
 Windows runtime-function entry; leaf unwinding can corrupt the dispatch walk
-before UEF. Per-method or range-accurate JIT unwind registration, concurrent
-publication/removal rules, and code-cache teardown ownership remain a separate
-required Stage E substage.
+before UEF. The selected implementation is documented in
+[win32_faults_and_stacks.md](../../../win32_faults_and_stacks.md#79-dynamic-jit-pe-unwind-design):
+a Windows-JIT-only fixed RBP anchor, explicit PE unwind bytes in the primary
+JIT data view, one immutable `RtlAddFunctionTable()` entry per code allocation,
+publication only after registration, and deletion before mspace reuse or
+mapping teardown. Stage E must implement and stress that design. It must also
+extend native-to-managed boundary preservation from full-width XMM6-XMM11 to
+XMM6-XMM15; ART's managed scalar XMM12-XMM15 preservation is only 64 bits and
+does not by itself satisfy the Microsoft 128-bit nonvolatile contract. The OSR
+stub also needs a static runtime-function record before fatal dispatch through
+its variable copied-stack interval is supported.
