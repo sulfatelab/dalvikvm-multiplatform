@@ -1689,8 +1689,14 @@ The prologue preserves rdi and rsi because they are Microsoft nonvolatile
 registers, and the common save block preserves the native caller's r15 before
 publishing managed rSELF. W-003 subsequently added a 96-byte boundary area
 for XMM6-XMM11, so the Windows conceptual CFA is now 192 bytes; Linux retains
-its original 80-byte CFA and instruction path. The accepted W-002 rSELF/OSR
-transition and the W-003 Microsoft-XMM repair are separate contracts.
+its original 80-byte CFA and instruction path. W-010 later added two
+contiguous PE unwind ranges: an RBP-anchored entry/variable-copy range and an
+RSP-based inherited-frame return range, because OSR return reconstructs
+managed RBP. The emitted XMM unwind offsets are 64 through 144 relative to the
+completed 184-byte fixed frame, not 0 through 80 relative to the temporary
+store RSP. The accepted W-002 rSELF/OSR transition, W-003 Microsoft-XMM
+normal-return repair, and W-010 exception-unwind records are separate
+contracts.
 
 ### Nterp OSR
 
@@ -1815,13 +1821,15 @@ XMM run reports `mask=0 selfTestMask=63`; and fatal/dump scans are clean. The
 JIT logs explicitly confirm creation of the Windows pagefile-section J-2
 dual view before successful compilation.
 
-PE assembly unwind metadata remains absent because CFI macros are disabled on
-Windows. ART managed unwinding is separate. W-010 owns only the exact
-VEH/non-owning-`CONTEXT` managed-fault adapter and cooperative handler-chain
-policy. Missing `.pdata`/`.xdata` remains separate diagnostics hardening unless
-W-010 testing proves it necessary for correctness. That separation applies
-only under the required CET-shadow-stack-disabled process contract; missing
-unwind/EH-continuation metadata cannot be interpreted as latent CET support.
+Targeted PE assembly unwind metadata is now present for the static invoke,
+generic-JNI, and split OSR boundaries even though the generic CFI macros remain
+disabled on Windows. ART managed unwinding is separate. W-010 owns both the
+exact VEH/non-owning-`CONTEXT` managed-fault adapter and the Windows unwind
+records required for exception dispatch across exercised native/managed
+boundaries; a missing record on another fatal-crossable frame is a correctness
+gap, not merely dump hardening. This remains under the required
+CET-shadow-stack-disabled process contract; unwind/EH-continuation metadata
+cannot be interpreted as latent CET support.
 
 See
 [RESULT-w003-quick-frames-analysis.md](tools/verify/win64_phase4/RESULT-w003-quick-frames-analysis.md)

@@ -50,7 +50,10 @@ and writes its evidence under `logs` plus the expected fatal dump under
 The runner verifies:
 
 - package identity and the Linux-generated CET/link structural report;
-- emitted PE unwind records for the static invoke and generic-JNI boundaries;
+- emitted PE unwind records for the static invoke, generic-JNI, and split OSR
+  entry/return boundaries;
+- live split OSR lookup and virtual unwind from a variable copied-stack RSP,
+  an RSP-based return with managed RBP clobbered, and the canonical epilogue;
 - actual user shadow-stack policy observation;
 - main/default, 64 KiB, 256 KiB, 1 MiB, 2 MiB, and 9 MiB requested pthread
   reservations, including the Windows rule that sub-default requests retain
@@ -71,9 +74,10 @@ The runner verifies:
 - one static `-Xint` fatal JNI native AV reaching diagnostic VEH, UEF, nonzero
   termination, and a real `MDMP` file.
 
-The package does not claim fatal dispatch from dynamically emitted JIT code.
-That path still requires registered JIT PE runtime-function data and explicit
-code-cache registration/removal ownership.
+The package does not yet exercise fatal dispatch from dynamically emitted JIT
+code or from the OSR copied-stack interval. Dynamic registration/removal is
+implemented and locally Wine-verified; those fatal native paths remain
+separate Stage E acceptance items.
 
 ## Required result
 
@@ -83,9 +87,11 @@ code-cache registration/removal ownership.
 OVERALL PASS
 ```
 
-It must contain 19 PASS records and no FAIL record. Key evidence includes:
+It must contain 20 PASS records and no FAIL record. Key evidence includes:
 
 - `logs\cet_policy.log` with `WIN32_CET_POLICY_PROBE PASS`;
+- `logs\osr_unwind.log` with `win32_osr_unwind_probe failures=0`, the
+  zero-offset entry frame, zero-prologue return range, and `OK` marker;
 - `logs\W010_W014_STRUCTURAL_REPORT.txt` with
   `boundary_unwind=win32_boundary_unwind OK ...`;
 - `logs\thread_stack.log` with all five nonzero requested sizes and zero
@@ -135,5 +141,4 @@ The following are still required before W-010/W-014 close:
   debug builds;
 - wrong-address and unsupported exception-kind native negatives; and
 - predecessor UEF invocation and runtime unload behavior in an embedding host.
-- threshold-zero JIT-origin fatal dispatch after dynamic runtime-function
-  registration is implemented.
+- threshold-zero JIT-origin and OSR-origin fatal dispatch on native Windows.

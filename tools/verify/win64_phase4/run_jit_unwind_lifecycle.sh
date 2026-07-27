@@ -10,13 +10,13 @@ JAR="${JAR:-/usr/lib/jvm/java-21-openjdk-amd64/bin/jar}"
 R8JAR="${R8JAR:-$REPO/vendor/r8/r8.jar}"
 TIMEOUT="${TIMEOUT:-120}"
 
+cmake --build "$BUILD" --target jitunwindlifecycleprobe -j"${JOBS:-32}"
+
 if [[ ! -f "$BUILD/art.dll" || ! -f "$RUN/art.dll" ]] ||
    ! cmp -s "$BUILD/art.dll" "$RUN/art.dll"; then
-  printf 'built and staged art.dll must exist and match before JIT lifecycle testing\n' >&2
+  printf 'built and staged art.dll must exist and match after the JIT lifecycle build\n' >&2
   exit 1
 fi
-
-cmake --build "$BUILD" --target jitunwindlifecycleprobe -j"${JOBS:-32}"
 
 temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/jit-unwind-lifecycle.XXXXXX")"
 trap 'rm -rf "$temp_dir"' EXIT

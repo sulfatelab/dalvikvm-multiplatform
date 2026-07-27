@@ -147,6 +147,9 @@ add_executable(win32_jit_unwind_info_probe EXCLUDE_FROM_ALL
 target_include_directories(win32_jit_unwind_info_probe PRIVATE
   "${MDVM_ART_DIR}/compiler")
 
+add_executable(win32_osr_unwind_probe EXCLUDE_FROM_ALL
+  "${CMAKE_CURRENT_SOURCE_DIR}/win32_osr_unwind_probe.cc")
+
 include(${CMAKE_CURRENT_SOURCE_DIR}/phase1.cmake)
 
 add_executable(win32_jit_unwind_registry_probe EXCLUDE_FROM_ALL

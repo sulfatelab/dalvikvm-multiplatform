@@ -15,11 +15,20 @@ cmake --build "$BUILD" --target \
   win32_stack_page_probe \
   win32_fault_record_probe \
   win32_sigchain_probe \
+  win32_osr_unwind_probe \
   -j"$JOBS"
 
 bash "$REPO/tools/verify/win64_phase4/build_one.sh" W010ManagedFaultProbe
 WINEDEBUG="$WINEDEBUG" "$REPO/tools/verify/win64_phase4/run_thread_stack_probe.sh"
 WINEDEBUG="$WINEDEBUG" "$REPO/tools/verify/win64_phase4/run_fault_adapter_probe.sh"
+osr_unwind_output="$(
+  WINEDEBUG="$WINEDEBUG" "$REPO/tools/verify/win64_phase4/run_osr_unwind_probe.sh"
+)"
+printf '%s\n' "$osr_unwind_output"
+osr_unwind_summary="$(
+  printf '%s\n' "$osr_unwind_output" | tr -d '\r' | \
+    grep '^win32_osr_unwind_probe failures=0 '
+)"
 WINEDEBUG="$WINEDEBUG" "$REPO/tools/verify/win64_phase4/run_w010_managed_fault_probe.sh"
 
 cet_output="$(
@@ -36,6 +45,7 @@ required_build_files=(
   "$BUILD/win32_stack_page_probe.exe"
   "$BUILD/win32_fault_record_probe.exe"
   "$BUILD/win32_sigchain_probe.exe"
+  "$BUILD/win32_osr_unwind_probe.exe"
   "$BUILD/run/boot.jar"
   "$BUILD/run/w010managedfaultprobe.jar"
   "$BUILD/run/crashnativeprobe.jar"
@@ -60,7 +70,8 @@ for executable in \
   win32_thread_stack_probe.exe \
   win32_stack_page_probe.exe \
   win32_fault_record_probe.exe \
-  win32_sigchain_probe.exe; do
+  win32_sigchain_probe.exe \
+  win32_osr_unwind_probe.exe; do
   cp -a "$BUILD/$executable" "$OUT/"
 done
 cp -a "$BUILD/run/w010managedfaultprobe.jar" "$OUT/run/"
@@ -76,6 +87,7 @@ cat >"$OUT/W010_W014_STRUCTURAL_REPORT.txt" <<EOF
 status=PASS
 cet_contract=$cet_output
 boundary_unwind=$boundary_unwind_output
+osr_unwind=$osr_unwind_summary
 windows_minimum_build=17134
 requested_stack_sizes=0,65536,262144,1048576,2097152,9437184
 sigchain_action_calls=3
@@ -91,6 +103,7 @@ host_llvm_tools_required=no
 dalvikvm_sha256=$(sha256sum "$OUT/dalvikvm.exe" | awk '{print $1}')
 art_sha256=$(sha256sum "$OUT/art.dll" | awk '{print $1}')
 sigchain_sha256=$(sha256sum "$OUT/sigchain.dll" | awk '{print $1}')
+osr_probe_sha256=$(sha256sum "$OUT/win32_osr_unwind_probe.exe" | awk '{print $1}')
 managed_jar_sha256=$(sha256sum "$OUT/run/w010managedfaultprobe.jar" | awk '{print $1}')
 EOF
 

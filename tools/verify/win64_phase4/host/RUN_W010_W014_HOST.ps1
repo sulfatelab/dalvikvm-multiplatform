@@ -70,6 +70,7 @@ function Test-StructuralReport {
         '^status=PASS$'
         '^cet_contract=WIN32_CET_CONTRACT PASS '
         '^boundary_unwind=win32_boundary_unwind OK '
+        '^osr_unwind=win32_osr_unwind_probe failures=0 prologue=[0-9]+ entry_frame_offset=0 return_prologue=0 variable_rsp_delta=256$'
         '^windows_minimum_build=17134$'
         '^requested_stack_sizes=0,65536,262144,1048576,2097152,9437184$'
         '^sigchain_action_calls=3$'
@@ -97,6 +98,7 @@ function Test-StructuralReport {
         'dalvikvm.exe' = 'dalvikvm_sha256'
         'art.dll' = 'art_sha256'
         'sigchain.dll' = 'sigchain_sha256'
+        'win32_osr_unwind_probe.exe' = 'osr_probe_sha256'
         'run\w010managedfaultprobe.jar' = 'managed_jar_sha256'
     }
     foreach ($relative in $hashEntries.Keys) {
@@ -256,6 +258,12 @@ try {
     $script:Failed = $true
 }
 
+Invoke-CheckedProcess -Name 'osr_unwind' -Executable 'win32_osr_unwind_probe.exe' -Markers @(
+    'win32_osr_unwind_probe failures=0'
+    'entry_frame_offset=0 return_prologue=0 variable_rsp_delta=256'
+    'win32_osr_unwind_probe OK'
+)
+
 Invoke-CheckedProcess -Name 'thread_stack' -Executable 'win32_thread_stack_probe.exe' -Markers @(
     'requested=65536'
     'requested=262144'
@@ -302,7 +310,7 @@ Invoke-CheckedProcess -Name 'jit_npe' -Executable 'dalvikvm.exe' -Arguments "$Co
 Invoke-CheckedProcess -Name 'jit_so' -Executable 'dalvikvm.exe' -Arguments "$Common -verbose:jit -Xjitwarmupthreshold:0 -Xjitthreshold:0 -cp run\w010managedfaultprobe.jar W010ManagedFaultProbe so" -Markers @('W010ManagedFaultProbe SO OK main=2 child=2 recovery=4 gc=4', 'Win64 CompileMethod done success=1 method=int W010ManagedFaultProbe.recurse(int)', 'Win64 CompileMethod done success=1 method=int W010ManagedFaultProbe.runStackOverflowRounds()', 'W010ManagedFaultProbe OK mode=so', 'main end exception=0') -ForbiddenMarkers $HandledForbidden
 Clear-ArtEnvironment
 
-$handledLogNames = @('thread_stack', 'stack_page', 'fault_record', 'sigchain', 'switch_so', 'nterp_npe', 'nterp_so', 'jit_npe', 'jit_so')
+$handledLogNames = @('osr_unwind', 'thread_stack', 'stack_page', 'fault_record', 'sigchain', 'switch_so', 'nterp_npe', 'nterp_so', 'jit_npe', 'jit_so')
 $handledScanFailed = $false
 foreach ($name in $handledLogNames) {
     $path = Join-Path $Logs ($name + '.log')

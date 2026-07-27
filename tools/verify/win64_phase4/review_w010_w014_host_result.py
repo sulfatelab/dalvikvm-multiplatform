@@ -19,6 +19,19 @@ IDENTITY_FILES = (
     "W010_W014_STRUCTURAL_REPORT.txt",
 )
 
+EXPECTED_PASS_RECORDS = 20
+HANDLED_FAULT_FORBIDDEN = (
+    "ART Win64 VEH",
+    "ART Win64 UEF",
+    "minidump written",
+    "unexpected_continue",
+)
+OSR_UNWIND_MARKERS = (
+    "win32_osr_unwind_probe failures=0",
+    "entry_frame_offset=0 return_prologue=0 variable_rsp_delta=256",
+    "win32_osr_unwind_probe OK",
+)
+
 
 def fail(message: str) -> None:
     raise RuntimeError(message)
@@ -126,6 +139,15 @@ def require_exit(log_text: str, *, nonzero: bool) -> None:
         fail("process log does not prove timed_out=False")
 
 
+def review_osr_log(logs: Path) -> None:
+    osr_text = require_markers(
+        logs / "osr_unwind.log",
+        OSR_UNWIND_MARKERS,
+        HANDLED_FAULT_FORBIDDEN,
+    )
+    require_exit(osr_text, nonzero=False)
+
+
 def review(returned: Path, issued: Path) -> None:
     return_form = verify_issued_payload(returned, issued)
     logs = returned / "logs"
@@ -147,6 +169,7 @@ def review(returned: Path, issued: Path) -> None:
         "PASS structural_report",
         "PASS cet_policy exit=0 ",
         "PASS hsp_policy",
+        "PASS osr_unwind exit=0 ",
         "PASS thread_stack exit=0 ",
         "PASS stack_page exit=0 ",
         "PASS fault_record exit=0 ",
@@ -166,8 +189,11 @@ def review(returned: Path, issued: Path) -> None:
         if not any(line.startswith(prefix) for line in result_lines):
             fail(f"RESULT_W010_W014.txt is missing result: {prefix}")
     pass_lines = [line for line in result_lines if line.startswith("PASS ")]
-    if len(pass_lines) != 19:
-        fail(f"expected 19 PASS records, found {len(pass_lines)}")
+    if len(pass_lines) != EXPECTED_PASS_RECORDS:
+        fail(
+            f"expected {EXPECTED_PASS_RECORDS} PASS records, "
+            f"found {len(pass_lines)}"
+        )
 
     version_text = require_markers(
         logs / "WINDOWS_VERSION.txt", ("BuildNumber", "OSArchitecture")
@@ -194,12 +220,8 @@ def review(returned: Path, issued: Path) -> None:
     ):
         fail("older Windows did not report a disabled or unavailable shadow-stack policy")
 
-    common_handled_forbidden = (
-        "ART Win64 VEH",
-        "ART Win64 UEF",
-        "minidump written",
-        "unexpected_continue",
-    )
+    common_handled_forbidden = HANDLED_FAULT_FORBIDDEN
+    review_osr_log(logs)
     thread_text = require_markers(
         logs / "thread_stack.log",
         (
@@ -326,7 +348,8 @@ def review(returned: Path, issued: Path) -> None:
 
     print(
         "W-010/W-014 native Stage E result: PASS "
-        f"(build={windows_build}, pass_records=19, dumps={len(dumps)}, return={return_form})"
+        f"(build={windows_build}, pass_records={EXPECTED_PASS_RECORDS}, "
+        f"dumps={len(dumps)}, return={return_form})"
     )
 
 

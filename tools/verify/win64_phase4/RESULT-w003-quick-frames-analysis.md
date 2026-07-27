@@ -191,6 +191,14 @@ Add a W-003 checker that verifies:
 - expected r15 publication and Runtime singleton relocations remain; and
 - Linux invoke, OSR, and SETUP instruction paths are unchanged.
 
+The 2026-07-27 W-010 unwind follow-up tightened this gate from source-level
+save presence to exact emitted PE offsets. XMM stores occur before a later
+64-byte fixed GPR/bookkeeping area, so `UWOP_SAVE_XMM128` must describe
+completed-frame offsets 64 through 144 rather than temporary store-time
+offsets 0 through 80. Both invoke records and the split OSR records now use
+the corrected offsets; the live OSR `RtlVirtualUnwind()` probe restores all six
+registers. This changes no normal-return stack layout or Linux object.
+
 ### Stage C: focused runtime probes (complete under Wine 2026-07-26)
 
 Create a managed probe with separate, named subtests for:

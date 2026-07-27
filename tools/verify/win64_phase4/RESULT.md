@@ -1,6 +1,6 @@
 # Win64 Phase 4 — RESULT
 
-**Status:** **WINE COMPLETE; FOCUSED NATIVE SUBSETS ACCEPTED** — A5–A8 and managed/native JIT hardening gates pass; W-002, W-003, W-004, and W-024 native closure matrices are accepted; W-010 Stages C-D plus dynamic-JIT registration/lifecycle/fatal dispatch are focused-Wine verified and product implicit null/SO translation is active
+**Status:** **WINE COMPLETE; FOCUSED NATIVE SUBSETS ACCEPTED** — A5–A8 and managed/native JIT hardening gates pass; W-002, W-003, W-004, and W-024 native closure matrices are accepted; W-010 Stages C-D, split static OSR unwind, and dynamic-JIT registration/lifecycle/fatal dispatch are focused-Wine verified and product implicit null/SO translation is active
 **Date:** 2026-07-27
 **Depends on:** Phase 3 complete (real Win10 G12 goldens)
 
@@ -24,6 +24,7 @@
 | P4_G6 GoldenApp regression | **PASS** | phase3 `run_goldenapp.sh` |
 | W-002 structural managed entries | **PASS** | `check_w002_managed_entries.py` |
 | W-003 quick boundary/trap parity | **PASS** | `check_w003_quick_boundaries.py` |
+| W-010 static OSR lookup/virtual unwind | **PASS** | `run_osr_unwind_probe.sh` (variable RSP, managed-clobbered RBP return, GPR/XMM restore, epilogue) |
 | W-003 attributed frame families | **PASS, 8/8** | `run_w003_frame_probe.sh` |
 | W-003 XMM6-XMM11 sentinel | **PASS, 6/6** | `run_w003_xmm_sentinel.sh` |
 | W-002 OSR matrix | **PASS, 8/8** | `run_w002_osr_probe.sh` |
@@ -65,6 +66,7 @@ PASS native_crash_aborts
 | W-010 Stage C adapter and probes | `../win64_phase1/win32_fault_record_probe.cc`; `../win64_phase1/win32_sigchain_probe.cc`; `run_fault_adapter_probe.sh`; `vendor/art/runtime/multiplatform/windows/sigchain_windows.cc` |
 | W-010 Stage D activation and stress | `src/W010ManagedFaultProbe.java`; `run_w010_managed_fault_probe.sh`; common runtime null/SO flags and early nterp range registration |
 | W-010 dynamic-JIT PE unwind | `runtime/multiplatform/windows/jit_unwind_windows.*`; `runtime/jit/{jit_code_cache,jit_memory_region}.*`; `run_jit_unwind_{info,registry,lifecycle}.sh`; `run_jit_fatal_unwind.sh` |
+| W-010 static OSR PE unwind | `quick_entrypoints_x86_64.S`; `../win64_phase1/win32_osr_unwind_probe.cc`; `run_osr_unwind_probe.sh`; `check_win32_boundary_unwind.py` |
 
 ## Host
 
@@ -108,8 +110,9 @@ sentinel runs. See `evidence/w003_host/ACCEPTANCE.md`.
   acceptance on Windows 10/current Windows: generated nterp/JIT NPE/SOE,
   foreign VEH/SEH/debugger ordering, stack-budget measurements, fatal
   predecessor-UEF/dump behavior, dynamic-table churn/sampling, and
-  HSP-disabled/forced-policy cases. Add OSR-stub unwind and full XMM6-XMM15
-  native-boundary preservation.
+  HSP-disabled/forced-policy cases. Repeat the split OSR lookup/unwind probe,
+  add a native OSR fatal path, and complete full XMM6-XMM15 native-boundary
+  preservation.
 - Complete W-025 broader JIT-mapping native acceptance and hardening
 
 ## W-010 Stage D activation re-run (2026-07-27)
@@ -134,6 +137,24 @@ Win64 `art`/`dalvikvm`, Linux `art`/`dalvikvm`,
 `dalvikvm -showversion`, and shared-boot imageless Hello also pass. Wine is
 development evidence; native Windows Stage E remains required. See
 [`RESULT-w010-managed-faults.md`](RESULT-w010-managed-faults.md).
+
+## W-010 static OSR unwind re-run (2026-07-27)
+
+`art_quick_osr_stub` now has two contiguous static PE runtime-function ranges.
+The first uses fixed-bottom RBP while the copy body moves RSP downward. The
+second describes the inherited 184-byte fixed frame directly from RSP because
+returned OSR code reconstructs managed RBP rather than preserving the stub's
+temporary native anchor. The return record uses exact GPR/XMM save offsets and
+ends in `add rsp,184; ret`.
+
+The emitted audit verifies both records and the corrected completed-frame
+XMM6-XMM11 offsets for OSR and the two invoke stubs. The live Wine probe
+restores all nonvolatile GPRs and XMM6-XMM11 from a variable-depth entry
+context, a return context with RBP deliberately clobbered, and the return
+epilogue. The actual W-002 OSR matrix passes 8/8 across dual/J-1 and
+default-nterp/switch. J-2/J-1 fatal-unwind gates and the full Phase-4 aggregate
+also pass. Native Windows must repeat both lookups/unwinds and add an OSR fatal
+path; full XMM12-XMM15 boundary preservation remains open.
 
 ## Multiplatform re-run (2026-07-17)
 

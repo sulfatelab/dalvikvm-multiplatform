@@ -13,6 +13,8 @@ run() {
 for cls in GcStressProbe ThreadHeavyProbe HandleLeakProbe PerfSmokeProbe CrashAbortProbe CrashNativeProbe; do
   bash "$ROOT/build_one.sh" "$cls"
 done
+cmake --build "$BUILD" --target art dalvikvm -j"${JOBS:-32}"
+cp -a "$BUILD/art.dll" "$BUILD/run/art.dll"
 run P4_W004_RUNTIME_LOAD python3 \
   "$REPO/tools/verify/win64_phase1/check_w004_runtime_load.py" --build "$BUILD"
 run P4_W002_MANAGED_ENTRIES python3 \
@@ -20,6 +22,7 @@ run P4_W002_MANAGED_ENTRIES python3 \
 run P4_W003_QUICK_BOUNDARIES python3 \
   "$REPO/tools/verify/win64_phase1/check_w003_quick_boundaries.py" \
   --win-build "$BUILD" --linux-build "$LINUX_BUILD"
+run P4_W010_OSR_STATIC_UNWIND bash "$ROOT/run_osr_unwind_probe.sh"
 run P4_W003_FRAME_FAMILIES env \
   PRODUCT_BUILD="$BUILD" \
   BUILD="$REPO/build/win64_w003_frames" \

@@ -100,6 +100,16 @@ def main() -> int:
     )
     run_case(
         root,
+        "osr_unwind",
+        [wine, "./win32_osr_unwind_probe.exe"],
+        markers=(
+            "win32_osr_unwind_probe failures=0",
+            "entry_frame_offset=0 return_prologue=0 variable_rsp_delta=256",
+            "win32_osr_unwind_probe OK",
+        ),
+    )
+    run_case(
+        root,
         "thread_stack",
         [wine, "./win32_thread_stack_probe.exe"],
         markers=(

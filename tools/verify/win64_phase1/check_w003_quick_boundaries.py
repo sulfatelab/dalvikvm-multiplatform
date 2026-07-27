@@ -160,9 +160,9 @@ def check_boundary_source(quick: str) -> None:
             "#endif",
         ],
     )
-    # The two invoke stubs carry inline saves so their PE unwind directives
-    # describe every XMM store. OSR has no PE record yet and continues to use
-    # the shared annotation-free helper.
+    # All three Win64 boundary stubs carry inline saves so their PE unwind
+    # directives describe every XMM store. The one textual shared save/restore
+    # site is the Linux side of the OSR preprocessor branch.
     if quick.count("    SAVE_WIN64_NATIVE_XMMS\n") != 1:
         fail("expected exactly one shared Win64 native XMM save site for OSR")
     if quick.count("    RESTORE_WIN64_NATIVE_XMMS\n") != 3:
@@ -187,7 +187,9 @@ def check_boundary_source(quick: str) -> None:
                 "movq 0x40(%rsp), %r11",
                 "subq LITERAL(96), %rsp",
                 "movdqu %xmm6, 0(%rsp)",
+                ".seh_savexmm %xmm6, 64",
                 "movdqu %xmm11, 80(%rsp)",
+                ".seh_savexmm %xmm11, 144",
                 f"LOOP_OVER_SHORTY_LOADING_XMMS xmm6, {xmm_label}",
                 f"{gpr_label}:",
                 "call *ART_METHOD_QUICK_CODE_OFFSET_64(%rdi)",
@@ -203,24 +205,56 @@ def check_boundary_source(quick: str) -> None:
         osr,
         "art_quick_osr_stub source",
         [
+            "movq 0x28(%rsp), %r10",
+            "movq 0x30(%rsp), %r11",
+            "PUSH rbp",
             "PUSH rdi",
             "PUSH rsi",
-            "movq 0x38(%rsp), %r10",
-            "movq 0x40(%rsp), %r11",
-            "SAVE_WIN64_NATIVE_XMMS",
+            "subq LITERAL(96), %rsp",
+            "movdqu %xmm6, 0(%rsp)",
+            ".seh_savexmm %xmm6, 64",
+            "movdqu %xmm11, 80(%rsp)",
+            ".seh_savexmm %xmm11, 144",
             "PUSH r15",
+            ".seh_pushreg %r15",
+            "pushq LITERAL(0)",
+            ".seh_stackalloc 8",
+            "movq %rsp, %rbp",
+            ".seh_setframe %rbp, 0",
+            ".seh_endprologue",
+            "jmp .Losr_call",
+            ".Losr_entry:",
+            "CFI_RESTORE_STATE_AND_DEF_CFA rsp, 192",
+            "jmp *%rdx",
+            ".Losr_call:",
             "call .Losr_entry",
+            ".seh_endproc",
+            "#else",
             "POP r15",
             "POP rbp",
             "RESTORE_WIN64_NATIVE_XMMS",
-            "POP rsi",
-            "POP rdi",
-            "ret",
-            ".Losr_entry:",
-            "CFI_RESTORE_STATE_AND_DEF_CFA rsp, 192",
-            "#else",
             "CFI_RESTORE_STATE_AND_DEF_CFA rsp, 80",
             "jmp *%rdx",
+        ],
+    )
+    osr_return = source_region(quick, ".Losr_return:", ".seh_endproc")
+    require_ordered(
+        osr_return,
+        "Win64 OSR return source",
+        [
+            ".seh_stackalloc 184",
+            ".seh_savereg %r15, 8",
+            ".seh_savexmm %xmm6, 64",
+            ".seh_savexmm %xmm11, 144",
+            ".seh_savereg %rbp, 176",
+            ".seh_endprologue",
+            "movq 8(%rsp), %r15",
+            "movdqu 64(%rsp), %xmm6",
+            "movdqu 144(%rsp), %xmm11",
+            "movq 176(%rsp), %rbp",
+            "movq %rax, (%rcx)",
+            "addq LITERAL(184), %rsp",
+            "ret",
         ],
     )
 
@@ -250,14 +284,9 @@ def restore_tokens() -> list[str]:
 
 
 def check_boundary_objects(win_dis: str, linux_dis: str) -> None:
-    for symbol in BOUNDARY_SYMBOLS:
+    for symbol in ("art_quick_invoke_stub", "art_quick_invoke_static_stub"):
         win_body = object_function(win_dis, symbol)
         linux_body = object_function(linux_dis, symbol)
-        call_token = (
-            "callq\t*0x18(%rdi)"
-            if symbol != "art_quick_osr_stub"
-            else "callq\t"
-        )
         require_ordered(
             win_body,
             f"Win64 {symbol} object",
@@ -267,7 +296,7 @@ def check_boundary_objects(win_dis: str, linux_dis: str) -> None:
                 "movq\t0x38(%rsp), %r10",
                 "movq\t0x40(%rsp), %r11",
                 *save_tokens(),
-                call_token,
+                "callq\t*0x18(%rdi)",
                 "popq\t%rbp",
                 *restore_tokens(),
                 "popq\t%rsi",
@@ -282,6 +311,45 @@ def check_boundary_objects(win_dis: str, linux_dis: str) -> None:
             fail(f"Linux {symbol} unexpectedly gained Win64 XMM boundary saves")
         if "subq\t$0x60, %rsp" in linux_body:
             fail(f"Linux {symbol} unexpectedly reserves the Win64 save area")
+
+    symbol = "art_quick_osr_stub"
+    win_body = object_function(win_dis, symbol)
+    linux_body = object_function(linux_dis, symbol)
+    require_ordered(
+        win_body,
+        "Win64 art_quick_osr_stub object",
+        [
+            "movq\t0x28(%rsp), %r10",
+            "movq\t0x30(%rsp), %r11",
+            "pushq\t%rbp",
+            "pushq\t%rdi",
+            "pushq\t%rsi",
+            *save_tokens(),
+            "movq\t%rsp, %rbp",
+            "jmp\t",
+            "subq\t%rcx, %rsp",
+            "rep\t\tmovsb",
+            "jmpq\t*%rdx",
+            "callq\t",
+            "movq\t0x8(%rsp), %r15",
+            "movq\t0x28(%rsp), %rbx",
+            "movdqu\t0x40(%rsp), %xmm6",
+            "movdqu\t0x90(%rsp), %xmm11",
+            "movq\t0xa0(%rsp), %rsi",
+            "movq\t0xa8(%rsp), %rdi",
+            "movq\t%rax, (%rcx)",
+            "addq\t$0xb8, %rsp",
+            "retq",
+        ],
+    )
+    if win_body.count("subq\t$0x60, %rsp") != 1:
+        fail("Win64 art_quick_osr_stub must reserve exactly one XMM save area")
+    if win_body.count("addq\t$0xb8, %rsp") != 1:
+        fail("Win64 art_quick_osr_stub must have one RSP-based return epilogue")
+    if "movdqu" in linux_body:
+        fail("Linux art_quick_osr_stub unexpectedly gained Win64 XMM saves")
+    if "subq\t$0x60, %rsp" in linux_body:
+        fail("Linux art_quick_osr_stub unexpectedly reserves the Win64 save area")
 
 
 def main() -> int:

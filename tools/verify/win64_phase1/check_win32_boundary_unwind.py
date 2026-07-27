@@ -23,12 +23,12 @@ BOUNDARIES = {
         "PUSH_NONVOL reg=R13",
         "PUSH_NONVOL reg=R14",
         "PUSH_NONVOL reg=R15",
-        "SAVE_XMM128 reg=XMM6",
-        "SAVE_XMM128 reg=XMM7",
-        "SAVE_XMM128 reg=XMM8",
-        "SAVE_XMM128 reg=XMM9",
-        "SAVE_XMM128 reg=XMM10",
-        "SAVE_XMM128 reg=XMM11",
+        "SAVE_XMM128 reg=XMM6, offset=0x40",
+        "SAVE_XMM128 reg=XMM7, offset=0x50",
+        "SAVE_XMM128 reg=XMM8, offset=0x60",
+        "SAVE_XMM128 reg=XMM9, offset=0x70",
+        "SAVE_XMM128 reg=XMM10, offset=0x80",
+        "SAVE_XMM128 reg=XMM11, offset=0x90",
     ),
     "art_quick_invoke_static_stub": (
         "FrameRegister: RBP",
@@ -41,12 +41,32 @@ BOUNDARIES = {
         "PUSH_NONVOL reg=R13",
         "PUSH_NONVOL reg=R14",
         "PUSH_NONVOL reg=R15",
-        "SAVE_XMM128 reg=XMM6",
-        "SAVE_XMM128 reg=XMM7",
-        "SAVE_XMM128 reg=XMM8",
-        "SAVE_XMM128 reg=XMM9",
-        "SAVE_XMM128 reg=XMM10",
-        "SAVE_XMM128 reg=XMM11",
+        "SAVE_XMM128 reg=XMM6, offset=0x40",
+        "SAVE_XMM128 reg=XMM7, offset=0x50",
+        "SAVE_XMM128 reg=XMM8, offset=0x60",
+        "SAVE_XMM128 reg=XMM9, offset=0x70",
+        "SAVE_XMM128 reg=XMM10, offset=0x80",
+        "SAVE_XMM128 reg=XMM11, offset=0x90",
+    ),
+    "art_quick_osr_stub": (
+        "FrameRegister: RBP",
+        "FrameOffset: 0x0",
+        "SET_FPREG reg=RBP, offset=0x0",
+        "ALLOC_SMALL size=96",
+        "PUSH_NONVOL reg=RDI",
+        "PUSH_NONVOL reg=RSI",
+        "PUSH_NONVOL reg=RBP",
+        "PUSH_NONVOL reg=RBX",
+        "PUSH_NONVOL reg=R12",
+        "PUSH_NONVOL reg=R13",
+        "PUSH_NONVOL reg=R14",
+        "PUSH_NONVOL reg=R15",
+        "SAVE_XMM128 reg=XMM6, offset=0x40",
+        "SAVE_XMM128 reg=XMM7, offset=0x50",
+        "SAVE_XMM128 reg=XMM8, offset=0x60",
+        "SAVE_XMM128 reg=XMM9, offset=0x70",
+        "SAVE_XMM128 reg=XMM10, offset=0x80",
+        "SAVE_XMM128 reg=XMM11, offset=0x90",
     ),
     "art_quick_generic_jni_trampoline": (
         "FrameRegister: R12",
@@ -167,6 +187,39 @@ def main() -> int:
             for marker in required:
                 if marker not in record:
                     errors.append(f"{name}: missing {marker}")
+        osr_address = base + rvas["art_quick_osr_stub"]
+        osr_record = records.get(osr_address, "")
+        osr_end_match = re.search(
+            r"EndAddress:\s*\((0x[0-9A-Fa-f]+)\)", osr_record
+        )
+        if osr_end_match is None:
+            errors.append("art_quick_osr_stub: missing end address")
+        else:
+            return_address = int(osr_end_match.group(1), 16)
+            return_record = unwind_records(readobj, dll, {return_address}).get(
+                return_address
+            )
+            if return_record is None:
+                errors.append("art_quick_osr_stub: missing contiguous return unwind range")
+            else:
+                return_required = (
+                    "PrologSize: 0",
+                    "FrameRegister: -",
+                    "ALLOC_LARGE size=184",
+                    "SAVE_NONVOL reg=R15, offset=0x8",
+                    "SAVE_NONVOL reg=R14, offset=0x10",
+                    "SAVE_NONVOL reg=R13, offset=0x18",
+                    "SAVE_NONVOL reg=R12, offset=0x20",
+                    "SAVE_NONVOL reg=RBX, offset=0x28",
+                    "SAVE_XMM128 reg=XMM6, offset=0x40",
+                    "SAVE_XMM128 reg=XMM11, offset=0x90",
+                    "SAVE_NONVOL reg=RSI, offset=0xA0",
+                    "SAVE_NONVOL reg=RDI, offset=0xA8",
+                    "SAVE_NONVOL reg=RBP, offset=0xB0",
+                )
+                for marker in return_required:
+                    if marker not in return_record:
+                        errors.append(f"art_quick_osr_return: missing {marker}")
         if errors:
             print("Win64 boundary unwind audit failed:", file=sys.stderr)
             for error in errors:

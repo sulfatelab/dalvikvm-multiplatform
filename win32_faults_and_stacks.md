@@ -4,7 +4,8 @@
 verified under Wine and Linux; static fatal boundaries plus dynamic-JIT frame
 anchors, PE serialization, xdata placement, runtime registration, collection
 lifecycle, and threshold-zero fatal dispatch are locally implemented and
-verified; native Windows Stage E, OSR-stub unwind, and full XMM6-XMM15 boundary
+verified; the static OSR entry/return ranges are structurally and live-unwind
+verified under Wine; native Windows Stage E and full XMM6-XMM15 boundary
 acceptance remain
 **Created:** 2026-07-26
 **Updated:** 2026-07-27
@@ -85,11 +86,12 @@ The selected design is:
     threads or JIT initialization if the process policy is active.
 14. Provide correctness-grade Win64 unwind descriptions wherever Windows may
     dispatch a fatal exception across ART-managed frames. Static invoke/JNI
-    boundary records are implemented. Dynamic optimizing/JNI code uses
-    Windows-JIT-only fixed `RBP` anchors or a fixed-RSP CriticalNative shape,
-    explicit compact PE unwind bytes, xdata in the existing JIT data
-    allocation, and one immutable `RtlAddFunctionTable` registration per code
-    allocation owned by the JIT code cache.
+    boundary records and the split OSR entry/return records are implemented.
+    Dynamic optimizing/JNI code uses Windows-JIT-only fixed `RBP` anchors or a
+    fixed-RSP CriticalNative shape, explicit compact PE unwind bytes, xdata in
+    the existing JIT data allocation, and one immutable
+    `RtlAddFunctionTable` registration per code allocation owned by the JIT
+    code cache.
 
 ## 2. Scope and ownership
 
@@ -223,15 +225,23 @@ The current tree now has the active W-010 product capability:
   operations, and resumes managed execution; the gate requests 16 collections
   across each NPE run and one collection after each of the four caught SOEs.
 - Win64 PE unwind records now cover `art_quick_invoke_stub`,
-  `art_quick_invoke_static_stub`, and `art_quick_generic_jni_trampoline`.
-  Structural inspection verifies their fixed allocation, nonvolatile GPR/XMM
-  saves, and frame anchors. With `-Xint`, an unhandled JNI native AV crosses
-  these records, reaches ART's UEF, and creates a new valid `MDMP` dump.
+  `art_quick_invoke_static_stub`, `art_quick_generic_jni_trampoline`, and both
+  contiguous ranges of `art_quick_osr_stub`. Structural inspection verifies
+  their fixed allocations, nonvolatile GPR/XMM saves, frame anchors, and the
+  OSR return range's inherited 184-byte RSP frame. With `-Xint`, an unhandled
+  JNI native AV crosses the exercised invoke/JNI records, reaches ART's UEF,
+  and creates a new valid `MDMP` dump.
 - The invoke and OSR native-to-managed stubs currently preserve full-width
-  XMM6-XMM11; the invoke unwind records describe those saves. Stage E must
+  XMM6-XMM11; their unwind records describe those saves at the completed-frame
+  offsets, including the 64 bytes allocated after the XMM stores. Stage E must
   extend every such native boundary to XMM6-XMM15 because ART's managed scalar
   preservation of XMM12-XMM15 is only 64 bits while the Microsoft ABI requires
   128 bits.
+- The focused OSR unwind probe resolves the exported entry record and its
+  contiguous return record, unwinds from 256 bytes below the fixed frame,
+  restores RBP/RDI/RSI/RBX/R12-R15 and XMM6-XMM11, proves return unwinding with
+  a managed-clobbered RBP, and exercises the canonical return epilogue. The
+  actual dual-view/J-1 default-nterp and switch OSR matrix passes 8/8.
 - Dynamic optimizing and JNI JIT allocations now append DWORD-aligned unwind
   bytes after roots and `CodeInfo`, write them through the data RW alias, and
   expose them through the primary read-only low-4-GiB view. `JitCodeCache`
@@ -248,14 +258,15 @@ The current tree now has the active W-010 product capability:
   diagnostic VEH and UEF and creates a new valid `MDMP` dump in both J-2 and
   J-1. This proves fatal exception dispatch across the exercised dynamic JIT
   chain. It does not yet prove debugger-quality minidump stack reconstruction,
-  concurrent sampling under large-table churn, or the separate OSR-stub path.
+  concurrent sampling under large-table churn, or native fatal dispatch from
+  the OSR copied-stack interval.
 
 Stage D and the selected dynamic-JIT runtime-function implementation are
 therefore locally complete. Stage E must still reproduce the generated-fault,
 handler-chain, debugger, stack-budget, fatal-UEF, HSP policy, and dynamic-table
-stress matrix on native Windows 10/current Windows. It must also add and accept
-the OSR stub's static record and full-width XMM6-XMM15 preservation before
-claiming all native-to-managed fatal paths.
+stress matrix on native Windows 10/current Windows. It must accept the static
+OSR entry/return records on native Windows and add full-width XMM6-XMM15
+preservation before claiming all native-to-managed fatal paths.
 
 ## 5. Windows contracts and conclusions
 
@@ -760,6 +771,12 @@ The first locally implemented boundary set is deliberately small:
 - The invoke records describe RDI, RSI, RBP, RBX, R12-R15 and XMM6-XMM11; a
   structural verifier resolves the exports and checks the emitted `.pdata` /
   `.xdata` records instead of trusting assembly source annotations.
+- `art_quick_osr_stub` uses one RBP-anchored entry range for the fixed save
+  area and variable copied-stack body, followed immediately by an RSP-based
+  return range that does not assume OSR code preserved the native RBP anchor.
+  The emitted verifier checks both contiguous records and their exact save
+  offsets; the live probe virtually unwinds the variable body, return body,
+  and canonical return epilogue.
 
 Those records make the static `-Xint` JNI crash path reach the UEF and produce
 a valid minidump. Section 7.9 now complements them with range-accurate one-entry
@@ -768,7 +785,7 @@ methods, tied to the code-cache allocation lifetime. The threshold-zero J-2 and
 J-1 fatal gates now cross the exercised dynamic chain, reach UEF, and create a
 valid dump. Dumping directly from the diagnostic VEH remains unnecessary and
 would not restore foreign frame-based SEH semantics; debugger-quality dump
-stack reconstruction and the separate OSR-stub path still require acceptance.
+stack reconstruction and native OSR fatal-path acceptance still remain.
 
 An opt-in diagnostic build may add a final observer VEH or a preallocated
 record ring, but it must be off by default and must not run before the managed
@@ -889,13 +906,15 @@ the invoke and OSR stubs must save and restore the full 128-bit XMM6-XMM15
 native state outside the canonical ART managed frame, and every boundary PE
 record must describe the saves that can participate in Windows unwind. The
 current implementation and focused sentinels cover only XMM6-XMM11; the
-emitted unwind verifier currently covers the two invoke records. Full-width
-XMM12-XMM15 boundary preservation is a Stage E prerequisite before claiming
-complete native context restoration, even though the existing XMM6-XMM11
-sentinel and fatal minidump probes pass. `art_quick_osr_stub` also needs a
-static PE runtime-function record for its fixed saves, `RBP` anchor, and
-variable copied-stack interval before fatal dispatch through OSR can be
-claimed.
+emitted unwind verifier covers both invoke records plus the OSR entry and
+return records. The unwind offsets are relative to the completed fixed frame,
+not the temporary RSP used by each store: the six saves therefore occupy
+offsets 64 through 144 after accounting for the later 64 bytes of fixed GPR
+and bookkeeping state. The live OSR probe independently proved that
+`RtlVirtualUnwind()` restores all six values from both OSR ranges. Full-width
+XMM12-XMM15 boundary preservation is still a Stage E prerequisite before
+claiming complete native context restoration, even though the existing
+XMM6-XMM11 sentinels and fatal minidump probes pass.
 
 Intermediate dynamic managed records describe the stack allocation, frame
 anchor, and pushed nonvolatile GPRs needed to recover caller control state.
@@ -1094,7 +1113,11 @@ The following local J-2 and J-1 checks pass:
 - production code-cache invalidation, collection, lookup disappearance, exact
   mspace address reuse, re-registration, and replacement-code execution;
 - threshold-zero fatal dispatch through an optimizing caller and JIT JNI stub
-  to VEH, UEF, and a new valid minidump; and
+  to VEH, UEF, and a new valid minidump;
+- structural `.pdata`/`.xdata` inspection plus live `RtlVirtualUnwind()` of
+  the OSR variable copied-stack body, inherited-frame return range, and return
+  epilogue, followed by the 8/8 dual/J-1 default/switch OSR execution matrix;
+  and
 - normal/FastNative and CriticalNative ABI regressions plus Linux compiler and
   runtime rebuilds.
 
@@ -1108,8 +1131,8 @@ The remaining acceptance and stress gates are:
 - broader `RtlLookupFunctionEntry()` sampling across many published methods;
 - recursive `RtlVirtualUnwind2()` tracing through the complete fatal native AV
   chain, including the static invoke boundary and outer native frame;
-- structural and live unwind checks for the OSR stub's static runtime-function
-  record, including the variable copied-stack interval;
+- native Windows lookup/unwind and fatal-dispatch acceptance for both static
+  OSR runtime-function ranges;
 - a foreign frame-based SEH wrapper around a threshold-zero invocation, plus
   the existing UEF/minidump gate;
 - rollback fault injection before registration, after registration, and at
@@ -1121,6 +1144,63 @@ The remaining acceptance and stress gates are:
   unwind; and
 - Linux optimized/JNI CFI tests and full ART rebuilds, proving no non-Windows
   code-generation change.
+
+### 7.10 Static OSR boundary unwind design
+
+`art_quick_osr_stub` cannot use one ordinary native frame recipe from entry to
+return. Before the OSR jump, its fixed 184-byte save area is stable and RBP can
+anchor a variable copied stack. After the jumped-to managed method returns,
+however, RBP contains the value reconstructed from the copied managed frame;
+it is not the private native anchor established before the jump. Relying on
+that register made synthetic unwinding pass but failed the real switch-OSR
+return path.
+
+The implemented layout therefore has two contiguous PE runtime-function
+ranges:
+
+```text
+art_quick_osr_stub entry range
+  capture Microsoft stack arguments
+  push native RBP/RDI/RSI
+  reserve and save XMM6-XMM11
+  save result/shorty slots and RBX/R12-R15
+  push null ArtMethod slot
+  RBP = fixed RSP
+  jump around the variable-copy body
+  variable-copy body: move RSP downward, copy, jump to OSR code
+  final instruction: call variable-copy body
+
+contiguous OSR return range
+  entry RSP = original native RSP - 184
+  restore from fixed RSP offsets without trusting managed RBP
+  add RSP, 184
+  ret
+```
+
+The call is deliberately the final instruction in the first range, so its
+return address is exactly the first byte of the second range. The entry record
+uses `FrameRegister=RBP`, `FrameOffset=0`, and covers the variable copied-stack
+interval. The return record has a zero-length logical prologue and describes
+the already inherited fixed frame with `UWOP_ALLOC_LARGE(184)`,
+`UWOP_SAVE_NONVOL` for RBP/RDI/RSI/RBX/R12-R15, and `UWOP_SAVE_XMM128` for
+XMM6-XMM11. Its executable body performs the same restores and ends in the
+canonical `add rsp, 184; ret` epilogue.
+
+This split is Windows-only. Linux retains the original call, shared restore
+sequence, CFI state, and control flow. The Win64 entry still uses the same
+184-byte components and the same copied managed stack; only the order of the
+fixed native saves and the placement of the variable-copy body differ.
+
+`check_win32_boundary_unwind.py` verifies exact emitted records, including the
+contiguous return range and completed-frame XMM offsets. The standalone
+`win32_osr_unwind_probe` resolves both records with
+`RtlLookupFunctionEntry()`, places RSP 256 bytes below the fixed frame, and
+proves variable-body, managed-RBP-independent return-body, and epilogue
+unwinding with GPR and XMM restoration. Wine passes this live probe and the
+actual 8/8 OSR execution matrix. Native Windows must repeat both before the
+OSR fatal path is accepted; the zero-prologue inherited-frame record is a
+deliberate platform adapter and must not be generalized to ordinary called
+functions.
 
 ## 8. W-014 detailed stack design
 
@@ -1607,9 +1687,10 @@ Implementation and local evidence (2026-07-26):
   a future/reserved bit, old-build unavailability, and failure cases. Under
   Wine it reports build 19043, zero flags, and `PASS`.
 - The structural/package verifier reports 9 CMake harnesses, 3 direct links,
-  5 enforced host packagers, 19 Ninja PE link targets, and 20 inspected PE
-  files including external LLVM `c++.dll`, all with no CET-compatible marker.
-  The selected Win64 build completed 321 steps
+  6 enforced host packagers, and 25 Ninja PE link targets. It inspects 25 PE
+  files in the build tree and 53 when the focused W-010/W-014 staged package
+  is included, with no CET-compatible marker, including external LLVM
+  `c++.dll`. The selected Win64 build completed 321 steps
   and `dalvikvm
   -showversion` reports `ART version 2.1.0 x86_64` under Wine.
 - The complete Phase-4 Wine suite passes after the change, including W-002,
@@ -1751,9 +1832,13 @@ evidence belongs to Stage E and is not implied by Wine.
 ### Stage E — fatal unwind, native acceptance, and cleanup
 
 - **Implemented locally:** PE unwind records for the two native invoke stubs
-  and generic JNI trampoline, a structural emitted-record audit, and a
-  hardened static `-Xint` JNI crash gate that requires VEH, UEF, minidump
-  marker, and a newly created valid `MDMP` file.
+  and generic JNI trampoline; split entry/return records for the OSR stub; a
+  structural emitted-record audit; a live OSR lookup/virtual-unwind probe; and
+  a hardened static `-Xint` JNI crash gate that requires VEH, UEF, minidump
+  marker, and a newly created valid `MDMP` file. The OSR probe covers a
+  variable copied-stack RSP, managed-clobbered RBP on return, GPR/XMM restore,
+  and the canonical return epilogue. The actual dual/J-1 default/switch OSR
+  matrix passes 8/8.
 - **Dynamic compiler/runtime implementation:** the x86_64 assembler serializes
   version-1 PE unwind bytes independently of DWARF CFI, optimizing Win64 JIT
   methods reserve and force-spill `RBP` then establish it after the fixed
@@ -1765,10 +1850,11 @@ evidence belongs to Stage E and is not implied by Wine.
   publication, unregisters before reuse, and clears before teardown. Focused
   J-2/J-1 registry, collection/reuse, and threshold-zero fatal UEF/minidump
   gates pass.
-- **Still open:** add the OSR static unwind record, extend native-to-managed
-  boundary full-width XMM preservation from XMM6-XMM11 to XMM6-XMM15, and pass
-  native foreign-frame SEH, debugger, large-table churn/sampling, rollback-
-  injection, and debugger-quality dump-stack gates.
+- **Still open:** accept both OSR static ranges and an OSR fatal path on native
+  Windows, extend native-to-managed boundary full-width XMM preservation from
+  XMM6-XMM11 to XMM6-XMM15, and pass native foreign-frame SEH, debugger,
+  large-table churn/sampling, rollback-injection, and debugger-quality
+  dump-stack gates.
 - Run the complete matrix below on Windows 10 build 17134+ and a current
   Windows release.
 - Keep Wine as a development oracle and Linux as the behavior oracle.
@@ -1894,7 +1980,7 @@ and debugger evidence.
 | `runtime/multiplatform/windows/fault_handler_windows.cc` | Not required; the Stage C dispatcher remains narrow enough to live in `sigchain_windows.cc` |
 | `runtime/multiplatform/windows/fault_handler_windows.h` | Windows-only non-owning context view and documented AV-kind constants; no common-header Win32 leakage |
 | `runtime/arch/x86/fault_handler_x86.cc` | Win64 non-owning context view, real `CONTEXT` PC/SP/RAX access, read-only stack-fault and protected-page checks |
-| `runtime/arch/x86_64/quick_entrypoints_x86_64.S` | Implemented PE unwind records for the two native invoke stubs and generic JNI trampoline; Stage E still needs an OSR record and full-width XMM12-XMM15 preservation across all invoke/OSR native-to-managed boundaries |
+| `runtime/arch/x86_64/quick_entrypoints_x86_64.S` | Implemented PE unwind records for the two native invoke stubs, generic JNI trampoline, and split OSR entry/return ranges; corrected XMM6-XMM11 unwind offsets to the completed fixed frame; Stage E still needs native OSR fatal acceptance and full-width XMM12-XMM15 preservation across all invoke/OSR native-to-managed boundaries |
 | `compiler/utils/x86_64/win64_unwind_info.h`, `assembler_x86_64.*`, and `compiler/optimizing/code_generator_x86_64.{h,cc}` | Implemented SDK-independent version-1 PE serializer plus Windows-JIT-only forced `RBP` anchor; Linux and non-JIT code paths unchanged |
 | `compiler/jni/quick/jni_compiler.*`, calling-convention files, and `compiler/utils/x86_64/jni_macro_assembler_x86_64.*` | Implemented RBP-anchored normal/FastNative JIT stubs, fixed-RSP CriticalNative descriptors, reserved-frame scratch selection, and opaque metadata carry independent of DWARF CFI |
 | `runtime/multiplatform/windows/jit_unwind_windows.{h,cc}` and `runtime/jit/jit_code_cache.*` | Implemented stable one-entry dynamic-function registry, publish-after-register rule, exact deletion, unregister-before-free/reuse, and clear-before-teardown ownership |
@@ -1907,8 +1993,8 @@ and debugger evidence.
 | `compat/src/win64_posix_stubs.c` | Implemented `_beginthreadex`, handle/result lifetime, join/detach, tagged external identity, exact current-stack bounds, and stack attributes |
 | `runtime/runtime.cc` | Implemented diagnostic handler shutdown, common implicit null/SO activation, Linux-like started-runtime sigchain invariant, and early nterp range registration |
 | `tools/verify/win64_phase1/check_win32_cet_contract.py` and `win32_cet_policy_probe.cc` | Implemented link/PE audit plus deterministic and actual-policy probe |
-| `tools/verify/win64_phase1/check_win32_boundary_unwind.py` and `tools/verify/win64_phase4/run_crashnative.sh` | Implemented emitted boundary-record audit and hardened static JNI fatal gate requiring a new valid minidump |
-| `tools/verify/win64_phase1/win32_thread_stack_probe.c`, `win32_stack_page_probe.cc`, `win32_stack_page_fault_probe.S`, `win32_fault_record_probe.cc`, `win32_sigchain_probe.cc`, `win32_jit_unwind_info_probe.cc`, `win32_jit_unwind_registry_probe.cc`, and Phase 4 probe scripts | Implemented Stage A reservation/identity/lifetime gate, Stage B synthetic selection/restore/direct-fault gate, Stage C deterministic record/live VEH gate, Stage D nterp/JIT managed-fault stress, and Stage E serialization, runtime registry, collection/reuse lifecycle, and threshold-zero fatal-dispatch coverage |
+| `tools/verify/win64_phase1/check_win32_boundary_unwind.py`, `win32_osr_unwind_probe.cc`, `tools/verify/win64_phase4/run_osr_unwind_probe.sh`, and `run_crashnative.sh` | Implemented exact emitted boundary-record audit, live split-OSR lookup/virtual-unwind/epilogue gate, and hardened static JNI fatal gate requiring a new valid minidump |
+| `tools/verify/win64_phase1/win32_thread_stack_probe.c`, `win32_stack_page_probe.cc`, `win32_stack_page_fault_probe.S`, `win32_fault_record_probe.cc`, `win32_sigchain_probe.cc`, `win32_jit_unwind_info_probe.cc`, `win32_jit_unwind_registry_probe.cc`, and Phase 4 probe scripts | Implemented Stage A reservation/identity/lifetime gate, Stage B synthetic selection/restore/direct-fault gate, Stage C deterministic record/live VEH gate, Stage D nterp/JIT managed-fault stress, and Stage E static OSR, serialization, runtime registry, collection/reuse lifecycle, and threshold-zero fatal-dispatch coverage |
 
 The exact split between `sigchain_windows.cc` and
 `fault_handler_windows.cc` is an implementation detail. There must still be

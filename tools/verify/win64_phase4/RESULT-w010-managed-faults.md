@@ -3,7 +3,8 @@
 **Status:** focused Wine and Linux managed-fault verification PASS; static and
 dynamic JIT fatal-unwind dispatch PASS locally; dynamic-JIT frame anchoring,
 PE serialization, xdata placement, runtime registration, collection/reuse
-lifecycle, and J-2/J-1 fatal dispatch PASS; native Windows Stage E remains
+lifecycle, J-2/J-1 fatal dispatch, and split static OSR lookup/virtual-unwind
+PASS; native Windows Stage E remains
 **Date:** 2026-07-27
 
 ## Product behavior
@@ -88,6 +89,13 @@ requires no change.
 - Static `-Xint` JNI native AV: emitted unwind audit passes for the two invoke
   stubs and generic JNI trampoline; the crash reaches initial VEH and UEF and
   creates a new valid `MDMP` minidump.
+- Static OSR unwind: the emitted audit verifies the RBP-anchored entry range
+  and its contiguous zero-prologue RSP-based return range, including exact
+  completed-frame XMM offsets. `run_osr_unwind_probe.sh` resolves both records,
+  virtually unwinds from 256 bytes below the fixed frame, restores
+  RBP/RDI/RSI/RBX/R12-R15 and XMM6-XMM11, repeats return unwinding with managed
+  RBP deliberately clobbered, and verifies the canonical `add rsp,184; ret`
+  epilogue. The real W-002 dual/J-1 default/switch OSR matrix passes 8/8.
 - Threshold-zero JIT JNI native AV: the optimizing caller and JNI stub compile,
   both J-2 and J-1 reach initial VEH and UEF, and each run creates a changed or
   new valid `MDMP` minidump.
@@ -133,5 +141,6 @@ a valid dump across the exercised optimizing/JIT-JNI path. It does not prove
 debugger-quality minidump stack reconstruction or concurrent native sampling
 under large dynamic-table churn. Stage E must cover those on native Windows,
 extend native-to-managed boundary preservation from full-width XMM6-XMM11 to
-XMM6-XMM15, and add the OSR stub's static runtime-function record before fatal
-dispatch through its variable copied-stack interval is supported.
+XMM6-XMM15, repeat both OSR runtime-function lookups/unwinds, and accept an OSR
+fatal path before native fatal dispatch through its variable copied-stack
+interval is supported.

@@ -52,6 +52,12 @@ def parse_report(path: Path) -> dict[str, str]:
         "win32_boundary_unwind OK "
     ):
         fail("structural report does not contain the boundary unwind PASS marker")
+    if not re.fullmatch(
+        r"win32_osr_unwind_probe failures=0 prologue=\d+ "
+        r"entry_frame_offset=0 return_prologue=0 variable_rsp_delta=256",
+        values.get("osr_unwind", ""),
+    ):
+        fail("structural report does not contain the OSR unwind PASS marker")
     return values
 
 
@@ -115,6 +121,7 @@ def check_package(root: Path) -> None:
         "win32_stack_page_probe.exe",
         "win32_fault_record_probe.exe",
         "win32_sigchain_probe.exe",
+        "win32_osr_unwind_probe.exe",
         "run/boot.jar",
         "run/w010managedfaultprobe.jar",
         "run/crashnativeprobe.jar",
@@ -136,6 +143,7 @@ def check_package(root: Path) -> None:
         ("dalvikvm.exe", "dalvikvm_sha256"),
         ("art.dll", "art_sha256"),
         ("sigchain.dll", "sigchain_sha256"),
+        ("win32_osr_unwind_probe.exe", "osr_probe_sha256"),
         ("run/w010managedfaultprobe.jar", "managed_jar_sha256"),
     ):
         if report.get(key) != sha256(root / relative):
@@ -147,6 +155,8 @@ def check_package(root: Path) -> None:
         "Test-PackageIntegrity",
         "Test-StructuralReport",
         "win32_cet_policy_probe.exe",
+        "win32_osr_unwind_probe.exe",
+        "entry_frame_offset=0 return_prologue=0 variable_rsp_delta=256",
         "actual=disabled",
         "requested=65536",
         "requested=9437184",
@@ -169,16 +179,18 @@ def check_package(root: Path) -> None:
         fail("host runner must not require LLVM inspection tools")
 
     checklist = (root / "W010_W014_HOST_CHECKLIST.md").read_text(encoding="utf-8")
+    checklist_normalized = " ".join(checklist.split())
     for marker in (
         "Hardware-enforced Stack Protection",
         "NO_HANDLED_DMP_FILES",
         "static `-Xint` fatal JNI native AV",
+        "live split OSR lookup and virtual unwind",
         "dynamically emitted JIT code",
         "debugger",
         "forced-policy",
         "review_w010_w014_host_result.py",
     ):
-        if marker not in checklist:
+        if marker not in checklist_normalized:
             fail(f"host checklist is missing required scope text: {marker}")
 
     check_manifest(root)
