@@ -160,8 +160,11 @@ def check_boundary_source(quick: str) -> None:
             "#endif",
         ],
     )
-    if quick.count("    SAVE_WIN64_NATIVE_XMMS\n") != 3:
-        fail("expected exactly three Win64 native XMM save sites")
+    # The two invoke stubs carry inline saves so their PE unwind directives
+    # describe every XMM store. OSR has no PE record yet and continues to use
+    # the shared annotation-free helper.
+    if quick.count("    SAVE_WIN64_NATIVE_XMMS\n") != 1:
+        fail("expected exactly one shared Win64 native XMM save site for OSR")
     if quick.count("    RESTORE_WIN64_NATIVE_XMMS\n") != 3:
         fail("expected exactly three Win64 native XMM restore sites")
 
@@ -182,7 +185,9 @@ def check_boundary_source(quick: str) -> None:
                 "pushq %rsi",
                 "movq 0x38(%rsp), %r10",
                 "movq 0x40(%rsp), %r11",
-                "SAVE_WIN64_NATIVE_XMMS",
+                "subq LITERAL(96), %rsp",
+                "movdqu %xmm6, 0(%rsp)",
+                "movdqu %xmm11, 80(%rsp)",
                 f"LOOP_OVER_SHORTY_LOADING_XMMS xmm6, {xmm_label}",
                 f"{gpr_label}:",
                 "call *ART_METHOD_QUICK_CODE_OFFSET_64(%rdi)",

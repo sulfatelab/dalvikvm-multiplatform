@@ -165,8 +165,26 @@ def check_source(repo: Path) -> None:
     codegen = (
         art / "compiler/optimizing/code_generator_x86_64.cc"
     ).read_text(encoding="utf-8")
-    if "| (1u << R15)" not in codegen:
+    blocked = source_function(
+        codegen,
+        "inline RegisterSet CodeGeneratorX86_64::ComputeBlockedRegisters() const {",
+        "return blocked_registers;\n}",
+    )
+    require_ordered(
+        blocked,
+        "Win64 optimizing blocked-register source",
+        [
+            "#if defined(_WIN32) || defined(ART_TARGET_WINDOWS)",
+            "core_registers |= (1u << R15);",
+            "if (GetCompilerOptions().IsJitCompiler()) {",
+            "core_registers |= (1u << RBP);",
+            "#endif",
+        ],
+    )
+    if blocked.count("core_registers |= (1u << R15);") != 1:
         fail("Win64 optimizing compiler no longer blocks R15")
+    if blocked.count("core_registers |= (1u << RBP);") != 1:
+        fail("Win64 JIT optimizing compiler no longer blocks its RBP frame anchor")
     if "{ RBX, RBP, R12, R13, R14 };" not in codegen:
         fail("Win64 compiled callee-save set unexpectedly includes R15")
 

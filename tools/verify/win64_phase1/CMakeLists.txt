@@ -142,6 +142,11 @@ add_executable(win32_cet_policy_probe EXCLUDE_FROM_ALL
 target_include_directories(win32_cet_policy_probe PRIVATE
   "${MDVM_ART_WIN_RUNTIME}")
 
+add_executable(win32_jit_unwind_info_probe EXCLUDE_FROM_ALL
+  "${CMAKE_CURRENT_SOURCE_DIR}/win32_jit_unwind_info_probe.cc")
+target_include_directories(win32_jit_unwind_info_probe PRIVATE
+  "${MDVM_ART_DIR}/compiler")
+
 include(${CMAKE_CURRENT_SOURCE_DIR}/phase1.cmake)
 
 add_executable(win64_w013_mem_map_probe EXCLUDE_FROM_ALL
