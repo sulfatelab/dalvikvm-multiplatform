@@ -1,6 +1,6 @@
 # Win64 Phase 4 — RESULT
 
-**Status:** **WINE COMPLETE; FOCUSED NATIVE SUBSETS ACCEPTED; W-010/W-014 DIAGNOSIS ACTIVE** — W-002, W-003, W-004, and W-024 native matrices are accepted. The second W-010/W-014 build-19044 run passes CET, reservations, direct page state, NPE, sigchain/frame-SEH, OSR unwind, and XMM6-XMM15, but native recursive SOE reaches `STATUS_STACK_OVERFLOW` and all fatal AV origins miss UEF/minidump after VEH.
+**Status:** **WINE COMPLETE; FOCUSED NATIVE SUBSETS ACCEPTED; W-010/W-014 REDESIGN/DIAGNOSIS ACTIVE** — W-002, W-003, W-004, and W-024 native matrices are accepted. W-010/W-014 run 3 proves recursive Windows stack growth converts ART's fixed page to committed `PAGE_READWRITE` before `STATUS_STACK_OVERFLOW`, invalidating fixed-page SOE delivery. Standalone UEF dispatch works and ART still owns the UEF slot immediately before the JNI crash, but the fatal path reaches neither late nor ART UEF after VEH; GenericJNI/common-boundary traversal is the next target.
 **Date:** 2026-07-27
 **Depends on:** Phase 3 complete (real Win10 G12 goldens)
 
@@ -38,7 +38,7 @@
 | W-010 threshold-zero JIT fatal dispatch | **PASS, J-2/J-1** | `run_jit_fatal_unwind.sh` (VEH, UEF, changed/new valid `MDMP`) |
 | W-010 OSR-origin fatal dispatch | **PASS, J-2/J-1** | `run_osr_fatal_unwind.sh` (real switch OSR jump, VEH, UEF, new valid `MDMP`) |
 | W-010/W-014 native package preflight | **PASS under Wine** | `package_win64_w010_w014.sh` (unchanged 30-record acceptance runner plus separate stack-growth/UEF diagnostics) |
-| W-010/W-014 isolated failure diagnostics | **PASS for Wine-safe modes** | baseline/writable/direct stack growth; frame-SEH/main/chain/worker UEF; late ART predecessor/UEF/minidump. Protected recursive growth is native-only because Wine itself crashes. |
+| W-010/W-014 isolated failure diagnostics | **PASS on native build 19044** | run 3: baseline/protected/writable/direct stack state; frame-SEH/main/chain/worker UEF; late ART predecessor ownership. Fixed-page SOE invalidated; UEF replacement ruled out. |
 | Full suite | **PASS** | `run_all_wine_gates.sh` |
 
 Evidence: `evidence/all_wine_gates.txt`, `evidence/crashnative.txt`
@@ -113,9 +113,9 @@ JOBS=32 WINEDEBUG=-all \
 
 The Linux-side preflight passes package integrity, the complete Wine matrix,
 all fatal origins, the safe isolated diagnostics, per-case preservation of
-valid minidumps, and the final clean-package checker. Native execution and
-returned-evidence review remain required; a Wine package smoke is not native
-acceptance.
+valid minidumps, and the final clean-package checker. A Wine package smoke is
+not native acceptance; the returned build-19044 acceptance and diagnostic
+results below remain authoritative for native behavior.
 
 The second returned Windows 10 build-19044 package has 20 PASS and 12 FAIL
 records. It closes ordinary CET classification, exact requested reservations,
@@ -123,7 +123,29 @@ direct fixed-page restoration, NPE translation, sigchain/frame-SEH, OSR live
 unwind, and six XMM6-XMM15 sentinel runs. Switch/nterp/JIT SOE all terminate
 with native stack overflow before ART's fixed-page AV. Static, JIT J-2/J-1,
 and OSR J-2/J-1 fatal AVs all reach VEH but not UEF/dump. Run the separate
-diagnostics before changing stack delivery or JIT unwind code.
+diagnostics before changing stack delivery or JIT unwind code; the run-3 result
+below supplies that evidence.
+
+The third returned diagnostic archive,
+`/tmp/diag-log-win64_w010_w014_host-run3.zip`, matches the issued package and
+completes the isolated matrix. Baseline/protected/writable recursion reaches
+`STATUS_STACK_OVERFLOW`; direct access to the protected page still produces
+the expected AV. At protected-mode termination the selected page is part of a
+2,093,056-byte committed `PAGE_READWRITE` region, and writable mode can
+re-protect it before `_resetstkoflw()`. The prior error 13 is secondary; normal
+Windows stack growth has already consumed the fixed page as stack backing.
+
+Standalone unhandled main-thread and worker-thread AVs reach UEF, direct
+predecessor chaining reaches both filters, and frame SEH consumes its AV as
+expected. The late ART probe reports its predecessor inside `art.dll`
+immediately before the crash, then only the ART VEH marker appears: neither
+late nor ART UEF runs, no dump marker is emitted, and no dump is created. This
+rules out UEF replacement, debugger attachment, the PowerShell runner, and
+dump-path/API failure. The captured return site maps to
+`art_quick_generic_jni_trampoline + 0xc5`; current GenericJNI metadata has only
+structural coverage, so the next test is a realistic GenericJNI
+`RtlVirtualUnwind()` frame plus JNI raised/hardware AV and JNI-created native
+worker isolation. It is not yet evidence that the metadata itself is wrong.
 
 ## Non-goals
 
@@ -133,9 +155,10 @@ diagnostics before changing stack delivery or JIT unwind code.
 
 ## Next
 
-- Return the stack-growth and UEF diagnostics from native Windows. Use them to
-  redesign or repair managed SOE delivery and distinguish UEF replacement from
-  dispatch/unwind failure. Then repeat the repaired SOE and static/JIT/OSR
+- Add realistic GenericJNI virtual-unwind and JNI/native-worker exception-
+  dispatch probes. Design a replacement Windows SOE delivery mechanism that
+  does not rely on retaining a fixed no-access page inside the system stack.
+  Then repeat the repaired SOE and static/JIT/OSR
   fatal matrix, debugger/stack-budget work, forced named-incompatible CET
   policies, exception-unwind XMM coverage, and dynamic-table churn/sampling on
   Windows 10/current Windows.

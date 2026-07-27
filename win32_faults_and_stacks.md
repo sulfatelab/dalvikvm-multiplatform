@@ -1,12 +1,13 @@
 # Win64 managed faults and ART stack design
 
-**Status:** W-010 Stages 0/C/D and W-014 Stages A-B are implemented; the second
-Windows 10 build-19044 Stage E run passes 20 checks and fails 12. Native stack
-bounds/reservations, direct fixed-page operations, NPE translation, sigchain,
-OSR unwind, CET classification, and XMM6-XMM15 preservation pass. Recursive
-SOE reaches Windows `STATUS_STACK_OVERFLOW` before ART's fixed page, and fatal
-AVs reach VEH but not UEF/minidump. The stack-overflow mechanism and fatal UEF
-dispatch are therefore reopened pending the packaged diagnostics.
+**Status:** W-010 Stages 0/C/D and W-014 Stages A-B are implemented; native
+Windows 10 build-19044 diagnostics now invalidate the fixed-page recursive SOE
+mechanism and rule out UEF replacement. Windows commits/reprotects the fixed
+page as ordinary `PAGE_READWRITE` during stack growth, then raises
+`STATUS_STACK_OVERFLOW`; fatal JNI AV reaches ART's VEH while ART still owns
+the UEF slot, but top-level UEF dispatch is not reached. Managed SOE delivery
+must be redesigned, and fatal dispatch investigation is narrowed to the common
+native/managed boundary, beginning with realistic GenericJNI unwind coverage.
 **Created:** 2026-07-26
 **Updated:** 2026-07-27
 **Target:** x86_64 Windows 10 build 17134+
@@ -31,9 +32,11 @@ boundaries.
 The stable decisions and currently implemented candidate are:
 
 1. Keep ART's existing implicit null-check model. Keep Linux-like implicit
-   stack probes as the preferred low-divergence result, but do not call the
-   fixed-page implementation accepted: native recursive stress has failed and
-   the stack-overflow delivery choice is reopened.
+   stack probes as the preferred low-divergence result, but do not use the
+   current fixed-page implementation for recursive SOE delivery: native
+   Windows stack growth overwrites its protection and reaches native stack
+   overflow first. The generated probes may remain if a narrow Windows
+   delivery adapter can preserve their common semantics.
 2. Implement a process-wide ART managed-fault VEH with
    `AddVectoredExceptionHandler(1, ...)`. It handles only recognized,
    continuable `EXCEPTION_ACCESS_VIOLATION` records and returns
@@ -53,9 +56,10 @@ The stable decisions and currently implemented candidate are:
    `STATUS_STACK_OVERFLOW`; its final input contract is reopened.
 6. Treat Windows `EXCEPTION_STACK_OVERFLOW`, `PAGE_GUARD`, and the moving OS
    stack guard as native Windows mechanisms. The implemented separate fixed
-   `PAGE_NOACCESS` page works for direct access and under Wine, but Windows
-   build 19044 reaches the moving guard first during switch, nterp, and JIT
-   recursion. Do not assume the generated probe will arrive as an AV.
+   `PAGE_NOACCESS` page works for direct access and under Wine, but recursive
+   growth on Windows build 19044 commits/reprotects it as `PAGE_READWRITE` and
+   reaches native stack overflow first. The fixed page cannot be retained
+   unchanged inside a Windows-owned thread-stack reservation.
 7. Discover the current system stack with
    `GetCurrentThreadStackLimits()`, reject `IsThreadAFiber()`, validate the
    complete allocation with `VirtualQuery()`, and reject attachment if the
@@ -65,8 +69,9 @@ The stable decisions and currently implemented candidate are:
    `PAGE_NOACCESS`/`PAGE_GUARD` page. Select the first suitable reserved or
    ordinary committed page above that excluded-low prefix as ART's fixed
    `PAGE_NOACCESS` page, followed by ART's existing 8 KiB x86_64 overflow
-   reserve. This selection/restoration machinery remains valid, but native
-   evidence shows that page placement alone is not a complete SOE design.
+   reserve. This selection/restoration machinery remains useful for direct
+   page-state tests and any future bounded stack adapter, but it is not a
+   viable recursive SOE mechanism on a Windows-owned system stack.
 9. Create CRT-using ART threads with `_beginthreadex`, not raw `CreateThread`.
    For a non-zero requested stack size, pass
    `STACK_SIZE_PARAM_IS_A_RESERVATION`. Replace the current thread-ID/reopen
@@ -233,9 +238,11 @@ The current tree now has the active W-010 product capability:
   `art_quick_invoke_static_stub`, `art_quick_generic_jni_trampoline`, and both
   contiguous ranges of `art_quick_osr_stub`. Structural inspection verifies
   their fixed allocations, nonvolatile GPR/XMM saves, frame anchors, and the
-  OSR return range's inherited 248-byte RSP frame. With `-Xint`, an unhandled
-  JNI native AV crosses the exercised invoke/JNI records, reaches ART's UEF,
-  and creates a new valid `MDMP` dump.
+  OSR return range's inherited 248-byte RSP frame. Wine's `-Xint` crash gate
+  reaches ART's UEF and creates a valid `MDMP`, but native build 19044 does not.
+  The GenericJNI record currently has structural coverage only; no probe yet
+  calls `RtlVirtualUnwind()` on a realistic GenericJNI body/native-return
+  frame.
 - The invoke and OSR native-to-managed stubs now preserve full-width
   XMM6-XMM15 in a 160-byte Windows-only adapter area. Their unwind records
   describe all ten saves at completed-frame offsets 64 through 208. ART's
@@ -274,9 +281,13 @@ The implementation is locally complete under Wine for the static boundaries,
 dynamic JIT registration/lifecycle, fatal paths, full-width XMM boundary
 state, and managed-fault/stack matrix. The second native run validates a large
 subset but disproves the fixed-page recursive SOE assumption and exposes an
-independent fatal-UEF dispatch failure. Those two failures now gate further
-product design; debugger, stack-budget, forced-policy, and dynamic-table
-stress remain additional native acceptance work.
+independent fatal-UEF dispatch failure. The third native diagnostic run proves
+the fixed page is overwritten by normal Windows stack growth and proves ART
+still owns the UEF slot immediately before the crash. Managed SOE therefore
+needs a new delivery design; fatal dispatch work is narrowed to native
+exception traversal across the common GenericJNI/managed boundary. Debugger,
+stack-budget, forced-policy, and dynamic-table stress remain additional native
+acceptance work.
 
 ### 4.1 Second native Stage E result and current diagnosis
 
@@ -305,16 +316,18 @@ Wine preserves an 8192-byte bottom prefix and selects an already committed
 Windows classifies it as native stack overflow before ART sees a read AV in
 its fixed page. The switch path additionally reports
 `ART stack page was not private read/write before protect` with error 13 after
-the page was temporarily writable. The leading hypothesis is that Windows'
-moving guard reaches or changes that page during recovery. A passing direct
+the page was temporarily writable. Run 3 resolves that observation: recursive
+growth commits/reprotects the selected page as ordinary `PAGE_READWRITE`, and
+pre-reset re-protection succeeds. The error 13 was secondary. A passing direct
 page probe does not model recursive stack growth and cannot validate SOE.
 
 The fatal AV failures are a separate class. Static `-Xint`, JIT J-2/J-1, and
 OSR J-2/J-1 all reach `ART Win64 VEH: exception 0xc0000005`, then exit with
 the AV status without an ART UEF marker or dump. Identical behavior across all
 five origins is not evidence of a JIT unwind defect. The next distinction is
-whether ART's UEF was replaced, whether ordinary top-level dispatch is being
-bypassed, or whether the fatal dalvikvm path cannot unwind to it.
+whether ordinary top-level dispatch is being bypassed or the fatal dalvikvm
+path cannot unwind to it. Run 3 later rules out UEF replacement and narrows
+that question to native exception traversal across the common boundary.
 
 The diagnostic package now contains:
 
@@ -332,8 +345,50 @@ UEF modes, and the late chain where ART is the predecessor and writes a valid
 dump. Wine 10.0 itself segfaults in protected recursive stack growth, so that
 case is intentionally native-only. See
 `tools/verify/win64_phase4/W010_W014_DIAGNOSTICS.md` for the interpretation
-matrix. No production stack or UEF fix should be selected before the native
-diagnostic return.
+matrix.
+
+### 4.2 Third native diagnostic result
+
+`/tmp/diag-log-win64_w010_w014_host-run3.zip` matches the issued package and
+completes every isolated diagnostic on Windows build 19044. The stack result is
+decisive:
+
+- baseline, protected, and writable recursive modes terminate with
+  `STATUS_STACK_OVERFLOW`; direct access to the protected page still produces
+  the expected `EXCEPTION_ACCESS_VIOLATION`;
+- the protected mode starts with the selected page as `PAGE_NOACCESS`, but at
+  the terminal overflow `VirtualQuery()` reports a 2,093,056-byte committed
+  `PAGE_READWRITE` region beginning at that page;
+- the fault is above the fixed page, not an AV in it; and
+- writable mode successfully re-protects the page before `_resetstkoflw()` and
+  restores it afterward. The earlier error 13 was therefore a secondary ART
+  state-check/recovery symptom, not the root cause.
+
+Do not describe this as Windows moving `PAGE_GUARD` onto the fixed page. The
+observed terminal state is ordinary `PAGE_READWRITE`: normal recursive stack
+growth commits/reprotects the page and Windows raises stack overflow before the
+Linux-style fixed-page event can occur. Selection, direct protection, and exact
+restoration remain valid infrastructure, but fixed-page recursive SOE delivery
+inside a Windows-owned stack reservation is invalidated.
+
+The standalone UEF probe also closes the process-level hypotheses. Main-thread
+and `_beginthreadex` worker AVs reach a UEF, direct predecessor chaining reaches
+both filters, and a frame SEH handler consumes its own AV before UEF as
+documented. No debugger is attached. Immediately before the ART fatal probe, a
+late filter observes that its predecessor is still inside `art.dll`; the crash
+then reaches `ART Win64 VEH` but reaches neither the late filter nor ART's UEF,
+creates no minidump marker, and creates no dump. UEF replacement, the runner,
+and dump-path/API failure are therefore ruled out at this stage.
+
+The captured native stack contains a return address at
+`art_quick_generic_jni_trampoline + 0xc5`; an adjacent
+`art_jni_dlsym_lookup_stub` address is likely saved data or function-pointer
+state rather than a proven call frame. This narrows the next diagnosis to
+Windows exception traversal across GenericJNI and the managed/native boundary,
+but does not prove the GenericJNI unwind record is wrong. The next probes must
+exercise `RtlVirtualUnwind()` on a realistic GenericJNI frame and isolate JNI
+`RaiseException`, JNI hardware AV, and a JNI-created native worker AV before
+any production unwind repair is selected.
 
 ## 5. Windows contracts and conclusions
 
@@ -369,8 +424,9 @@ Windows guard pages are one-shot alarms. On first access Windows raises
 guard page to grow thread stacks. ART needs repeatable managed-overflow
 delivery, so directly substituting `PAGE_GUARD` for Linux's fixed page remains
 invalid. However, native build 19044 also proves that a separate
-`PAGE_NOACCESS` page is not sufficient unchanged: normal guard growth reaches
-native stack overflow first and may alter the temporarily writable ART page.
+`PAGE_NOACCESS` page is not sufficient unchanged: recursive stack growth
+commits/reprotects that page as ordinary `PAGE_READWRITE` and reaches native
+stack overflow first.
 
 ### 5.4 Native stack overflow is observed but not yet a valid ART event
 
@@ -379,9 +435,11 @@ the event the current W-010 classifier expects. Native Windows instead reports
 `EXCEPTION_STACK_OVERFLOW` for the real recursive probes. That event has
 different recovery rules, including compiler/CRT guard restoration. It must
 not be translated blindly as ART SOE, but it can no longer be dismissed as an
-irrelevant native-only condition. The diagnostic stage must determine whether
-a safe platform adapter can preserve the required PC, SP, frame, and recovery
-invariants.
+irrelevant native-only condition. The protected/writable diagnostic proves that
+pre-reset re-protection succeeds, but Windows has already consumed the fixed
+page as stack backing by then. Any replacement must be a narrow platform
+adapter that preserves the required PC, SP, frame, and repeatable recovery
+invariants; retaining the Linux fixed page unchanged is no longer an option.
 
 ### 5.5 The system stack interval is a documented API
 
@@ -862,15 +920,26 @@ The first locally implemented boundary set is deliberately small:
   records and exact save offsets; the live probe virtually unwinds the
   variable body, return body, and canonical return epilogue.
 
-Those records make the static `-Xint` JNI crash path reach the UEF and produce
-a valid minidump. Section 7.9 complements them with range-accurate one-entry
+Under Wine those records make the static `-Xint` JNI crash path reach the UEF
+and produce a valid minidump. Native build 19044 reaches the diagnostic VEH but
+does not reach UEF even while ART still owns the UEF slot. Section 7.9
+complements the static records with range-accurate one-entry
 `RtlAddFunctionTable` records for dynamically generated optimizing and JNI JIT
 methods, tied to the code-cache allocation lifetime. The threshold-zero J-2 and
 J-1 JIT-origin and switch-OSR-origin fatal gates cross their complete exercised
-chains, reach UEF, and each create a valid dump. Dumping directly from the
+chains under Wine, reach UEF, and each create a valid dump. Dumping directly from the
 diagnostic VEH remains unnecessary and would not restore foreign frame-based
 SEH semantics; debugger-quality dump stack reconstruction and native stress
 remain native-host work.
+
+The current GenericJNI `.pdata` record covers the trampoline body with an R12
+frame anchor and a 5120-byte allocation, but its verification is structural.
+Unlike invoke and OSR, no live or synthetic gate has yet built the real
+completed-frame/native-argument layout and called `RtlVirtualUnwind()` at the
+native-call return PC. The run-3 stack maps that return PC to
+`art_quick_generic_jni_trampoline + 0xc5`, making that missing test the next
+narrow proof point. It is a coverage gap, not evidence by itself that the
+metadata is defective.
 
 An opt-in diagnostic build may add a final observer VEH or a preallocated
 record ring, but it must be off by default and must not run before the managed
@@ -1350,9 +1419,9 @@ low-stack-safe diagnostic. This makes these unsupported in the first product:
 This is safer than pretending a manual stack belongs to Windows thread-stack
 growth machinery.
 
-### 8.3 Windows lower-stack layout
+### 8.3 Windows lower-stack layout and invalidated fixed-page candidate
 
-The selected conceptual layout is:
+The implemented fixed-page candidate uses this conceptual layout:
 
 ```text
 high / GetCurrentThreadStackLimits.HighLimit
@@ -1374,6 +1443,12 @@ lowest allocation page. If the following page is already `PAGE_NOACCESS` or
 `PAGE_GUARD`, ART skips that complete region as well. This handles both the
 usual native reserved-bottom layout and the fully committed Wine layout that
 has already shown `PAGE_NOACCESS` followed by `PAGE_GUARD`.
+
+This remains the exact selection/restoration layout in the current tree, but
+it is no longer the selected product SOE mechanism. Native recursive growth
+commits/reprotects the candidate page as ordinary stack backing. A replacement
+may reuse the measured bounds and page-state infrastructure, but must not rely
+on that page remaining `PAGE_NOACCESS` while Windows grows the stack.
 
 The page-selection algorithm is:
 
@@ -1982,9 +2057,18 @@ not as the final managed-overflow mechanism.
 - **Diagnostic stage:** the package adds isolated stack-growth and UEF probes
   plus a late ART UEF ownership mode under a separate PowerShell runner. The
   acceptance record count is unchanged.
+- **Third native diagnostic result:** recursive protected growth changes the
+  selected page from `PAGE_NOACCESS` to ordinary committed `PAGE_READWRITE`
+  before `STATUS_STACK_OVERFLOW`; direct access still AVs, and pre-reset
+  re-protection succeeds. Standalone main/worker/chained UEF dispatch passes,
+  and the late probe proves ART still owns the UEF slot immediately before the
+  crash, but neither late nor ART UEF runs after the VEH marker. Fixed-page SOE
+  delivery is invalidated, UEF replacement is ruled out, and the fatal path is
+  narrowed to native exception traversal across GenericJNI/managed frames.
 - **Still open:** repeat the static ranges, full-width XMM6-XMM15
   exception-unwind sentinel and fatal paths after UEF dispatch is repaired,
-  redesign or repair managed SOE delivery, and pass native debugger,
+  add realistic GenericJNI `RtlVirtualUnwind()` and JNI/native-worker exception
+  isolation, redesign managed SOE delivery, and pass native debugger,
   large-table churn/sampling, rollback-injection, and debugger-quality
   dump-stack gates. Native normal-return XMM, OSR live unwind, and foreign
   VEH/frame-SEH already pass in the second run.
@@ -2143,10 +2227,9 @@ one VEH owner and one managed dispatch path.
 These are validation questions, not permission to improvise new product
 fallbacks:
 
-1. On build 19044 the bottom candidate is reserved at `low + 4096`, and native
-   recursion reaches `STATUS_STACK_OVERFLOW` before the fixed page can provide
-   ART's AV. Does the isolated protected/writable probe show Windows moving
-   `PAGE_GUARD` onto that page, and is this identical on current Windows?
+1. Repeat the build-19044 recursive result on a current Windows release: the
+   selected page becomes ordinary committed `PAGE_READWRITE`, not
+   `PAGE_GUARD`, before `STATUS_STACK_OVERFLOW`, while direct protection works.
 2. How much stack do Windows exception dispatch, the ART VEH, the quick throw
    stub, and the code before `UnprotectStack()` consume in release and debug
    builds?
@@ -2169,9 +2252,14 @@ fallbacks:
 7. Does the locally implemented full-width XMM6-XMM15 adapter survive native
    Windows normal managed return and exception unwind through several
    optimizing and JNI frames?
-8. Why does early ART UEF registration miss every native fatal origin? Use the
-   standalone and late-ownership probes to distinguish replacement, dispatch
-   bypass, and failure inside ART's filter before changing unwind metadata.
+8. Does a realistic synthetic GenericJNI frame virtually unwind from the
+   native-call return/body PC to the expected caller with the current R12-
+   anchored record? Structural metadata checks alone do not answer this.
+9. Do JNI `RaiseException(EXCEPTION_ACCESS_VIOLATION)`, a JNI hardware AV, and
+   an AV on a JNI-created `_beginthreadex` worker differ in UEF dispatch? Use
+   that matrix to separate exception-shape effects from traversal across the
+   common GenericJNI/managed boundary. ART UEF replacement, standalone Windows
+   UEF behavior, debugger attachment, and dump creation are already ruled out.
 
 ## 16. Primary references and comparative implementation
 
