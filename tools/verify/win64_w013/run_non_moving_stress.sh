@@ -56,7 +56,6 @@ if ! (
         -Xbootclasspath:run/boot.jar \
         -Xbootclasspath-locations:run/boot.jar \
         -Ximage:/nonexistent-no-boot-image \
-        -Xno-sig-chain \
         -XjdwpProvider:none \
         -Xint \
         -Xms2m \

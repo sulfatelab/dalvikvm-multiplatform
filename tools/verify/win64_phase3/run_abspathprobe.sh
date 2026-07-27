@@ -19,7 +19,7 @@ import subprocess, os, sys
 build=os.getcwd()
 env=os.environ.copy()
 env.update({'ANDROID_ROOT':'run','ANDROID_ART_ROOT':'run','ANDROID_I18N_ROOT':'run','ANDROID_DATA':'run/data','ICU_DATA':'run/icu','WINEDEBUG':env.get('WINEDEBUG','-all')})
-base=['timeout','45','wine64','./dalvikvm.exe','-Xbootclasspath:run/boot.jar','-Xbootclasspath-locations:run/boot.jar','-Ximage:/nonexistent-no-boot-image','-Xno-sig-chain','-XjdwpProvider:none','-Xint','-Xms64m','-Xmx512m']
+base=['timeout','45','wine64','./dalvikvm.exe','-Xbootclasspath:run/boot.jar','-Xbootclasspath-locations:run/boot.jar','-Ximage:/nonexistent-no-boot-image','-XjdwpProvider:none','-Xint','-Xms64m','-Xmx512m']
 fail=0
 for label,cp in [
   ('P2_fwd', r'C:/art_phase3/abs_dir/hello.jar'),

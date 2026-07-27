@@ -1,6 +1,6 @@
 # Win64 Phase 4 — RESULT
 
-**Status:** **WINE COMPLETE; FOCUSED NATIVE SUBSETS ACCEPTED** — A5–A8 and managed/native JIT hardening gates pass; W-002, W-003, W-004, and W-024 native closure matrices are accepted; W-010 Stage C adapter is focused-Wine verified and remains dormant
+**Status:** **WINE COMPLETE; FOCUSED NATIVE SUBSETS ACCEPTED** — A5–A8 and managed/native JIT hardening gates pass; W-002, W-003, W-004, and W-024 native closure matrices are accepted; W-010 Stages C-D are focused-Wine verified and product implicit null/SO translation is active
 **Date:** 2026-07-27
 **Depends on:** Phase 3 complete (real Win10 G12 goldens)
 
@@ -29,7 +29,8 @@
 | W-002 OSR matrix | **PASS, 8/8** | `run_w002_osr_probe.sh` |
 | W-002 attached-thread matrix | **PASS, 8/8** | `run_w002_attach_probe.sh`; each raw thread now detaches, uses native stack, and reattaches |
 | W-014 thread reservation/lifetime/fixed page | **PASS** | `run_thread_stack_probe.sh` |
-| W-010 dormant fault record/context adapter | **PASS** | `run_fault_adapter_probe.sh` (`failures=0 cases=8`; live probe `calls=2 first=0 second=0`) |
+| W-010 fault record/context adapter | **PASS** | `run_fault_adapter_probe.sh` (`failures=0 cases=8`; live probe `calls=2 first=0 second=0`) |
+| W-010 active nterp/JIT managed faults | **PASS** | `run_w010_managed_fault_probe.sh` (started-runtime no-chain rejection; 64 read + 64 write NPEs; repeated main/child SOEs in nterp and threshold-zero JIT; no handled-fault diagnostics/dump change) |
 | Full suite | **PASS** | `run_all_wine_gates.sh` |
 
 Evidence: `evidence/all_wine_gates.txt`, `evidence/crashnative.txt`
@@ -58,6 +59,7 @@ PASS native_crash_aborts
 | W-003 native package and evidence | `package_win64_w003.sh`; `evidence/w003_host/ACCEPTANCE.md` |
 | W-014 Stages A-B stack/pthread/page gate | `../win64_phase1/win32_thread_stack_probe.c`; `../win64_phase1/win32_stack_page_probe.cc`; `../win64_phase1/win32_stack_page_fault_probe.S`; `run_thread_stack_probe.sh` |
 | W-010 Stage C adapter and probes | `../win64_phase1/win32_fault_record_probe.cc`; `../win64_phase1/win32_sigchain_probe.cc`; `run_fault_adapter_probe.sh`; `vendor/art/runtime/multiplatform/windows/sigchain_windows.cc` |
+| W-010 Stage D activation and stress | `src/W010ManagedFaultProbe.java`; `run_w010_managed_fault_probe.sh`; common runtime null/SO flags and early nterp range registration |
 
 ## Host
 
@@ -97,12 +99,34 @@ sentinel runs. See `evidence/w003_host/ACCEPTANCE.md`.
 
 ## Next
 
-- Keep W-010 dormant while implementing the atomic Stage D capability gate;
-  prove generated nterp/JIT NPE/SOE and negative/chain cases before enabling
-  implicit checks.
-- Complete W-014 Stages A-B native acceptance and W-010 native Stage C/E
-  acceptance on Windows 10/current Windows.
+- Complete W-014 Stages A-B/E native acceptance and W-010 native Stage E
+  acceptance on Windows 10/current Windows: generated nterp/JIT NPE/SOE,
+  foreign VEH/SEH/debugger ordering, stack-budget measurements, fatal
+  predecessor-UEF/dump behavior, and HSP-disabled/forced-policy cases.
 - Complete W-025 broader JIT-mapping native acceptance and hardening
+
+## W-010 Stage D activation re-run (2026-07-27)
+
+Win64 now enables common implicit null and stack-overflow checks, keeps x86_64
+implicit suspend checks off, registers stack before null, and registers
+nterp's immutable code range before startup can publish nterp entrypoints.
+Normal started runtimes reject `-Xno-sig-chain`; active product and host
+runners no longer pass it.
+
+Focused Wine acceptance passes:
+
+- 64 caught read NPEs and 64 caught write NPEs in nterp;
+- the same NPE matrix in threshold-zero JIT with the faulting caller compiled;
+- two caught main-thread plus two caught child-thread SOEs in each mode, with
+  the recursive JIT methods compiled;
+- no managed-fault diagnostic VEH/UEF marker and no dump-state change; and
+- unmanaged native AV still reaching fatal diagnostics.
+
+The rebuilt complete Phase-4 aggregate reports `PASS all wine Phase 4 gates`.
+Win64 `art`/`dalvikvm`, Linux `art`/`dalvikvm`,
+`dalvikvm -showversion`, and shared-boot imageless Hello also pass. Wine is
+development evidence; native Windows Stage E remains required. See
+[`RESULT-w010-managed-faults.md`](RESULT-w010-managed-faults.md).
 
 ## Multiplatform re-run (2026-07-17)
 

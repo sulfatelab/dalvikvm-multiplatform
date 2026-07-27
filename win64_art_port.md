@@ -6,8 +6,9 @@ Product tree: **dalvikvm-multiplatform** (nested vendor + artmp_*).
 
 Status: historical feasibility and phased-port record; Phases 0–3 gate-complete,
 Phase 4 Wine-complete with focused native W-024/W-013 acceptance, x86_64
-quick/nterp/managed/native JIT enabled by default, and W-010 Stage C focused
-Wine verification; generated-fault activation remains open
+quick/nterp/managed/native JIT enabled by default, and W-010 Stages C-D
+focused Wine verification with product implicit null/SO translation active;
+native Stage E remains open
 Updated: 2026-07-27
 
 **Living tracker (leftovers + temporary workarounds):** [win32_open_items.md](win32_open_items.md)
@@ -677,12 +678,14 @@ Each phase has a kill-or-continue gate. This is the execution roadmap when imple
 ### Phase 2 — Interpreter Hello (2–4 months) — **DONE (2026-07-16, wine64 A3)**
 
 - Crash-diagnostic VEH was sufficient for the Phase-2 Hello path; managed
-  implicit-null and stack-overflow fault translation did not land and remains
-  W-010. W-014 Stages A-B have since implemented accurate Windows stack
+  implicit-null and stack-overflow fault translation did not exist at that
+  checkpoint and was tracked as W-010. W-014 Stages A-B have since implemented
+  accurate Windows stack
   bounds, requested reservation sizing, pthread lifetime, measured excluded-low
   accounting, the fixed ART protected page, and detach restoration. The
-  dormant W-010 Stage C exact-record/live-`CONTEXT` adapter is also
-  implemented. Native A-B/C acceptance and W-010 Stage D activation remain.
+  W-010 Stage C exact-record/live-`CONTEXT` adapter and Stage D atomic
+  null/SO activation are also implemented. Native A-B/E and handler-policy
+  acceptance remain.
   Their selected coupled design is
   [win32_faults_and_stacks.md](win32_faults_and_stacks.md).
 - MemMap extensions for heap + boot image optional (imageless OK).
@@ -723,7 +726,7 @@ all product paths. Windows NIO.2 remains a non-goal.
 ### Phase 4 — Hardening (2–4 months) — **WINE COMPLETE; FOCUSED NATIVE SUBSETS PASS**
 
 - GC stress, multi-thread stress, crash dumps, resource leaks handles — **PASS** under wine64 (`tools/verify/win64_phase4/`).
-- Crash path: separate diagnostic VEH plus predecessor-preserving unhandled filter and **MiniDumpWriteDump** to `run/crash/*.dmp` (`runtime_windows.cc`); the dormant W-010 managed VEH/context adapter has a focused Wine gate but is not product-enabled.
+- Crash path: separate diagnostic VEH plus predecessor-preserving unhandled filter and **MiniDumpWriteDump** to `run/crash/*.dmp` (`runtime_windows.cc`); the W-010 managed VEH/context adapter is product-enabled for exact Win64 nterp/JIT implicit null and stack-overflow faults and has focused Wine stress.
 - Performance smoke (arraycopy/string churn) **PASS**.
 - **Gate:** A5–A8 stable under Wine. Focused native Windows W-024 JNI/JVMTI and
   W-013 heap/JIT/handle/repeated-start matrices pass; the broader general
@@ -756,7 +759,7 @@ the feasibility record, not as a current schedule.
 
 | Risk | Severity | Mitigation |
 |------|----------|------------|
-| VEH ≠ Linux signals subtlety | Critical | Diagnostic VEH/minidump support and the dormant W-010 exact-record/non-owning-`CONTEXT` adapter are landed and Wine-verified, but generated-code translation remains disabled. The selected design reuses common `FaultManager`, chains every unrecognized exception, validates R15 and the W-014 page, and still needs atomic activation, debugger ordering, negative AVs, stack budget, and repeated nterp/JIT NPE/SOE on native Windows. |
+| VEH ≠ Linux signals subtlety | Critical | Diagnostic VEH/minidump support and the active W-010 exact-record/non-owning-`CONTEXT` adapter are landed and Wine-verified. Common `FaultManager` now translates repeated nterp/JIT NPE/SOE while validating R15 and the W-014 page; every unrecognized exception still continues search. Native Windows debugger/foreign-VEH/SEH ordering, negative AVs, stack budget, fatal predecessor-UEF behavior, and repeated NPE/SOE remain required. |
 | CET user shadow-stack mismatch | Critical | Current x86_64 `art_quick_do_long_jump` restores the regular stack and returns without synchronizing CET's protected return stack; W-010 also redirects `CONTEXT.Rip`/`Rsp`. Stage 0 now marks every project PE `/CETCOMPAT:NO`, audits packaged DLLs, and rejects any nonzero process HSP policy before memory/thread/JIT startup. Compatibility, audit, and strict modes are unsupported; native forced-policy acceptance remains and CFG is separate. |
 | Windows stack discovery / growth differs from pthread stacks | Critical | W-014 Stages A-B reject fibers, use `GetCurrentThreadStackLimits()` plus a complete `VirtualQuery()` allocation walk, apply `_beginthreadex` reservation semantics with retained join handles/tagged external identities, pass thread-pool reservation sizes, measure the bottom exclusion, and install/restore a verified fixed `PAGE_NOACCESS` page without adopting Windows' moving one-shot `PAGE_GUARD`. Native small/default/large reservation, guard-growth, and detach/reattach acceptance remains. |
 | Win64 ABI assembly volume | Critical | x86_64 quick/nterp/JIT bridges are implemented; retain Linux/Win64 ABI matrices |
@@ -819,9 +822,9 @@ See `tools/verify/win64_phase2/RESULT.md` and `tools/verify/win64_phase1/hello_a
   audit; runtime/compiler/JIT metadata and the card table now follow Linux-like
   anywhere placement.
 - VEH register + stack dump; SignalCatcher skipped; `-Xno-sig-chain` was
-  allowed for the historical Phase-2 interpreter path. The W-010 product
-  design permits it only with a mode that cannot execute nterp/JIT implicit
-  faults.
+  allowed for the historical Phase-2 interpreter path. Stage D removes that
+  Windows exception: normal started runtimes reject it exactly as Linux does;
+  only genuine non-started compiler/tool runtimes retain the option.
 - W-014 Stages A-B exact current-stack validation, `_beginthreadex` reservation
   semantics, opaque join/detach/result lifetime, tagged external thread
   identity, Windows thread-pool sizing, measured excluded-low accounting,
@@ -921,6 +924,7 @@ broader JIT-memory hardening remains W-025 and is maintained in
 ---
 
 *Updated 2026-07-27: Phases 0–3 gated; Phase 4 Wine hardening complete;
-focused native W-024 and W-013 matrices pass; W-010 Stage C exact-record/live
-context probes pass under Wine while generated-fault activation and broader
+focused native W-024 and W-013 matrices pass; W-010 Stages C-D exact-record,
+live-context, and repeated nterp/JIT NPE/SOE probes pass under Wine with
+product implicit null/SO translation active; native Stage E and broader
 H-001/W-025 host work remain.*

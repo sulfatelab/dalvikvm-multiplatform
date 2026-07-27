@@ -18,7 +18,7 @@ env.update({
 })
 base=['timeout','45','wine64','./dalvikvm.exe',
   '-Xbootclasspath:run/boot.jar','-Xbootclasspath-locations:run/boot.jar',
-  '-Ximage:/nonexistent-no-boot-image','-Xno-sig-chain','-XjdwpProvider:none','-Xint',
+  '-Ximage:/nonexistent-no-boot-image','-XjdwpProvider:none','-Xint',
   '-Xms64m','-Xmx512m']
 # Hello regression
 r=subprocess.run(base+['-cp','run/hello.jar','Hello'], cwd=build, env=env, capture_output=True, text=True)

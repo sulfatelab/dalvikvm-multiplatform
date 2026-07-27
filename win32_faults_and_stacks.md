@@ -1,8 +1,7 @@
 # Win64 managed faults and ART stack design
 
-**Status:** W-010 Stage C adapter and W-014 Stages A-B implemented and locally
-verified under Wine; implicit-fault activation, native acceptance, and Stages
-D-E remain
+**Status:** W-010 Stages 0/C/D and W-014 Stages A-B implemented and locally
+verified under Wine and Linux; native Windows Stage E acceptance remains
 **Created:** 2026-07-26
 **Updated:** 2026-07-27
 **Target:** x86_64 Windows 10 build 17134+
@@ -168,7 +167,8 @@ no-op-protection workarounds:
   current-SP containment and committed-private ownership, and walks the full
   allocation with `VirtualQuery()` before publishing bounds. Its temporary
   one-page `guardsize` report is not treated as an authoritative Windows guard
-  or excluded-low measurement while implicit stack checks remain disabled.
+  or excluded-low measurement; `InitStack()` replaces it with the measured
+  excluded-low prefix before publishing ART bounds.
 - `pthread_create()` uses `_beginthreadex`; non-zero sizes use reservation
   semantics, custom stack addresses are rejected, joinable handles and
   callback results have real ownership, and detach closes the handle exactly
@@ -187,8 +187,7 @@ no-op-protection workarounds:
   transitions. `Thread` teardown directly restores and verifies the original
   reserved or committed state before an external native thread can continue.
 
-The current tree now has the dormant W-010 adapter, but the product capability
-is intentionally not enabled yet:
+The current tree now has the active W-010 product capability:
 
 - `sigchain_windows.cc` owns one immutable special-`SIGSEGV` action and a
   first VEH. It filters exact continuable access violations, adapts the real
@@ -197,15 +196,22 @@ is intentionally not enabled yet:
 - `runtime_windows.cc` still owns a separate diagnostic VEH. It may log fatal
   first-chance events, but it never translates managed faults. The fatal UEF
   writes a best-effort dump and chains to its predecessor, or returns search.
-- Runtime initialization still forces implicit null, stack-overflow, and
-  suspend flags off. Consequently nterp and optimizing code retain their
-  Linux-shaped implicit accesses, while the dormant adapter is exercised only
-  by focused probes and cannot yet turn product NPE/SOE faults into Java
-  exceptions.
+- Runtime initialization enables implicit null and stack-overflow checks on
+  Win64 x86_64 and keeps implicit suspend checks disabled, matching ART's
+  x86_64 policy. Common handlers retain Linux order: stack before null.
+- Win64 registers nterp's immutable generated-code range during fault-manager
+  initialization from `IsNterpSupported()`, before `Runtime::Start()` can
+  publish nterp entrypoints. JIT ranges continue through common
+  `Runtime::AddGeneratedCodeRange()`.
+- A normal started runtime rejects `-Xno-sig-chain` on Windows exactly as on
+  Linux. The option remains for genuine non-started compiler/tool runtimes.
+- The focused Stage D Wine gate catches 64 read plus 64 write NPEs and repeated
+  main/child SOEs in both nterp and threshold-zero JIT, with no managed-fault
+  diagnostic output or dump-state change.
 
-The adapter is therefore a real Stage C implementation, not a product
-activation. Stage D must add the atomic capability gate and then prove the
-generated-code paths with native Windows evidence.
+Stage D is therefore locally complete. Stage E must reproduce the generated
+fault, handler-chain, debugger, stack-budget, fatal-UEF, and HSP policy matrix
+on native Windows 10/current Windows.
 
 ## 5. Windows contracts and conclusions
 
@@ -994,8 +1000,9 @@ reservation. Tests record:
 - Windows allocation-granularity rounding.
 
 This distinction is important because ART adds historical native headroom and
-overflow overhead before `pthread_create()`. While W-010 remains dormant, the
-Windows branch also adds one protected-page capacity so installing the new
+overflow overhead before `pthread_create()`. Because the main thread attaches
+before architecture implicit-check flags are selected, the Windows bootstrap
+branch also adds one protected-page capacity so installing the
 ART-owned page does not silently debit the requested stack budget. The
 measured excluded-low prefix belongs to the Windows system-stack reservation
 layout and is not guessed or added as another ART-owned page.
@@ -1093,9 +1100,9 @@ Then:
   their normal code contains implicit accesses;
 - startup registration failure is fatal for the normal nterp/JIT product, not
   a silent continuation with inconsistent code;
-- an intentional `-Xno-sig-chain` diagnostic run must also select a mode that
-  does not execute nterp/JIT implicit faults, or startup rejects the option
-  combination;
+- `-Xno-sig-chain` is accepted only for a runtime that does not enter normal
+  `Runtime::Start()` (for example dex2oat); a started runtime rejects it
+  regardless of interpreter/JIT mode;
 - after product activation there is no process-wide fallback that disables
   implicit checks while already generated code exists.
 
@@ -1217,7 +1224,8 @@ Stage A because the build and early-runtime enforcement are now present.
   and equality compares immutable thread IDs across module boundaries.
 - **Adjacent lifecycle repair:** runtime teardown removes the diagnostic VEH
   before `art.dll` unload and restores, rather than clobbers, a later host UEF.
-- Product implicit Windows checks remain disabled until Stages B-D complete.
+- Stage D now enables product implicit null/SO checks after the Stage A-B page
+  and Stage C adapter prerequisites are installed.
 
 Local evidence (2026-07-26):
 
@@ -1246,7 +1254,8 @@ close the native handle-lifetime proof point.
 - `Thread` records the selection and state below the native-code-visible TLS
   layout. Non-AOT Windows attachment installs the page before publication,
   common stack accounting uses the measured excluded-low bytes plus the fixed
-  page, and the dormant `FixStackSize()` path compensates for the ART page.
+  page, and the Win64 bootstrap `FixStackSize()` compensation preserves the
+  requested stack budget.
 - Protect, unprotect, install rollback, and detach restoration verify the
   resulting `VirtualQuery()` state. Reserved originals return to
   `MEM_RESERVE`; committed originals return to their exact type/protection.
@@ -1266,7 +1275,7 @@ real Windows bottom layouts, small/default/large reservations, guard growth,
 reserved-page restoration, stack budgets, and detach/reattach behavior. That
 evidence belongs to Stage E and is not implied by Wine.
 
-### Stage C — dormant W-010 adapter — implemented locally (2026-07-27)
+### Stage C — initially dormant W-010 adapter — implemented locally (2026-07-27)
 
 - `sigchain_windows.cc` now owns the special-action facade and managed VEH
   registration, promotion, publication, and removal lifecycle. Unsupported
@@ -1286,23 +1295,37 @@ evidence belongs to Stage E and is not implied by Wine.
   record cases. `win32_sigchain_probe` faults a real `PAGE_NOACCESS` page twice,
   verifies live context redirection and `Rax` forwarding, calls promotion
   between faults, and then removes the action. Both pass under Wine.
-- The runtime capability remains dormant: Windows implicit null/SO/suspend
-  flags stay disabled, so no product-generated fault is translated yet.
+- At this checkpoint the runtime capability remained dormant; Stage D below
+  subsequently activated the same adapter without changing generated code.
 - Fatal diagnostics remain separate. The diagnostic VEH continues search, and
   the UEF writes a best-effort dump then invokes the predecessor or returns
   search.
 - The complete Phase-4 Wine aggregate passes with the new W-010 gate, and the
   shared Linux `art`/`dalvikvm` rebuild plus `dalvikvm -showversion` pass.
 
-### Stage D — atomic product activation — next
+### Stage D — atomic product activation — implemented locally (2026-07-27)
 
-- Enable Win64 implicit null and stack-overflow flags.
-- Register handlers in Linux order: stack before null (suspend remains off).
-- Gate nterp/JIT on the completed capability.
-- Remove the Windows exception from the normal started-runtime sigchain
-  invariant.
-- Remove old product uses of `-Xno-sig-chain` that are no longer intentional
-  switch-interpreter diagnostics.
+- Win64 x86_64 enables common implicit null and stack-overflow flags while
+  leaving implicit suspend checks off.
+- `FaultManager` registers stack before null, preserving Linux handler order.
+- Nterp's immutable code range is registered before startup publishes nterp
+  entrypoints even though Win64 deliberately keeps `CanRuntimeUseNterp()`
+  false during early initialization. JIT code-cache ranges retain the common
+  registration path.
+- The main thread's W-014 page is installed before the capability is
+  published; later non-AOT attachments install it under the enabled implicit
+  stack-check flag. Installation failure rejects attachment/startup.
+- The Windows exception to the normal started-runtime sigchain invariant is
+  removed. Active runners no longer pass `-Xno-sig-chain`; one focused
+  negative case proves started-runtime rejection.
+- `W010ManagedFaultProbe` passes nterp and threshold-zero JIT modes for 64
+  caught read NPEs, 64 caught write NPEs, two caught main-thread SOEs, and two
+  caught child-thread SOEs. The JIT runs prove compilation of the faulting
+  caller/recursive methods. Handled faults emit no diagnostic VEH/UEF marker
+  and do not change `run/crash/*.dmp`.
+- Unmanaged native AV still reaches fatal diagnostics. The full Phase-4 Wine
+  aggregate, Win64 build, Linux full `art`/`dalvikvm` rebuild,
+  `dalvikvm -showversion`, and shared-boot imageless Hello all pass.
 
 ### Stage E — native acceptance and cleanup
 
@@ -1429,9 +1452,9 @@ and debugger evidence.
 | `runtime/thread_pool.cc` | Implemented no-caller-allocated-stack Windows policy; requested reservation passes through pthread attributes |
 | `compat/include/pthread.h` | Implemented opaque Windows `pthread_t`, numeric-ID helper, and strict attribute contract |
 | `compat/src/win64_posix_stubs.c` | Implemented `_beginthreadex`, handle/result lifetime, join/detach, tagged external identity, exact current-stack bounds, and stack attributes |
-| `runtime/runtime.cc` | Implemented diagnostic handler shutdown; later atomic managed-fault capability and nterp/JIT activation policy |
+| `runtime/runtime.cc` | Implemented diagnostic handler shutdown, common implicit null/SO activation, Linux-like started-runtime sigchain invariant, and early nterp range registration |
 | `tools/verify/win64_phase1/check_win32_cet_contract.py` and `win32_cet_policy_probe.cc` | Implemented link/PE audit plus deterministic and actual-policy probe |
-| `tools/verify/win64_phase1/win32_thread_stack_probe.c`, `win32_stack_page_probe.cc`, `win32_stack_page_fault_probe.S`, `win32_fault_record_probe.cc`, `win32_sigchain_probe.cc`, and Phase 4 probe scripts | Implemented Stage A reservation/identity/lifetime gate, Stage B synthetic selection/restore/direct-fault gate, and Stage C deterministic record plus live VEH/context gate |
+| `tools/verify/win64_phase1/win32_thread_stack_probe.c`, `win32_stack_page_probe.cc`, `win32_stack_page_fault_probe.S`, `win32_fault_record_probe.cc`, `win32_sigchain_probe.cc`, and Phase 4 probe scripts | Implemented Stage A reservation/identity/lifetime gate, Stage B synthetic selection/restore/direct-fault gate, Stage C deterministic record/live VEH gate, and Stage D nterp/JIT managed-fault stress |
 
 The exact split between `sigchain_windows.cc` and
 `fault_handler_windows.cc` is an implementation detail. There must still be

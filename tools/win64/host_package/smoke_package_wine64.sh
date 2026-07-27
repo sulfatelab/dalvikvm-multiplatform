@@ -17,7 +17,7 @@ import os, subprocess, sys
 pkg=os.getcwd()
 env=os.environ.copy()
 env.update({'ANDROID_ROOT':'run','ANDROID_ART_ROOT':'run','ANDROID_I18N_ROOT':'run','ANDROID_DATA':'run/data','ICU_DATA':'run/icu','WINEDEBUG':'-all'})
-base=['timeout','60','wine64','./dalvikvm.exe','-Xbootclasspath:run/boot.jar','-Xbootclasspath-locations:run/boot.jar','-Ximage:/nonexistent-no-boot-image','-Xno-sig-chain','-XjdwpProvider:none','-Xint','-Xms64m','-Xmx512m']
+base=['timeout','60','wine64','./dalvikvm.exe','-Xbootclasspath:run/boot.jar','-Xbootclasspath-locations:run/boot.jar','-Ximage:/nonexistent-no-boot-image','-XjdwpProvider:none','-Xint','-Xms64m','-Xmx512m']
 fail=0
 def run(label, args, need=None, expect_fail=False):
   global fail

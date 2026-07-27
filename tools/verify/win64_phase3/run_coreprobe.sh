@@ -9,7 +9,7 @@ python3 - <<'PY'
 import subprocess, os, sys
 env=os.environ.copy()
 env.update({'ANDROID_ROOT':'run','ANDROID_ART_ROOT':'run','ANDROID_I18N_ROOT':'run','ANDROID_DATA':'run/data','ICU_DATA':'run/icu','WINEDEBUG':env.get('WINEDEBUG','-all')})
-cmd=['timeout','60','wine64','./dalvikvm.exe','-Xbootclasspath:run/boot.jar','-Xbootclasspath-locations:run/boot.jar','-Ximage:/nonexistent-no-boot-image','-Xno-sig-chain','-XjdwpProvider:none','-Xint','-Xms64m','-Xmx512m','-cp','run/coreprobe.jar','CoreProbe']
+cmd=['timeout','60','wine64','./dalvikvm.exe','-Xbootclasspath:run/boot.jar','-Xbootclasspath-locations:run/boot.jar','-Ximage:/nonexistent-no-boot-image','-XjdwpProvider:none','-Xint','-Xms64m','-Xmx512m','-cp','run/coreprobe.jar','CoreProbe']
 r=subprocess.run(cmd, cwd=os.getcwd(), env=env, capture_output=True, text=True)
 for line in r.stdout.splitlines():
   if not line.startswith('dalvikvm.exe'): print(line)

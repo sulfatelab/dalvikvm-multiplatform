@@ -38,7 +38,7 @@ set ANDROID_DATA=run\\data
 set ICU_DATA=run\\icu
 if not exist logs mkdir logs
 echo === ${name} ===> logs\\${name}.log
-dalvikvm.exe -Xbootclasspath:run\\boot.jar -Xbootclasspath-locations:run\\boot.jar -Ximage:/nonexistent-no-boot-image -Xno-sig-chain -XjdwpProvider:none -Xint -Xms64m -Xmx512m -cp ${cp} ${main} >> logs\\${name}.log 2>&1
+dalvikvm.exe -Xbootclasspath:run\\boot.jar -Xbootclasspath-locations:run\\boot.jar -Ximage:/nonexistent-no-boot-image -XjdwpProvider:none -Xint -Xms64m -Xmx512m -cp ${cp} ${main} >> logs\\${name}.log 2>&1
 set RC=%ERRORLEVEL%
 echo exit=%RC%>> logs\\${name}.log
 type logs\\${name}.log
@@ -79,7 +79,7 @@ if not exist logs mkdir logs
 if not exist C:\art_phase3\abs_dir mkdir C:\art_phase3\abs_dir
 copy /Y run\hello.jar C:\art_phase3\abs_dir\hello.jar >nul
 echo === abspath ===> logs\abspath.log
-dalvikvm.exe -Xbootclasspath:run\boot.jar -Xbootclasspath-locations:run\boot.jar -Ximage:/nonexistent-no-boot-image -Xno-sig-chain -XjdwpProvider:none -Xint -Xms64m -Xmx512m -cp "C:\art_phase3\abs_dir\hello.jar;run\abspathprobe.jar" AbsPathProbe >> logs\abspath.log 2>&1
+dalvikvm.exe -Xbootclasspath:run\boot.jar -Xbootclasspath-locations:run\boot.jar -Ximage:/nonexistent-no-boot-image -XjdwpProvider:none -Xint -Xms64m -Xmx512m -cp "C:\art_phase3\abs_dir\hello.jar;run\abspathprobe.jar" AbsPathProbe >> logs\abspath.log 2>&1
 set RC=%ERRORLEVEL%
 echo exit=%RC%>> logs\abspath.log
 type logs\abspath.log
@@ -99,7 +99,7 @@ set ANDROID_DATA=run\data
 set ICU_DATA=run\icu
 if not exist logs mkdir logs
 echo === throw ===> logs\throw.log
-dalvikvm.exe -Xbootclasspath:run\boot.jar -Xbootclasspath-locations:run\boot.jar -Ximage:/nonexistent-no-boot-image -Xno-sig-chain -XjdwpProvider:none -Xint -Xms64m -Xmx512m -cp run\throwprobe.jar ThrowProbe >> logs\throw.log 2>&1
+dalvikvm.exe -Xbootclasspath:run\boot.jar -Xbootclasspath-locations:run\boot.jar -Ximage:/nonexistent-no-boot-image -XjdwpProvider:none -Xint -Xms64m -Xmx512m -cp run\throwprobe.jar ThrowProbe >> logs\throw.log 2>&1
 set RC=%ERRORLEVEL%
 echo exit=%RC%>> logs\throw.log
 type logs\throw.log
@@ -239,7 +239,7 @@ set ANDROID_DATA=run\data
 set ICU_DATA=run\icu
 if not exist logs mkdir logs
 echo === crashabort ===> logs\crashabort.log
-dalvikvm.exe -Xbootclasspath:run\boot.jar -Xbootclasspath-locations:run\boot.jar -Ximage:/nonexistent-no-boot-image -Xno-sig-chain -XjdwpProvider:none -Xint -Xms64m -Xmx512m -cp run\crashabortprobe.jar CrashAbortProbe >> logs\crashabort.log 2>&1
+dalvikvm.exe -Xbootclasspath:run\boot.jar -Xbootclasspath-locations:run\boot.jar -Ximage:/nonexistent-no-boot-image -XjdwpProvider:none -Xint -Xms64m -Xmx512m -cp run\crashabortprobe.jar CrashAbortProbe >> logs\crashabort.log 2>&1
 set RC=%ERRORLEVEL%
 echo exit=%RC%>> logs\crashabort.log
 type logs\crashabort.log

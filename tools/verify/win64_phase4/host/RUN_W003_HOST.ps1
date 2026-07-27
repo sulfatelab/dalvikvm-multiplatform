@@ -227,7 +227,7 @@ function Invoke-CheckedProcess {
     }
 }
 
-$Common = '-Xbootclasspath:run\boot.jar -Xbootclasspath-locations:run\boot.jar -Ximage:/nonexistent-no-boot-image -Xno-sig-chain -XjdwpProvider:none -Xms64m -Xmx512m'
+$Common = '-Xbootclasspath:run\boot.jar -Xbootclasspath-locations:run\boot.jar -Ximage:/nonexistent-no-boot-image -XjdwpProvider:none -Xms64m -Xmx512m'
 
 Add-Result "W-003 native host acceptance $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 try {

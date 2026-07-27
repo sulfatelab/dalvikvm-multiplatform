@@ -211,10 +211,12 @@ sentinel test so OSR preservation is not inferred only from checksums.
 
 The landed frame-family probe uses bounds throws plus method tracing for
 save-everything attribution. It intentionally excludes nterp implicit-null
-faults: a null-only workload reproduces the same
-`nterp_op_invoke_virtual+0x3a` crash in the ordinary non-instrumented product,
-because the current diagnostic VEH does not translate ART implicit faults.
-That independent gap remains W-010; no W-003 product workaround was added.
+faults: at this W-003 checkpoint, a null-only workload reproduced the same
+`nterp_op_invoke_virtual+0x3a` crash in the ordinary non-instrumented product
+because the then-current diagnostic VEH did not translate ART implicit faults.
+That independent gap was assigned to W-010, and no W-003 product workaround
+was added. W-010 Stage D has since activated common nterp/JIT implicit-fault
+translation and verifies this path in its dedicated gate.
 
 ### Stage D: acceptance
 

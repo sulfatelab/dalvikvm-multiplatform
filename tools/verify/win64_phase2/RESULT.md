@@ -39,7 +39,7 @@ export ANDROID_ROOT=run ANDROID_ART_ROOT=run ANDROID_I18N_ROOT=run
 export ANDROID_DATA=run/data ICU_DATA=run/icu
 WINEDEBUG=-all wine64 ./dalvikvm.exe \
   -Xbootclasspath:run/boot.jar -Xbootclasspath-locations:run/boot.jar \
-  -Ximage:/nonexistent-no-boot-image -Xno-sig-chain -XjdwpProvider:none -Xint \
+  -Ximage:/nonexistent-no-boot-image -XjdwpProvider:none -Xint \
   -Xms64m -Xmx512m -cp run/hello.jar Hello
 ```
 
@@ -59,7 +59,9 @@ bash tools/win64/jni_stubs/build_combined.sh
 - `ExecuteSwitchImplAsm` SysV→MSVC bridge
 - `ResolveJniEntryPoint` without `%gs` lookup stub
 - Expanded `InterpreterJni` / `InterpreterJniGeneric` (incl. FJ/IJ/JL/LJ/VJ/VLJ/VJL/VJIIL/IJLILILZ)
-- VEH + skip SignalCatcher; `-Xno-sig-chain` allowed on Windows
+- Historical Phase-2 VEH + skipped SignalCatcher. Stage D now requires the
+  Win64 managed-fault chain for every started runtime; `-Xno-sig-chain`
+  remains only for non-started compiler/tool runtimes.
 - `InitNativeMethods` loads PE `libicu_jni` / `libjavacore` / `libopenjdk`
 
 ### PE JNI stubs (Phase-2 only — not full libcore)

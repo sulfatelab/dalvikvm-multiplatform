@@ -69,7 +69,6 @@ run_one() {
       -Xbootclasspath:run/boot.jar \
       -Xbootclasspath-locations:run/boot.jar \
       -Ximage:/nonexistent-no-boot-image \
-      -Xno-sig-chain \
       -XjdwpProvider:none \
       -Xplugin:openjdkjvmti.dll \
       -agentpath:libjvmtiforceprobe.dll \

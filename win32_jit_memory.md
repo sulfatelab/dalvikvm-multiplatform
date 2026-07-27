@@ -976,7 +976,7 @@ unsupported for current Win64 ART rather than a pending W-025 feature; see
 | 2026-07-26 | W-002 R2 pins warmup and optimize thresholds to 100, increases the exact-checksum loop to 2,000,000 iterations, accepts strict evidence-only returns, and passes unit, focused Wine, aggregate Wine, and Linux controls |
 | 2026-07-26 | W-002 native R2 passes 21/21 records on Windows 10 build 19044: 8/8 OSR, 8/8 attach, exact thresholds/checksum, clean fatal scan, and no dump; W-002 closes |
 | 2026-07-26 | W-003 opt-in frame attribution passes 8/8 under Wine; nterp and threshold-zero JIT each prove all four quick-frame families, while an independent implicit-null AV is assigned to W-010 |
-| 2026-07-26 | W-003 native R1 passes 19/19 records on Windows build 19044: 8/8 frame attribution, 6/6 XMM6-XMM11 sentinel, explicit pagefile-section J-2 creation, successful JIT compilation, and no fatal marker or dump; W-003 closes while implicit-fault translation remains W-010 |
+| 2026-07-26 | W-003 native R1 passes 19/19 records on Windows build 19044: 8/8 frame attribution, 6/6 XMM6-XMM11 sentinel, explicit pagefile-section J-2 creation, successful JIT compilation, and no fatal marker or dump; W-003 closes while implicit-fault translation remains W-010 at this checkpoint (later activated by Stage D) |
 | 2026-07-24 | Native Windows 10 build 19044 tripwire matrix passes all nine cases with exact required native compile records and no crash dump; W-024 cleanup is authorized |
 | 2026-07-24 | ART `42a03f2ea0` restores exact upstream interpreter scope and common default native-JIT policy; final Win64 and Linux regressions pass and W-011/W-012/W-024 close |
 

@@ -12,7 +12,7 @@ env=os.environ.copy()
 env.update({'ANDROID_ROOT':'run','ANDROID_ART_ROOT':'run','ANDROID_I18N_ROOT':'run','ANDROID_DATA':'run/data','ICU_DATA':'run/icu','WINEDEBUG':env.get('WINEDEBUG','-all')})
 cmd=['timeout','45','wine64','./dalvikvm.exe',
   '-Xbootclasspath:run/boot.jar','-Xbootclasspath-locations:run/boot.jar',
-  '-Ximage:/nonexistent-no-boot-image','-Xno-sig-chain','-XjdwpProvider:none','-Xint',
+  '-Ximage:/nonexistent-no-boot-image','-XjdwpProvider:none','-Xint',
   '-Xms64m','-Xmx512m','-cp','run/ioprobe.jar','IoProbe']
 r=subprocess.run(cmd, cwd=build, env=env, capture_output=True, text=True)
 for line in r.stdout.splitlines():

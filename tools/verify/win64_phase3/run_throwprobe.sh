@@ -8,7 +8,7 @@ python3 - <<'PY'
 import subprocess, os, sys
 env=os.environ.copy()
 env.update({'ANDROID_ROOT':'run','ANDROID_ART_ROOT':'run','ANDROID_I18N_ROOT':'run','ANDROID_DATA':'run/data','ICU_DATA':'run/icu','WINEDEBUG':env.get('WINEDEBUG','-all')})
-cmd=['timeout','45','wine64','./dalvikvm.exe','-Xbootclasspath:run/boot.jar','-Xbootclasspath-locations:run/boot.jar','-Ximage:/nonexistent-no-boot-image','-Xno-sig-chain','-XjdwpProvider:none','-Xint','-Xms64m','-Xmx512m','-cp','run/throwprobe.jar','ThrowProbe']
+cmd=['timeout','45','wine64','./dalvikvm.exe','-Xbootclasspath:run/boot.jar','-Xbootclasspath-locations:run/boot.jar','-Ximage:/nonexistent-no-boot-image','-XjdwpProvider:none','-Xint','-Xms64m','-Xmx512m','-cp','run/throwprobe.jar','ThrowProbe']
 r=subprocess.run(cmd,env=env,capture_output=True,text=True)
 text=r.stdout+'\n'+r.stderr
 for line in r.stdout.splitlines():

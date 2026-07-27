@@ -157,7 +157,7 @@ function Clear-JitEnvironment {
     }
 }
 
-$Common = '-Xbootclasspath:run\boot.jar -Xbootclasspath-locations:run\boot.jar -Ximage:/nonexistent-no-boot-image -Xno-sig-chain -XjdwpProvider:none'
+$Common = '-Xbootclasspath:run\boot.jar -Xbootclasspath-locations:run\boot.jar -Ximage:/nonexistent-no-boot-image -XjdwpProvider:none'
 
 Add-Result "W-013 native host acceptance $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 try {

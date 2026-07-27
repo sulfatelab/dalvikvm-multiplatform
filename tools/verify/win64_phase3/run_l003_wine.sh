@@ -30,7 +30,7 @@ env.update({
 })
 base=['timeout','60','wine64','./dalvikvm.exe',
   '-Xbootclasspath:run/boot.jar','-Xbootclasspath-locations:run/boot.jar',
-  '-Ximage:/nonexistent-no-boot-image','-Xno-sig-chain','-XjdwpProvider:none',
+  '-Ximage:/nonexistent-no-boot-image','-XjdwpProvider:none',
   '-Xint','-Xms64m','-Xmx512m']
 cases=[
   ('exec','run/execprobe.jar','ExecProbe','ExecProbe.done=ok'),

@@ -742,8 +742,9 @@ publishing the bounds. Failure rejects attachment; there is no clamp or
 fabricated-size fallback. The one-page pthread `guardsize` result remains a
 facade compatibility value; the Stage B platform helper replaces it with the
 measured excluded-low prefix, installs the fixed ART page, and publishes the
-adjusted bounds before managed execution. W-010 translation and atomic product
-activation remain incomplete.
+adjusted bounds before managed execution. W-010 Stage D now activates common
+implicit null/SO translation after those page prerequisites are installed;
+native Windows Stage E acceptance remains incomplete.
 
 #### 6.9.1 W-014 bounds and thread-creation contract
 
@@ -817,23 +818,21 @@ acceptance remains open.
 ### 6.10 Exception delivery interaction
 
 Win64 now has two deliberately separate exception paths. The runtime-owned
-diagnostic VEH logs selected first-chance exceptions and returns
-`EXCEPTION_CONTINUE_SEARCH`. The dormant W-010 special-`SIGSEGV` facade owns a
-second managed VEH that filters exact continuable access violations and adapts
-the live `CONTEXT` into common `FaultManager`; it is exercised by focused
-probes but product implicit checks remain disabled. Managed soft throws still
-use ART's `Thread::exception_` and delivery entrypoints.
+diagnostic VEH logs selected unhandled first-chance exceptions and returns
+`EXCEPTION_CONTINUE_SEARCH`. The active W-010 special-`SIGSEGV` facade owns
+a second, first-position managed VEH that filters exact continuable access
+violations and adapts the live `CONTEXT` into common `FaultManager`.
+Managed soft throws still use ART's `Thread::exception_` and delivery
+entrypoints.
 
-This still creates a stack-overflow policy mismatch: runtime initialization
-disables Windows implicit SO checks, while the x86_64 optimizing backend and
-nterp emit the normal unconditional
-`RSP - ART_STACK_OVERFLOW_GAP_x86_64` probe. W-014 Stage B now installs the
-fixed page and makes that eventual low-stack fault deterministic. Stage C can
-classify and adapt the record, but runtime policy still installs no generated
-stack/null handlers while implicit checks remain disabled. The switch
-interpreter instead uses explicit `Thread::stack_end_` comparisons. W-010
-Stage D must close this execution-mode split before deep generated recursion
-is a supported path.
+Stage D closes the former stack-overflow policy mismatch. Runtime
+initialization enables Windows implicit null/SO checks, keeps x86_64 implicit
+suspend checks off, and registers stack before null. The x86_64 optimizing
+backend and nterp retain their normal unconditional
+`RSP - ART_STACK_OVERFLOW_GAP_x86_64` probe; W-014's fixed page makes the
+low-stack fault deterministic and common ART redirects it to
+`art_quick_throw_stack_overflow`. The switch interpreter continues to use
+explicit `Thread::stack_end_` comparisons.
 
 The selected W-010 design is a narrow ART `SIGSEGV` facade over a first
 process-wide VEH. It filters only continuable access violations, passes a
@@ -853,12 +852,15 @@ Stage A removes the current diagnostic VEH before `art.dll` unload and restores
 ART's predecessor without clobbering a later host UEF; the UEF now calls its
 predecessor after the best-effort dump, or returns search when none exists.
 
-W-010 and W-014 activate atomically for the normal nterp/JIT product. The
-dormant page and adapter may land separately, but implicit null/SO flags stay
-off until handler installation, per-thread page state, repeated NPE/SOE, and
-native handler-stack measurements pass together. See the authoritative design
-and full matrix in [win32_faults_and_stacks.md](win32_faults_and_stacks.md),
-with state tracked in [win32_open_items.md](win32_open_items.md).
+W-010 and W-014 now activate atomically for the normal nterp/JIT product. The
+main-thread page is installed before runtime architecture flags are selected;
+the VEH, stack/null handlers, and nterp generated-code range are registered
+before startup publishes nterp entrypoints; later attachments install their
+page under the enabled flag. Focused Wine passes repeated nterp/JIT NPE/SOE
+and clean handled-fault diagnostics. Native handler-stack and chain evidence
+remains Stage E. See the authoritative design and full matrix in
+[win32_faults_and_stacks.md](win32_faults_and_stacks.md), with state tracked in
+[win32_open_items.md](win32_open_items.md).
 
 This exception design does not support CET user shadow stacks. The decisive
 conflict is the shared x86_64 `art_quick_do_long_jump`: it restores an older
@@ -881,10 +883,11 @@ nonzero or unexpectedly unavailable policy before memory/thread/JIT startup.
 Stage C focused Wine evidence also passes: the deterministic record probe
 passes all eight cases, and the live VEH/context probe forwards two real page
 faults, redirects `Rip`, returns `Rax == 0`, survives promotion, and removes
-the action cleanly. Stage D must still gate and exercise generated nterp/JIT
-NPE/SOE paths.
-Wine exercises the disabled-policy allow path; native compatibility/audit/
-strict rejection remains pending acceptance.
+the action cleanly. Stage D now also gates generated nterp/JIT implicit NPE
+and SOE paths under Wine, including repeated caught faults and clean handled-
+fault diagnostics. Wine exercises the disabled-policy allow path; native
+Stage E compatibility, chain/debugger behavior, stack-budget evidence, and
+strict shadow-stack-policy rejection remain pending acceptance.
 
 JIT deopt flags (`THREAD_DEOPT_CHECK_REQUIRED_OFFSET`) stay Thread fields accessed via self base.
 
@@ -1082,7 +1085,7 @@ items are complete. W-002's managed-entry implementation and Wine/Linux/native
 Windows verification are complete; deterministic R2 passes every OSR and
 attached-thread mode pair and closes W-002. W-003's frame-family and native
 XMM boundary matrices also pass on Windows build 19044. Current residual work
-is W-008/W-010/W-014/W-017, broader W-025 hardening, and the other
+is W-008, native W-010/W-014 acceptance, W-017, broader W-025 hardening, and the other
 host-validation gaps in [win32_open_items.md](win32_open_items.md).
 
 ## 15. Nterp / mterp on WinNT x86_64 — analysis and design
@@ -1795,12 +1798,13 @@ quick invoke, compares all 96 bytes, and restores the native caller. It passes
 6/6 nterp/switch/JIT Wine processes; an intentional-clobber self-test returns
 the exact six-bit mask `0x3f`.
 
-The initial frame workload also isolated an independent W-010 defect: nterp's
-implicit null load faults at `nterp_op_invoke_virtual+0x3a`, and the ordinary
-non-instrumented product reproduces it because the current Win64 VEH logs but
-does not translate ART generated-code faults. W-003 excludes that one
-implicit-null subtest without adding a product fallback; explicit class-cast,
-array-store, and bounds paths remain covered.
+The initial frame workload also isolated the independent W-010 defect:
+nterp's implicit null load faulted at `nterp_op_invoke_virtual+0x3a` because
+the old Win64 VEH only logged generated-code faults. W-003 continues to exclude
+that one subtest so its frame attribution remains stable, but Stage D now
+translates the product fault and the dedicated W-010 gate covers repeated
+nterp/JIT read/write NPEs without adding a compiler or interpreter fallback.
+Explicit class-cast, array-store, and bounds paths remain covered by W-003.
 
 The focused native-host package validates its PE/hash contract, smokes all
 seven modes under Wine, restores product `art.dll`, and ships without runtime

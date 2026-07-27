@@ -77,7 +77,6 @@ run_probe() {
         -Xbootclasspath:run/boot.jar \
         -Xbootclasspath-locations:run/boot.jar \
         -Ximage:/nonexistent-no-boot-image \
-        -Xno-sig-chain \
         -XjdwpProvider:none \
         -Xms64m -Xmx512m \
         -Xjitthreshold:0 \

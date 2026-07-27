@@ -35,7 +35,6 @@ run_one() {
       -Xbootclasspath:run/boot.jar \
       -Xbootclasspath-locations:run/boot.jar \
       -Ximage:/nonexistent-no-boot-image \
-      -Xno-sig-chain \
       -XjdwpProvider:none \
       -Xms64m -Xmx512m \
       -verbose:jit -Xjitwarmupthreshold:100 -Xjitthreshold:100 \
