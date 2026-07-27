@@ -45,6 +45,7 @@ def parse_report(path: Path) -> dict[str, str]:
         "xmm_self_test_mask": "1023",
         "fatal_dispatch_modes": "static,jit-j2,jit-j1,osr-j2,osr-j1",
         "diagnostic_fatal_modes": "jni-av,jni-raise,native-worker",
+        "fatal_unwind_trace": "bounded-32-live-veh",
         "fatal_minidumps_required": "5",
         "host_llvm_tools_required": "no",
     }
@@ -236,6 +237,10 @@ def check_package(root: Path) -> None:
         "WIN32_JNI_RAISE_AV",
         "WIN32_JNI_NATIVE_WORKER enter",
         "WIN32_LATE_UEF_INSTALL",
+        "ART_WIN64_FATAL_UNWIND_TRACE",
+        "ART_WIN64_UNWIND_TRACE begin",
+        "ART_WIN64_UNWIND_TRACE end",
+        "unwind_frames=",
         "DIAGNOSTICS COMPLETE",
     ):
         if marker not in diagnostics:

@@ -172,6 +172,18 @@ complete dispatch fix; the next package must trace bounded recursive native
 unwind progress from the live VEH context before any further product metadata
 change.
 
+That E4 live-VEH trace is now implemented behind
+`ART_WIN64_FATAL_UNWIND_TRACE=1` and enabled only for the three late-UEF
+diagnostic children. It copies the context, records module-relative runtime-
+function data, walks at most 32 frames, validates leaf pops and stack bounds,
+and does not change dispatch. A direct Wine smoke reaches an end marker after
+15 frames. Its first live lookup gap is `ExecuteSwitchImplAsm + 0x9` at the
+post-call `pop %rbx`: the wrapper has pushed RBX but has no PE runtime-function
+record, so leaf fallback consumes saved RBX as the return PC. Native E4 return
+must confirm this same boundary before the assembly is changed. A confirmed
+repair must also account for the wrapper's missing 32-byte MSVC outgoing home
+area while leaving its Linux/SysV path unchanged.
+
 ## Non-goals
 
 - Windows NIO.2
@@ -180,8 +192,9 @@ change.
 
 ## Next
 
-- Add and return a bounded live-VEH recursive unwind trace that identifies the
-  first invalid/no-progress frame after GenericJNI. Design a replacement Windows SOE delivery mechanism that
+- Return the bounded live-VEH recursive unwind trace and confirm whether
+  `ExecuteSwitchImplAsm + 0x9` is the first native lookup gap after GenericJNI.
+  Design a replacement Windows SOE delivery mechanism that
   does not rely on retaining a fixed no-access page inside the system stack.
   Then repeat the repaired SOE and static/JIT/OSR
   fatal matrix, debugger/stack-budget work, forced named-incompatible CET

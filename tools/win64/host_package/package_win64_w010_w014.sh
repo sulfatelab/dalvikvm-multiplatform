@@ -125,6 +125,7 @@ xmm_boundary_registers=10
 xmm_self_test_mask=1023
 fatal_dispatch_modes=static,jit-j2,jit-j1,osr-j2,osr-j1
 diagnostic_fatal_modes=jni-av,jni-raise,native-worker
+fatal_unwind_trace=bounded-32-live-veh
 fatal_minidumps_required=5
 host_llvm_tools_required=no
 dalvikvm_sha256=$(sha256sum "$OUT/dalvikvm.exe" | awk '{print $1}')
@@ -145,7 +146,7 @@ art_branch=$(git -C "$REPO/vendor/art" branch --show-current)
 art_commit=$(git -C "$REPO/vendor/art" rev-parse HEAD)
 win64_build=$BUILD
 windows_minimum_build=17134
-stage=E3-generic-jni-fatal-diagnostics
+stage=E4-live-fatal-unwind-diagnostics
 EOF
 
 clean_runtime_outputs() {

@@ -177,3 +177,39 @@ does not make valid progress. Do not add metadata to
 `art_jni_dlsym_lookup_stub` merely because its address appears in raw stack
 memory: it restores its temporary frame and tail-jumps to the resolved native
 method, so that value is not yet a proven active frame.
+
+## Live VEH unwind trace
+
+The E4 package sets `ART_WIN64_FATAL_UNWIND_TRACE=1` only for the three late-
+UEF cases. ART's diagnostic VEH copies the live `CONTEXT` and walks at most 32
+frames without modifying the exception record, live context, or handler return
+value. Every frame reports PC/RSP, module base/path and RVA, the
+`RtlLookupFunctionEntry()` result, and runtime-function begin/end/unwind RVAs.
+Registered frames use `RtlVirtualUnwind(UNW_FLAG_NHANDLER)`; leaf frames pop one
+validated return slot. The walk stops on zero PC, unaligned/out-of-stack RSP,
+unreadable leaf return, non-increasing/no progress, or the fixed limit. A
+thread-local recursion guard prevents an instrumentation fault from recursively
+starting another trace.
+
+The diagnostic result rows require a begin marker, at least one frame, and an
+end marker. Use the module-relative RVA rather than the process-specific PC
+when comparing Wine and native Windows.
+
+A local Wine smoke already finds a concrete candidate that the native trace
+must confirm. The walk crosses the crashing `libopenjdk.dll` native method,
+the repaired `art_quick_generic_jni_trampoline + 0xc5`,
+`art_quick_invoke_static_stub`, ordinary ART C++ frames, and
+`ExecuteSwitchImplCpp`. That last registered frame unwinds to
+`ExecuteSwitchImplAsm + 0x9`, the `pop %rbx` after its indirect call.
+`RtlLookupFunctionEntry()` returns null there even though the assembly wrapper
+has pushed RBX. Leaf fallback consequently reads the saved RBX as a return PC
+and leaves the real return address behind. This is the first proven live
+lookup gap in the local trace; `art_jni_dlsym_lookup_stub` is not the missing
+active frame in that walk.
+
+Do not land the product repair from Wine evidence alone. If native run 5
+repeats this boundary, repair `ExecuteSwitchImplAsm` as one Win64 ABI change:
+describe its prologue/epilogue with PE unwind directives and provide the
+mandatory 32-byte MSVC outgoing home area for its call to
+`ExecuteSwitchImplCpp`. Keep the Linux/SysV body unchanged, then add structural
+lookup and realistic virtual-unwind coverage before repeating fatal dispatch.

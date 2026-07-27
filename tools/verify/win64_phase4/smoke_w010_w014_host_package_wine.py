@@ -44,6 +44,7 @@ def run_case(
         "ART_WIN64_NTERP",
         "ART_WIN64_QUICK_INVOKE",
         "ART_WIN64_CRASH_NATIVE_WARMUP",
+        "ART_WIN64_FATAL_UNWIND_TRACE",
     ):
         env.pop(key, None)
     if env_extra:
@@ -451,11 +452,15 @@ def main() -> int:
                 "WIN32_LATE_UEF enter code=0xc0000005",
                 "ART Win64 UEF: exception 0xc0000005",
                 "minidump written",
+                "ART_WIN64_UNWIND_TRACE begin",
+                "ART_WIN64_UNWIND_TRACE frame=",
+                "ART_WIN64_UNWIND_TRACE end",
             ),
             forbidden=(
                 "CrashNativeProbe.unexpected_continue",
                 "WIN32_JNI_NATIVE_WORKER unexpected_return",
             ),
+            env_extra={"ART_WIN64_FATAL_UNWIND_TRACE": "1"},
         )
     run_case(
         root,
@@ -477,7 +482,11 @@ def main() -> int:
             "ART Win64 UEF: exception 0xc0000005",
             "minidump written",
             "CrashNativeProbe.unexpected_continue",
+            "ART_WIN64_UNWIND_TRACE begin",
+            "ART_WIN64_UNWIND_TRACE frame=",
+            "ART_WIN64_UNWIND_TRACE end",
         ),
+        env_extra={"ART_WIN64_FATAL_UNWIND_TRACE": "1"},
     )
 
     for mode in ("j2", "j1"):

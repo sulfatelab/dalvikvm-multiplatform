@@ -433,17 +433,35 @@ It is the presence of the ART managed/GenericJNI caller chain on the crashing
 thread. The repaired GenericJNI record remains a real correctness fix but is
 not the complete dispatch boundary.
 
-The next diagnostic is a bounded, opt-in recursive native unwind trace from a
-copy of the live VEH `CONTEXT`. For each frame it must record PC/RSP, the
-`RtlLookupFunctionEntry()` result, image base and runtime-function/unwind RVAs,
-then use `RtlVirtualUnwind()` or a validated leaf pop. It must stop on invalid
-stack memory, no progress, zero PC, or a small fixed frame limit, and it must
-not change dispatch. This should identify the first frame after GenericJNI
+The next diagnostic is now implemented as a bounded, opt-in recursive native
+unwind trace from a copy of the live VEH `CONTEXT`. For each frame it records
+PC/RSP, the `RtlLookupFunctionEntry()` result, image base and runtime-function/
+unwind RVAs, then uses `RtlVirtualUnwind()` or a validated leaf pop. It stops on
+invalid stack memory, no progress, zero PC, or a small fixed frame limit, and
+does not change dispatch. This identifies the first frame after GenericJNI
 that Windows cannot traverse. `art_jni_dlsym_lookup_stub` currently has no PE
 record, but it restores its complete temporary frame and tail-jumps to the
 resolved native method. Its address in captured stack memory may therefore be
 function-pointer data rather than an active frame; do not add metadata without
 the recursive trace proving it is traversed.
+
+The direct Wine E4 smoke makes that distinction. It unwinds the native crash,
+GenericJNI, the static invoke stub, normal ART C++ frames, and
+`ExecuteSwitchImplCpp`, then reaches `ExecuteSwitchImplAsm + 0x9` at its
+post-call `pop %rbx`. `RtlLookupFunctionEntry()` returns null for that live PC.
+Because the wrapper pushed RBX, leaf fallback reads saved RBX as the return PC
+instead of consuming the real return address. The trace then walks stack data,
+which is the exact failure shape expected from missing unwind metadata. The
+previous `art_jni_dlsym_lookup_stub` stack word is therefore not the first
+proven missing active frame.
+
+Native E4 must reproduce this frame before product assembly changes land. If
+it does, the narrow repair is not only `.seh_pushreg`: Win64
+`ExecuteSwitchImplAsm` also calls an MSVC-ABI C++ function without reserving
+the mandatory 32-byte outgoing home area. Add the home area and matching
+prologue/epilogue unwind description together under `_WIN32`, leave the
+Linux/SysV body unchanged, and cover entry, body, and epilogue PCs with both
+structural lookup and realistic `RtlVirtualUnwind()` tests.
 
 ## 5. Windows contracts and conclusions
 
@@ -1000,9 +1018,10 @@ isolated GenericJNI virtual-unwind coverage gap. Native run 4 nevertheless
 shows the two JNI-thread exception shapes still miss UEF while the native
 worker reaches it, so another frame or boundary above GenericJNI remains.
 
-An opt-in diagnostic build may add a final observer VEH or a preallocated
-record ring, but it must be off by default and must not run before the managed
-translator.
+The E4 opt-in diagnostic now walks from a copy of the live context in ART's
+existing diagnostic VEH. It is off by default, bounded to 32 frames, validates
+stack/leaf progress, reports module-relative RVAs, and does not alter dispatch
+or run before the managed translator.
 
 ### 7.9 Dynamic JIT PE unwind design
 
@@ -2136,6 +2155,11 @@ not as the final managed-overflow mechanism.
   ART process state, UEF ownership, runner/debugger behavior, and dump creation
   are ruled out. The repaired GenericJNI record is insufficient; bounded live
   recursive unwind tracing above it is the next diagnostic.
+- **E4 live trace implemented:** a bounded opt-in walk from the copied VEH
+  context reports module/runtime-function RVAs and terminal progress. Wine's
+  first live lookup miss is `ExecuteSwitchImplAsm + 0x9`, where the wrapper's
+  saved RBX is misread by leaf fallback. Native confirmation is required before
+  adding Win64 unwind metadata and the missing MSVC outgoing home area.
 - **Still open:** repeat the static ranges, full-width XMM6-XMM15
   exception-unwind sentinel and fatal paths after UEF dispatch is repaired,
   identify the first failing live unwind frame above GenericJNI, redesign
@@ -2323,11 +2347,11 @@ fallbacks:
 7. Does the locally implemented full-width XMM6-XMM15 adapter survive native
    Windows normal managed return and exception unwind through several
    optimizing and JNI frames?
-8. Which first frame after the repaired GenericJNI record prevents live
-   Windows exception traversal? Native run 4 proves JNI raised and hardware
-   AVs fail identically while a JNI-created native worker reaches UEF/dump.
-   Capture a bounded recursive `RtlVirtualUnwind()` trace from the live VEH
-   context; do not infer active frames from unstructured stack words. ART UEF
+8. Does native E4 confirm Wine's first live lookup gap at
+   `ExecuteSwitchImplAsm + 0x9` after the repaired GenericJNI and invoke frames?
+   The bounded trace is implemented and does not infer active frames from
+   unstructured stack words. If confirmed, repair the wrapper's Win64 PE
+   unwind record and mandatory MSVC outgoing home area together. ART UEF
    replacement, standalone UEF behavior, debugger/runner effects, dump
    creation, exception shape, and process-wide ART startup state are already
    ruled out.

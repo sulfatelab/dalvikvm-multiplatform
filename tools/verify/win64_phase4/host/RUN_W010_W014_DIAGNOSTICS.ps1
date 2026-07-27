@@ -23,6 +23,7 @@ $env:ICU_DATA = 'run\icu'
     'ART_WIN64_NTERP'
     'ART_WIN64_QUICK_INVOKE'
     'ART_WIN64_CRASH_NATIVE_WARMUP'
+    'ART_WIN64_FATAL_UNWIND_TRACE'
 ) | ForEach-Object {
     Remove-Item -Path ('Env:' + $_) -ErrorAction SilentlyContinue
 }
@@ -141,6 +142,7 @@ $lateModes = @(
     [PSCustomObject]@{ Name = 'native_worker'; Argument = 'uef-thread'; RequiredMarker = 'WIN32_JNI_NATIVE_WORKER enter'; RequireNonZero = $true }
 )
 
+$env:ART_WIN64_FATAL_UNWIND_TRACE = '1'
 foreach ($mode in $lateModes) {
     $beforeDumps = @{}
     Get-ChildItem -Path $Crash -File -Filter '*.dmp' -ErrorAction SilentlyContinue | ForEach-Object {
@@ -157,6 +159,9 @@ foreach ($mode in $lateModes) {
     $raised = Has-Marker $late 'WIN32_JNI_RAISE_AV'
     $workerCreated = Has-Marker $late 'WIN32_JNI_NATIVE_WORKER created'
     $workerEnter = Has-Marker $late 'WIN32_JNI_NATIVE_WORKER enter'
+    $unwindBegin = Has-Marker $late 'ART_WIN64_UNWIND_TRACE begin'
+    $unwindEnd = Has-Marker $late 'ART_WIN64_UNWIND_TRACE end'
+    $unwindFrames = ([regex]::Matches($late.Text, 'ART_WIN64_UNWIND_TRACE frame=')).Count
     $newDumps = @(
         Get-ChildItem -Path $Crash -File -Filter '*.dmp' -ErrorAction SilentlyContinue | Where-Object {
             $signature = "$($_.Length):$($_.LastWriteTimeUtc.Ticks)"
@@ -171,13 +176,14 @@ foreach ($mode in $lateModes) {
         $newDumpLines | Set-Content -LiteralPath $dumpReport
     }
     $exitShape = -not $mode.RequireNonZero -or $late.ExitCode -ne 0
-    Add-Result "ART_LATE_UEF mode=$($mode.Name) exit_shape=$([int]$exitShape) exit=$($late.ExitCode) install=$([int]$lateInstall) enter=$([int]$lateEnter) predecessor_art=$([int]$predecessorArt) art_veh=$([int]$artVeh) art_uef=$([int]$artUef) minidump_marker=$([int]$artDump) new_dumps=$($newDumps.Count) raised=$([int]$raised) worker_created=$([int]$workerCreated) worker_enter=$([int]$workerEnter)"
+    Add-Result "ART_LATE_UEF mode=$($mode.Name) exit_shape=$([int]$exitShape) exit=$($late.ExitCode) install=$([int]$lateInstall) enter=$([int]$lateEnter) predecessor_art=$([int]$predecessorArt) art_veh=$([int]$artVeh) art_uef=$([int]$artUef) minidump_marker=$([int]$artDump) new_dumps=$($newDumps.Count) raised=$([int]$raised) worker_created=$([int]$workerCreated) worker_enter=$([int]$workerEnter) unwind_begin=$([int]$unwindBegin) unwind_end=$([int]$unwindEnd) unwind_frames=$unwindFrames"
 
     $requiredMarkerPresent = $mode.RequiredMarker.Length -eq 0 -or (Has-Marker $late $mode.RequiredMarker)
-    if (-not $lateInstall -or -not $exitShape -or -not $requiredMarkerPresent) {
+    if (-not $lateInstall -or -not $exitShape -or -not $requiredMarkerPresent -or -not $unwindBegin -or -not $unwindEnd -or $unwindFrames -eq 0) {
         $script:InfrastructureFailed = $true
     }
 }
+Remove-Item -Path Env:ART_WIN64_FATAL_UNWIND_TRACE -ErrorAction SilentlyContinue
 
 $script:Results | Set-Content -LiteralPath (Join-Path $Logs 'RESULT_W010_W014_DIAGNOSTICS.txt')
 if ($script:InfrastructureFailed) {
