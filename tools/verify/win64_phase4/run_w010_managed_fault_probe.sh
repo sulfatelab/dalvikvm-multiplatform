@@ -94,14 +94,14 @@ run_one() {
   fi
 
   if [[ "$fault_mode" == "npe" ]] &&
-     ! grep -qF "W010ManagedFaultProbe NPE OK read=64 write=64" "$log"; then
+     ! grep -qF "W010ManagedFaultProbe NPE OK read=64 write=64 recovery=128 gc=16" "$log"; then
     printf 'W-010 managed NPE marker missing: %s\n' "$log" >&2
     tail -160 "$log" >&2
     return 1
   fi
 
   if [[ "$fault_mode" == "so" ]] &&
-     ! grep -qF "W010ManagedFaultProbe SO OK main=2 child=2" "$log"; then
+     ! grep -qF "W010ManagedFaultProbe SO OK main=2 child=2 recovery=4 gc=4" "$log"; then
     printf 'W-010 managed SO marker missing: %s\n' "$log" >&2
     tail -160 "$log" >&2
     return 1

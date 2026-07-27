@@ -1,7 +1,8 @@
 # W-010 Stage D managed-fault activation
 
-**Status:** focused Wine and Linux verification PASS; native Windows Stage E
-acceptance remains
+**Status:** focused Wine and Linux managed-fault verification PASS; static
+fatal-unwind boundaries PASS locally; dynamic-JIT PE unwind and native Windows
+Stage E acceptance remain
 **Date:** 2026-07-27
 
 ## Product behavior
@@ -52,6 +53,8 @@ The Java probe verifies per execution mode:
 - 64 caught implicit write NPEs;
 - two caught main-thread SOEs;
 - two caught SOEs on a newly created child thread; and
+- 128 post-NPE and four post-SOE stack-trace/allocation/time recovery checks;
+- 16 NPE-triggered and four SOE-triggered `System.gc()` calls; and
 - a clean process exit after repeated page unprotect/reprotect cycles.
 
 The JIT cases use zero warmup/compile thresholds and require successful compile
@@ -67,8 +70,11 @@ requires no change.
 
 - Win64 `art` and `dalvikvm` incremental build with `-j32`: PASS.
 - Complete Phase-4 Wine aggregate, including the new gate: PASS.
-- Unmanaged native AV: remains unhandled by ART's managed VEH and reaches
-  fatal diagnostics.
+- Foreign-VEH ordering before/after ART, best-effort promotion, continue-search
+  behavior, and frame-based SEH for an unrecognized AV: PASS.
+- Static `-Xint` JNI native AV: emitted unwind audit passes for the two invoke
+  stubs and generic JNI trampoline; the crash reaches initial VEH and UEF and
+  creates a new valid `MDMP` minidump.
 - JIT smoke: 12/12 PASS.
 - Phase-3 GoldenApp: PASS.
 - Linux full `art`/`dalvikvm` rebuild with `-j32`: PASS.
@@ -82,3 +88,10 @@ Windows must still cover repeated nterp/JIT NPE/SOE, debugger first-chance
 continue, foreign VEH before/after/promotion, frame-based SEH for unrecognized
 AV, exact wrong-address negatives, handler stack high-water, fatal predecessor
 UEF/minidump behavior, and the HSP-disabled plus forced-policy matrix.
+
+The static fatal result is not universal JIT-origin crash support. Recursive
+`RtlVirtualUnwind2` tracing shows that threshold-zero JIT code currently has no
+Windows runtime-function entry; leaf unwinding can corrupt the dispatch walk
+before UEF. Per-method or range-accurate JIT unwind registration, concurrent
+publication/removal rules, and code-cache teardown ownership remain a separate
+required Stage E substage.

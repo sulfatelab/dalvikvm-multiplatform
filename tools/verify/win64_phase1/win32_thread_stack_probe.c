@@ -21,6 +21,7 @@ typedef struct {
 } thread_case_t;
 
 static volatile LONG g_failures;
+static size_t g_default_stack_size;
 
 static void Fail(const char* test, const char* detail) {
   fprintf(stderr, "FAIL %s: %s (winerr=%lu errno=%d)\n",
@@ -176,10 +177,15 @@ static int CheckRequestedReservation(size_t requested_size) {
     if (test_case.observed_size < PTHREAD_STACK_MIN) {
       Fail("reservation", "default reservation is too small");
     }
-  } else if (test_case.observed_size < requested_size ||
-             test_case.observed_size - requested_size >=
+    g_default_stack_size = test_case.observed_size;
+  } else {
+    const size_t effective_request =
+        requested_size < g_default_stack_size ? g_default_stack_size : requested_size;
+    if (test_case.observed_size < effective_request ||
+        test_case.observed_size - effective_request >=
                  (size_t)system_info.dwAllocationGranularity) {
-    Fail("reservation", "requested reservation was not allocation-granularity rounded");
+      Fail("reservation", "effective reservation was not allocation-granularity rounded");
+    }
   }
   return test_case.failures == 0;
 }
@@ -407,8 +413,11 @@ int main(void) {
 
   CheckAttributeRejections();
   CheckRequestedReservation(0);
+  CheckRequestedReservation(64 * 1024);
+  CheckRequestedReservation(256 * 1024);
   CheckRequestedReservation(1024 * 1024);
   CheckRequestedReservation(2 * 1024 * 1024);
+  CheckRequestedReservation(9 * 1024 * 1024);
   CheckLiveOtherThread();
   CheckDetach(1, 0);
   CheckDetach(0, 0);

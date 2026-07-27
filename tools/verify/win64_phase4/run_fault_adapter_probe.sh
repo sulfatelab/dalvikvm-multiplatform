@@ -26,5 +26,7 @@ sigchain_log="${TMPDIR:-/tmp}/win32-sigchain-probe.log"
 ) >"$sigchain_log" 2>&1
 
 grep -qF "win32_sigchain_probe calls=2 first=0 second=0" "$sigchain_log"
+grep -qF "action_calls=3 foreign_before=2 foreign_after=2" "$sigchain_log"
+grep -qF "frame_with_action=1 frame_after_remove=1 sequence=1,2,1,2" "$sigchain_log"
 grep -qF "win32_sigchain_probe OK" "$sigchain_log"
 cat "$sigchain_log"

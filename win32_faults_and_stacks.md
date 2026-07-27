@@ -1,7 +1,9 @@
 # Win64 managed faults and ART stack design
 
 **Status:** W-010 Stages 0/C/D and W-014 Stages A-B implemented and locally
-verified under Wine and Linux; native Windows Stage E acceptance remains
+verified under Wine and Linux; the static fatal-unwind boundaries are locally
+implemented; dynamic-JIT PE unwind registration and native Windows Stage E
+acceptance remain
 **Created:** 2026-07-26
 **Updated:** 2026-07-27
 **Target:** x86_64 Windows 10 build 17134+
@@ -79,6 +81,10 @@ The selected design is:
     modes are all unsupported. Build every project Win64 PE explicitly with
     `/CETCOMPAT:NO`, inspect packaged DLLs, and reject startup before managed
     threads or JIT initialization if the process policy is active.
+14. Provide correctness-grade Win64 unwind descriptions wherever Windows may
+    dispatch a fatal exception across ART-managed frames. Static invoke/JNI
+    boundary records are implemented; dynamic JIT runtime-function
+    registration and lifecycle ownership remain required.
 
 ## 2. Scope and ownership
 
@@ -114,11 +120,11 @@ The selected design is:
 - Supporting caller-provided stack addresses through fibers.
 - Windows ARM64 in the first implementation. The interfaces should not prevent
   it, but all concrete acceptance in this draft is Win64 x86_64.
-- Perfect PE native unwinding through every quick assembly stub. Managed stack
-  walking remains ART-owned; PE `.pdata`/`.xdata` is separate diagnostics
-  hardening unless testing proves it is required for correctness. This
-  separation is valid only under the required CET-shadow-stack-disabled
-  process contract.
+- Full symbol-quality native unwinding through every quick assembly stub.
+  Managed stack walking remains ART-owned. This does not make correctness-
+  critical PE runtime-function data optional: Windows exception dispatch must
+  be able to cross the native/managed boundary stubs and dynamically emitted
+  JIT frames that can be present on a fatal exception path.
 - Enabling implicit suspend checks on Win64 x86_64. Current ART enables that
   mechanism on Arm64, not x86_64.
 - Windows CET user shadow stacks, also exposed as Hardware-enforced Stack
@@ -207,11 +213,29 @@ The current tree now has the active W-010 product capability:
   Linux. The option remains for genuine non-started compiler/tool runtimes.
 - The focused Stage D Wine gate catches 64 read plus 64 write NPEs and repeated
   main/child SOEs in both nterp and threshold-zero JIT, with no managed-fault
-  diagnostic output or dump-state change.
+  diagnostic output or dump-state change. Every caught fault also constructs
+  and consumes its managed stack trace, performs ordinary allocation/time
+  operations, and resumes managed execution; the gate requests 16 collections
+  across each NPE run and one collection after each of the four caught SOEs.
+- Win64 PE unwind records now cover `art_quick_invoke_stub`,
+  `art_quick_invoke_static_stub`, and `art_quick_generic_jni_trampoline`.
+  Structural inspection verifies their fixed allocation, nonvolatile GPR/XMM
+  saves, and frame anchors. With `-Xint`, an unhandled JNI native AV crosses
+  these records, reaches ART's UEF, and creates a new valid `MDMP` dump.
+- That result is not universal fatal-dispatch support. A threshold-zero JIT
+  native AV reaches dynamically emitted managed code for which Windows has no
+  runtime-function entry. `RtlVirtualUnwind2` then applies leaf unwinding to
+  managed frame contents, eventually presents a stale JIT `RBP` to the static
+  invoke-stub record, and Wine rejects the resulting exception frame before
+  UEF dispatch. Per-method JIT PE unwind registration and lifecycle ownership
+  remain open.
 
-Stage D is therefore locally complete. Stage E must reproduce the generated
-fault, handler-chain, debugger, stack-budget, fatal-UEF, and HSP policy matrix
-on native Windows 10/current Windows.
+Stage D is therefore locally complete. The static-boundary part of Stage E is
+implemented locally. Stage E must still reproduce the generated-fault,
+handler-chain, debugger, stack-budget, static fatal-UEF, and HSP policy matrix
+on native Windows 10/current Windows, and must design and accept dynamic-JIT
+runtime-function registration before claiming arbitrary JIT-origin fatal
+dispatch.
 
 ## 5. Windows contracts and conclusions
 
@@ -696,6 +720,37 @@ only if ART is still the current UEF. If an embedding application installed a
 later UEF, teardown preserves that later filter. The fatal UEF now calls the
 saved predecessor after the best-effort dump when one exists, and otherwise
 returns `EXCEPTION_CONTINUE_SEARCH`.
+
+PE unwind metadata is part of exception-dispatch correctness on Win64, not
+only minidump quality. Recursive `RtlVirtualUnwind2` tracing of the JNI fatal
+probe showed the exact failure mode: without a runtime-function record,
+Windows treats the current instruction as a leaf, pops whatever the managed
+frame happens to contain as a return address, and may later reject the
+fabricated frame before the UEF can run.
+
+The first locally implemented boundary set is deliberately small:
+
+- `art_quick_generic_jni_trampoline` uses `R12` as a fixed PE frame anchor
+  above its 5120-byte reserved area while preserving ART's canonical managed
+  `RBP` meaning.
+- `art_quick_invoke_stub` and `art_quick_invoke_static_stub` schedule their
+  fixed Win64 saves before variable argument decoding, fit the PE prologue in
+  255 bytes, and use `RBP` to anchor the frame above the variable argument
+  area.
+- The invoke records describe RDI, RSI, RBP, RBX, R12-R15 and XMM6-XMM11; a
+  structural verifier resolves the exports and checks the emitted `.pdata` /
+  `.xdata` records instead of trusting assembly source annotations.
+
+Those records make the static `-Xint` JNI crash path reach the UEF and produce
+a valid minidump. They do not describe dynamically generated JIT methods. A
+threshold-zero JIT fatal probe still reaches a JIT PC with no Windows
+runtime-function entry, so leaf unwinding corrupts the dispatch walk before
+the static invoke record can help. The complete design therefore needs
+per-method or otherwise range-accurate JIT runtime-function data registered
+with `RtlAddFunctionTable` or `RtlAddGrowableFunctionTable`, plus removal
+ordering tied to code-cache lifetime. Dumping directly from the diagnostic VEH
+would provide an emergency artifact but would not restore foreign frame-based
+SEH semantics and is not the product fix.
 
 An opt-in diagnostic build may add a final observer VEH or a preallocated
 record ring, but it must be off by default and must not run before the managed
@@ -1327,8 +1382,16 @@ evidence belongs to Stage E and is not implied by Wine.
   aggregate, Win64 build, Linux full `art`/`dalvikvm` rebuild,
   `dalvikvm -showversion`, and shared-boot imageless Hello all pass.
 
-### Stage E — native acceptance and cleanup
+### Stage E — fatal unwind, native acceptance, and cleanup
 
+- **Implemented locally:** PE unwind records for the two native invoke stubs
+  and generic JNI trampoline, a structural emitted-record audit, and a
+  hardened static `-Xint` JNI crash gate that requires VEH, UEF, minidump
+  marker, and a newly created valid `MDMP` file.
+- **Still open:** register range-accurate PE unwind data for dynamic JIT code
+  and define registration, replacement, collection, and code-cache teardown
+  ordering. Until then, arbitrary threshold-zero JIT-origin fatal AVs are not
+  guaranteed to reach frame-based SEH or the UEF.
 - Run the complete matrix below on Windows 10 build 17134+ and a current
   Windows release.
 - Keep Wine as a development oracle and Linux as the behavior oracle.
@@ -1394,14 +1457,22 @@ evidence belongs to Stage E and is not implied by Wine.
 
 ### 13.5 Chain and fatal diagnostics
 
+- Structural inspection resolves `art_quick_invoke_stub`,
+  `art_quick_invoke_static_stub`, and `art_quick_generic_jni_trampoline` in
+  the staged `art.dll` and verifies their frame anchors, allocations, saved
+  nonvolatile GPRs, and saved XMM registers.
 - Foreign VEH registered before ART, after ART, and promoted by
   `EnsureFrontOfChain()`.
 - Foreign handlers returning search preserve ART behavior.
 - An unrecognized AV reaches a frame-based SEH handler.
 - Debugger first-chance stop followed by continue reaches the Java exception.
 - Handled NPE/SOE produces no first-chance dump and no `.dmp`.
-- Unhandled native AV produces the expected UEF/minidump and calls the previous
-  UEF.
+- A static/`-Xint` unhandled JNI native AV produces the expected initial VEH,
+  UEF, predecessor-chain behavior, and a newly created valid `MDMP` minidump.
+- A threshold-zero JIT-origin unhandled JNI native AV crosses registered JIT
+  runtime-function data, reaches foreign frame-based SEH and the UEF, and
+  produces the same valid dump. This case remains open; the current build has
+  no dynamic-JIT runtime-function entries and must not be reported as passing.
 - `EXCEPTION_GUARD_PAGE`, `EXCEPTION_STACK_OVERFLOW`, breakpoint, single-step,
   illegal-instruction, and execute AV are not consumed by ART's managed VEH.
 - Runtime shutdown removes the VEH before `art.dll` can unload.
@@ -1446,6 +1517,7 @@ and debugger evidence.
 | `runtime/multiplatform/windows/fault_handler_windows.cc` | Not required; the Stage C dispatcher remains narrow enough to live in `sigchain_windows.cc` |
 | `runtime/multiplatform/windows/fault_handler_windows.h` | Windows-only non-owning context view and documented AV-kind constants; no common-header Win32 leakage |
 | `runtime/arch/x86/fault_handler_x86.cc` | Win64 non-owning context view, real `CONTEXT` PC/SP/RAX access, read-only stack-fault and protected-page checks |
+| `runtime/arch/x86_64/quick_entrypoints_x86_64.S` | Implemented PE unwind records for the two native invoke stubs and generic JNI trampoline; dynamic JIT code remains separate |
 | `runtime/thread.cc` | Implemented exact current-stack acceptance and attach failure; later common accounting plus a small `_WIN32` fixed-page installation branch |
 | `runtime/multiplatform/windows/stack_windows.{h,cc}` | Implemented Stage B selection, commit/protect state machine, verified rollback, and exact original-state restoration |
 | `runtime/multiplatform/windows/thread_windows.cc` | Implemented bounded `Thread` integration for Stage B; no alternate signal stack |
@@ -1454,6 +1526,7 @@ and debugger evidence.
 | `compat/src/win64_posix_stubs.c` | Implemented `_beginthreadex`, handle/result lifetime, join/detach, tagged external identity, exact current-stack bounds, and stack attributes |
 | `runtime/runtime.cc` | Implemented diagnostic handler shutdown, common implicit null/SO activation, Linux-like started-runtime sigchain invariant, and early nterp range registration |
 | `tools/verify/win64_phase1/check_win32_cet_contract.py` and `win32_cet_policy_probe.cc` | Implemented link/PE audit plus deterministic and actual-policy probe |
+| `tools/verify/win64_phase1/check_win32_boundary_unwind.py` and `tools/verify/win64_phase4/run_crashnative.sh` | Implemented emitted boundary-record audit and hardened static JNI fatal gate requiring a new valid minidump |
 | `tools/verify/win64_phase1/win32_thread_stack_probe.c`, `win32_stack_page_probe.cc`, `win32_stack_page_fault_probe.S`, `win32_fault_record_probe.cc`, `win32_sigchain_probe.cc`, and Phase 4 probe scripts | Implemented Stage A reservation/identity/lifetime gate, Stage B synthetic selection/restore/direct-fault gate, Stage C deterministic record/live VEH gate, and Stage D nterp/JIT managed-fault stress |
 
 The exact split between `sigchain_windows.cc` and
@@ -1480,10 +1553,14 @@ fallbacks:
 5. Does a security product or debugger used in acceptance install a first VEH
    that consumes expected AVs? If so, this is an embedding compatibility issue,
    not a reason to weaken ART's classifier.
-6. Is PE unwind metadata required for useful fatal minidumps through the two
-   quick exception trampolines? It is not required merely to return
-   `EXCEPTION_CONTINUE_EXECUTION` with a modified context while CET user shadow
-   stacks are disabled. It cannot be used to infer CET compatibility.
+6. What is the smallest correct dynamic-JIT PE unwind design: one immutable
+   runtime-function record per compiled method, a growable table per code-cache
+   range, or another range-accurate scheme? Specify publication before code can
+   execute, replacement/collection synchronization, deletion before backing
+   memory is released, code-cache teardown order, and behavior during
+   concurrent Windows exception dispatch. Static boundary records are already
+   required and implemented; neither static nor dynamic unwind data implies
+   CET user-shadow-stack compatibility.
 
 ## 16. Primary references and comparative implementation
 

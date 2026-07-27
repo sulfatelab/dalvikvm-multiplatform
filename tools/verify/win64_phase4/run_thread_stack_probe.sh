@@ -16,6 +16,11 @@ stack_log="${TMPDIR:-/tmp}/win32-thread-stack-probe.log"
 ) >"$stack_log" 2>&1
 
 grep -qF "win32_thread_stack_probe failures=0 join_stress=512 detach_stress=128" "$stack_log"
+grep -qF "requested=65536" "$stack_log"
+grep -qF "requested=262144" "$stack_log"
+grep -qF "requested=1048576" "$stack_log"
+grep -qF "requested=2097152" "$stack_log"
+grep -qF "requested=9437184" "$stack_log"
 grep -qF "win32_thread_stack_probe OK" "$stack_log"
 cat "$stack_log"
 

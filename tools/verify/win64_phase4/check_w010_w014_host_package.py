@@ -1,0 +1,204 @@
+#!/usr/bin/env python3
+"""Validate the focused W-010/W-014 native-Windows Stage E package."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+from pathlib import Path
+import re
+import sys
+
+
+def fail(message: str) -> None:
+    raise RuntimeError(message)
+
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def parse_report(path: Path) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if "=" in line:
+            key, value = line.split("=", 1)
+            values[key.strip()] = value.strip()
+    required = {
+        "status": "PASS",
+        "windows_minimum_build": "17134",
+        "requested_stack_sizes": "0,65536,262144,1048576,2097152,9437184",
+        "sigchain_action_calls": "3",
+        "sigchain_foreign_before_calls": "2",
+        "sigchain_foreign_after_calls": "2",
+        "sigchain_sequence": "1,2,1,2",
+        "managed_npe_read_rounds": "64",
+        "managed_npe_write_rounds": "64",
+        "managed_so_main_rounds": "2",
+        "managed_so_child_rounds": "2",
+        "host_llvm_tools_required": "no",
+    }
+    for key, expected in required.items():
+        if values.get(key) != expected:
+            fail(f"structural report has {key}={values.get(key)!r}, expected {expected!r}")
+    if not values.get("cet_contract", "").startswith("WIN32_CET_CONTRACT PASS "):
+        fail("structural report does not contain the CET contract PASS marker")
+    if not values.get("boundary_unwind", "").startswith(
+        "win32_boundary_unwind OK "
+    ):
+        fail("structural report does not contain the boundary unwind PASS marker")
+    return values
+
+
+def check_manifest(root: Path) -> None:
+    manifest_path = root / "MANIFEST.json"
+    sums_path = root / "SHA256SUMS.txt"
+    if not manifest_path.is_file() or not sums_path.is_file():
+        fail("package manifest files are missing")
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    entries = manifest.get("files")
+    if not isinstance(entries, list) or manifest.get("count") != len(entries):
+        fail("MANIFEST.json count does not match its file list")
+
+    expected_paths = {
+        path.relative_to(root).as_posix()
+        for path in root.rglob("*")
+        if path.is_file()
+        and "logs" not in path.relative_to(root).parts
+        and path.suffix.lower() != ".dmp"
+        and path.name not in {"MANIFEST.json", "SHA256SUMS.txt"}
+    }
+    listed_paths = {entry.get("path") for entry in entries}
+    if listed_paths != expected_paths:
+        missing = sorted(expected_paths - listed_paths)
+        extra = sorted(listed_paths - expected_paths)
+        fail(f"MANIFEST.json path mismatch: missing={missing} extra={extra}")
+    for entry in entries:
+        path = root / entry["path"]
+        if entry.get("bytes") != path.stat().st_size:
+            fail(f"manifest size mismatch: {entry['path']}")
+        if entry.get("sha256") != sha256(path):
+            fail(f"manifest hash mismatch: {entry['path']}")
+
+    sums: dict[str, str] = {}
+    for line in sums_path.read_text(encoding="utf-8").splitlines():
+        match = re.fullmatch(r"([0-9a-f]{64})  (.+)", line)
+        if match is None:
+            fail(f"invalid SHA256SUMS line: {line!r}")
+        relative = match.group(2)
+        if relative.startswith("./"):
+            relative = relative[2:]
+        sums[Path(relative).as_posix()] = match.group(1)
+    sum_paths = expected_paths | {"MANIFEST.json"}
+    if set(sums) != sum_paths:
+        missing = sorted(sum_paths - set(sums))
+        extra = sorted(set(sums) - sum_paths)
+        fail(f"SHA256SUMS.txt path mismatch: missing={missing} extra={extra}")
+    for relative, expected in sums.items():
+        if sha256(root / relative) != expected:
+            fail(f"SHA256SUMS mismatch: {relative}")
+
+
+def check_package(root: Path) -> None:
+    required_files = [
+        "dalvikvm.exe",
+        "art.dll",
+        "sigchain.dll",
+        "win32_cet_policy_probe.exe",
+        "win32_thread_stack_probe.exe",
+        "win32_stack_page_probe.exe",
+        "win32_fault_record_probe.exe",
+        "win32_sigchain_probe.exe",
+        "run/boot.jar",
+        "run/w010managedfaultprobe.jar",
+        "run/crashnativeprobe.jar",
+        "run/crash/README.txt",
+        "scripts/RUN_W010_W014_HOST.ps1",
+        "W010_W014_HOST_CHECKLIST.md",
+        "W010_W014_STRUCTURAL_REPORT.txt",
+        "BUILD_INFO.txt",
+    ]
+    for relative in required_files:
+        if not (root / relative).is_file():
+            fail(f"required package file is missing: {relative}")
+
+    if list(root.rglob("*.dmp")):
+        fail("clean issued package unexpectedly contains a crash dump")
+
+    report = parse_report(root / "W010_W014_STRUCTURAL_REPORT.txt")
+    for relative, key in (
+        ("dalvikvm.exe", "dalvikvm_sha256"),
+        ("art.dll", "art_sha256"),
+        ("sigchain.dll", "sigchain_sha256"),
+        ("run/w010managedfaultprobe.jar", "managed_jar_sha256"),
+    ):
+        if report.get(key) != sha256(root / relative):
+            fail(f"structural report hash mismatch for {relative}")
+
+    runner = (root / "scripts/RUN_W010_W014_HOST.ps1").read_text(encoding="utf-8")
+    required_runner_text = [
+        "17134",
+        "Test-PackageIntegrity",
+        "Test-StructuralReport",
+        "win32_cet_policy_probe.exe",
+        "actual=disabled",
+        "requested=65536",
+        "requested=9437184",
+        "action_calls=3 foreign_before=2 foreign_after=2",
+        "frame_with_action=1 frame_after_remove=1 sequence=1,2,1,2",
+        "A started runtime should have sig chain enabled",
+        "ART_WIN64_NTERP = '0'",
+        "W010ManagedFaultProbe NPE OK read=64 write=64 recovery=128 gc=16",
+        "W010ManagedFaultProbe SO OK main=2 child=2 recovery=4 gc=4",
+        "Win64 CompileMethod done success=1 method=void W010ManagedFaultProbe.runNullChecks()",
+        "HANDLED_DMP_SCAN.txt",
+        "FATAL_DMP_SCAN.txt",
+        "ART Win64 UEF: exception 0xc0000005",
+        "OVERALL PASS",
+    ]
+    for marker in required_runner_text:
+        if marker not in runner:
+            fail(f"host runner is missing required contract text: {marker}")
+    if "llvm-readobj" in runner or "llvm-objdump" in runner:
+        fail("host runner must not require LLVM inspection tools")
+
+    checklist = (root / "W010_W014_HOST_CHECKLIST.md").read_text(encoding="utf-8")
+    for marker in (
+        "Hardware-enforced Stack Protection",
+        "NO_HANDLED_DMP_FILES",
+        "static `-Xint` fatal JNI native AV",
+        "dynamically emitted JIT code",
+        "debugger",
+        "forced-policy",
+        "review_w010_w014_host_result.py",
+    ):
+        if marker not in checklist:
+            fail(f"host checklist is missing required scope text: {marker}")
+
+    check_manifest(root)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("package", type=Path)
+    args = parser.parse_args()
+    root = args.package.resolve()
+    if not root.is_dir():
+        fail(f"package directory does not exist: {root}")
+    check_package(root)
+    print("W-010/W-014 host package check: PASS")
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as error:
+        print(f"W-010/W-014 host package check: FAIL: {error}", file=sys.stderr)
+        sys.exit(1)

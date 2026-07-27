@@ -1,0 +1,364 @@
+#!/usr/bin/env python3
+"""Review returned native-Windows W-010/W-014 Stage E evidence."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+from pathlib import Path
+import re
+import sys
+import tempfile
+import zipfile
+
+
+IDENTITY_FILES = (
+    "BUILD_INFO.txt",
+    "MANIFEST.json",
+    "SHA256SUMS.txt",
+    "W010_W014_STRUCTURAL_REPORT.txt",
+)
+
+
+def fail(message: str) -> None:
+    raise RuntimeError(message)
+
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def safe_extract(archive: Path, output: Path) -> None:
+    with zipfile.ZipFile(archive) as source:
+        for member in source.infolist():
+            target = (output / member.filename).resolve()
+            if output.resolve() not in target.parents and target != output.resolve():
+                fail(f"archive contains an unsafe path: {member.filename}")
+        source.extractall(output)
+
+
+def find_package_root(root: Path, required: str) -> Path:
+    if (root / required).is_file():
+        return root
+    required_path = Path(required)
+    candidates = sorted(
+        path.parents[len(required_path.parts) - 1]
+        for path in root.rglob(required_path.name)
+        if path.as_posix().endswith(required_path.as_posix())
+    )
+    unique = []
+    for candidate in candidates:
+        if candidate not in unique:
+            unique.append(candidate)
+    if len(unique) != 1:
+        fail(f"expected one package root containing {required}, found {len(unique)}")
+    return unique[0]
+
+
+def read_sums(path: Path) -> dict[str, str]:
+    sums: dict[str, str] = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        match = re.fullmatch(r"([0-9a-f]{64})  (.+)", line)
+        if match is None:
+            fail(f"invalid SHA256SUMS line: {line!r}")
+        relative = match.group(2)
+        if relative.startswith("./"):
+            relative = relative[2:]
+        sums[Path(relative).as_posix()] = match.group(1)
+    return sums
+
+
+def verify_issued_payload(returned: Path, issued: Path) -> str:
+    for relative in IDENTITY_FILES:
+        returned_path = returned / relative
+        issued_path = issued / relative
+        if not returned_path.is_file():
+            fail(f"returned evidence is missing identity file: {relative}")
+        if not issued_path.is_file():
+            fail(f"issued package is missing identity file: {relative}")
+        if returned_path.read_bytes() != issued_path.read_bytes():
+            fail(f"returned {relative} does not match the issued package")
+
+    issued_sums = read_sums(issued / "SHA256SUMS.txt")
+    payload_paths = [relative for relative in issued_sums if relative not in IDENTITY_FILES]
+    returned_payload = [relative for relative in payload_paths if (returned / relative).is_file()]
+    if not returned_payload:
+        return "evidence-only"
+    if len(returned_payload) != len(payload_paths):
+        missing = sorted(set(payload_paths) - set(returned_payload))
+        fail(f"returned package has a partial issued payload; missing: {missing}")
+    for relative, expected in issued_sums.items():
+        path = returned / relative
+        if not path.is_file():
+            fail(f"returned package is missing issued file: {relative}")
+        if sha256(path) != expected:
+            fail(f"returned package changed issued file: {relative}")
+    return "full-package"
+
+
+def require_markers(path: Path, markers: tuple[str, ...], forbidden: tuple[str, ...] = ()) -> str:
+    if not path.is_file():
+        fail(f"required evidence file is missing: {path.relative_to(path.parents[1])}")
+    text = path.read_text(encoding="utf-8", errors="replace")
+    for marker in markers:
+        if marker not in text:
+            fail(f"{path.name} is missing marker: {marker}")
+    for marker in forbidden:
+        if marker in text:
+            fail(f"{path.name} contains forbidden marker: {marker}")
+    return text
+
+
+def require_exit(log_text: str, *, nonzero: bool) -> None:
+    match = re.search(r"^exit=(-?\d+)\s*$", log_text, re.MULTILINE)
+    if match is None:
+        fail("process log does not contain an exit code")
+    exit_code = int(match.group(1))
+    if nonzero and exit_code == 0:
+        fail("process log unexpectedly reports exit=0")
+    if not nonzero and exit_code != 0:
+        fail(f"process log reports nonzero exit={exit_code}")
+    if "timed_out=False" not in log_text:
+        fail("process log does not prove timed_out=False")
+
+
+def review(returned: Path, issued: Path) -> None:
+    return_form = verify_issued_payload(returned, issued)
+    logs = returned / "logs"
+    if not logs.is_dir():
+        fail("returned package has no logs directory")
+
+    result_path = logs / "RESULT_W010_W014.txt"
+    if not result_path.is_file():
+        fail("RESULT_W010_W014.txt is missing")
+    result_lines = result_path.read_text(encoding="utf-8", errors="replace").splitlines()
+    if not result_lines or result_lines[-1] != "OVERALL PASS":
+        fail("RESULT_W010_W014.txt does not end with OVERALL PASS")
+    if any(line.startswith("FAIL ") or line == "OVERALL FAIL" for line in result_lines):
+        fail("RESULT_W010_W014.txt contains a failure record")
+
+    required_result_prefixes = (
+        "PASS host_os build=",
+        "PASS package_integrity",
+        "PASS structural_report",
+        "PASS cet_policy exit=0 ",
+        "PASS hsp_policy",
+        "PASS thread_stack exit=0 ",
+        "PASS stack_page exit=0 ",
+        "PASS fault_record exit=0 ",
+        "PASS sigchain exit=0 ",
+        "PASS no_sig_chain_rejection exit=",
+        "PASS switch_so exit=0 ",
+        "PASS nterp_npe exit=0 ",
+        "PASS nterp_so exit=0 ",
+        "PASS jit_npe exit=0 ",
+        "PASS jit_so exit=0 ",
+        "PASS handled_log_scan",
+        "PASS handled_dump_scan NO_HANDLED_DMP_FILES",
+        "PASS crashnative exit=",
+        "PASS fatal_dump_scan count=",
+    )
+    for prefix in required_result_prefixes:
+        if not any(line.startswith(prefix) for line in result_lines):
+            fail(f"RESULT_W010_W014.txt is missing result: {prefix}")
+    pass_lines = [line for line in result_lines if line.startswith("PASS ")]
+    if len(pass_lines) != 19:
+        fail(f"expected 19 PASS records, found {len(pass_lines)}")
+
+    version_text = require_markers(
+        logs / "WINDOWS_VERSION.txt", ("BuildNumber", "OSArchitecture")
+    )
+    build_match = re.search(r"BuildNumber\s*:\s*(\d+)", version_text)
+    if build_match is None or int(build_match.group(1)) < 17134:
+        fail("native result does not prove Windows 10 RS4 build 17134 or later")
+    windows_build = int(build_match.group(1))
+
+    copied_report = logs / "W010_W014_STRUCTURAL_REPORT.txt"
+    if not copied_report.is_file():
+        fail("returned logs do not contain W010_W014_STRUCTURAL_REPORT.txt")
+    if copied_report.read_bytes() != (issued / "W010_W014_STRUCTURAL_REPORT.txt").read_bytes():
+        fail("returned structural report does not match the issued report")
+
+    cet_text = require_markers(logs / "cet_policy.log", ("WIN32_CET_POLICY_PROBE PASS",))
+    require_exit(cet_text, nonzero=False)
+    if windows_build >= 19041:
+        if "actual=disabled" not in cet_text:
+            fail("Windows build 19041+ did not prove disabled user shadow stacks")
+    elif not any(
+        marker in cet_text
+        for marker in ("actual=disabled", "actual=unavailable-on-older-windows")
+    ):
+        fail("older Windows did not report a disabled or unavailable shadow-stack policy")
+
+    common_handled_forbidden = (
+        "ART Win64 VEH",
+        "ART Win64 UEF",
+        "minidump written",
+        "unexpected_continue",
+    )
+    thread_text = require_markers(
+        logs / "thread_stack.log",
+        (
+            "requested=65536",
+            "requested=262144",
+            "requested=1048576",
+            "requested=2097152",
+            "requested=9437184",
+            "join_stress count=512",
+            "detach_stress count=128",
+            "win32_thread_stack_probe failures=0 join_stress=512 detach_stress=128",
+            "win32_thread_stack_probe OK",
+        ),
+        common_handled_forbidden,
+    )
+    require_exit(thread_text, nonzero=False)
+    stack_page_text = require_markers(
+        logs / "stack_page.log",
+        (
+            "selection_cases count=8",
+            "reserved_case size=1048576 iterations=64",
+            "win32_stack_page_probe failures=0 committed_restore_iterations=64 reserved_restore_iterations=64 faults=258",
+            "win32_stack_page_probe OK",
+        ),
+        common_handled_forbidden,
+    )
+    require_exit(stack_page_text, nonzero=False)
+    fault_record_text = require_markers(
+        logs / "fault_record.log",
+        ("win32_fault_record_probe failures=0 cases=8", "win32_fault_record_probe OK"),
+        common_handled_forbidden,
+    )
+    require_exit(fault_record_text, nonzero=False)
+    sigchain_text = require_markers(
+        logs / "sigchain.log",
+        (
+            "win32_sigchain_probe calls=2 first=0 second=0",
+            "action_calls=3 foreign_before=2 foreign_after=2",
+            "frame_with_action=1 frame_after_remove=1 sequence=1,2,1,2",
+            "win32_sigchain_probe OK",
+        ),
+        common_handled_forbidden,
+    )
+    require_exit(sigchain_text, nonzero=False)
+
+    no_chain_text = require_markers(
+        logs / "no_sig_chain_rejection.log",
+        ("A started runtime should have sig chain enabled",),
+        ("W010ManagedFaultProbe OK",),
+    )
+    require_exit(no_chain_text, nonzero=True)
+
+    managed_cases = {
+        "switch_so": (
+            "W010ManagedFaultProbe SO OK main=2 child=2 recovery=4 gc=4",
+            "W010ManagedFaultProbe OK mode=so",
+            "main end exception=0",
+        ),
+        "nterp_npe": (
+            "W010ManagedFaultProbe NPE OK read=64 write=64 recovery=128 gc=16",
+            "W010ManagedFaultProbe OK mode=npe",
+            "main end exception=0",
+        ),
+        "nterp_so": (
+            "W010ManagedFaultProbe SO OK main=2 child=2 recovery=4 gc=4",
+            "W010ManagedFaultProbe OK mode=so",
+            "main end exception=0",
+        ),
+        "jit_npe": (
+            "W010ManagedFaultProbe NPE OK read=64 write=64 recovery=128 gc=16",
+            "Win64 CompileMethod done success=1 method=void W010ManagedFaultProbe.runNullChecks()",
+            "W010ManagedFaultProbe OK mode=npe",
+            "main end exception=0",
+        ),
+        "jit_so": (
+            "W010ManagedFaultProbe SO OK main=2 child=2 recovery=4 gc=4",
+            "Win64 CompileMethod done success=1 method=int W010ManagedFaultProbe.recurse(int)",
+            "Win64 CompileMethod done success=1 method=int W010ManagedFaultProbe.runStackOverflowRounds()",
+            "W010ManagedFaultProbe OK mode=so",
+            "main end exception=0",
+        ),
+    }
+    for name, markers in managed_cases.items():
+        forbidden = common_handled_forbidden
+        if name in {"switch_so", "nterp_npe", "nterp_so"}:
+            forbidden = (*forbidden, "Win64 CompileMethod done success=1 method=")
+        text = require_markers(logs / f"{name}.log", markers, forbidden)
+        require_exit(text, nonzero=False)
+
+    require_markers(logs / "HANDLED_DMP_SCAN.txt", ("NO_HANDLED_DMP_FILES",))
+    fatal_text = require_markers(
+        logs / "crashnative.log",
+        (
+            "CrashNativeProbe.start",
+            "ART Win64 VEH: exception 0xc0000005",
+            "ART Win64 UEF: exception 0xc0000005",
+            "minidump written",
+        ),
+        ("CrashNativeProbe.unexpected_continue",),
+    )
+    require_exit(fatal_text, nonzero=True)
+
+    scan_text = require_markers(logs / "FATAL_DMP_SCAN.txt", ("path=", "bytes=", "sha256="))
+    scan_records: set[tuple[int, str]] = set()
+    for line in scan_text.splitlines():
+        match = re.search(r"bytes=(\d+)\s+sha256=([0-9a-f]{64})", line)
+        if match:
+            scan_records.add((int(match.group(1)), match.group(2)))
+    if not scan_records:
+        fail("FATAL_DMP_SCAN.txt contains no parseable dump record")
+
+    dumps = sorted(returned.rglob("*.dmp"))
+    if not dumps:
+        fail("returned evidence contains no fatal minidump")
+    matched_dump = False
+    for dump in dumps:
+        if dump.stat().st_size < 4096 or dump.read_bytes()[:4] != b"MDMP":
+            fail(f"returned dump is not a valid minidump: {dump}")
+        record = (dump.stat().st_size, sha256(dump))
+        if record in scan_records:
+            matched_dump = True
+    if not matched_dump:
+        fail("no returned minidump matches FATAL_DMP_SCAN.txt")
+
+    print(
+        "W-010/W-014 native Stage E result: PASS "
+        f"(build={windows_build}, pass_records=19, dumps={len(dumps)}, return={return_form})"
+    )
+
+
+def materialize(path: Path, temporary: Path, required: str, label: str) -> Path:
+    if path.is_dir():
+        return find_package_root(path.resolve(), required)
+    if not path.is_file() or not zipfile.is_zipfile(path):
+        fail(f"not a package directory or ZIP archive: {path}")
+    output = temporary / label
+    output.mkdir()
+    safe_extract(path, output)
+    return find_package_root(output, required)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("returned", type=Path)
+    parser.add_argument("--issued", required=True, type=Path)
+    args = parser.parse_args()
+    with tempfile.TemporaryDirectory(prefix="w010-w014-review-") as temp:
+        temporary = Path(temp)
+        returned = materialize(
+            args.returned, temporary, "logs/RESULT_W010_W014.txt", "returned"
+        )
+        issued = materialize(args.issued, temporary, "SHA256SUMS.txt", "issued")
+        review(returned, issued)
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except (OSError, RuntimeError, ValueError, zipfile.BadZipFile) as error:
+        print(f"W-010/W-014 native Stage E result: FAIL: {error}", file=sys.stderr)
+        sys.exit(1)
