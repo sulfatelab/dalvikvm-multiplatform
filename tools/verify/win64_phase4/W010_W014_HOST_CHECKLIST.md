@@ -54,6 +54,8 @@ The runner verifies:
   entry/return boundaries;
 - live split OSR lookup and virtual unwind from a variable copied-stack RSP,
   an RSP-based return with managed RBP clobbered, and the canonical epilogue;
+- two full XMM6-XMM15 preservation runs at each nterp, switch-interpreter, and
+  threshold-zero JIT native-to-managed boundary;
 - actual user shadow-stack policy observation;
 - main/default, 64 KiB, 256 KiB, 1 MiB, 2 MiB, and 9 MiB requested pthread
   reservations, including the Windows rule that sub-default requests retain
@@ -87,11 +89,16 @@ separate Stage E acceptance items.
 OVERALL PASS
 ```
 
-It must contain 20 PASS records and no FAIL record. Key evidence includes:
+It must contain 26 PASS records and no FAIL record. Key evidence includes:
 
 - `logs\cet_policy.log` with `WIN32_CET_POLICY_PROBE PASS`;
 - `logs\osr_unwind.log` with `win32_osr_unwind_probe failures=0`, the
-  zero-offset entry frame, zero-prologue return range, and `OK` marker;
+  zero-offset entry frame, zero-prologue return range, `fixed_frame=248`,
+  `xmm_count=10`, two invoke records, and the `OK` marker;
+- six `logs\xmm_full_*_run*.log` files with `mask=0`,
+  `fullSelfTestMask=1023`, and `W003XmmSentinelProbe OK`. The retained
+  `selfTestMask=63` field is the historical XMM6-XMM11 compatibility marker;
+  `fullSelfTestMask=1023` is the authoritative XMM6-XMM15 self-test;
 - `logs\W010_W014_STRUCTURAL_REPORT.txt` with
   `boundary_unwind=win32_boundary_unwind OK ...`;
 - `logs\thread_stack.log` with all five nonzero requested sizes and zero

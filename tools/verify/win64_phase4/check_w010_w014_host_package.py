@@ -41,6 +41,8 @@ def parse_report(path: Path) -> dict[str, str]:
         "managed_npe_write_rounds": "64",
         "managed_so_main_rounds": "2",
         "managed_so_child_rounds": "2",
+        "xmm_boundary_registers": "10",
+        "xmm_self_test_mask": "1023",
         "host_llvm_tools_required": "no",
     }
     for key, expected in required.items():
@@ -54,7 +56,8 @@ def parse_report(path: Path) -> dict[str, str]:
         fail("structural report does not contain the boundary unwind PASS marker")
     if not re.fullmatch(
         r"win32_osr_unwind_probe failures=0 prologue=\d+ "
-        r"entry_frame_offset=0 return_prologue=0 variable_rsp_delta=256",
+        r"entry_frame_offset=0 return_prologue=0 fixed_frame=248 "
+        r"xmm_count=10 invoke_records=2 variable_rsp_delta=256",
         values.get("osr_unwind", ""),
     ):
         fail("structural report does not contain the OSR unwind PASS marker")
@@ -122,8 +125,10 @@ def check_package(root: Path) -> None:
         "win32_fault_record_probe.exe",
         "win32_sigchain_probe.exe",
         "win32_osr_unwind_probe.exe",
+        "libw003xmmsentinel.dll",
         "run/boot.jar",
         "run/w010managedfaultprobe.jar",
+        "run/w003xmmsentinelprobe.jar",
         "run/crashnativeprobe.jar",
         "run/crash/README.txt",
         "scripts/RUN_W010_W014_HOST.ps1",
@@ -145,6 +150,8 @@ def check_package(root: Path) -> None:
         ("sigchain.dll", "sigchain_sha256"),
         ("win32_osr_unwind_probe.exe", "osr_probe_sha256"),
         ("run/w010managedfaultprobe.jar", "managed_jar_sha256"),
+        ("libw003xmmsentinel.dll", "xmm_probe_sha256"),
+        ("run/w003xmmsentinelprobe.jar", "xmm_jar_sha256"),
     ):
         if report.get(key) != sha256(root / relative):
             fail(f"structural report hash mismatch for {relative}")
@@ -156,7 +163,8 @@ def check_package(root: Path) -> None:
         "Test-StructuralReport",
         "win32_cet_policy_probe.exe",
         "win32_osr_unwind_probe.exe",
-        "entry_frame_offset=0 return_prologue=0 variable_rsp_delta=256",
+        "entry_frame_offset=0 return_prologue=0 fixed_frame=248 "
+        "xmm_count=10 invoke_records=2 variable_rsp_delta=256",
         "actual=disabled",
         "requested=65536",
         "requested=9437184",
@@ -167,6 +175,11 @@ def check_package(root: Path) -> None:
         "W010ManagedFaultProbe NPE OK read=64 write=64 recovery=128 gc=16",
         "W010ManagedFaultProbe SO OK main=2 child=2 recovery=4 gc=4",
         "Win64 CompileMethod done success=1 method=void W010ManagedFaultProbe.runNullChecks()",
+        "foreach ($mode in @('nterp', 'switch', 'jit'))",
+        "xmm_full_{0}_run{1:D2}",
+        "mask=0 selfTestMask=63 iterations=128",
+        "fullSelfTestMask=1023",
+        "success=1 method=int W003XmmSentinelProbe.managedCallback(",
         "HANDLED_DMP_SCAN.txt",
         "FATAL_DMP_SCAN.txt",
         "ART Win64 UEF: exception 0xc0000005",
@@ -185,6 +198,7 @@ def check_package(root: Path) -> None:
         "NO_HANDLED_DMP_FILES",
         "static `-Xint` fatal JNI native AV",
         "live split OSR lookup and virtual unwind",
+        "full XMM6-XMM15",
         "dynamically emitted JIT code",
         "debugger",
         "forced-policy",

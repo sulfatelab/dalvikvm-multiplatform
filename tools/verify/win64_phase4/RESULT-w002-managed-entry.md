@@ -122,7 +122,7 @@ The structural gate requires:
 - ordered Microsoft-to-SysV conversion and r15 publication in source and PE
   object code;
 - preservation of Win64 rdi/rsi and the Linux 80-byte CFA;
-- the Windows 96-byte CFA;
+- the current Windows 256-byte conceptual CFA while Linux remains 80 bytes;
 - exactly one nterp relocation to `NterpFree` and no raw `free` relocation;
 - the Windows nterp return-adapter sequence;
 - Win64 compiler Thread accesses through r15; and

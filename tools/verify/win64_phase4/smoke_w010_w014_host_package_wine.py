@@ -104,7 +104,8 @@ def main() -> int:
         [wine, "./win32_osr_unwind_probe.exe"],
         markers=(
             "win32_osr_unwind_probe failures=0",
-            "entry_frame_offset=0 return_prologue=0 variable_rsp_delta=256",
+            "entry_frame_offset=0 return_prologue=0 fixed_frame=248 "
+            "xmm_count=10 invoke_records=2 variable_rsp_delta=256",
             "win32_osr_unwind_probe OK",
         ),
     )
@@ -163,6 +164,51 @@ def main() -> int:
         "-Xms64m",
         "-Xmx512m",
     ]
+    for mode in ("nterp", "switch", "jit"):
+        env_extra = {"ART_WIN64_QUICK_INVOKE": "1"}
+        vm_args: list[str] = []
+        if mode == "nterp":
+            env_extra.update(ART_WIN64_JIT="0", ART_WIN64_NTERP="1")
+        elif mode == "switch":
+            env_extra.update(ART_WIN64_JIT="0", ART_WIN64_NTERP="0")
+        else:
+            env_extra.update(
+                ART_WIN64_JIT="1",
+                ART_WIN64_NTERP="1",
+                ART_WIN64_JIT_FILTER="W003XmmSentinelProbe.managedCallback",
+                ART_WIN64_JIT_LOG_COMPILES="1",
+            )
+            vm_args.extend(
+                ["-verbose:jit", "-Xjitwarmupthreshold:0", "-Xjitthreshold:0"]
+            )
+        markers = [
+            f"W003XmmSentinelProbe mode={mode}",
+            "mask=0 selfTestMask=63 iterations=128",
+            "fullSelfTestMask=1023",
+            "W003XmmSentinelProbe OK",
+            "main end exception=0",
+        ]
+        forbidden = list(handled_forbidden)
+        if mode == "jit":
+            markers.append("success=1 method=int W003XmmSentinelProbe.managedCallback(")
+        else:
+            forbidden.append("Win64 CompileMethod done success=1 method=")
+        run_case(
+            root,
+            f"xmm_full_{mode}",
+            [
+                *common,
+                *vm_args,
+                f"-Dw003.mode={mode}",
+                "-Djava.library.path=.",
+                "-cp",
+                "run/w003xmmsentinelprobe.jar",
+                "W003XmmSentinelProbe",
+            ],
+            markers=tuple(markers),
+            forbidden=tuple(forbidden),
+            env_extra=env_extra,
+        )
     run_case(
         root,
         "no_sig_chain_rejection",

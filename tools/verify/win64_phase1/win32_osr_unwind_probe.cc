@@ -55,6 +55,121 @@ struct VirtualStack {
   uint8_t* address;
 };
 
+void ExpectForSymbol(bool condition, const char* symbol, const char* message) {
+  if (!condition) {
+    std::cerr << "FAIL: " << symbol << ' ' << message << '\n';
+    ++g_failures;
+  }
+}
+
+void TestInvokeUnwind(HMODULE art, const char* symbol) {
+  auto* entry = reinterpret_cast<uint8_t*>(GetProcAddress(art, symbol));
+  ExpectForSymbol(entry != nullptr, symbol, "export resolves");
+  if (entry == nullptr) {
+    return;
+  }
+
+  DWORD64 image_base = 0u;
+  PRUNTIME_FUNCTION function =
+      RtlLookupFunctionEntry(reinterpret_cast<DWORD64>(entry), &image_base, nullptr);
+  ExpectForSymbol(function != nullptr, symbol, "runtime-function entry resolves");
+  if (function == nullptr) {
+    return;
+  }
+  const uint8_t* unwind = reinterpret_cast<const uint8_t*>(image_base + function->UnwindData);
+  const uint8_t prologue_size = unwind[1];
+  ExpectForSymbol(prologue_size != 0u, symbol, "prologue is nonempty");
+  ExpectForSymbol((unwind[3] & 0x0fu) == 5u, symbol, "frame register is RBP");
+
+  SYSTEM_INFO system_info = {};
+  GetSystemInfo(&system_info);
+  VirtualStack stack(system_info.dwPageSize);
+  ExpectForSymbol(stack.address != nullptr, symbol, "synthetic stack allocation succeeds");
+  if (stack.address == nullptr) {
+    return;
+  }
+
+  uintptr_t entry_rsp = reinterpret_cast<uintptr_t>(stack.address + system_info.dwPageSize - 512u);
+  entry_rsp = (entry_rsp & ~uintptr_t{15u}) + 8u;
+  const uintptr_t fixed_rsp = entry_rsp - 240u;
+  const uintptr_t variable_rsp = fixed_rsp - 256u;
+  constexpr uint64_t kReturnAddress = UINT64_C(0x23456789abcdef01);
+  constexpr uint64_t kRbp = UINT64_C(0x1020304050607080);
+  constexpr uint64_t kRdi = UINT64_C(0x1122334455667788);
+  constexpr uint64_t kRsi = UINT64_C(0x8877665544332211);
+  constexpr uint64_t kRbx = UINT64_C(0x2233445566778899);
+  constexpr uint64_t kR12 = UINT64_C(0x33445566778899aa);
+  constexpr uint64_t kR13 = UINT64_C(0x445566778899aabb);
+  constexpr uint64_t kR14 = UINT64_C(0x5566778899aabbcc);
+  constexpr uint64_t kR15 = UINT64_C(0x66778899aabbccdd);
+
+  *reinterpret_cast<uint64_t*>(entry_rsp) = kReturnAddress;
+  *reinterpret_cast<uint64_t*>(entry_rsp - 8u) = kRdi;
+  *reinterpret_cast<uint64_t*>(entry_rsp - 16u) = kRsi;
+  *reinterpret_cast<uint64_t*>(entry_rsp - 184u) = kRbp;
+  *reinterpret_cast<uint64_t*>(entry_rsp - 192u) = UINT64_C(0xa1a2a3a4a5a6a7a8);
+  *reinterpret_cast<uint64_t*>(entry_rsp - 200u) = UINT64_C(0xb1b2b3b4b5b6b7b8);
+  *reinterpret_cast<uint64_t*>(entry_rsp - 208u) = kRbx;
+  *reinterpret_cast<uint64_t*>(entry_rsp - 216u) = kR12;
+  *reinterpret_cast<uint64_t*>(entry_rsp - 224u) = kR13;
+  *reinterpret_cast<uint64_t*>(entry_rsp - 232u) = kR14;
+  *reinterpret_cast<uint64_t*>(entry_rsp - 240u) = kR15;
+
+  M128A saved_xmms[10] = {};
+  for (size_t index = 0; index < 10u; ++index) {
+    saved_xmms[index] = MakeM128(
+        UINT64_C(0x6060606060606060) + index,
+        static_cast<int64_t>(UINT64_C(0x7070707070707070) + index));
+    StoreM128(entry_rsp - 176u + index * 16u, saved_xmms[index]);
+  }
+
+  CONTEXT context = {};
+  context.ContextFlags = CONTEXT_FULL;
+  context.Rip = reinterpret_cast<DWORD64>(entry + prologue_size);
+  context.Rsp = variable_rsp;
+  context.Rbp = fixed_rsp;
+  context.Rbx = context.R12 = context.R13 = context.R14 = context.R15 =
+      UINT64_C(0xcccccccccccccccc);
+  context.Rdi = context.Rsi = UINT64_C(0xdddddddddddddddd);
+  context.Xmm6 = context.Xmm7 = context.Xmm8 = context.Xmm9 = context.Xmm10 = context.Xmm11 =
+      context.Xmm12 = context.Xmm13 = context.Xmm14 = context.Xmm15 =
+          MakeM128(UINT64_C(0xeeeeeeeeeeeeeeee), INT64_C(-1));
+  PVOID handler_data = nullptr;
+  DWORD64 establisher_frame = 0u;
+  RtlVirtualUnwind(UNW_FLAG_NHANDLER,
+                   image_base,
+                   context.Rip,
+                   function,
+                   &context,
+                   &handler_data,
+                   &establisher_frame,
+                   nullptr);
+  ExpectForSymbol(context.Rip == kReturnAddress, symbol, "restores return address");
+  ExpectForSymbol(context.Rsp == entry_rsp + 8u, symbol, "restores caller RSP");
+  ExpectForSymbol(context.Rbp == kRbp && context.Rdi == kRdi && context.Rsi == kRsi &&
+                      context.Rbx == kRbx && context.R12 == kR12 && context.R13 == kR13 &&
+                      context.R14 == kR14 && context.R15 == kR15,
+                  symbol,
+                  "restores nonvolatile GPRs");
+  const M128A* restored[] = {
+      &context.Xmm6,
+      &context.Xmm7,
+      &context.Xmm8,
+      &context.Xmm9,
+      &context.Xmm10,
+      &context.Xmm11,
+      &context.Xmm12,
+      &context.Xmm13,
+      &context.Xmm14,
+      &context.Xmm15,
+  };
+  bool xmms_match = true;
+  for (size_t index = 0; index < 10u; ++index) {
+    xmms_match = xmms_match && EqualM128(*restored[index], saved_xmms[index]);
+  }
+  ExpectForSymbol(xmms_match, symbol, "restores XMM6-XMM15");
+}
+
 }  // namespace
 
 int main() {
@@ -64,6 +179,9 @@ int main() {
     std::cerr << "LoadLibraryW error=" << GetLastError() << '\n';
     return 1;
   }
+
+  TestInvokeUnwind(art, "art_quick_invoke_stub");
+  TestInvokeUnwind(art, "art_quick_invoke_static_stub");
 
   auto* osr = reinterpret_cast<uint8_t*>(GetProcAddress(art, "art_quick_osr_stub"));
   Expect(osr != nullptr, "art_quick_osr_stub export resolves");
@@ -138,7 +256,7 @@ int main() {
   // Identify the canonical epilogue independently. RtlVirtualUnwind must
   // recognize it instead of applying the complete inherited-frame record.
   constexpr uint8_t kCanonicalEpilogue[] = {
-      0x48u, 0x81u, 0xc4u, 0xb8u, 0x00u, 0x00u, 0x00u,  // add rsp, 184
+      0x48u, 0x81u, 0xc4u, 0xf8u, 0x00u, 0x00u, 0x00u,  // add rsp, 248
       0xc3u,                            // ret
   };
   uint8_t* epilogue = FindBytes(return_begin, return_end, kCanonicalEpilogue);
@@ -156,7 +274,7 @@ int main() {
 
   uintptr_t entry_rsp = reinterpret_cast<uintptr_t>(stack.address + system_info.dwPageSize - 512u);
   entry_rsp = (entry_rsp & ~uintptr_t{15u}) + 8u;
-  const uintptr_t fixed_rsp = entry_rsp - 184u;
+  const uintptr_t fixed_rsp = entry_rsp - 248u;
   const uintptr_t variable_rsp = fixed_rsp - 256u;
 
   constexpr uint64_t kReturnAddress = UINT64_C(0x123456789abcdef0);
@@ -175,14 +293,14 @@ int main() {
   *reinterpret_cast<uint64_t*>(entry_rsp - 8u) = kRbp;
   *reinterpret_cast<uint64_t*>(entry_rsp - 16u) = kRdi;
   *reinterpret_cast<uint64_t*>(entry_rsp - 24u) = kRsi;
-  *reinterpret_cast<uint64_t*>(entry_rsp - 128u) = UINT64_C(0xa1a2a3a4a5a6a7a8);
-  *reinterpret_cast<uint64_t*>(entry_rsp - 136u) = UINT64_C(0xb1b2b3b4b5b6b7b8);
-  *reinterpret_cast<uint64_t*>(entry_rsp - 144u) = kRbx;
-  *reinterpret_cast<uint64_t*>(entry_rsp - 152u) = kR12;
-  *reinterpret_cast<uint64_t*>(entry_rsp - 160u) = kR13;
-  *reinterpret_cast<uint64_t*>(entry_rsp - 168u) = kR14;
-  *reinterpret_cast<uint64_t*>(entry_rsp - 176u) = kR15;
-  *reinterpret_cast<uint64_t*>(entry_rsp - 184u) = 0u;
+  *reinterpret_cast<uint64_t*>(entry_rsp - 192u) = UINT64_C(0xa1a2a3a4a5a6a7a8);
+  *reinterpret_cast<uint64_t*>(entry_rsp - 200u) = UINT64_C(0xb1b2b3b4b5b6b7b8);
+  *reinterpret_cast<uint64_t*>(entry_rsp - 208u) = kRbx;
+  *reinterpret_cast<uint64_t*>(entry_rsp - 216u) = kR12;
+  *reinterpret_cast<uint64_t*>(entry_rsp - 224u) = kR13;
+  *reinterpret_cast<uint64_t*>(entry_rsp - 232u) = kR14;
+  *reinterpret_cast<uint64_t*>(entry_rsp - 240u) = kR15;
+  *reinterpret_cast<uint64_t*>(entry_rsp - 248u) = 0u;
 
   const M128A saved_xmms[] = {
       MakeM128(UINT64_C(0x0606060606060606), INT64_C(0x1616161616161616)),
@@ -191,9 +309,13 @@ int main() {
       MakeM128(UINT64_C(0x0909090909090909), INT64_C(0x1919191919191919)),
       MakeM128(UINT64_C(0x0a0a0a0a0a0a0a0a), INT64_C(0x1a1a1a1a1a1a1a1a)),
       MakeM128(UINT64_C(0x0b0b0b0b0b0b0b0b), INT64_C(0x1b1b1b1b1b1b1b1b)),
+      MakeM128(UINT64_C(0x0c0c0c0c0c0c0c0c), INT64_C(0x1c1c1c1c1c1c1c1c)),
+      MakeM128(UINT64_C(0x0d0d0d0d0d0d0d0d), INT64_C(0x1d1d1d1d1d1d1d1d)),
+      MakeM128(UINT64_C(0x0e0e0e0e0e0e0e0e), INT64_C(0x1e1e1e1e1e1e1e1e)),
+      MakeM128(UINT64_C(0x0f0f0f0f0f0f0f0f), INT64_C(0x1f1f1f1f1f1f1f1f)),
   };
-  for (size_t index = 0; index < 6u; ++index) {
-    StoreM128(entry_rsp - 120u + index * 16u, saved_xmms[index]);
+  for (size_t index = 0; index < 10u; ++index) {
+    StoreM128(entry_rsp - 184u + index * 16u, saved_xmms[index]);
   }
 
   CONTEXT context = {};
@@ -206,7 +328,8 @@ int main() {
   context.Rcx = kVolatileRcx;
   context.R8 = kVolatileR8;
   context.Xmm6 = context.Xmm7 = context.Xmm8 = context.Xmm9 = context.Xmm10 = context.Xmm11 =
-      MakeM128(UINT64_C(0xeeeeeeeeeeeeeeee), INT64_C(-1));
+      context.Xmm12 = context.Xmm13 = context.Xmm14 = context.Xmm15 =
+          MakeM128(UINT64_C(0xeeeeeeeeeeeeeeee), INT64_C(-1));
 
   PVOID handler_data = nullptr;
   DWORD64 establisher_frame = 0u;
@@ -236,6 +359,10 @@ int main() {
   Expect(EqualM128(context.Xmm9, saved_xmms[3]), "variable-stack unwind restores XMM9");
   Expect(EqualM128(context.Xmm10, saved_xmms[4]), "variable-stack unwind restores XMM10");
   Expect(EqualM128(context.Xmm11, saved_xmms[5]), "variable-stack unwind restores XMM11");
+  Expect(EqualM128(context.Xmm12, saved_xmms[6]), "variable-stack unwind restores XMM12");
+  Expect(EqualM128(context.Xmm13, saved_xmms[7]), "variable-stack unwind restores XMM13");
+  Expect(EqualM128(context.Xmm14, saved_xmms[8]), "variable-stack unwind restores XMM14");
+  Expect(EqualM128(context.Xmm15, saved_xmms[9]), "variable-stack unwind restores XMM15");
 
   CONTEXT return_context = {};
   return_context.ContextFlags = CONTEXT_FULL;
@@ -248,8 +375,9 @@ int main() {
   return_context.Rcx = kVolatileRcx;
   return_context.R8 = kVolatileR8;
   return_context.Xmm6 = return_context.Xmm7 = return_context.Xmm8 = return_context.Xmm9 =
-      return_context.Xmm10 = return_context.Xmm11 =
-          MakeM128(UINT64_C(0xeeeeeeeeeeeeeeee), INT64_C(-1));
+      return_context.Xmm10 = return_context.Xmm11 = return_context.Xmm12 =
+          return_context.Xmm13 = return_context.Xmm14 = return_context.Xmm15 =
+              MakeM128(UINT64_C(0xeeeeeeeeeeeeeeee), INT64_C(-1));
   handler_data = nullptr;
   establisher_frame = 0u;
   RtlVirtualUnwind(UNW_FLAG_NHANDLER,
@@ -275,8 +403,12 @@ int main() {
              EqualM128(return_context.Xmm8, saved_xmms[2]) &&
              EqualM128(return_context.Xmm9, saved_xmms[3]) &&
              EqualM128(return_context.Xmm10, saved_xmms[4]) &&
-             EqualM128(return_context.Xmm11, saved_xmms[5]),
-         "return-range unwind restores XMM6-XMM11");
+             EqualM128(return_context.Xmm11, saved_xmms[5]) &&
+             EqualM128(return_context.Xmm12, saved_xmms[6]) &&
+             EqualM128(return_context.Xmm13, saved_xmms[7]) &&
+             EqualM128(return_context.Xmm14, saved_xmms[8]) &&
+             EqualM128(return_context.Xmm15, saved_xmms[9]),
+         "return-range unwind restores XMM6-XMM15");
 
   CONTEXT epilogue_context = {};
   epilogue_context.ContextFlags = CONTEXT_FULL;
@@ -296,6 +428,10 @@ int main() {
   epilogue_context.Xmm9 = saved_xmms[3];
   epilogue_context.Xmm10 = saved_xmms[4];
   epilogue_context.Xmm11 = saved_xmms[5];
+  epilogue_context.Xmm12 = saved_xmms[6];
+  epilogue_context.Xmm13 = saved_xmms[7];
+  epilogue_context.Xmm14 = saved_xmms[8];
+  epilogue_context.Xmm15 = saved_xmms[9];
   handler_data = nullptr;
   establisher_frame = 0u;
   RtlVirtualUnwind(UNW_FLAG_NHANDLER,
@@ -319,13 +455,20 @@ int main() {
              EqualM128(epilogue_context.Xmm8, saved_xmms[2]) &&
              EqualM128(epilogue_context.Xmm9, saved_xmms[3]) &&
              EqualM128(epilogue_context.Xmm10, saved_xmms[4]) &&
-             EqualM128(epilogue_context.Xmm11, saved_xmms[5]),
+             EqualM128(epilogue_context.Xmm11, saved_xmms[5]) &&
+             EqualM128(epilogue_context.Xmm12, saved_xmms[6]) &&
+             EqualM128(epilogue_context.Xmm13, saved_xmms[7]) &&
+             EqualM128(epilogue_context.Xmm14, saved_xmms[8]) &&
+             EqualM128(epilogue_context.Xmm15, saved_xmms[9]),
          "epilogue unwind preserves already-restored XMM registers");
 
   std::cout << "win32_osr_unwind_probe failures=" << g_failures
             << " prologue=" << static_cast<unsigned>(prologue_size)
             << " entry_frame_offset=" << static_cast<unsigned>(frame_offset) * 16u
             << " return_prologue=0"
+            << " fixed_frame=248"
+            << " xmm_count=10"
+            << " invoke_records=2"
             << " variable_rsp_delta=" << fixed_rsp - variable_rsp << '\n';
   if (g_failures == 0) {
     std::cout << "win32_osr_unwind_probe OK\n";

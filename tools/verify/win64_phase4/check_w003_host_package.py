@@ -68,7 +68,7 @@ def parse_report(path: Path) -> dict[str, str]:
         "frame_counter_symbols": "4",
         "frame_jni_exports": "3",
         "xmm_jni_exports": "1",
-        "xmm_unwind_saves": "6",
+        "xmm_unwind_saves": "10",
         "host_llvm_tools_required": "no",
     }
     for key, expected in required.items():
@@ -177,6 +177,7 @@ def check_package(root: Path) -> None:
         "W003FrameProbe OK mode=",
         "W003XmmSentinelProbe OK",
         "selfTestMask=63",
+        "fullSelfTestMask=1023",
         "DMP_SCAN.txt",
         "OVERALL PASS",
     ]

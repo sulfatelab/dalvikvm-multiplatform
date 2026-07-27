@@ -135,13 +135,17 @@ def check_boundary_source(quick: str) -> None:
         "Win64 XMM save macro",
         [
             "#if defined(_WIN32)",
-            "subq LITERAL(96), %rsp",
+            "subq LITERAL(160), %rsp",
             "movdqu %xmm6, 0(%rsp)",
             "movdqu %xmm7, 16(%rsp)",
             "movdqu %xmm8, 32(%rsp)",
             "movdqu %xmm9, 48(%rsp)",
             "movdqu %xmm10, 64(%rsp)",
             "movdqu %xmm11, 80(%rsp)",
+            "movdqu %xmm12, 96(%rsp)",
+            "movdqu %xmm13, 112(%rsp)",
+            "movdqu %xmm14, 128(%rsp)",
+            "movdqu %xmm15, 144(%rsp)",
             "#endif",
         ],
     )
@@ -156,7 +160,11 @@ def check_boundary_source(quick: str) -> None:
             "movdqu 48(%rsp), %xmm9",
             "movdqu 64(%rsp), %xmm10",
             "movdqu 80(%rsp), %xmm11",
-            "addq LITERAL(96), %rsp",
+            "movdqu 96(%rsp), %xmm12",
+            "movdqu 112(%rsp), %xmm13",
+            "movdqu 128(%rsp), %xmm14",
+            "movdqu 144(%rsp), %xmm15",
+            "addq LITERAL(160), %rsp",
             "#endif",
         ],
     )
@@ -185,11 +193,13 @@ def check_boundary_source(quick: str) -> None:
                 "pushq %rsi",
                 "movq 0x38(%rsp), %r10",
                 "movq 0x40(%rsp), %r11",
-                "subq LITERAL(96), %rsp",
+                "subq LITERAL(160), %rsp",
                 "movdqu %xmm6, 0(%rsp)",
                 ".seh_savexmm %xmm6, 64",
                 "movdqu %xmm11, 80(%rsp)",
                 ".seh_savexmm %xmm11, 144",
+                "movdqu %xmm15, 144(%rsp)",
+                ".seh_savexmm %xmm15, 208",
                 f"LOOP_OVER_SHORTY_LOADING_XMMS xmm6, {xmm_label}",
                 f"{gpr_label}:",
                 "call *ART_METHOD_QUICK_CODE_OFFSET_64(%rdi)",
@@ -210,11 +220,13 @@ def check_boundary_source(quick: str) -> None:
             "PUSH rbp",
             "PUSH rdi",
             "PUSH rsi",
-            "subq LITERAL(96), %rsp",
+            "subq LITERAL(160), %rsp",
             "movdqu %xmm6, 0(%rsp)",
             ".seh_savexmm %xmm6, 64",
             "movdqu %xmm11, 80(%rsp)",
             ".seh_savexmm %xmm11, 144",
+            "movdqu %xmm15, 144(%rsp)",
+            ".seh_savexmm %xmm15, 208",
             "PUSH r15",
             ".seh_pushreg %r15",
             "pushq LITERAL(0)",
@@ -224,7 +236,7 @@ def check_boundary_source(quick: str) -> None:
             ".seh_endprologue",
             "jmp .Losr_call",
             ".Losr_entry:",
-            "CFI_RESTORE_STATE_AND_DEF_CFA rsp, 192",
+            "CFI_RESTORE_STATE_AND_DEF_CFA rsp, 256",
             "jmp *%rdx",
             ".Losr_call:",
             "call .Losr_entry",
@@ -242,18 +254,20 @@ def check_boundary_source(quick: str) -> None:
         osr_return,
         "Win64 OSR return source",
         [
-            ".seh_stackalloc 184",
+            ".seh_stackalloc 248",
             ".seh_savereg %r15, 8",
             ".seh_savexmm %xmm6, 64",
             ".seh_savexmm %xmm11, 144",
-            ".seh_savereg %rbp, 176",
+            ".seh_savexmm %xmm15, 208",
+            ".seh_savereg %rbp, 240",
             ".seh_endprologue",
             "movq 8(%rsp), %r15",
             "movdqu 64(%rsp), %xmm6",
             "movdqu 144(%rsp), %xmm11",
-            "movq 176(%rsp), %rbp",
+            "movdqu 208(%rsp), %xmm15",
+            "movq 240(%rsp), %rbp",
             "movq %rax, (%rcx)",
-            "addq LITERAL(184), %rsp",
+            "addq LITERAL(248), %rsp",
             "ret",
         ],
     )
@@ -261,13 +275,17 @@ def check_boundary_source(quick: str) -> None:
 
 def save_tokens() -> list[str]:
     return [
-        "subq\t$0x60, %rsp",
+        "subq\t$0xa0, %rsp",
         "movdqu\t%xmm6, (%rsp)",
         "movdqu\t%xmm7, 0x10(%rsp)",
         "movdqu\t%xmm8, 0x20(%rsp)",
         "movdqu\t%xmm9, 0x30(%rsp)",
         "movdqu\t%xmm10, 0x40(%rsp)",
         "movdqu\t%xmm11, 0x50(%rsp)",
+        "movdqu\t%xmm12, 0x60(%rsp)",
+        "movdqu\t%xmm13, 0x70(%rsp)",
+        "movdqu\t%xmm14, 0x80(%rsp)",
+        "movdqu\t%xmm15, 0x90(%rsp)",
     ]
 
 
@@ -279,7 +297,11 @@ def restore_tokens() -> list[str]:
         "movdqu\t0x30(%rsp), %xmm9",
         "movdqu\t0x40(%rsp), %xmm10",
         "movdqu\t0x50(%rsp), %xmm11",
-        "addq\t$0x60, %rsp",
+        "movdqu\t0x60(%rsp), %xmm12",
+        "movdqu\t0x70(%rsp), %xmm13",
+        "movdqu\t0x80(%rsp), %xmm14",
+        "movdqu\t0x90(%rsp), %xmm15",
+        "addq\t$0xa0, %rsp",
     ]
 
 
@@ -303,13 +325,13 @@ def check_boundary_objects(win_dis: str, linux_dis: str) -> None:
                 "popq\t%rdi",
             ],
         )
-        if win_body.count("subq\t$0x60, %rsp") != 1:
+        if win_body.count("subq\t$0xa0, %rsp") != 1:
             fail(f"Win64 {symbol} must reserve exactly one XMM save area")
-        if win_body.count("addq\t$0x60, %rsp") != 1:
+        if win_body.count("addq\t$0xa0, %rsp") != 1:
             fail(f"Win64 {symbol} must release exactly one XMM save area")
         if "movdqu" in linux_body:
             fail(f"Linux {symbol} unexpectedly gained Win64 XMM boundary saves")
-        if "subq\t$0x60, %rsp" in linux_body:
+        if "subq\t$0xa0, %rsp" in linux_body:
             fail(f"Linux {symbol} unexpectedly reserves the Win64 save area")
 
     symbol = "art_quick_osr_stub"
@@ -335,20 +357,21 @@ def check_boundary_objects(win_dis: str, linux_dis: str) -> None:
             "movq\t0x28(%rsp), %rbx",
             "movdqu\t0x40(%rsp), %xmm6",
             "movdqu\t0x90(%rsp), %xmm11",
-            "movq\t0xa0(%rsp), %rsi",
-            "movq\t0xa8(%rsp), %rdi",
+            "movdqu\t0xd0(%rsp), %xmm15",
+            "movq\t0xe0(%rsp), %rsi",
+            "movq\t0xe8(%rsp), %rdi",
             "movq\t%rax, (%rcx)",
-            "addq\t$0xb8, %rsp",
+            "addq\t$0xf8, %rsp",
             "retq",
         ],
     )
-    if win_body.count("subq\t$0x60, %rsp") != 1:
+    if win_body.count("subq\t$0xa0, %rsp") != 1:
         fail("Win64 art_quick_osr_stub must reserve exactly one XMM save area")
-    if win_body.count("addq\t$0xb8, %rsp") != 1:
+    if win_body.count("addq\t$0xf8, %rsp") != 1:
         fail("Win64 art_quick_osr_stub must have one RSP-based return epilogue")
     if "movdqu" in linux_body:
         fail("Linux art_quick_osr_stub unexpectedly gained Win64 XMM saves")
-    if "subq\t$0x60, %rsp" in linux_body:
+    if "subq\t$0xa0, %rsp" in linux_body:
         fail("Linux art_quick_osr_stub unexpectedly reserves the Win64 save area")
 
 

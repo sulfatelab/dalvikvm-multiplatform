@@ -1687,13 +1687,14 @@ Microsoft x64 entry and converts only inside its Windows prologue:
 
 The prologue preserves rdi and rsi because they are Microsoft nonvolatile
 registers, and the common save block preserves the native caller's r15 before
-publishing managed rSELF. W-003 subsequently added a 96-byte boundary area
-for XMM6-XMM11, so the Windows conceptual CFA is now 192 bytes; Linux retains
-its original 80-byte CFA and instruction path. W-010 later added two
+publishing managed rSELF. W-003 initially added a 96-byte boundary area for
+XMM6-XMM11. The W-010 full-width follow-up expands only that Windows adapter
+to 160 bytes for XMM6-XMM15, so the Windows conceptual CFA is now 256 bytes;
+Linux retains its original 80-byte CFA and instruction path. W-010 also added two
 contiguous PE unwind ranges: an RBP-anchored entry/variable-copy range and an
 RSP-based inherited-frame return range, because OSR return reconstructs
-managed RBP. The emitted XMM unwind offsets are 64 through 144 relative to the
-completed 184-byte fixed frame, not 0 through 80 relative to the temporary
+managed RBP. The emitted XMM unwind offsets are 64 through 208 relative to the
+completed 248-byte fixed frame, not 0 through 144 relative to the temporary
 store RSP. The accepted W-002 rSELF/OSR transition, W-003 Microsoft-XMM
 normal-return repair, and W-010 exception-unwind records are separate
 contracts.
@@ -1781,11 +1782,12 @@ only at explicit platform boundaries.
 The confirmed defect was at three such boundaries:
 `art_quick_invoke_stub`, `art_quick_invoke_static_stub`, and
 `art_quick_osr_stub`. They are ordinary Microsoft-x64 C++ entries and preserve
-the additional nonvolatile GPRs. They now also reserve a Windows-only 96-byte
-area and save the lower 128 bits of XMM6-XMM11 before argument setup or the
-managed OSR jump. Restoration occurs before the Microsoft-ABI return. The
+the additional nonvolatile GPRs. W-003 initially reserved a Windows-only
+96-byte area for XMM6-XMM11. The W-010 exception-unwind follow-up now reserves
+160 bytes and saves the lower 128 bits of XMM6-XMM15 before argument setup or
+the managed OSR jump. Restoration occurs before the Microsoft-ABI return. The
 area stays outside canonical ART frames and preserves alignment; the Win64
-OSR conceptual CFA is 192 while Linux remains 80.
+OSR conceptual CFA is 256 while Linux remains 80.
 
 `check_w003_quick_boundaries.py` permanently checks all four SETUP source
 contracts, each PE boundary sequence, absence of the save area in Linux
@@ -1817,8 +1819,13 @@ seven modes under Wine, restores product `art.dll`, and ships without runtime
 logs, dumps, or traces. Windows 10 build 19044 returns exactly 19 PASS records
 and `OVERALL PASS` over 8 frame runs and 6 XMM runs. All children exit zero
 without timeout; nterp and JIT each attribute all four frame families; every
-XMM run reports `mask=0 selfTestMask=63`; and fatal/dump scans are clean. The
-JIT logs explicitly confirm creation of the Windows pagefile-section J-2
+XMM run reports `mask=0 selfTestMask=63`; and fatal/dump scans are clean. This
+accepted W-003 evidence remains the historical six-register checkpoint. The
+same sentinel has since been extended to XMM6-XMM15 for W-010 while retaining
+`selfTestMask=63` as a compatibility field and adding the authoritative
+`fullSelfTestMask=1023`; focused Wine passes 2/2 in nterp, switch, and
+threshold-zero JIT. Native repetition is part of W-010 Stage E. The JIT logs
+explicitly confirm creation of the Windows pagefile-section J-2
 dual view before successful compilation.
 
 Targeted PE assembly unwind metadata is now present for the static invoke,

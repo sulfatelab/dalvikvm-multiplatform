@@ -182,6 +182,7 @@ def xmm_mode(root: Path, mode: str) -> None:
     markers = [
         f"W003XmmSentinelProbe mode={mode}",
         "mask=0 selfTestMask=63 iterations=128",
+        "fullSelfTestMask=1023",
         "W003XmmSentinelProbe OK",
         "main end exception=0",
     ]

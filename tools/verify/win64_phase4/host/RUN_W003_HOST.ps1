@@ -80,7 +80,7 @@ function Test-StructuralReport {
         '^frame_counter_symbols=4$'
         '^frame_jni_exports=3$'
         '^xmm_jni_exports=1$'
-        '^xmm_unwind_saves=6$'
+        '^xmm_unwind_saves=10$'
         '^host_llvm_tools_required=no$'
     )
     foreach ($pattern in $required) {
@@ -328,6 +328,7 @@ if ($script:PreflightPassed) {
                 $markers = @(
                     "W003XmmSentinelProbe mode=$mode"
                     'mask=0 selfTestMask=63 iterations=128'
+                    'fullSelfTestMask=1023'
                     'W003XmmSentinelProbe OK'
                     'main end exception=0'
                 )

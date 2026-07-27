@@ -30,6 +30,8 @@ osr_unwind_summary="$(
     grep '^win32_osr_unwind_probe failures=0 '
 )"
 WINEDEBUG="$WINEDEBUG" "$REPO/tools/verify/win64_phase4/run_w010_managed_fault_probe.sh"
+WINEDEBUG="$WINEDEBUG" REPEATS=2 \
+  "$REPO/tools/verify/win64_phase4/run_w003_xmm_sentinel.sh"
 
 cet_output="$(
   python3 "$REPO/tools/verify/win64_phase1/check_win32_cet_contract.py" \
@@ -46,8 +48,10 @@ required_build_files=(
   "$BUILD/win32_fault_record_probe.exe"
   "$BUILD/win32_sigchain_probe.exe"
   "$BUILD/win32_osr_unwind_probe.exe"
+  "$BUILD/libw003xmmsentinel.dll"
   "$BUILD/run/boot.jar"
   "$BUILD/run/w010managedfaultprobe.jar"
+  "$BUILD/run/w003xmmsentinelprobe.jar"
   "$BUILD/run/crashnativeprobe.jar"
 )
 for path in "${required_build_files[@]}"; do
@@ -74,7 +78,9 @@ for executable in \
   win32_osr_unwind_probe.exe; do
   cp -a "$BUILD/$executable" "$OUT/"
 done
+cp -a "$BUILD/libw003xmmsentinel.dll" "$OUT/"
 cp -a "$BUILD/run/w010managedfaultprobe.jar" "$OUT/run/"
+cp -a "$BUILD/run/w003xmmsentinelprobe.jar" "$OUT/run/"
 cp -a "$REPO/tools/verify/win64_phase4/host/RUN_W010_W014_HOST.ps1" "$OUT/scripts/"
 cp -a "$REPO/tools/verify/win64_phase4/W010_W014_HOST_CHECKLIST.md" "$OUT/"
 mkdir -p "$OUT/run/data" "$OUT/run/crash" "$OUT/logs"
@@ -99,12 +105,16 @@ managed_npe_write_rounds=64
 managed_so_main_rounds=2
 managed_so_child_rounds=2
 managed_recovery=stack-trace,nanoTime,identityHashCode,System.gc
+xmm_boundary_registers=10
+xmm_self_test_mask=1023
 host_llvm_tools_required=no
 dalvikvm_sha256=$(sha256sum "$OUT/dalvikvm.exe" | awk '{print $1}')
 art_sha256=$(sha256sum "$OUT/art.dll" | awk '{print $1}')
 sigchain_sha256=$(sha256sum "$OUT/sigchain.dll" | awk '{print $1}')
 osr_probe_sha256=$(sha256sum "$OUT/win32_osr_unwind_probe.exe" | awk '{print $1}')
 managed_jar_sha256=$(sha256sum "$OUT/run/w010managedfaultprobe.jar" | awk '{print $1}')
+xmm_probe_sha256=$(sha256sum "$OUT/libw003xmmsentinel.dll" | awk '{print $1}')
+xmm_jar_sha256=$(sha256sum "$OUT/run/w003xmmsentinelprobe.jar" | awk '{print $1}')
 EOF
 
 cat >"$OUT/BUILD_INFO.txt" <<EOF

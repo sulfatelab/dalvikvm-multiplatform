@@ -125,8 +125,43 @@ class OsrUnwindLogTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "nonzero exit=5"):
             REVIEWER.review_osr_log(self.logs)
 
-    def test_native_result_contract_has_twenty_records(self) -> None:
-        self.assertEqual(REVIEWER.EXPECTED_PASS_RECORDS, 20)
+    def test_native_result_contract_has_twenty_six_records(self) -> None:
+        self.assertEqual(REVIEWER.EXPECTED_PASS_RECORDS, 26)
+
+
+class XmmLogTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory(prefix="w010-w014-xmm-log-")
+        self.logs = Path(self.temporary.name)
+
+    def tearDown(self) -> None:
+        self.temporary.cleanup()
+
+    def write_log(
+        self, name: str, mode: str, *, include_full_mask: bool = True
+    ) -> None:
+        lines = [
+            f"W003XmmSentinelProbe mode={mode}",
+            "mask=0 selfTestMask=63 iterations=128",
+        ]
+        if include_full_mask:
+            lines.append("fullSelfTestMask=1023")
+        lines.extend(("W003XmmSentinelProbe OK", "main end exception=0"))
+        if mode == "jit":
+            lines.append("success=1 method=int W003XmmSentinelProbe.managedCallback(")
+        lines.extend(("exit=0", "timed_out=False"))
+        (self.logs / f"{name}.log").write_text(
+            "\n".join(lines) + "\n", encoding="utf-8"
+        )
+
+    def test_accepts_complete_jit_log(self) -> None:
+        self.write_log("xmm_full_jit_run01", "jit")
+        REVIEWER.review_xmm_log(self.logs, "xmm_full_jit_run01", "jit")
+
+    def test_rejects_missing_full_width_self_test(self) -> None:
+        self.write_log("xmm_full_nterp_run01", "nterp", include_full_mask=False)
+        with self.assertRaisesRegex(RuntimeError, "fullSelfTestMask=1023"):
+            REVIEWER.review_xmm_log(self.logs, "xmm_full_nterp_run01", "nterp")
 
 
 if __name__ == "__main__":

@@ -19,7 +19,7 @@ IDENTITY_FILES = (
     "W010_W014_STRUCTURAL_REPORT.txt",
 )
 
-EXPECTED_PASS_RECORDS = 20
+EXPECTED_PASS_RECORDS = 26
 HANDLED_FAULT_FORBIDDEN = (
     "ART Win64 VEH",
     "ART Win64 UEF",
@@ -28,7 +28,9 @@ HANDLED_FAULT_FORBIDDEN = (
 )
 OSR_UNWIND_MARKERS = (
     "win32_osr_unwind_probe failures=0",
-    "entry_frame_offset=0 return_prologue=0 variable_rsp_delta=256",
+    "entry_frame_offset=0 return_prologue=0 fixed_frame=248 xmm_count=10 "
+    "invoke_records=2 "
+    "variable_rsp_delta=256",
     "win32_osr_unwind_probe OK",
 )
 
@@ -148,6 +150,23 @@ def review_osr_log(logs: Path) -> None:
     require_exit(osr_text, nonzero=False)
 
 
+def review_xmm_log(logs: Path, name: str, mode: str) -> None:
+    markers = [
+        f"W003XmmSentinelProbe mode={mode}",
+        "mask=0 selfTestMask=63 iterations=128",
+        "fullSelfTestMask=1023",
+        "W003XmmSentinelProbe OK",
+        "main end exception=0",
+    ]
+    forbidden = list(HANDLED_FAULT_FORBIDDEN)
+    if mode == "jit":
+        markers.append("success=1 method=int W003XmmSentinelProbe.managedCallback(")
+    else:
+        forbidden.append("Win64 CompileMethod done success=1 method=")
+    text = require_markers(logs / f"{name}.log", tuple(markers), tuple(forbidden))
+    require_exit(text, nonzero=False)
+
+
 def review(returned: Path, issued: Path) -> None:
     return_form = verify_issued_payload(returned, issued)
     logs = returned / "logs"
@@ -170,6 +189,12 @@ def review(returned: Path, issued: Path) -> None:
         "PASS cet_policy exit=0 ",
         "PASS hsp_policy",
         "PASS osr_unwind exit=0 ",
+        "PASS xmm_full_nterp_run01 exit=0 ",
+        "PASS xmm_full_nterp_run02 exit=0 ",
+        "PASS xmm_full_switch_run01 exit=0 ",
+        "PASS xmm_full_switch_run02 exit=0 ",
+        "PASS xmm_full_jit_run01 exit=0 ",
+        "PASS xmm_full_jit_run02 exit=0 ",
         "PASS thread_stack exit=0 ",
         "PASS stack_page exit=0 ",
         "PASS fault_record exit=0 ",
@@ -222,6 +247,9 @@ def review(returned: Path, issued: Path) -> None:
 
     common_handled_forbidden = HANDLED_FAULT_FORBIDDEN
     review_osr_log(logs)
+    for mode in ("nterp", "switch", "jit"):
+        for repeat in (1, 2):
+            review_xmm_log(logs, f"xmm_full_{mode}_run{repeat:02d}", mode)
     thread_text = require_markers(
         logs / "thread_stack.log",
         (

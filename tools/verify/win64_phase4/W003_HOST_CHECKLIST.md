@@ -54,7 +54,7 @@ The runner performs:
 - package SHA-256 and precomputed structural-report checks;
 - 2 runs each of the frame probe in `-Xint`, switch, nterp, and
   threshold-zero JIT modes (8 processes);
-- 2 runs each of the XMM6-XMM11 sentinel in switch, nterp, and
+- 2 runs each of the full-width XMM6-XMM15 sentinel in switch, nterp, and
   threshold-zero JIT modes (6 processes);
 - fatal-marker scanning over every process log; and
 - a recursive `.dmp` scan over the extracted package.
@@ -94,8 +94,10 @@ Acceptance additionally requires:
 - JIT frame logs contain positive refs-only, refs-and-args,
   all-callee-saves, and save-everything counters;
 - nterp frame logs contain the same four positive families; and
-- JIT XMM logs contain `mask=0 selfTestMask=63 iterations=128` and a successful
-  compile record for `W003XmmSentinelProbe.managedCallback`.
+- JIT XMM logs contain the compatibility marker
+  `mask=0 selfTestMask=63 iterations=128`, the full-width marker
+  `fullSelfTestMask=1023`, and a successful compile record for
+  `W003XmmSentinelProbe.managedCallback`.
 
 The runner checks these conditions automatically. The commands above are a
 short operator cross-check, not a substitute for a zero runner exit code.

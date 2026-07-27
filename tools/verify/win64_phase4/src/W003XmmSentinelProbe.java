@@ -1,4 +1,4 @@
-/** Focused Microsoft-x64 XMM6-XMM11 preservation probe around JNI quick invoke. */
+/** Focused Microsoft-x64 XMM6-XMM15 preservation probe around JNI quick invoke. */
 public final class W003XmmSentinelProbe {
     private static native int runXmmSentinel(int expected, boolean clobberForSelfTest);
 
@@ -52,20 +52,22 @@ public final class W003XmmSentinelProbe {
         for (int i = 0; i < iterations; ++i) {
             mask |= runXmmSentinel(expected, false);
         }
-        int selfTestMask = runXmmSentinel(expected, true);
+        int fullSelfTestMask = runXmmSentinel(expected, true);
+        int selfTestMask = fullSelfTestMask & 0x3f;
         System.out.println("W003XmmSentinelProbe mode=" + mode
                 + " expected=" + expected
                 + " warmChecksum=" + warmChecksum
                 + " mask=" + mask
                 + " selfTestMask=" + selfTestMask
-                + " iterations=" + iterations);
+                + " iterations=" + iterations
+                + " fullSelfTestMask=" + fullSelfTestMask);
         if (mask != 0) {
             throw new AssertionError("XMM sentinel mismatch mask=0x"
                     + Integer.toHexString(mask));
         }
-        if (selfTestMask != 0x3f) {
+        if (fullSelfTestMask != 0x3ff) {
             throw new AssertionError("XMM sentinel self-test mismatch mask=0x"
-                    + Integer.toHexString(selfTestMask));
+                    + Integer.toHexString(fullSelfTestMask));
         }
         System.out.println("W003XmmSentinelProbe OK");
     }

@@ -98,7 +98,7 @@ if [[ "$product_probe_exports" -ne 0 ||
       "$frame_counter_symbols" -ne 4 ||
       "$frame_jni_exports" -ne 3 ||
       "$xmm_jni_exports" -ne 1 ||
-      "$xmm_unwind_saves" -ne 6 ]]; then
+      "$xmm_unwind_saves" -ne 10 ]]; then
   echo "invalid W-003 structural report values" >&2
   exit 1
 fi

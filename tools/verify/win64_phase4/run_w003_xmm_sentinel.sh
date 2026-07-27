@@ -32,19 +32,22 @@ OBJ="$(find "$NATIVE_BUILD/CMakeFiles/w003xmmsentinel.dir" \
   -name 'w003_xmm_sentinel_x86_64.S.obj' -print -quit)"
 DIS="$(llvm-objdump -dr --no-show-raw-insn "$OBJ")"
 for token in \
-    $'subq\t$0x88, %rsp' \
+    $'subq\t$0xc8, %rsp' \
     $'movdqu\t%xmm6, 0x20(%rsp)' \
-    $'movdqu\t%xmm11, 0x70(%rsp)' \
+    $'movdqu\t%xmm15, 0xb0(%rsp)' \
     $'IMAGE_REL_AMD64_REL32\tW003InvokeManagedCallback' \
     $'movdqu\t0x20(%rsp), %xmm6' \
-    $'movdqu\t0x70(%rsp), %xmm11' \
-    $'addq\t$0x88, %rsp'; do
+    $'movdqu\t0xb0(%rsp), %xmm15' \
+    $'addq\t$0xc8, %rsp'; do
   if ! grep -qF "$token" <<<"$DIS"; then
     echo "W-003 sentinel object is missing: $token" >&2
     exit 1
   fi
 done
-if ! llvm-readobj --unwind "$OBJ" | grep -qF 'W003XmmSentinelAssembly'; then
+UNWIND="$(llvm-readobj --unwind "$OBJ")"
+if ! grep -qF 'W003XmmSentinelAssembly' <<<"$UNWIND" ||
+   [[ "$(grep -c 'SAVE_XMM128 reg=XMM' <<<"$UNWIND")" -ne 10 ]] ||
+   ! grep -qF 'SAVE_XMM128 reg=XMM15, offset=0xB0' <<<"$UNWIND"; then
   echo "W-003 sentinel assembly is missing unwind metadata" >&2
   exit 1
 fi
@@ -52,7 +55,7 @@ C_OBJ="$(find "$NATIVE_BUILD/CMakeFiles/w003xmmsentinel.dir" \
   -name 'w003_xmm_sentinel.c.obj' -print -quit)"
 HELPER_DIS="$(llvm-objdump -dr --no-show-raw-insn "$C_OBJ" | \
   sed -n '/<W003InvokeManagedCallback>:/,/^$/p')"
-if grep -Eq '%xmm(6|7|8|9|10|11)' <<<"$HELPER_DIS"; then
+if grep -Eq '%xmm(6|7|8|9|10|11|12|13|14|15)' <<<"$HELPER_DIS"; then
   echo "W-003 C callback unexpectedly masks the boundary with local XMM saves" >&2
   exit 1
 fi
@@ -130,6 +133,7 @@ run_one() {
   fi
 
   if ! grep -Eq "W003XmmSentinelProbe mode=$mode expected=-?[0-9]+ warmChecksum=-?[0-9]+ mask=0 selfTestMask=63 iterations=128" "$log" ||
+     ! grep -qF 'fullSelfTestMask=1023' "$log" ||
      ! grep -qF 'W003XmmSentinelProbe OK' "$log" ||
      ! grep -qF 'main end exception=0' "$log"; then
     echo "W-003 XMM sentinel $mode run=$iteration markers failed: $log" >&2

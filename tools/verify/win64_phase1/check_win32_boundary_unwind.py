@@ -11,10 +11,15 @@ import subprocess
 import sys
 
 
+FULL_XMM_UNWIND = tuple(
+    f"SAVE_XMM128 reg=XMM{register}, offset=0x{offset:X}"
+    for register, offset in zip(range(6, 16), range(0x40, 0xE0, 0x10))
+)
+
 BOUNDARIES = {
     "art_quick_invoke_stub": (
         "FrameRegister: RBP",
-        "ALLOC_SMALL size=96",
+        "ALLOC_LARGE size=160",
         "PUSH_NONVOL reg=RDI",
         "PUSH_NONVOL reg=RSI",
         "PUSH_NONVOL reg=RBP",
@@ -23,16 +28,11 @@ BOUNDARIES = {
         "PUSH_NONVOL reg=R13",
         "PUSH_NONVOL reg=R14",
         "PUSH_NONVOL reg=R15",
-        "SAVE_XMM128 reg=XMM6, offset=0x40",
-        "SAVE_XMM128 reg=XMM7, offset=0x50",
-        "SAVE_XMM128 reg=XMM8, offset=0x60",
-        "SAVE_XMM128 reg=XMM9, offset=0x70",
-        "SAVE_XMM128 reg=XMM10, offset=0x80",
-        "SAVE_XMM128 reg=XMM11, offset=0x90",
+        *FULL_XMM_UNWIND,
     ),
     "art_quick_invoke_static_stub": (
         "FrameRegister: RBP",
-        "ALLOC_SMALL size=96",
+        "ALLOC_LARGE size=160",
         "PUSH_NONVOL reg=RDI",
         "PUSH_NONVOL reg=RSI",
         "PUSH_NONVOL reg=RBP",
@@ -41,18 +41,13 @@ BOUNDARIES = {
         "PUSH_NONVOL reg=R13",
         "PUSH_NONVOL reg=R14",
         "PUSH_NONVOL reg=R15",
-        "SAVE_XMM128 reg=XMM6, offset=0x40",
-        "SAVE_XMM128 reg=XMM7, offset=0x50",
-        "SAVE_XMM128 reg=XMM8, offset=0x60",
-        "SAVE_XMM128 reg=XMM9, offset=0x70",
-        "SAVE_XMM128 reg=XMM10, offset=0x80",
-        "SAVE_XMM128 reg=XMM11, offset=0x90",
+        *FULL_XMM_UNWIND,
     ),
     "art_quick_osr_stub": (
         "FrameRegister: RBP",
         "FrameOffset: 0x0",
         "SET_FPREG reg=RBP, offset=0x0",
-        "ALLOC_SMALL size=96",
+        "ALLOC_LARGE size=160",
         "PUSH_NONVOL reg=RDI",
         "PUSH_NONVOL reg=RSI",
         "PUSH_NONVOL reg=RBP",
@@ -61,12 +56,7 @@ BOUNDARIES = {
         "PUSH_NONVOL reg=R13",
         "PUSH_NONVOL reg=R14",
         "PUSH_NONVOL reg=R15",
-        "SAVE_XMM128 reg=XMM6, offset=0x40",
-        "SAVE_XMM128 reg=XMM7, offset=0x50",
-        "SAVE_XMM128 reg=XMM8, offset=0x60",
-        "SAVE_XMM128 reg=XMM9, offset=0x70",
-        "SAVE_XMM128 reg=XMM10, offset=0x80",
-        "SAVE_XMM128 reg=XMM11, offset=0x90",
+        *FULL_XMM_UNWIND,
     ),
     "art_quick_generic_jni_trampoline": (
         "FrameRegister: R12",
@@ -205,17 +195,16 @@ def main() -> int:
                 return_required = (
                     "PrologSize: 0",
                     "FrameRegister: -",
-                    "ALLOC_LARGE size=184",
+                    "ALLOC_LARGE size=248",
                     "SAVE_NONVOL reg=R15, offset=0x8",
                     "SAVE_NONVOL reg=R14, offset=0x10",
                     "SAVE_NONVOL reg=R13, offset=0x18",
                     "SAVE_NONVOL reg=R12, offset=0x20",
                     "SAVE_NONVOL reg=RBX, offset=0x28",
-                    "SAVE_XMM128 reg=XMM6, offset=0x40",
-                    "SAVE_XMM128 reg=XMM11, offset=0x90",
-                    "SAVE_NONVOL reg=RSI, offset=0xA0",
-                    "SAVE_NONVOL reg=RDI, offset=0xA8",
-                    "SAVE_NONVOL reg=RBP, offset=0xB0",
+                    *FULL_XMM_UNWIND,
+                    "SAVE_NONVOL reg=RSI, offset=0xE0",
+                    "SAVE_NONVOL reg=RDI, offset=0xE8",
+                    "SAVE_NONVOL reg=RBP, offset=0xF0",
                 )
                 for marker in return_required:
                     if marker not in return_record:

@@ -5,8 +5,8 @@ verified under Wine and Linux; static fatal boundaries plus dynamic-JIT frame
 anchors, PE serialization, xdata placement, runtime registration, collection
 lifecycle, and threshold-zero fatal dispatch are locally implemented and
 verified; the static OSR entry/return ranges are structurally and live-unwind
-verified under Wine; native Windows Stage E and full XMM6-XMM15 boundary
-acceptance remain
+verified under Wine; full-width XMM6-XMM15 boundary preservation is implemented
+and locally verified, while native Windows Stage E acceptance remains
 **Created:** 2026-07-26
 **Updated:** 2026-07-27
 **Target:** x86_64 Windows 10 build 17134+
@@ -228,20 +228,22 @@ The current tree now has the active W-010 product capability:
   `art_quick_invoke_static_stub`, `art_quick_generic_jni_trampoline`, and both
   contiguous ranges of `art_quick_osr_stub`. Structural inspection verifies
   their fixed allocations, nonvolatile GPR/XMM saves, frame anchors, and the
-  OSR return range's inherited 184-byte RSP frame. With `-Xint`, an unhandled
+  OSR return range's inherited 248-byte RSP frame. With `-Xint`, an unhandled
   JNI native AV crosses the exercised invoke/JNI records, reaches ART's UEF,
   and creates a new valid `MDMP` dump.
-- The invoke and OSR native-to-managed stubs currently preserve full-width
-  XMM6-XMM11; their unwind records describe those saves at the completed-frame
-  offsets, including the 64 bytes allocated after the XMM stores. Stage E must
-  extend every such native boundary to XMM6-XMM15 because ART's managed scalar
-  preservation of XMM12-XMM15 is only 64 bits while the Microsoft ABI requires
-  128 bits.
+- The invoke and OSR native-to-managed stubs now preserve full-width
+  XMM6-XMM15 in a 160-byte Windows-only adapter area. Their unwind records
+  describe all ten saves at completed-frame offsets 64 through 208. ART's
+  managed ABI remains unchanged and still uses 64-bit scalar XMM12-XMM15
+  spills; the complete Microsoft nonvolatile state is adapted only at the
+  native boundary.
 - The focused OSR unwind probe resolves the exported entry record and its
   contiguous return record, unwinds from 256 bytes below the fixed frame,
-  restores RBP/RDI/RSI/RBX/R12-R15 and XMM6-XMM11, proves return unwinding with
-  a managed-clobbered RBP, and exercises the canonical return epilogue. The
-  actual dual-view/J-1 default-nterp and switch OSR matrix passes 8/8.
+  restores RBP/RDI/RSI/RBX/R12-R15 and XMM6-XMM15, proves return unwinding with
+  a managed-clobbered RBP, synthetically unwinds both invoke records, and
+  exercises the canonical `add rsp,248; ret` return epilogue. The actual
+  dual-view/J-1 default-nterp and switch OSR matrix passes 8/8. The strengthened
+  normal-return sentinel passes 2/2 in nterp, switch, and threshold-zero JIT.
 - Dynamic optimizing and JNI JIT allocations now append DWORD-aligned unwind
   bytes after roots and `CodeInfo`, write them through the data RW alias, and
   expose them through the primary read-only low-4-GiB view. `JitCodeCache`
@@ -265,8 +267,8 @@ Stage D and the selected dynamic-JIT runtime-function implementation are
 therefore locally complete. Stage E must still reproduce the generated-fault,
 handler-chain, debugger, stack-budget, fatal-UEF, HSP policy, and dynamic-table
 stress matrix on native Windows 10/current Windows. It must accept the static
-OSR entry/return records on native Windows and add full-width XMM6-XMM15
-preservation before claiming all native-to-managed fatal paths.
+OSR entry/return records and the full-width XMM6-XMM15 normal-return/unwind
+sentinels on native Windows before claiming all native-to-managed fatal paths.
 
 ## 5. Windows contracts and conclusions
 
@@ -768,7 +770,7 @@ The first locally implemented boundary set is deliberately small:
   fixed Win64 saves before variable argument decoding, fit the PE prologue in
   255 bytes, and use `RBP` to anchor the frame above the variable argument
   area.
-- The invoke records describe RDI, RSI, RBP, RBX, R12-R15 and XMM6-XMM11; a
+- The invoke records describe RDI, RSI, RBP, RBX, R12-R15 and XMM6-XMM15; a
   structural verifier resolves the exports and checks the emitted `.pdata` /
   `.xdata` records instead of trusting assembly source annotations.
 - `art_quick_osr_stub` uses one RBP-anchored entry range for the fixed save
@@ -901,20 +903,22 @@ native call. Expanding every managed spill slot to 128 bits would change frame
 layout, stack maps, JNI frame calculations, and code size throughout the
 Windows compiler.
 
-The lower-divergence rule is to adapt at native-to-managed entry boundaries:
+The implemented lower-divergence rule adapts at native-to-managed entry boundaries:
 the invoke and OSR stubs must save and restore the full 128-bit XMM6-XMM15
 native state outside the canonical ART managed frame, and every boundary PE
 record must describe the saves that can participate in Windows unwind. The
-current implementation and focused sentinels cover only XMM6-XMM11; the
-emitted unwind verifier covers both invoke records plus the OSR entry and
-return records. The unwind offsets are relative to the completed fixed frame,
-not the temporary RSP used by each store: the six saves therefore occupy
-offsets 64 through 144 after accounting for the later 64 bytes of fixed GPR
-and bookkeeping state. The live OSR probe independently proved that
-`RtlVirtualUnwind()` restores all six values from both OSR ranges. Full-width
-XMM12-XMM15 boundary preservation is still a Stage E prerequisite before
-claiming complete native context restoration, even though the existing
-XMM6-XMM11 sentinels and fatal minidump probes pass.
+implementation now covers XMM6-XMM15; the emitted unwind verifier covers both
+invoke records plus the OSR entry and return records. The unwind offsets are
+relative to the completed fixed frame, not the temporary RSP used by each
+store: the ten saves occupy offsets 64 through 208 after accounting for the
+later 64 bytes of fixed GPR and bookkeeping state. The live OSR probe proves
+that `RtlVirtualUnwind()` restores all ten values from both OSR ranges and
+synthetically unwinds both invoke records. The normal-return sentinel seeds,
+checks, and restores all ten registers and passes 2/2 in nterp, switch, and
+threshold-zero JIT under Wine. Its historical `selfTestMask=63` marker is
+retained for W-003 evidence compatibility; `fullSelfTestMask=1023` is the
+authoritative XMM6-XMM15 result. Native Windows must repeat both the normal-
+return and exception-unwind cases before Stage E acceptance.
 
 Intermediate dynamic managed records describe the stack allocation, frame
 anchor, and pushed nonvolatile GPRs needed to recover caller control state.
@@ -1140,15 +1144,15 @@ The remaining acceptance and stress gates are:
 - collection/redefinition/OSR/JNI churn that verifies lookup disappears before
   address reuse and the replacement record describes the new allocation;
 - concurrent native stack sampling while JIT compilation and collection run;
-- full XMM6-XMM15 native-boundary sentinels across normal return and exception
-  unwind; and
+- native Windows repetition of the locally passing full XMM6-XMM15 boundary
+  sentinels across normal return and exception unwind; and
 - Linux optimized/JNI CFI tests and full ART rebuilds, proving no non-Windows
   code-generation change.
 
 ### 7.10 Static OSR boundary unwind design
 
 `art_quick_osr_stub` cannot use one ordinary native frame recipe from entry to
-return. Before the OSR jump, its fixed 184-byte save area is stable and RBP can
+return. Before the OSR jump, its fixed 248-byte save area is stable and RBP can
 anchor a variable copied stack. After the jumped-to managed method returns,
 however, RBP contains the value reconstructed from the copied managed frame;
 it is not the private native anchor established before the jump. Relying on
@@ -1162,7 +1166,7 @@ ranges:
 art_quick_osr_stub entry range
   capture Microsoft stack arguments
   push native RBP/RDI/RSI
-  reserve and save XMM6-XMM11
+  reserve and save XMM6-XMM15
   save result/shorty slots and RBX/R12-R15
   push null ArtMethod slot
   RBP = fixed RSP
@@ -1171,9 +1175,9 @@ art_quick_osr_stub entry range
   final instruction: call variable-copy body
 
 contiguous OSR return range
-  entry RSP = original native RSP - 184
+  entry RSP = original native RSP - 248
   restore from fixed RSP offsets without trusting managed RBP
-  add RSP, 184
+  add RSP, 248
   ret
 ```
 
@@ -1181,14 +1185,14 @@ The call is deliberately the final instruction in the first range, so its
 return address is exactly the first byte of the second range. The entry record
 uses `FrameRegister=RBP`, `FrameOffset=0`, and covers the variable copied-stack
 interval. The return record has a zero-length logical prologue and describes
-the already inherited fixed frame with `UWOP_ALLOC_LARGE(184)`,
+the already inherited fixed frame with `UWOP_ALLOC_LARGE(248)`,
 `UWOP_SAVE_NONVOL` for RBP/RDI/RSI/RBX/R12-R15, and `UWOP_SAVE_XMM128` for
-XMM6-XMM11. Its executable body performs the same restores and ends in the
-canonical `add rsp, 184; ret` epilogue.
+XMM6-XMM15. Its executable body performs the same restores and ends in the
+canonical `add rsp, 248; ret` epilogue.
 
 This split is Windows-only. Linux retains the original call, shared restore
 sequence, CFI state, and control flow. The Win64 entry still uses the same
-184-byte components and the same copied managed stack; only the order of the
+248-byte components and the same copied managed stack; only the order of the
 fixed native saves and the placement of the variable-copy body differ.
 
 `check_win32_boundary_unwind.py` verifies exact emitted records, including the
@@ -1688,7 +1692,7 @@ Implementation and local evidence (2026-07-26):
   Wine it reports build 19043, zero flags, and `PASS`.
 - The structural/package verifier reports 9 CMake harnesses, 3 direct links,
   6 enforced host packagers, and 25 Ninja PE link targets. It inspects 25 PE
-  files in the build tree and 53 when the focused W-010/W-014 staged package
+  files in the build tree and 54 when the focused W-010/W-014 staged package
   is included, with no CET-compatible marker, including external LLVM
   `c++.dll`. The selected Win64 build completed 321 steps
   and `dalvikvm
@@ -1850,9 +1854,9 @@ evidence belongs to Stage E and is not implied by Wine.
   publication, unregisters before reuse, and clears before teardown. Focused
   J-2/J-1 registry, collection/reuse, and threshold-zero fatal UEF/minidump
   gates pass.
-- **Still open:** accept both OSR static ranges and an OSR fatal path on native
-  Windows, extend native-to-managed boundary full-width XMM preservation from
-  XMM6-XMM11 to XMM6-XMM15, and pass native foreign-frame SEH, debugger,
+- **Still open:** accept both OSR static ranges, the full-width XMM6-XMM15
+  normal-return/unwind sentinel, and an OSR fatal path on native Windows, and
+  pass native foreign-frame SEH, debugger,
   large-table churn/sampling, rollback-injection, and debugger-quality
   dump-stack gates.
 - Run the complete matrix below on Windows 10 build 17134+ and a current
@@ -1980,7 +1984,7 @@ and debugger evidence.
 | `runtime/multiplatform/windows/fault_handler_windows.cc` | Not required; the Stage C dispatcher remains narrow enough to live in `sigchain_windows.cc` |
 | `runtime/multiplatform/windows/fault_handler_windows.h` | Windows-only non-owning context view and documented AV-kind constants; no common-header Win32 leakage |
 | `runtime/arch/x86/fault_handler_x86.cc` | Win64 non-owning context view, real `CONTEXT` PC/SP/RAX access, read-only stack-fault and protected-page checks |
-| `runtime/arch/x86_64/quick_entrypoints_x86_64.S` | Implemented PE unwind records for the two native invoke stubs, generic JNI trampoline, and split OSR entry/return ranges; corrected XMM6-XMM11 unwind offsets to the completed fixed frame; Stage E still needs native OSR fatal acceptance and full-width XMM12-XMM15 preservation across all invoke/OSR native-to-managed boundaries |
+| `runtime/arch/x86_64/quick_entrypoints_x86_64.S` | Implemented PE unwind records for the two native invoke stubs, generic JNI trampoline, and split OSR entry/return ranges; preserves full-width XMM6-XMM15 in Windows-only boundary adapters with completed-frame unwind offsets; Stage E still needs native normal-return/unwind repetition and OSR fatal acceptance |
 | `compiler/utils/x86_64/win64_unwind_info.h`, `assembler_x86_64.*`, and `compiler/optimizing/code_generator_x86_64.{h,cc}` | Implemented SDK-independent version-1 PE serializer plus Windows-JIT-only forced `RBP` anchor; Linux and non-JIT code paths unchanged |
 | `compiler/jni/quick/jni_compiler.*`, calling-convention files, and `compiler/utils/x86_64/jni_macro_assembler_x86_64.*` | Implemented RBP-anchored normal/FastNative JIT stubs, fixed-RSP CriticalNative descriptors, reserved-frame scratch selection, and opaque metadata carry independent of DWARF CFI |
 | `runtime/multiplatform/windows/jit_unwind_windows.{h,cc}` and `runtime/jit/jit_code_cache.*` | Implemented stable one-entry dynamic-function registry, publish-after-register rule, exact deletion, unregister-before-free/reuse, and clear-before-teardown ownership |
@@ -2026,9 +2030,9 @@ fallbacks:
    cost with large method counts; move to the documented lock-free callback
    alternative only if this gate fails. Neither static nor dynamic unwind data
    implies CET user-shadow-stack compatibility.
-7. After extending invoke-boundary saves to full-width XMM6-XMM15, do native
-   sentinels survive both normal managed return and exception unwind through
-   several optimizing and JNI frames?
+7. Does the locally implemented full-width XMM6-XMM15 adapter survive native
+   Windows normal managed return and exception unwind through several
+   optimizing and JNI frames?
 
 ## 16. Primary references and comparative implementation
 

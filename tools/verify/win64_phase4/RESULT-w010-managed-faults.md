@@ -93,9 +93,14 @@ requires no change.
   and its contiguous zero-prologue RSP-based return range, including exact
   completed-frame XMM offsets. `run_osr_unwind_probe.sh` resolves both records,
   virtually unwinds from 256 bytes below the fixed frame, restores
-  RBP/RDI/RSI/RBX/R12-R15 and XMM6-XMM11, repeats return unwinding with managed
-  RBP deliberately clobbered, and verifies the canonical `add rsp,184; ret`
-  epilogue. The real W-002 dual/J-1 default/switch OSR matrix passes 8/8.
+  RBP/RDI/RSI/RBX/R12-R15 and XMM6-XMM15, repeats return unwinding with managed
+  RBP deliberately clobbered, synthetically unwinds both invoke records, and
+  verifies the canonical `add rsp,248; ret` epilogue. The real W-002 dual/J-1
+  default/switch OSR matrix passes 8/8.
+- Full-width Microsoft-XMM boundary sentinel: the Windows-only save area is
+  160 bytes outside canonical ART frames; nterp, switch, and threshold-zero JIT
+  each pass 2/2 with `mask=0`, retained historical `selfTestMask=63`, and
+  authoritative `fullSelfTestMask=1023` for XMM6-XMM15.
 - Threshold-zero JIT JNI native AV: the optimizing caller and JNI stub compile,
   both J-2 and J-1 reach initial VEH and UEF, and each run creates a changed or
   new valid `MDMP` minidump.
@@ -140,7 +145,7 @@ The threshold-zero gate proves Windows fatal dispatch reaches UEF and produces
 a valid dump across the exercised optimizing/JIT-JNI path. It does not prove
 debugger-quality minidump stack reconstruction or concurrent native sampling
 under large dynamic-table churn. Stage E must cover those on native Windows,
-extend native-to-managed boundary preservation from full-width XMM6-XMM11 to
-XMM6-XMM15, repeat both OSR runtime-function lookups/unwinds, and accept an OSR
-fatal path before native fatal dispatch through its variable copied-stack
-interval is supported.
+repeat full-width XMM6-XMM15 normal-return and exception-unwind sentinels,
+repeat both OSR runtime-function lookups/unwinds, and accept an OSR fatal path
+before native fatal dispatch through its variable copied-stack interval is
+supported.

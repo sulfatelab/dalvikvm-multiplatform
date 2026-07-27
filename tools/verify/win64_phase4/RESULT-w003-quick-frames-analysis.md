@@ -309,6 +309,17 @@ The complete Stage A-D close bar is satisfied and W-003 is closed. W-010
 continues to own implicit generated-fault translation and the broader
 PE/SEH/native-unwind decision.
 
+### W-010 full-width follow-up (2026-07-27)
+
+The accepted W-003 native evidence above remains a six-register historical
+checkpoint and is not rewritten. W-010 subsequently expanded only the
+Windows boundary adapter from 96 to 160 bytes so invoke and OSR preserve the
+full Microsoft nonvolatile XMM6-XMM15 set without changing ART managed frames
+or Linux assembly. The sentinel now retains `selfTestMask=63` for compatibility
+and adds `fullSelfTestMask=1023`; focused Wine passes 2/2 in nterp, switch, and
+threshold-zero JIT. Native Windows repetition belongs to W-010 Stage E rather
+than reopening W-003.
+
 ## Rejected directions
 
 - Do not make all quick C++ helpers Microsoft ABI; that would duplicate most

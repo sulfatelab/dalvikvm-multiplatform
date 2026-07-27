@@ -70,7 +70,7 @@ function Test-StructuralReport {
         '^status=PASS$'
         '^cet_contract=WIN32_CET_CONTRACT PASS '
         '^boundary_unwind=win32_boundary_unwind OK '
-        '^osr_unwind=win32_osr_unwind_probe failures=0 prologue=[0-9]+ entry_frame_offset=0 return_prologue=0 variable_rsp_delta=256$'
+        '^osr_unwind=win32_osr_unwind_probe failures=0 prologue=[0-9]+ entry_frame_offset=0 return_prologue=0 fixed_frame=248 xmm_count=10 invoke_records=2 variable_rsp_delta=256$'
         '^windows_minimum_build=17134$'
         '^requested_stack_sizes=0,65536,262144,1048576,2097152,9437184$'
         '^sigchain_action_calls=3$'
@@ -81,6 +81,8 @@ function Test-StructuralReport {
         '^managed_npe_write_rounds=64$'
         '^managed_so_main_rounds=2$'
         '^managed_so_child_rounds=2$'
+        '^xmm_boundary_registers=10$'
+        '^xmm_self_test_mask=1023$'
         '^host_llvm_tools_required=no$'
     )
     foreach ($pattern in $required) {
@@ -100,6 +102,8 @@ function Test-StructuralReport {
         'sigchain.dll' = 'sigchain_sha256'
         'win32_osr_unwind_probe.exe' = 'osr_probe_sha256'
         'run\w010managedfaultprobe.jar' = 'managed_jar_sha256'
+        'libw003xmmsentinel.dll' = 'xmm_probe_sha256'
+        'run\w003xmmsentinelprobe.jar' = 'xmm_jar_sha256'
     }
     foreach ($relative in $hashEntries.Keys) {
         $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $Root $relative)).Hash.ToLowerInvariant()
@@ -260,9 +264,46 @@ try {
 
 Invoke-CheckedProcess -Name 'osr_unwind' -Executable 'win32_osr_unwind_probe.exe' -Markers @(
     'win32_osr_unwind_probe failures=0'
-    'entry_frame_offset=0 return_prologue=0 variable_rsp_delta=256'
+    'entry_frame_offset=0 return_prologue=0 fixed_frame=248 xmm_count=10 invoke_records=2 variable_rsp_delta=256'
     'win32_osr_unwind_probe OK'
 )
+
+foreach ($mode in @('nterp', 'switch', 'jit')) {
+    foreach ($repeat in 1..2) {
+        Clear-ArtEnvironment
+        $env:ART_WIN64_QUICK_INVOKE = '1'
+        $vmArgs = ''
+        if ($mode -eq 'nterp') {
+            $env:ART_WIN64_JIT = '0'
+            $env:ART_WIN64_NTERP = '1'
+        } elseif ($mode -eq 'switch') {
+            $env:ART_WIN64_JIT = '0'
+            $env:ART_WIN64_NTERP = '0'
+        } else {
+            $env:ART_WIN64_JIT = '1'
+            $env:ART_WIN64_NTERP = '1'
+            $env:ART_WIN64_JIT_FILTER = 'W003XmmSentinelProbe.managedCallback'
+            $env:ART_WIN64_JIT_LOG_COMPILES = '1'
+            $vmArgs = '-verbose:jit -Xjitwarmupthreshold:0 -Xjitthreshold:0'
+        }
+        $name = 'xmm_full_{0}_run{1:D2}' -f $mode, $repeat
+        $markers = @(
+            "W003XmmSentinelProbe mode=$mode"
+            'mask=0 selfTestMask=63 iterations=128'
+            'fullSelfTestMask=1023'
+            'W003XmmSentinelProbe OK'
+            'main end exception=0'
+        )
+        $forbidden = $HandledForbidden
+        if ($mode -eq 'jit') {
+            $markers += 'success=1 method=int W003XmmSentinelProbe.managedCallback('
+        } else {
+            $forbidden += 'Win64 CompileMethod done success=1 method='
+        }
+        Invoke-CheckedProcess -Name $name -Executable 'dalvikvm.exe' -Arguments "$Common $vmArgs -Dw003.mode=$mode -Djava.library.path=. -cp run\w003xmmsentinelprobe.jar W003XmmSentinelProbe" -Markers $markers -ForbiddenMarkers $forbidden
+    }
+}
+Clear-ArtEnvironment
 
 Invoke-CheckedProcess -Name 'thread_stack' -Executable 'win32_thread_stack_probe.exe' -Markers @(
     'requested=65536'
@@ -310,7 +351,24 @@ Invoke-CheckedProcess -Name 'jit_npe' -Executable 'dalvikvm.exe' -Arguments "$Co
 Invoke-CheckedProcess -Name 'jit_so' -Executable 'dalvikvm.exe' -Arguments "$Common -verbose:jit -Xjitwarmupthreshold:0 -Xjitthreshold:0 -cp run\w010managedfaultprobe.jar W010ManagedFaultProbe so" -Markers @('W010ManagedFaultProbe SO OK main=2 child=2 recovery=4 gc=4', 'Win64 CompileMethod done success=1 method=int W010ManagedFaultProbe.recurse(int)', 'Win64 CompileMethod done success=1 method=int W010ManagedFaultProbe.runStackOverflowRounds()', 'W010ManagedFaultProbe OK mode=so', 'main end exception=0') -ForbiddenMarkers $HandledForbidden
 Clear-ArtEnvironment
 
-$handledLogNames = @('osr_unwind', 'thread_stack', 'stack_page', 'fault_record', 'sigchain', 'switch_so', 'nterp_npe', 'nterp_so', 'jit_npe', 'jit_so')
+$handledLogNames = @(
+    'osr_unwind'
+    'xmm_full_nterp_run01'
+    'xmm_full_nterp_run02'
+    'xmm_full_switch_run01'
+    'xmm_full_switch_run02'
+    'xmm_full_jit_run01'
+    'xmm_full_jit_run02'
+    'thread_stack'
+    'stack_page'
+    'fault_record'
+    'sigchain'
+    'switch_so'
+    'nterp_npe'
+    'nterp_so'
+    'jit_npe'
+    'jit_so'
+)
 $handledScanFailed = $false
 foreach ($name in $handledLogNames) {
     $path = Join-Path $Logs ($name + '.log')

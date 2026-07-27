@@ -5,13 +5,15 @@ P4_W002_MANAGED_ENTRIES PASS
 P4_W003_QUICK_BOUNDARIES PASS (boundaries=3 trap_functions=212 traps=401)
 P4_W010_OSR_STATIC_UNWIND PASS
   entry frame offset 0; contiguous RSP-based return record; variable RSP
-  delta 256; GPR/XMM restore and canonical epilogue virtual unwind
+  delta 256; GPR plus XMM6-XMM15 restore; two invoke records; canonical
+  add-rsp-248 epilogue virtual unwind
 P4_W003_FRAME_FAMILIES PASS
   int 2/2, switch 2/2, nterp 2/2, threshold-zero JIT 2/2
   nterp and JIT each reached refs-only, refs-and-args, all-callee-saves,
   and save-everything
 P4_W003_XMM_SENTINEL PASS
   nterp 2/2, switch 2/2, threshold-zero JIT 2/2
+  historical selfTestMask=63 retained; fullSelfTestMask=1023 proves XMM6-XMM15
 P4_W002_OSR PASS
 P4_W002_ATTACH PASS
 P4_W024_CLEANUP_SOURCE PASS
