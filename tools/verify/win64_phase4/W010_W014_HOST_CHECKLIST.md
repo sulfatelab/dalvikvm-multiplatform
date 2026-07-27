@@ -2,7 +2,7 @@
 
 **Target:** Windows 10 version 1803 (RS4, build 17134) or later, x64
 
-**State:** native acceptance candidate; not yet accepted
+**State:** native acceptance and GenericJNI fatal-diagnostic candidate; not yet accepted
 
 ## Purpose
 
@@ -68,6 +68,9 @@ The runner verifies:
   entry/return boundaries;
 - live split OSR lookup and virtual unwind from a variable copied-stack RSP,
   an RSP-based return with managed RBP clobbered, and the canonical epilogue;
+- realistic GenericJNI virtual unwind from the captured native-call return at
+  trampoline `+0xc5`, with variable native RSP and caller RIP/RSP plus all
+  nonvolatile GPR restoration;
 - two full XMM6-XMM15 preservation runs at each nterp, switch-interpreter, and
   threshold-zero JIT native-to-managed boundary;
 - actual user shadow-stack policy observation;
@@ -117,7 +120,8 @@ It must contain 30 PASS records and no FAIL record. Key evidence includes:
 - `logs\osr_unwind.log` with `win32_osr_unwind_probe failures=0`,
   `entry_frame_register=R12 compiled_frame_register=RBP`, the zero-offset
   entry frame, zero-prologue return range, `fixed_frame=248`,
-  `xmm_count=10`, two invoke records, and the `OK` marker;
+  `xmm_count=10`, two invoke records, `generic_jni_records=1`,
+  `generic_jni_native_return=0xc5`, and the `OK` marker;
 - six `logs\xmm_full_*_run*.log` files with `mask=0`,
   `fullSelfTestMask=1023`, and `W003XmmSentinelProbe OK`. The retained
   `selfTestMask=63` field is the historical XMM6-XMM11 compatibility marker;

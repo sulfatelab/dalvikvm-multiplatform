@@ -170,6 +170,129 @@ void TestInvokeUnwind(HMODULE art, const char* symbol) {
   ExpectForSymbol(xmms_match, symbol, "restores XMM6-XMM15");
 }
 
+size_t TestGenericJniUnwind(HMODULE art) {
+  constexpr const char* kSymbol = "art_quick_generic_jni_trampoline";
+  auto* entry = reinterpret_cast<uint8_t*>(GetProcAddress(art, kSymbol));
+  ExpectForSymbol(entry != nullptr, kSymbol, "export resolves");
+  if (entry == nullptr) {
+    return 0u;
+  }
+
+  DWORD64 image_base = 0u;
+  PRUNTIME_FUNCTION function =
+      RtlLookupFunctionEntry(reinterpret_cast<DWORD64>(entry), &image_base, nullptr);
+  ExpectForSymbol(function != nullptr, kSymbol, "runtime-function entry resolves");
+  if (function == nullptr) {
+    return 0u;
+  }
+  auto* function_begin = reinterpret_cast<uint8_t*>(image_base + function->BeginAddress);
+  auto* function_end = reinterpret_cast<uint8_t*>(image_base + function->EndAddress);
+  ExpectForSymbol(function_begin == entry, kSymbol, "runtime-function starts at export");
+  ExpectForSymbol(function_end > function_begin, kSymbol, "runtime-function range is nonempty");
+
+  const uint8_t* unwind = reinterpret_cast<const uint8_t*>(image_base + function->UnwindData);
+  const uint8_t prologue_size = unwind[1];
+  ExpectForSymbol((unwind[0] & 0x7u) == 1u, kSymbol, "unwind info uses version 1");
+  ExpectForSymbol(prologue_size == 121u, kSymbol, "prologue covers the R12 anchor");
+  ExpectForSymbol((unwind[3] & 0x0fu) == 12u, kSymbol, "frame register is R12");
+  ExpectForSymbol((unwind[3] >> 4u) == 0u, kSymbol, "frame offset is zero");
+
+  // This is the Win64 indirect native call and its return PC. The run-3
+  // native stack captured the same return at trampoline + 0xc5.
+  constexpr uint8_t kNativeCall[] = {
+      0x41u, 0xffu, 0xd3u,              // call *%r11
+      0x4cu, 0x89u, 0xffu,              // mov %r15, %rdi
+  };
+  uint8_t* native_call = FindBytes(function_begin, function_end, kNativeCall);
+  ExpectForSymbol(native_call != nullptr, kSymbol, "native call return is found");
+  if (native_call == nullptr) {
+    return 0u;
+  }
+  uint8_t* native_return = native_call + 3u;
+  const size_t native_return_offset = static_cast<size_t>(native_return - entry);
+  ExpectForSymbol(native_return_offset == 0xc5u,
+                  kSymbol,
+                  "native call return matches captured offset");
+
+  SYSTEM_INFO system_info = {};
+  GetSystemInfo(&system_info);
+  VirtualStack stack(static_cast<size_t>(system_info.dwPageSize) * 4u);
+  ExpectForSymbol(stack.address != nullptr, kSymbol, "synthetic stack allocation succeeds");
+  if (stack.address == nullptr) {
+    return native_return_offset;
+  }
+
+  // Completed Win64 GenericJNI frame:
+  //   88 bytes of pushes + 112-byte save area = 200-byte canonical frame;
+  //   R12 anchors the additional 5120-byte reserved area;
+  //   a no-stack-argument normal JNI call uses 32-byte shadow plus cookie and
+  //   alignment, placing its variable native RSP 48 bytes below managed_sp.
+  uintptr_t entry_rsp = reinterpret_cast<uintptr_t>(
+      stack.address + static_cast<size_t>(system_info.dwPageSize) * 4u - 512u);
+  entry_rsp = (entry_rsp & ~uintptr_t{15u}) + 8u;
+  constexpr uintptr_t kCanonicalFrameSize = 200u;
+  constexpr uintptr_t kReservedAreaSize = 5120u;
+  constexpr uintptr_t kNativeCallAreaSize = 48u;
+  const uintptr_t managed_sp = entry_rsp - kCanonicalFrameSize;
+  const uintptr_t reserved_sp = managed_sp - kReservedAreaSize;
+  const uintptr_t native_rsp = managed_sp - kNativeCallAreaSize;
+
+  constexpr uint64_t kReturnAddress = UINT64_C(0x3456789abcdef012);
+  constexpr uint64_t kRbp = UINT64_C(0x1020304050607080);
+  constexpr uint64_t kRdi = UINT64_C(0x1122334455667788);
+  constexpr uint64_t kRsi = UINT64_C(0x8877665544332211);
+  constexpr uint64_t kRbx = UINT64_C(0x2233445566778899);
+  constexpr uint64_t kR12 = UINT64_C(0x33445566778899aa);
+  constexpr uint64_t kR13 = UINT64_C(0x445566778899aabb);
+  constexpr uint64_t kR14 = UINT64_C(0x5566778899aabbcc);
+  constexpr uint64_t kR15 = UINT64_C(0x66778899aabbccdd);
+
+  *reinterpret_cast<uint64_t*>(entry_rsp) = kReturnAddress;
+  *reinterpret_cast<uint64_t*>(entry_rsp - 8u) = kR15;
+  *reinterpret_cast<uint64_t*>(entry_rsp - 16u) = kR14;
+  *reinterpret_cast<uint64_t*>(entry_rsp - 24u) = kR13;
+  *reinterpret_cast<uint64_t*>(entry_rsp - 32u) = kR12;
+  *reinterpret_cast<uint64_t*>(entry_rsp - 40u) = UINT64_C(0x9192939495969798);
+  *reinterpret_cast<uint64_t*>(entry_rsp - 48u) = UINT64_C(0x8182838485868788);
+  *reinterpret_cast<uint64_t*>(entry_rsp - 56u) = kRsi;
+  *reinterpret_cast<uint64_t*>(entry_rsp - 64u) = kRbp;
+  *reinterpret_cast<uint64_t*>(entry_rsp - 72u) = kRbx;
+  *reinterpret_cast<uint64_t*>(entry_rsp - 80u) = UINT64_C(0x7172737475767778);
+  *reinterpret_cast<uint64_t*>(entry_rsp - 88u) = UINT64_C(0x6162636465666768);
+  *reinterpret_cast<uint64_t*>(managed_sp) = kRdi;
+
+  CONTEXT context = {};
+  context.ContextFlags = CONTEXT_FULL;
+  context.Rip = reinterpret_cast<DWORD64>(native_return);
+  context.Rsp = native_rsp;
+  context.Rbp = context.Rbx = context.R13 = context.R14 = context.R15 =
+      UINT64_C(0xcccccccccccccccc);
+  context.Rdi = context.Rsi = UINT64_C(0xdddddddddddddddd);
+  context.R12 = reserved_sp;
+
+  PVOID handler_data = nullptr;
+  DWORD64 establisher_frame = 0u;
+  RtlVirtualUnwind(UNW_FLAG_NHANDLER,
+                   image_base,
+                   context.Rip,
+                   function,
+                   &context,
+                   &handler_data,
+                   &establisher_frame,
+                   nullptr);
+  ExpectForSymbol(context.Rip == kReturnAddress, kSymbol, "restores return address");
+  ExpectForSymbol(context.Rsp == entry_rsp + 8u, kSymbol, "restores caller RSP");
+  ExpectForSymbol(context.Rbp == kRbp, kSymbol, "restores RBP from variable native RSP");
+  ExpectForSymbol(context.Rdi == kRdi, kSymbol, "restores RDI from variable native RSP");
+  ExpectForSymbol(context.Rsi == kRsi, kSymbol, "restores RSI from variable native RSP");
+  ExpectForSymbol(context.Rbx == kRbx, kSymbol, "restores RBX from variable native RSP");
+  ExpectForSymbol(context.R12 == kR12, kSymbol, "restores R12 from variable native RSP");
+  ExpectForSymbol(context.R13 == kR13, kSymbol, "restores R13 from variable native RSP");
+  ExpectForSymbol(context.R14 == kR14, kSymbol, "restores R14 from variable native RSP");
+  ExpectForSymbol(context.R15 == kR15, kSymbol, "restores R15 from variable native RSP");
+  return native_return_offset;
+}
+
 }  // namespace
 
 int main() {
@@ -182,6 +305,7 @@ int main() {
 
   TestInvokeUnwind(art, "art_quick_invoke_stub");
   TestInvokeUnwind(art, "art_quick_invoke_static_stub");
+  const size_t generic_jni_native_return = TestGenericJniUnwind(art);
 
   auto* osr = reinterpret_cast<uint8_t*>(GetProcAddress(art, "art_quick_osr_stub"));
   Expect(osr != nullptr, "art_quick_osr_stub export resolves");
@@ -474,6 +598,9 @@ int main() {
             << " fixed_frame=248"
             << " xmm_count=10"
             << " invoke_records=2"
+            << " generic_jni_records=1"
+            << " generic_jni_native_return=0x" << std::hex << generic_jni_native_return
+            << std::dec
             << " variable_rsp_delta=" << fixed_rsp - variable_rsp << '\n';
   if (g_failures == 0) {
     std::cout << "win32_osr_unwind_probe OK\n";

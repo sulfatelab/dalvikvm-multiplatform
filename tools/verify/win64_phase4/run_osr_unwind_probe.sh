@@ -16,6 +16,6 @@ log="${TMPDIR:-/tmp}/win32-osr-unwind-probe.log"
 
 grep -qF "win32_osr_unwind_probe failures=0" "$log"
 grep -qF "entry_frame_register=R12 compiled_frame_register=RBP" "$log"
-grep -qF "entry_frame_offset=0 return_prologue=0 fixed_frame=248 xmm_count=10 invoke_records=2 variable_rsp_delta=256" "$log"
+grep -qF "entry_frame_offset=0 return_prologue=0 fixed_frame=248 xmm_count=10 invoke_records=2 generic_jni_records=1 generic_jni_native_return=0xc5 variable_rsp_delta=256" "$log"
 grep -qF "win32_osr_unwind_probe OK" "$log"
 cat "$log"

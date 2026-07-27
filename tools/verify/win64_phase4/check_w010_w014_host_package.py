@@ -44,6 +44,7 @@ def parse_report(path: Path) -> dict[str, str]:
         "xmm_boundary_registers": "10",
         "xmm_self_test_mask": "1023",
         "fatal_dispatch_modes": "static,jit-j2,jit-j1,osr-j2,osr-j1",
+        "diagnostic_fatal_modes": "jni-av,jni-raise,native-worker",
         "fatal_minidumps_required": "5",
         "host_llvm_tools_required": "no",
     }
@@ -60,7 +61,8 @@ def parse_report(path: Path) -> dict[str, str]:
         r"win32_osr_unwind_probe failures=0 prologue=\d+ "
         r"entry_frame_register=R12 compiled_frame_register=RBP "
         r"entry_frame_offset=0 return_prologue=0 fixed_frame=248 "
-        r"xmm_count=10 invoke_records=2 variable_rsp_delta=256",
+        r"xmm_count=10 invoke_records=2 generic_jni_records=1 "
+        r"generic_jni_native_return=0xc5 variable_rsp_delta=256",
         values.get("osr_unwind", ""),
     ):
         fail("structural report does not contain the OSR unwind PASS marker")
@@ -172,7 +174,8 @@ def check_package(root: Path) -> None:
         "win32_osr_unwind_probe.exe",
         "entry_frame_register=R12 compiled_frame_register=RBP",
         "entry_frame_offset=0 return_prologue=0 fixed_frame=248 "
-        "xmm_count=10 invoke_records=2 variable_rsp_delta=256",
+        "xmm_count=10 invoke_records=2 generic_jni_records=1 "
+        "generic_jni_native_return=0xc5 variable_rsp_delta=256",
         "actual=disabled",
         "known_incompatible=0x00000000",
         "requested=65536 actual=65536",
@@ -227,7 +230,11 @@ def check_package(root: Path) -> None:
     for marker in (
         "win32_stack_growth_probe.exe",
         "win32_uef_probe.exe",
-        "CrashNativeProbe uef",
+        "CrashNativeProbe $($mode.Argument)",
+        "uef-raise",
+        "uef-thread",
+        "WIN32_JNI_RAISE_AV",
+        "WIN32_JNI_NATIVE_WORKER enter",
         "WIN32_LATE_UEF_INSTALL",
         "DIAGNOSTICS COMPLETE",
     ):

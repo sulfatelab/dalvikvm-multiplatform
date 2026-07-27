@@ -146,7 +146,8 @@ def main() -> int:
             "win32_osr_unwind_probe failures=0",
             "entry_frame_register=R12 compiled_frame_register=RBP",
             "entry_frame_offset=0 return_prologue=0 fixed_frame=248 "
-            "xmm_count=10 invoke_records=2 variable_rsp_delta=256",
+            "xmm_count=10 invoke_records=2 generic_jni_records=1 "
+            "generic_jni_native_return=0xc5 variable_rsp_delta=256",
             "win32_osr_unwind_probe OK",
         ),
     )
@@ -423,26 +424,60 @@ def main() -> int:
         ),
         forbidden=("CrashNativeProbe.unexpected_continue",),
     )
-    run_fatal_case(
+    for name, argument, mode_markers in (
+        ("art_late_uef_jni_av", "uef-av", ()),
+        (
+            "art_late_uef_native_worker",
+            "uef-thread",
+            ("WIN32_JNI_NATIVE_WORKER created", "WIN32_JNI_NATIVE_WORKER enter"),
+        ),
+    ):
+        run_fatal_case(
+            root,
+            name,
+            [
+                *common,
+                "-Xint",
+                "-cp",
+                "run/crashnativeprobe.jar",
+                "CrashNativeProbe",
+                argument,
+            ],
+            markers=(
+                "WIN32_LATE_UEF_INSTALL",
+                "is_art=1 debugger=0",
+                f"CrashNativeProbe.uef_armed mode={argument}",
+                *mode_markers,
+                "WIN32_LATE_UEF enter code=0xc0000005",
+                "ART Win64 UEF: exception 0xc0000005",
+                "minidump written",
+            ),
+            forbidden=(
+                "CrashNativeProbe.unexpected_continue",
+                "WIN32_JNI_NATIVE_WORKER unexpected_return",
+            ),
+        )
+    run_case(
         root,
-        "art_late_uef",
+        "art_late_uef_jni_raise",
         [
             *common,
             "-Xint",
             "-cp",
             "run/crashnativeprobe.jar",
             "CrashNativeProbe",
-            "uef",
+            "uef-raise",
         ],
         markers=(
             "WIN32_LATE_UEF_INSTALL",
             "is_art=1 debugger=0",
-            "CrashNativeProbe.uef_armed",
+            "CrashNativeProbe.uef_armed mode=uef-raise",
+            "WIN32_JNI_RAISE_AV",
             "WIN32_LATE_UEF enter code=0xc0000005",
             "ART Win64 UEF: exception 0xc0000005",
             "minidump written",
+            "CrashNativeProbe.unexpected_continue",
         ),
-        forbidden=("CrashNativeProbe.unexpected_continue",),
     )
 
     for mode in ("j2", "j1"):

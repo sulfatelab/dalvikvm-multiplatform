@@ -68,7 +68,7 @@ BOUNDARIES = {
         "PUSH_NONVOL reg=RSI",
         "PUSH_NONVOL reg=RBP",
         "PUSH_NONVOL reg=RBX",
-        "SAVE_NONVOL reg=RDI",
+        "SAVE_NONVOL reg=RDI, offset=0x1400",
     ),
 }
 

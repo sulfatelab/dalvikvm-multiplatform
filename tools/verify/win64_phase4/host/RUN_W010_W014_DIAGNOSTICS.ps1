@@ -133,34 +133,50 @@ foreach ($mode in @('seh', 'unhandled', 'chain', 'thread')) {
     Add-Result "UEF mode=$mode exit_shape=$([int]$exitShape) exit=$($result.ExitCode) veh=$([int]$veh) first=$([int]$first) second=$([int]$second)"
 }
 
-$beforeDumps = @{}
-Get-ChildItem -Path $Crash -File -Filter '*.dmp' -ErrorAction SilentlyContinue | ForEach-Object {
-    $beforeDumps[$_.FullName] = "$($_.Length):$($_.LastWriteTimeUtc.Ticks)"
-}
-
 $Common = '-Xbootclasspath:run\boot.jar -Xbootclasspath-locations:run\boot.jar -Ximage:/nonexistent-no-boot-image -XjdwpProvider:none -Xms64m -Xmx512m'
-$late = Invoke-DiagnosticProcess -Name 'art_late_uef' -Executable 'dalvikvm.exe' -Arguments "$Common -Xint -cp run\crashnativeprobe.jar CrashNativeProbe uef" -TimeoutSeconds 120
-$lateInstall = Has-Marker $late 'WIN32_LATE_UEF_INSTALL'
-$lateEnter = Has-Marker $late 'WIN32_LATE_UEF enter'
-$predecessorArt = Has-Marker $late 'is_art=1'
-$artUef = Has-Marker $late 'ART Win64 UEF: exception 0xc0000005'
-$artDump = Has-Marker $late 'minidump written'
-$newDumps = @(
-    Get-ChildItem -Path $Crash -File -Filter '*.dmp' -ErrorAction SilentlyContinue | Where-Object {
-        $signature = "$($_.Length):$($_.LastWriteTimeUtc.Ticks)"
-        (-not $beforeDumps.ContainsKey($_.FullName)) -or $beforeDumps[$_.FullName] -ne $signature
-    }
-)
-$newDumpLines = @($newDumps | ForEach-Object { "new_dump=$($_.FullName) bytes=$($_.Length)" })
-if ($newDumpLines.Count -eq 0) {
-    'NO_NEW_DUMP' | Set-Content -LiteralPath (Join-Path $Logs 'ART_LATE_UEF_DUMPS.txt')
-} else {
-    $newDumpLines | Set-Content -LiteralPath (Join-Path $Logs 'ART_LATE_UEF_DUMPS.txt')
-}
-Add-Result "ART_LATE_UEF exit=$($late.ExitCode) install=$([int]$lateInstall) enter=$([int]$lateEnter) predecessor_art=$([int]$predecessorArt) art_uef=$([int]$artUef) minidump_marker=$([int]$artDump) new_dumps=$($newDumps.Count)"
 
-if (-not $lateInstall -or $late.ExitCode -eq 0) {
-    $script:InfrastructureFailed = $true
+$lateModes = @(
+    [PSCustomObject]@{ Name = 'jni_av'; Argument = 'uef-av'; RequiredMarker = ''; RequireNonZero = $true }
+    [PSCustomObject]@{ Name = 'jni_raise'; Argument = 'uef-raise'; RequiredMarker = 'WIN32_JNI_RAISE_AV'; RequireNonZero = $false }
+    [PSCustomObject]@{ Name = 'native_worker'; Argument = 'uef-thread'; RequiredMarker = 'WIN32_JNI_NATIVE_WORKER enter'; RequireNonZero = $true }
+)
+
+foreach ($mode in $lateModes) {
+    $beforeDumps = @{}
+    Get-ChildItem -Path $Crash -File -Filter '*.dmp' -ErrorAction SilentlyContinue | ForEach-Object {
+        $beforeDumps[$_.FullName] = "$($_.Length):$($_.LastWriteTimeUtc.Ticks)"
+    }
+
+    $late = Invoke-DiagnosticProcess -Name ('art_late_uef_' + $mode.Name) -Executable 'dalvikvm.exe' -Arguments "$Common -Xint -cp run\crashnativeprobe.jar CrashNativeProbe $($mode.Argument)" -TimeoutSeconds 120
+    $lateInstall = Has-Marker $late 'WIN32_LATE_UEF_INSTALL'
+    $lateEnter = Has-Marker $late 'WIN32_LATE_UEF enter'
+    $predecessorArt = Has-Marker $late 'is_art=1'
+    $artVeh = Has-Marker $late 'ART Win64 VEH: exception 0xc0000005'
+    $artUef = Has-Marker $late 'ART Win64 UEF: exception 0xc0000005'
+    $artDump = Has-Marker $late 'minidump written'
+    $raised = Has-Marker $late 'WIN32_JNI_RAISE_AV'
+    $workerCreated = Has-Marker $late 'WIN32_JNI_NATIVE_WORKER created'
+    $workerEnter = Has-Marker $late 'WIN32_JNI_NATIVE_WORKER enter'
+    $newDumps = @(
+        Get-ChildItem -Path $Crash -File -Filter '*.dmp' -ErrorAction SilentlyContinue | Where-Object {
+            $signature = "$($_.Length):$($_.LastWriteTimeUtc.Ticks)"
+            (-not $beforeDumps.ContainsKey($_.FullName)) -or $beforeDumps[$_.FullName] -ne $signature
+        }
+    )
+    $newDumpLines = @($newDumps | ForEach-Object { "new_dump=$($_.FullName) bytes=$($_.Length)" })
+    $dumpReport = Join-Path $Logs ('ART_LATE_UEF_' + $mode.Name.ToUpperInvariant() + '_DUMPS.txt')
+    if ($newDumpLines.Count -eq 0) {
+        'NO_NEW_DUMP' | Set-Content -LiteralPath $dumpReport
+    } else {
+        $newDumpLines | Set-Content -LiteralPath $dumpReport
+    }
+    $exitShape = -not $mode.RequireNonZero -or $late.ExitCode -ne 0
+    Add-Result "ART_LATE_UEF mode=$($mode.Name) exit_shape=$([int]$exitShape) exit=$($late.ExitCode) install=$([int]$lateInstall) enter=$([int]$lateEnter) predecessor_art=$([int]$predecessorArt) art_veh=$([int]$artVeh) art_uef=$([int]$artUef) minidump_marker=$([int]$artDump) new_dumps=$($newDumps.Count) raised=$([int]$raised) worker_created=$([int]$workerCreated) worker_enter=$([int]$workerEnter)"
+
+    $requiredMarkerPresent = $mode.RequiredMarker.Length -eq 0 -or (Has-Marker $late $mode.RequiredMarker)
+    if (-not $lateInstall -or -not $exitShape -or -not $requiredMarkerPresent) {
+        $script:InfrastructureFailed = $true
+    }
 }
 
 $script:Results | Set-Content -LiteralPath (Join-Path $Logs 'RESULT_W010_W014_DIAGNOSTICS.txt')

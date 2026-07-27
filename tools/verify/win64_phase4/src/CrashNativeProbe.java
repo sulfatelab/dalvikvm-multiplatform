@@ -2,6 +2,8 @@
 public class CrashNativeProbe {
   private static native void nativeSegfault();
   private static native void nativeInstallUefProbe();
+  private static native void nativeRaiseAccessViolation();
+  private static native void nativeWorkerSegfault();
 
   private static final int OSR_COUNT = 2_000_000;
   private static int state;
@@ -56,11 +58,21 @@ public class CrashNativeProbe {
       System.out.println(
           "CrashNativeProbe.osr_unexpected_return checksum=" + checksum
               + " state=" + state + " sink=" + sink);
-    } else if (args.length != 0 && args[0].equals("uef")) {
+    } else if (args.length != 0
+        && (args[0].equals("uef")
+            || args[0].equals("uef-av")
+            || args[0].equals("uef-raise")
+            || args[0].equals("uef-thread"))) {
       nativeInstallUefProbe();
-      System.out.println("CrashNativeProbe.uef_armed");
+      System.out.println("CrashNativeProbe.uef_armed mode=" + args[0]);
       System.out.flush();
-      nativeSegfault();
+      if (args[0].equals("uef-raise")) {
+        nativeRaiseAccessViolation();
+      } else if (args[0].equals("uef-thread")) {
+        nativeWorkerSegfault();
+      } else {
+        nativeSegfault();
+      }
     } else {
       nativeSegfault();
     }

@@ -1,7 +1,9 @@
 /* java.lang.Runtime free/total/max memory + nativeGc for Win64 PE stubs. */
 #include <jni.h>
 #include <windows.h>
+#include <process.h>
 #include <limits.h>
+#include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -104,6 +106,61 @@ __declspec(dllexport) void Java_CrashNativeProbe_nativeSegfault(JNIEnv* env, jcl
 }
 __declspec(dllexport) void Java_CrashNativeProbe_nativeSegfault__(JNIEnv* env, jclass cls) {
   Java_CrashNativeProbe_nativeSegfault(env, cls);
+}
+
+/* Software-raised AV with the same documented access-information shape. */
+__declspec(dllexport) void Java_CrashNativeProbe_nativeRaiseAccessViolation(
+    JNIEnv* env, jclass cls) {
+  (void)env; (void)cls;
+  ULONG_PTR arguments[2] = {1u, 0u};  /* write at null */
+  fprintf(stderr, "WIN32_JNI_RAISE_AV code=0x%08lx\n",
+          (unsigned long)EXCEPTION_ACCESS_VIOLATION);
+  fflush(stderr);
+  RaiseException(EXCEPTION_ACCESS_VIOLATION, 0u, 2u, arguments);
+}
+__declspec(dllexport) void Java_CrashNativeProbe_nativeRaiseAccessViolation__(
+    JNIEnv* env, jclass cls) {
+  Java_CrashNativeProbe_nativeRaiseAccessViolation(env, cls);
+}
+
+static unsigned __stdcall crash_native_worker(void* argument) {
+  (void)argument;
+  fprintf(stderr, "WIN32_JNI_NATIVE_WORKER enter tid=%lu\n",
+          (unsigned long)GetCurrentThreadId());
+  fflush(stderr);
+  volatile int* p = (volatile int*)0;
+  *p = 0x42424242;
+  return 2u;
+}
+
+/* Real AV on a CRT-created native thread whose crashing stack has no ART frames. */
+__declspec(dllexport) void Java_CrashNativeProbe_nativeWorkerSegfault(
+    JNIEnv* env, jclass cls) {
+  (void)env; (void)cls;
+  unsigned thread_id = 0u;
+  uintptr_t raw_handle = _beginthreadex(
+      NULL, 0u, crash_native_worker, NULL, 0u, &thread_id);
+  if (raw_handle == 0u) {
+    fprintf(stderr, "WIN32_JNI_NATIVE_WORKER create_failed errno=%d\n", errno);
+    fflush(stderr);
+    return;
+  }
+  HANDLE handle = (HANDLE)raw_handle;
+  fprintf(stderr, "WIN32_JNI_NATIVE_WORKER created tid=%u\n", thread_id);
+  fflush(stderr);
+  DWORD wait_result = WaitForSingleObject(handle, INFINITE);
+  DWORD exit_code = 0u;
+  GetExitCodeThread(handle, &exit_code);
+  CloseHandle(handle);
+  fprintf(stderr,
+          "WIN32_JNI_NATIVE_WORKER unexpected_return wait=%lu exit=0x%08lx\n",
+          (unsigned long)wait_result,
+          (unsigned long)exit_code);
+  fflush(stderr);
+}
+__declspec(dllexport) void Java_CrashNativeProbe_nativeWorkerSegfault__(
+    JNIEnv* env, jclass cls) {
+  Java_CrashNativeProbe_nativeWorkerSegfault(env, cls);
 }
 
 /* Probe-only late UEF ownership observation for W-010 fatal-dispatch diagnostics. */

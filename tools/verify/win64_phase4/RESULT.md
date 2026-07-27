@@ -1,6 +1,6 @@
 # Win64 Phase 4 — RESULT
 
-**Status:** **WINE COMPLETE; FOCUSED NATIVE SUBSETS ACCEPTED; W-010/W-014 REDESIGN/DIAGNOSIS ACTIVE** — W-002, W-003, W-004, and W-024 native matrices are accepted. W-010/W-014 run 3 proves recursive Windows stack growth converts ART's fixed page to committed `PAGE_READWRITE` before `STATUS_STACK_OVERFLOW`, invalidating fixed-page SOE delivery. Standalone UEF dispatch works and ART still owns the UEF slot immediately before the JNI crash, but the fatal path reaches neither late nor ART UEF after VEH; GenericJNI/common-boundary traversal is the next target.
+**Status:** **WINE COMPLETE; FOCUSED NATIVE SUBSETS ACCEPTED; W-010/W-014 REDESIGN/DIAGNOSIS ACTIVE** — W-002, W-003, W-004, and W-024 native matrices are accepted. Run 3 invalidates fixed-page recursive SOE delivery and rules out UEF replacement. A realistic GenericJNI unwind found and repaired RDI's save offset from zero to `0x1400`; caller RIP/RSP and all nonvolatile GPRs now restore. JNI-raised, JNI-hardware, and JNI-created native-worker fatal modes pass the complete UEF/minidump path under Wine and are packaged for native isolation.
 **Date:** 2026-07-27
 **Depends on:** Phase 3 complete (real Win10 G12 goldens)
 
@@ -25,6 +25,7 @@
 | W-002 structural managed entries | **PASS** | `check_w002_managed_entries.py` |
 | W-003 quick boundary/trap parity | **PASS** | `check_w003_quick_boundaries.py` |
 | W-010 static OSR/invoke lookup and virtual unwind | **PASS** | `run_osr_unwind_probe.sh` (R12-anchored variable RSP entry, explicit RBP JIT handoff, managed-clobbered RBP return, GPR plus XMM6-XMM15 restore, invoke records, epilogue) |
+| W-010 GenericJNI native-return virtual unwind | **PASS** | same probe: captured `+0xc5` return, variable native RSP, 5120-byte R12 anchor, repaired RDI `offset=0x1400`, caller RIP/RSP and all nonvolatile GPRs |
 | W-003 attributed frame families | **PASS, 8/8** | `run_w003_frame_probe.sh` |
 | W-003 historical XMM6-XMM11 / W-010 full XMM6-XMM15 sentinel | **PASS, 6/6** | `run_w003_xmm_sentinel.sh` (`selfTestMask=63`, `fullSelfTestMask=1023`) |
 | W-002 OSR matrix | **PASS, 8/8** | `run_w002_osr_probe.sh` |
@@ -142,10 +143,19 @@ immediately before the crash, then only the ART VEH marker appears: neither
 late nor ART UEF runs, no dump marker is emitted, and no dump is created. This
 rules out UEF replacement, debugger attachment, the PowerShell runner, and
 dump-path/API failure. The captured return site maps to
-`art_quick_generic_jni_trampoline + 0xc5`; current GenericJNI metadata has only
-structural coverage, so the next test is a realistic GenericJNI
-`RtlVirtualUnwind()` frame plus JNI raised/hardware AV and JNI-created native
-worker isolation. It is not yet evidence that the metadata itself is wrong.
+`art_quick_generic_jni_trampoline + 0xc5`. The new realistic GenericJNI test
+found RDI physically saved at `R12 + 0x1400` while `.xdata` described offset
+zero. The repaired record passes structural inspection and restores caller
+RIP/RSP plus every nonvolatile GPR. The earlier incorrect RDI did not corrupt
+synthetic control-stack recovery, so native results still determine whether it
+was the complete dispatch cause.
+
+The follow-up diagnostic package adds continuable JNI
+`RaiseException(EXCEPTION_ACCESS_VIOLATION)`, the JNI hardware AV, and a
+hardware AV on a JNI-created `_beginthreadex` worker with no managed frames on
+the crashing thread. All three reach late UEF, ART UEF, and a valid minidump
+under Wine. The software-raised case then resumes under Wine and its exit shape
+is recorded rather than treated as infrastructure failure.
 
 ## Non-goals
 
@@ -155,8 +165,8 @@ worker isolation. It is not yet evidence that the metadata itself is wrong.
 
 ## Next
 
-- Add realistic GenericJNI virtual-unwind and JNI/native-worker exception-
-  dispatch probes. Design a replacement Windows SOE delivery mechanism that
+- Return the repaired GenericJNI JNI-raised/JNI-hardware/native-worker
+  exception-dispatch matrix from native Windows. Design a replacement Windows SOE delivery mechanism that
   does not rely on retaining a fixed no-access page inside the system stack.
   Then repeat the repaired SOE and static/JIT/OSR
   fatal matrix, debugger/stack-budget work, forced named-incompatible CET

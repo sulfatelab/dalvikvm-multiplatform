@@ -6,8 +6,9 @@ mechanism and rule out UEF replacement. Windows commits/reprotects the fixed
 page as ordinary `PAGE_READWRITE` during stack growth, then raises
 `STATUS_STACK_OVERFLOW`; fatal JNI AV reaches ART's VEH while ART still owns
 the UEF slot, but top-level UEF dispatch is not reached. Managed SOE delivery
-must be redesigned, and fatal dispatch investigation is narrowed to the common
-native/managed boundary, beginning with realistic GenericJNI unwind coverage.
+must be redesigned. A realistic GenericJNI virtual unwind then exposed and
+repaired an RDI save-offset defect; native JNI-raised/JNI-hardware/native-worker
+exception isolation is the next fatal-dispatch gate.
 **Created:** 2026-07-26
 **Updated:** 2026-07-27
 **Target:** x86_64 Windows 10 build 17134+
@@ -240,9 +241,10 @@ The current tree now has the active W-010 product capability:
   their fixed allocations, nonvolatile GPR/XMM saves, frame anchors, and the
   OSR return range's inherited 248-byte RSP frame. Wine's `-Xint` crash gate
   reaches ART's UEF and creates a valid `MDMP`, but native build 19044 does not.
-  The GenericJNI record currently has structural coverage only; no probe yet
-  calls `RtlVirtualUnwind()` on a realistic GenericJNI body/native-return
-  frame.
+  The GenericJNI gate now calls `RtlVirtualUnwind()` from the captured native-
+  call return at trampoline `+0xc5` with its real 200-byte canonical frame,
+  5120-byte R12-anchored reserved area, and variable native RSP. It exposed and
+  repaired the RDI save offset from zero to `R12 + 0x1400`.
 - The invoke and OSR native-to-managed stubs now preserve full-width
   XMM6-XMM15 in a 160-byte Windows-only adapter area. Their unwind records
   describe all ten saves at completed-frame offsets 64 through 208. ART's
@@ -285,9 +287,11 @@ independent fatal-UEF dispatch failure. The third native diagnostic run proves
 the fixed page is overwritten by normal Windows stack growth and proves ART
 still owns the UEF slot immediately before the crash. Managed SOE therefore
 needs a new delivery design; fatal dispatch work is narrowed to native
-exception traversal across the common GenericJNI/managed boundary. Debugger,
-stack-budget, forced-policy, and dynamic-table stress remain additional native
-acceptance work.
+exception traversal across the common GenericJNI/managed boundary. The new
+local gate now proves the repaired record restores caller RIP/RSP and every
+nonvolatile GPR; three packaged native exception shapes must determine whether
+that repair restores UEF dispatch. Debugger, stack-budget, forced-policy, and
+dynamic-table stress remain additional native acceptance work.
 
 ### 4.1 Second native Stage E result and current diagnosis
 
@@ -383,12 +387,23 @@ and dump-path/API failure are therefore ruled out at this stage.
 The captured native stack contains a return address at
 `art_quick_generic_jni_trampoline + 0xc5`; an adjacent
 `art_jni_dlsym_lookup_stub` address is likely saved data or function-pointer
-state rather than a proven call frame. This narrows the next diagnosis to
-Windows exception traversal across GenericJNI and the managed/native boundary,
-but does not prove the GenericJNI unwind record is wrong. The next probes must
-exercise `RtlVirtualUnwind()` on a realistic GenericJNI frame and isolate JNI
-`RaiseException`, JNI hardware AV, and a JNI-created native worker AV before
-any production unwind repair is selected.
+state rather than a proven call frame. This narrowed the next diagnosis to
+Windows exception traversal across GenericJNI and the managed/native boundary.
+
+The resulting realistic virtual-unwind test found one concrete defect: RDI is
+physically saved before the 5120-byte reserved-area subtraction, at
+`R12 + 0x1400`, while the PE record described offset zero. Caller RIP/RSP and
+the pushed nonvolatile registers already restored correctly; only RDI failed.
+The record now describes offset `0x1400`, and both structural inspection and
+the realistic `RtlVirtualUnwind()` pass under Wine. Because the incorrect RDI
+alone did not corrupt the recovered control stack in the synthetic case, native
+evidence is still needed before calling it the complete UEF root cause.
+
+The follow-up package adds JNI `RaiseException`, JNI hardware AV, and a
+JNI-created `_beginthreadex` worker AV. Local Wine reaches late UEF, ART UEF,
+and minidump creation in all three shapes; the continuable software-raised AV
+then resumes under Wine and is recorded as an observation. Native comparison
+of those shapes is the next proof.
 
 ## 5. Windows contracts and conclusions
 
@@ -932,14 +947,17 @@ diagnostic VEH remains unnecessary and would not restore foreign frame-based
 SEH semantics; debugger-quality dump stack reconstruction and native stress
 remain native-host work.
 
-The current GenericJNI `.pdata` record covers the trampoline body with an R12
-frame anchor and a 5120-byte allocation, but its verification is structural.
-Unlike invoke and OSR, no live or synthetic gate has yet built the real
-completed-frame/native-argument layout and called `RtlVirtualUnwind()` at the
-native-call return PC. The run-3 stack maps that return PC to
-`art_quick_generic_jni_trampoline + 0xc5`, making that missing test the next
-narrow proof point. It is a coverage gap, not evidence by itself that the
-metadata is defective.
+The GenericJNI `.pdata` record covers the trampoline body with an R12 frame
+anchor and a 5120-byte allocation. A realistic synthetic gate now builds the
+completed 200-byte canonical frame, R12-anchored reserved area, and variable
+normal-JNI outgoing RSP, then calls `RtlVirtualUnwind()` at the run-3 native-
+call return PC, `art_quick_generic_jni_trampoline + 0xc5`. The first run found
+that `.seh_savereg %rdi, 0` addressed the bottom of the reserved area even
+though RDI is physically saved 5120 bytes above R12. The corrected record uses
+offset `0x1400` and restores caller RIP/RSP plus RBP/RDI/RSI/RBX/R12-R15.
+Structural inspection now requires the exact RDI offset. This closes the
+GenericJNI virtual-unwind coverage gap, but native exception dispatch still
+must show whether the defect caused the missing UEF.
 
 An opt-in diagnostic build may add a final observer VEH or a preallocated
 record ring, but it must be off by default and must not run before the managed
@@ -2065,10 +2083,16 @@ not as the final managed-overflow mechanism.
   crash, but neither late nor ART UEF runs after the VEH marker. Fixed-page SOE
   delivery is invalidated, UEF replacement is ruled out, and the fatal path is
   narrowed to native exception traversal across GenericJNI/managed frames.
+- **GenericJNI follow-up implemented:** the live probe now virtually unwinds a
+  realistic completed GenericJNI frame from the captured native-call return at
+  `+0xc5`. It found and repaired RDI's PE save offset (`0` -> `0x1400` from the
+  R12 frame base). Structural and live Wine checks pass. The diagnostic runner
+  now compares continuable JNI `RaiseException`, JNI hardware AV, and a
+  JNI-created native-worker hardware AV; all three reach UEF/dump under Wine.
 - **Still open:** repeat the static ranges, full-width XMM6-XMM15
   exception-unwind sentinel and fatal paths after UEF dispatch is repaired,
-  add realistic GenericJNI `RtlVirtualUnwind()` and JNI/native-worker exception
-  isolation, redesign managed SOE delivery, and pass native debugger,
+  return the three GenericJNI/native-worker exception shapes from native
+  Windows, redesign managed SOE delivery, and pass native debugger,
   large-table churn/sampling, rollback-injection, and debugger-quality
   dump-stack gates. Native normal-return XMM, OSR live unwind, and foreign
   VEH/frame-SEH already pass in the second run.
@@ -2202,7 +2226,7 @@ and debugger evidence.
 | `runtime/multiplatform/windows/fault_handler_windows.cc` | Not required; the Stage C dispatcher remains narrow enough to live in `sigchain_windows.cc` |
 | `runtime/multiplatform/windows/fault_handler_windows.h` | Windows-only non-owning context view and documented AV-kind constants; no common-header Win32 leakage |
 | `runtime/arch/x86/fault_handler_x86.cc` | Win64 non-owning context view, real `CONTEXT` PC/SP/RAX access, read-only stack-fault and protected-page checks |
-| `runtime/arch/x86_64/quick_entrypoints_x86_64.S` | Implemented PE unwind records for the two native invoke stubs, generic JNI trampoline, and split OSR entry/return ranges; OSR uses R12 for the static copy anchor and sets RBP to copied RSP before the JIT handoff; preserves full-width XMM6-XMM15 in Windows-only boundary adapters with completed-frame unwind offsets; native normal-return sentinel and OSR live unwind pass, while repaired fatal dispatch still needs exception-unwind repetition |
+| `runtime/arch/x86_64/quick_entrypoints_x86_64.S` | Implemented PE unwind records for the two native invoke stubs, generic JNI trampoline, and split OSR entry/return ranges; GenericJNI now records RDI at completed-frame offset `0x1400` from its R12 anchor and passes realistic native-return virtual unwind; OSR uses R12 for the static copy anchor and sets RBP to copied RSP before the JIT handoff; preserves full-width XMM6-XMM15 in Windows-only boundary adapters with completed-frame unwind offsets; native normal-return sentinel and OSR live unwind pass, while repaired fatal dispatch still needs exception-unwind repetition |
 | `compiler/utils/x86_64/win64_unwind_info.h`, `assembler_x86_64.*`, and `compiler/optimizing/code_generator_x86_64.{h,cc}` | Implemented SDK-independent version-1 PE serializer plus Windows-JIT-only forced `RBP` anchor; Linux and non-JIT code paths unchanged |
 | `compiler/jni/quick/jni_compiler.*`, calling-convention files, and `compiler/utils/x86_64/jni_macro_assembler_x86_64.*` | Implemented RBP-anchored normal/FastNative JIT stubs, fixed-RSP CriticalNative descriptors, reserved-frame scratch selection, and opaque metadata carry independent of DWARF CFI |
 | `runtime/multiplatform/windows/jit_unwind_windows.{h,cc}` and `runtime/jit/jit_code_cache.*` | Implemented stable one-entry dynamic-function registry, publish-after-register rule, exact deletion, unregister-before-free/reuse, and clear-before-teardown ownership |
@@ -2252,14 +2276,12 @@ fallbacks:
 7. Does the locally implemented full-width XMM6-XMM15 adapter survive native
    Windows normal managed return and exception unwind through several
    optimizing and JNI frames?
-8. Does a realistic synthetic GenericJNI frame virtually unwind from the
-   native-call return/body PC to the expected caller with the current R12-
-   anchored record? Structural metadata checks alone do not answer this.
-9. Do JNI `RaiseException(EXCEPTION_ACCESS_VIOLATION)`, a JNI hardware AV, and
+8. On native Windows, do JNI `RaiseException(EXCEPTION_ACCESS_VIOLATION)`, a JNI hardware AV, and
    an AV on a JNI-created `_beginthreadex` worker differ in UEF dispatch? Use
    that matrix to separate exception-shape effects from traversal across the
    common GenericJNI/managed boundary. ART UEF replacement, standalone Windows
    UEF behavior, debugger attachment, and dump creation are already ruled out.
+   The repaired GenericJNI record now passes realistic `RtlVirtualUnwind()`.
 
 ## 16. Primary references and comparative implementation
 
