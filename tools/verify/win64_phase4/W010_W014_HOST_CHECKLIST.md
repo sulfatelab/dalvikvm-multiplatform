@@ -18,6 +18,16 @@ handler stack high-water measurement, and predecessor-UEF embedding remain
 separate manual or launcher-assisted evidence after this automated run passes.
 These items are tracked as the remaining forced-policy and embedding matrix.
 
+If the acceptance runner fails in managed SOE or fatal UEF/minidump cases, run
+the separate diagnostic matrix before changing product code:
+
+```powershell
+.\scripts\RUN_W010_W014_DIAGNOSTICS.ps1
+```
+
+It writes `diagnostic_logs` and does not change the required 30 acceptance
+records. Interpretation is documented in `W010_W014_DIAGNOSTICS.md`.
+
 ## Host prerequisites
 
 - Use native Windows 10/11 x64, not Wine, WSL, or a compatibility VM layer.

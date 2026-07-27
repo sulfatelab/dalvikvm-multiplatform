@@ -1,6 +1,6 @@
 # Win64 Phase 4 — RESULT
 
-**Status:** **WINE COMPLETE; FOCUSED NATIVE SUBSETS ACCEPTED** — A5–A8 and managed/native JIT hardening gates pass; W-002, W-003, W-004, and W-024 native closure matrices are accepted; W-010 Stages C-D, full-width XMM6-XMM15 static boundaries, split OSR unwind, and dynamic-JIT registration/lifecycle/fatal dispatch are focused-Wine verified and product implicit null/SO translation is active
+**Status:** **WINE COMPLETE; FOCUSED NATIVE SUBSETS ACCEPTED; W-010/W-014 DIAGNOSIS ACTIVE** — W-002, W-003, W-004, and W-024 native matrices are accepted. The second W-010/W-014 build-19044 run passes CET, reservations, direct page state, NPE, sigchain/frame-SEH, OSR unwind, and XMM6-XMM15, but native recursive SOE reaches `STATUS_STACK_OVERFLOW` and all fatal AV origins miss UEF/minidump after VEH.
 **Date:** 2026-07-27
 **Depends on:** Phase 3 complete (real Win10 G12 goldens)
 
@@ -37,7 +37,8 @@
 | W-010 active nterp/JIT managed faults | **PASS** | `run_w010_managed_fault_probe.sh` (started-runtime no-chain rejection; 64 read + 64 write NPEs; repeated main/child SOEs in nterp and threshold-zero JIT; no handled-fault diagnostics/dump change) |
 | W-010 threshold-zero JIT fatal dispatch | **PASS, J-2/J-1** | `run_jit_fatal_unwind.sh` (VEH, UEF, changed/new valid `MDMP`) |
 | W-010 OSR-origin fatal dispatch | **PASS, J-2/J-1** | `run_osr_fatal_unwind.sh` (real switch OSR jump, VEH, UEF, new valid `MDMP`) |
-| W-010/W-014 native package preflight | **PASS under Wine** | `package_win64_w010_w014.sh` (30-record runner, five fatal origins, per-case dump preservation, final package checker) |
+| W-010/W-014 native package preflight | **PASS under Wine** | `package_win64_w010_w014.sh` (unchanged 30-record acceptance runner plus separate stack-growth/UEF diagnostics) |
+| W-010/W-014 isolated failure diagnostics | **PASS for Wine-safe modes** | baseline/writable/direct stack growth; frame-SEH/main/chain/worker UEF; late ART predecessor/UEF/minidump. Protected recursive growth is native-only because Wine itself crashes. |
 | Full suite | **PASS** | `run_all_wine_gates.sh` |
 
 Evidence: `evidence/all_wine_gates.txt`, `evidence/crashnative.txt`
@@ -69,7 +70,7 @@ PASS native_crash_aborts
 | W-010 Stage D activation and stress | `src/W010ManagedFaultProbe.java`; `run_w010_managed_fault_probe.sh`; common runtime null/SO flags and early nterp range registration |
 | W-010 dynamic-JIT PE unwind | `runtime/multiplatform/windows/jit_unwind_windows.*`; `runtime/jit/{jit_code_cache,jit_memory_region}.*`; `run_jit_unwind_{info,registry,lifecycle}.sh`; `run_jit_fatal_unwind.sh` |
 | W-010 static OSR PE unwind | `quick_entrypoints_x86_64.S`; `../win64_phase1/win32_osr_unwind_probe.cc`; `run_osr_unwind_probe.sh`; `check_win32_boundary_unwind.py` |
-| W-010/W-014 native Stage E package | `package_win64_w010_w014.sh`; `host/RUN_W010_W014_HOST.ps1`; `check_w010_w014_host_package.py`; `review_w010_w014_host_result.py`; `W010_W014_HOST_CHECKLIST.md` |
+| W-010/W-014 native Stage E package and diagnostics | `package_win64_w010_w014.sh`; `host/RUN_W010_W014_HOST.ps1`; `host/RUN_W010_W014_DIAGNOSTICS.ps1`; `check_w010_w014_host_package.py`; `review_w010_w014_host_result.py`; `W010_W014_HOST_CHECKLIST.md`; `W010_W014_DIAGNOSTICS.md` |
 
 ## Host
 
@@ -107,12 +108,22 @@ Focused W-010/W-014 native Stage E candidate:
 JOBS=32 WINEDEBUG=-all \
   bash tools/win64/host_package/package_win64_w010_w014.sh
 # Native PowerShell: .\scripts\RUN_W010_W014_HOST.ps1
+# Failure diagnosis: .\scripts\RUN_W010_W014_DIAGNOSTICS.ps1
 ```
 
 The Linux-side preflight passes package integrity, the complete Wine matrix,
-all five fatal origins, per-case preservation of valid minidumps, and the final
-clean-package checker. Native execution and returned-evidence review remain
-required; a Wine package smoke is not native acceptance.
+all fatal origins, the safe isolated diagnostics, per-case preservation of
+valid minidumps, and the final clean-package checker. Native execution and
+returned-evidence review remain required; a Wine package smoke is not native
+acceptance.
+
+The second returned Windows 10 build-19044 package has 20 PASS and 12 FAIL
+records. It closes ordinary CET classification, exact requested reservations,
+direct fixed-page restoration, NPE translation, sigchain/frame-SEH, OSR live
+unwind, and six XMM6-XMM15 sentinel runs. Switch/nterp/JIT SOE all terminate
+with native stack overflow before ART's fixed-page AV. Static, JIT J-2/J-1,
+and OSR J-2/J-1 fatal AVs all reach VEH but not UEF/dump. Run the separate
+diagnostics before changing stack delivery or JIT unwind code.
 
 ## Non-goals
 
@@ -122,15 +133,12 @@ required; a Wine package smoke is not native acceptance.
 
 ## Next
 
-- Complete W-014 Stages A-B/E native acceptance and W-010 native Stage E
-  acceptance on Windows 10/current Windows: generated nterp/JIT NPE/SOE,
-  foreign VEH/SEH/debugger ordering, stack-budget measurements, fatal
-  predecessor-UEF/dump behavior, dynamic-table churn/sampling, and
-  HSP-disabled/forced named-incompatible policy cases while accepting
-  `CetDynamicApisOutOfProcOnly` and reserved fields. Repeat the split
-  OSR/invoke unwind, full
-  XMM6-XMM15 normal-return probes, JIT-origin fatal path, and OSR-origin fatal
-  path on native Windows.
+- Return the stack-growth and UEF diagnostics from native Windows. Use them to
+  redesign or repair managed SOE delivery and distinguish UEF replacement from
+  dispatch/unwind failure. Then repeat the repaired SOE and static/JIT/OSR
+  fatal matrix, debugger/stack-budget work, forced named-incompatible CET
+  policies, exception-unwind XMM coverage, and dynamic-table churn/sampling on
+  Windows 10/current Windows.
 - Complete W-025 broader JIT-mapping native acceptance and hardening
 
 ## W-010 Stage D activation re-run (2026-07-27)
