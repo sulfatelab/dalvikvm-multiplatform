@@ -1,6 +1,6 @@
 # Win64 Phase 4 — RESULT
 
-**Status:** **WINE COMPLETE; FOCUSED NATIVE SUBSETS ACCEPTED; W-010/W-014 REDESIGN/DIAGNOSIS ACTIVE** — W-002, W-003, W-004, and W-024 native matrices are accepted. Run 3 invalidates fixed-page recursive SOE delivery and rules out UEF replacement. Run 4 proves the repaired GenericJNI RDI metadata is necessary but insufficient: JNI hardware and raised AVs still stop after ART's VEH, while a JNI-created native worker reaches both UEFs and writes a valid dump. Fatal diagnosis is now limited to exception traversal through the ART managed/GenericJNI caller chain.
+**Status:** **WINE COMPLETE; FOCUSED NATIVE SUBSETS ACCEPTED; W-010/W-014 REDESIGN/DIAGNOSIS ACTIVE** — W-002, W-003, W-004, and W-024 native matrices are accepted. Run 3 invalidates fixed-page recursive SOE delivery and rules out UEF replacement. Run 4 proves the repaired GenericJNI RDI metadata is necessary but insufficient: JNI hardware and raised AVs still stop after ART's VEH, while a JNI-created native worker reaches both UEFs and writes a valid dump. E4 bounded live unwind diagnostics pass the complete `-j32` package/Wine preflight and await native confirmation of the local `ExecuteSwitchImplAsm + 0x9` lookup gap.
 **Date:** 2026-07-28
 **Depends on:** Phase 3 complete (real Win10 G12 goldens)
 
@@ -183,6 +183,12 @@ record, so leaf fallback consumes saved RBX as the return PC. Native E4 return
 must confirm this same boundary before the assembly is changed. A confirmed
 repair must also account for the wrapper's missing 32-byte MSVC outgoing home
 area while leaving its Linux/SysV path unchanged.
+
+The exact-commit E4 package preflight passes the structural checker, all
+handled-fault and ABI gates, all three traced late-UEF modes, static/JIT/OSR
+fatal dispatch, 15 valid Wine minidumps, final dump cleanup, manifest/hash
+regeneration, and the final clean-package checker. This is package readiness,
+not native proof of the candidate frame.
 
 ## Non-goals
 

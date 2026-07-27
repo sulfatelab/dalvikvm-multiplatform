@@ -463,6 +463,12 @@ prologue/epilogue unwind description together under `_WIN32`, leave the
 Linux/SysV body unchanged, and cover entry, body, and epilogue PCs with both
 structural lookup and realistic `RtlVirtualUnwind()` tests.
 
+The complete E4 package builds with `-j32` and passes the structural checker
+and Wine smoke. All three late-UEF modes emit bounded trace begin/frame/end
+records; the full fatal smoke preserves 15 valid minidumps before final cleanup
+and clean manifest regeneration. This verifies the diagnostic transport and
+non-regression surface, not the candidate frame on native Windows.
+
 ## 5. Windows contracts and conclusions
 
 ### 5.1 VEH ordering is the Windows chain

@@ -213,3 +213,9 @@ describe its prologue/epilogue with PE unwind directives and provide the
 mandatory 32-byte MSVC outgoing home area for its call to
 `ExecuteSwitchImplCpp`. Keep the Linux/SysV body unchanged, then add structural
 lookup and realistic virtual-unwind coverage before repeating fatal dispatch.
+
+The complete E4 `-j32` package preflight passes under Wine. It requires begin,
+frame, and end trace markers in JNI hardware, JNI raised, and native-worker
+cases; preserves 15 valid fatal minidumps during the smoke; then removes all
+runtime dumps and regenerates the clean package manifests. Native run 5 is the
+remaining evidence gate.
