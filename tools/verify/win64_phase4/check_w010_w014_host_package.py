@@ -125,6 +125,8 @@ def check_package(root: Path) -> None:
         "win32_cet_policy_probe.exe",
         "win32_thread_stack_probe.exe",
         "win32_stack_page_probe.exe",
+        "win32_stack_growth_probe.exe",
+        "win32_uef_probe.exe",
         "win32_fault_record_probe.exe",
         "win32_sigchain_probe.exe",
         "win32_osr_unwind_probe.exe",
@@ -135,7 +137,9 @@ def check_package(root: Path) -> None:
         "run/crashnativeprobe.jar",
         "run/crash/README.txt",
         "scripts/RUN_W010_W014_HOST.ps1",
+        "scripts/RUN_W010_W014_DIAGNOSTICS.ps1",
         "W010_W014_HOST_CHECKLIST.md",
+        "W010_W014_DIAGNOSTICS.md",
         "W010_W014_STRUCTURAL_REPORT.txt",
         "BUILD_INFO.txt",
     ]
@@ -216,6 +220,19 @@ def check_package(root: Path) -> None:
     ):
         if marker not in checklist_normalized:
             fail(f"host checklist is missing required scope text: {marker}")
+
+    diagnostics = (root / "scripts/RUN_W010_W014_DIAGNOSTICS.ps1").read_text(
+        encoding="utf-8"
+    )
+    for marker in (
+        "win32_stack_growth_probe.exe",
+        "win32_uef_probe.exe",
+        "CrashNativeProbe uef",
+        "WIN32_LATE_UEF_INSTALL",
+        "DIAGNOSTICS COMPLETE",
+    ):
+        if marker not in diagnostics:
+            fail(f"diagnostic runner is missing required text: {marker}")
 
     check_manifest(root)
 

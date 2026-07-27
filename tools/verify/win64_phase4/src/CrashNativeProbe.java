@@ -1,6 +1,7 @@
 /** Phase 4 A8 native crash path: PE native AV; expects abort (non-zero), not silent success. */
 public class CrashNativeProbe {
   private static native void nativeSegfault();
+  private static native void nativeInstallUefProbe();
 
   private static final int OSR_COUNT = 2_000_000;
   private static int state;
@@ -55,6 +56,11 @@ public class CrashNativeProbe {
       System.out.println(
           "CrashNativeProbe.osr_unexpected_return checksum=" + checksum
               + " state=" + state + " sink=" + sink);
+    } else if (args.length != 0 && args[0].equals("uef")) {
+      nativeInstallUefProbe();
+      System.out.println("CrashNativeProbe.uef_armed");
+      System.out.flush();
+      nativeSegfault();
     } else {
       nativeSegfault();
     }

@@ -4,6 +4,7 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/../../.." && pwd)"
 BUILD="${BUILD:-$REPO/build/win64_phase1}"
+HYBRID="${MDVM_HYBRID_BUILD:-$REPO/build/win64_libcore_icu}"
 OUT="${1:-$REPO/dist/win64_w010_w014_host}"
 JOBS="${JOBS:-32}"
 WINEDEBUG="${WINEDEBUG:--all}"
@@ -13,10 +14,15 @@ cmake --build "$BUILD" --target \
   win32_cet_policy_probe \
   win32_thread_stack_probe \
   win32_stack_page_probe \
+  win32_stack_growth_probe \
+  win32_uef_probe \
   win32_fault_record_probe \
   win32_sigchain_probe \
   win32_osr_unwind_probe \
   -j"$JOBS"
+
+cmake --build "$HYBRID" --target openjdk -j"$JOBS"
+bash "$REPO/tools/verify/win64_libcore_icu/install_into_phase1.sh" "$HYBRID" "$BUILD"
 
 bash "$REPO/tools/verify/win64_phase4/build_one.sh" W010ManagedFaultProbe
 bash "$REPO/tools/verify/win64_phase4/build_one.sh" CrashNativeProbe
@@ -49,6 +55,8 @@ required_build_files=(
   "$BUILD/win32_cet_policy_probe.exe"
   "$BUILD/win32_thread_stack_probe.exe"
   "$BUILD/win32_stack_page_probe.exe"
+  "$BUILD/win32_stack_growth_probe.exe"
+  "$BUILD/win32_uef_probe.exe"
   "$BUILD/win32_fault_record_probe.exe"
   "$BUILD/win32_sigchain_probe.exe"
   "$BUILD/win32_osr_unwind_probe.exe"
@@ -77,6 +85,8 @@ for executable in \
   win32_cet_policy_probe.exe \
   win32_thread_stack_probe.exe \
   win32_stack_page_probe.exe \
+  win32_stack_growth_probe.exe \
+  win32_uef_probe.exe \
   win32_fault_record_probe.exe \
   win32_sigchain_probe.exe \
   win32_osr_unwind_probe.exe; do
@@ -86,7 +96,9 @@ cp -a "$BUILD/libw003xmmsentinel.dll" "$OUT/"
 cp -a "$BUILD/run/w010managedfaultprobe.jar" "$OUT/run/"
 cp -a "$BUILD/run/w003xmmsentinelprobe.jar" "$OUT/run/"
 cp -a "$REPO/tools/verify/win64_phase4/host/RUN_W010_W014_HOST.ps1" "$OUT/scripts/"
+cp -a "$REPO/tools/verify/win64_phase4/host/RUN_W010_W014_DIAGNOSTICS.ps1" "$OUT/scripts/"
 cp -a "$REPO/tools/verify/win64_phase4/W010_W014_HOST_CHECKLIST.md" "$OUT/"
+cp -a "$REPO/tools/verify/win64_phase4/W010_W014_DIAGNOSTICS.md" "$OUT/"
 mkdir -p "$OUT/run/data" "$OUT/run/crash" "$OUT/logs"
 printf '%s\n' 'Runtime-writable ART data directory; package generation leaves it clean.' \
   >"$OUT/run/data/README.txt"

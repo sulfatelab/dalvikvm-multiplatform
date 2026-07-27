@@ -175,6 +175,64 @@ def main() -> int:
             "win32_stack_page_probe OK",
         ),
     )
+    for mode, terminal in (
+        ("baseline", "caught=0xc00000fd"),
+        ("writable", "caught=0xc00000fd"),
+        ("direct", "caught=0xc0000005"),
+    ):
+        run_case(
+            root,
+            f"stack_growth_{mode}",
+            [wine, "./win32_stack_growth_probe.exe", mode],
+            markers=(
+                f"stack_growth mode={mode}",
+                terminal,
+                f"win32_stack_growth_probe mode={mode} failures=0 worker_exit=0",
+                "win32_stack_growth_probe OK",
+            ),
+        )
+    run_case(
+        root,
+        "uef_seh",
+        [wine, "./win32_uef_probe.exe", "seh"],
+        markers=(
+            "WIN32_UEF_PROBE VEH enter code=0xc0000005",
+            "WIN32_UEF_PROBE PASS seh",
+        ),
+        forbidden=("WIN32_UEF_PROBE UEF first", "WIN32_UEF_PROBE UEF second"),
+    )
+    run_case(
+        root,
+        "uef_unhandled",
+        [wine, "./win32_uef_probe.exe", "unhandled"],
+        markers=(
+            "WIN32_UEF_PROBE main armed=1",
+            "WIN32_UEF_PROBE VEH enter code=0xc0000005",
+            "WIN32_UEF_PROBE UEF first code=0xc0000005",
+        ),
+        require_nonzero=True,
+    )
+    run_case(
+        root,
+        "uef_chain",
+        [wine, "./win32_uef_probe.exe", "chain"],
+        markers=(
+            "WIN32_UEF_PROBE UEF second chaining=1",
+            "WIN32_UEF_PROBE UEF first code=0xc0000005",
+        ),
+        require_nonzero=True,
+    )
+    run_case(
+        root,
+        "uef_thread",
+        [wine, "./win32_uef_probe.exe", "thread"],
+        markers=(
+            "WIN32_UEF_PROBE worker armed=1",
+            "WIN32_UEF_PROBE VEH enter code=0xc0000005",
+            "WIN32_UEF_PROBE UEF first code=0xc0000005",
+        ),
+        require_nonzero=True,
+    )
     run_case(
         root,
         "fault_record",
@@ -360,6 +418,27 @@ def main() -> int:
         markers=(
             "CrashNativeProbe.start",
             "ART Win64 VEH: exception 0xc0000005",
+            "ART Win64 UEF: exception 0xc0000005",
+            "minidump written",
+        ),
+        forbidden=("CrashNativeProbe.unexpected_continue",),
+    )
+    run_fatal_case(
+        root,
+        "art_late_uef",
+        [
+            *common,
+            "-Xint",
+            "-cp",
+            "run/crashnativeprobe.jar",
+            "CrashNativeProbe",
+            "uef",
+        ],
+        markers=(
+            "WIN32_LATE_UEF_INSTALL",
+            "is_art=1 debugger=0",
+            "CrashNativeProbe.uef_armed",
+            "WIN32_LATE_UEF enter code=0xc0000005",
             "ART Win64 UEF: exception 0xc0000005",
             "minidump written",
         ),

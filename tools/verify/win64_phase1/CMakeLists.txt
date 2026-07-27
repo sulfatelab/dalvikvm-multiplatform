@@ -122,6 +122,16 @@ add_executable(win32_stack_page_probe EXCLUDE_FROM_ALL
 target_include_directories(win32_stack_page_probe PRIVATE
   "${MDVM_ART_WIN_RUNTIME}")
 
+add_executable(win32_stack_growth_probe EXCLUDE_FROM_ALL
+  "${CMAKE_CURRENT_SOURCE_DIR}/win32_stack_growth_probe.cc"
+  "${CMAKE_CURRENT_SOURCE_DIR}/win32_stack_page_fault_probe.S"
+  "${MDVM_ART_WIN_RUNTIME}/stack_windows.cc")
+target_include_directories(win32_stack_growth_probe PRIVATE
+  "${MDVM_ART_WIN_RUNTIME}")
+
+add_executable(win32_uef_probe EXCLUDE_FROM_ALL
+  "${CMAKE_CURRENT_SOURCE_DIR}/win32_uef_probe.cc")
+
 add_executable(win32_fault_record_probe EXCLUDE_FROM_ALL
   "${CMAKE_CURRENT_SOURCE_DIR}/win32_fault_record_probe.cc")
 target_include_directories(win32_fault_record_probe PRIVATE

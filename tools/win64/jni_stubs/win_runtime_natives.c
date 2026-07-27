@@ -2,11 +2,36 @@
 #include <jni.h>
 #include <windows.h>
 #include <limits.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 typedef jlong (*jvm_long_fn)(void);
 typedef void (*jvm_void_fn)(void);
+
+static LPTOP_LEVEL_EXCEPTION_FILTER g_late_uef_predecessor;
+
+static int module_is_art(const char* path) {
+  const char* base = strrchr(path, '\\');
+  if (base == NULL) base = strrchr(path, '/');
+  base = base != NULL ? base + 1 : path;
+  return _stricmp(base, "art.dll") == 0 || _stricmp(base, "libart.dll") == 0;
+}
+
+static LONG WINAPI late_uef_probe(EXCEPTION_POINTERS* info) {
+  DWORD code = info != NULL && info->ExceptionRecord != NULL
+      ? info->ExceptionRecord->ExceptionCode
+      : 0;
+  fprintf(stderr,
+          "WIN32_LATE_UEF enter code=0x%08lx predecessor=%p\n",
+          (unsigned long)code,
+          (void*)g_late_uef_predecessor);
+  fflush(stderr);
+  if (g_late_uef_predecessor != NULL && g_late_uef_predecessor != late_uef_probe) {
+    return g_late_uef_predecessor(info);
+  }
+  return EXCEPTION_CONTINUE_SEARCH;
+}
 
 static HMODULE art_module(void) {
   HMODULE m = GetModuleHandleA("art.dll");
@@ -79,6 +104,40 @@ __declspec(dllexport) void Java_CrashNativeProbe_nativeSegfault(JNIEnv* env, jcl
 }
 __declspec(dllexport) void Java_CrashNativeProbe_nativeSegfault__(JNIEnv* env, jclass cls) {
   Java_CrashNativeProbe_nativeSegfault(env, cls);
+}
+
+/* Probe-only late UEF ownership observation for W-010 fatal-dispatch diagnostics. */
+__declspec(dllexport) void Java_CrashNativeProbe_nativeInstallUefProbe(
+    JNIEnv* env, jclass cls) {
+  (void)env; (void)cls;
+  char module_path[MAX_PATH] = "unknown";
+  HMODULE module = NULL;
+  g_late_uef_predecessor = SetUnhandledExceptionFilter(late_uef_probe);
+  if (g_late_uef_predecessor != NULL) {
+    MEMORY_BASIC_INFORMATION memory;
+    if (VirtualQuery((const void*)(uintptr_t)g_late_uef_predecessor,
+                     &memory,
+                     sizeof(memory)) != 0) {
+      module = (HMODULE)memory.AllocationBase;
+      if (GetModuleFileNameA(module, module_path, sizeof(module_path)) == 0) {
+        snprintf(module_path, sizeof(module_path), "unknown-error-%lu",
+                 (unsigned long)GetLastError());
+      }
+    }
+  } else {
+    snprintf(module_path, sizeof(module_path), "none");
+  }
+  fprintf(stderr,
+          "WIN32_LATE_UEF_INSTALL predecessor=%p module=%s is_art=%d debugger=%d\n",
+          (void*)g_late_uef_predecessor,
+          module_path,
+          module != NULL && module_is_art(module_path),
+          IsDebuggerPresent() ? 1 : 0);
+  fflush(stderr);
+}
+__declspec(dllexport) void Java_CrashNativeProbe_nativeInstallUefProbe__(
+    JNIEnv* env, jclass cls) {
+  Java_CrashNativeProbe_nativeInstallUefProbe(env, cls);
 }
 
 
