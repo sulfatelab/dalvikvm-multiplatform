@@ -161,6 +161,7 @@ def main() -> int:
             "requested=2097152",
             "requested=9437184",
             "win32_thread_stack_probe failures=0 join_stress=512 detach_stress=128",
+            "runtime=wine reservation_rounding=request",
             "win32_thread_stack_probe OK",
         ),
     )

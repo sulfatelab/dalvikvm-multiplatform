@@ -365,14 +365,15 @@ foreach ($mode in @('nterp', 'switch', 'jit')) {
 Clear-ArtEnvironment
 
 Invoke-CheckedProcess -Name 'thread_stack' -Executable 'win32_thread_stack_probe.exe' -Markers @(
-    'requested=65536'
-    'requested=262144'
+    'requested=65536 actual=65536'
+    'requested=262144 actual=262144'
     'requested=1048576'
     'requested=2097152'
     'requested=9437184'
     'join_stress count=512'
     'detach_stress count=128'
     'win32_thread_stack_probe failures=0 join_stress=512 detach_stress=128'
+    'runtime=native reservation_rounding=request wine_default_clamps=0'
     'win32_thread_stack_probe OK'
 )
 Invoke-CheckedProcess -Name 'stack_page' -Executable 'win32_stack_page_probe.exe' -Markers @(

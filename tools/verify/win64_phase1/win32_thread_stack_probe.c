@@ -22,6 +22,13 @@ typedef struct {
 
 static volatile LONG g_failures;
 static size_t g_default_stack_size;
+static int g_running_under_wine;
+static LONG g_wine_default_clamps;
+
+static int IsRunningUnderWine(void) {
+  HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
+  return ntdll != NULL && GetProcAddress(ntdll, "wine_get_version") != NULL;
+}
 
 static void Fail(const char* test, const char* detail) {
   fprintf(stderr, "FAIL %s: %s (winerr=%lu errno=%d)\n",
@@ -179,12 +186,20 @@ static int CheckRequestedReservation(size_t requested_size) {
     }
     g_default_stack_size = test_case.observed_size;
   } else {
-    const size_t effective_request =
-        requested_size < g_default_stack_size ? g_default_stack_size : requested_size;
-    if (test_case.observed_size < effective_request ||
-        test_case.observed_size - effective_request >=
-                 (size_t)system_info.dwAllocationGranularity) {
-      Fail("reservation", "effective reservation was not allocation-granularity rounded");
+    const size_t granularity = (size_t)system_info.dwAllocationGranularity;
+    const size_t expected_size =
+        ((requested_size + granularity - 1u) / granularity) * granularity;
+    if (test_case.observed_size != expected_size) {
+      if (g_running_under_wine && requested_size < g_default_stack_size &&
+          test_case.observed_size == g_default_stack_size) {
+        InterlockedIncrement(&g_wine_default_clamps);
+        printf("wine_reservation_fallback requested=%zu expected=%zu actual=%zu\n",
+               requested_size,
+               expected_size,
+               test_case.observed_size);
+      } else {
+        Fail("reservation", "requested reservation was not allocation-granularity rounded");
+      }
     }
   }
   return test_case.failures == 0;
@@ -394,6 +409,8 @@ static void CheckExternalAndFiberThreads(void) {
 }
 
 int main(void) {
+  g_running_under_wine = IsRunningUnderWine();
+
   thread_case_t main_case;
   memset(&main_case, 0, sizeof(main_case));
   main_case.print_bounds = 1;
@@ -426,10 +443,13 @@ int main(void) {
   CheckDetachStress();
   CheckExternalAndFiberThreads();
 
-  printf("win32_thread_stack_probe failures=%ld join_stress=%d detach_stress=%d\n",
+  printf("win32_thread_stack_probe failures=%ld join_stress=%d detach_stress=%d "
+         "runtime=%s reservation_rounding=request wine_default_clamps=%ld\n",
          g_failures,
          kJoinStressCount,
-         kDetachStressCount);
+         kDetachStressCount,
+         g_running_under_wine ? "wine" : "native",
+         g_wine_default_clamps);
   if (g_failures != 0) return 1;
   puts("win32_thread_stack_probe OK");
   return 0;

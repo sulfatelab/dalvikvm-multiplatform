@@ -1441,7 +1441,9 @@ The Windows pthread shim must honor:
 
 - `stacksize == 0`: executable default reservation;
 - `stacksize != 0`: `_beginthreadex(..., stacksize, ...,
-  STACK_SIZE_PARAM_IS_A_RESERVATION, ...)`;
+  STACK_SIZE_PARAM_IS_A_RESERVATION, ...)`, with the resulting reservation
+  rounded from the explicit request rather than clamped to the executable
+  default;
 - `PTHREAD_CREATE_JOINABLE`: retain the real thread handle until join or
   detach;
 - `PTHREAD_CREATE_DETACHED`: arrange automatic control-object cleanup and
@@ -1770,21 +1772,27 @@ Stage A because the build and early-runtime enforcement are now present.
 - Stage D now enables product implicit null/SO checks after the Stage A-B page
   and Stage C adapter prerequisites are installed.
 
-Local evidence (2026-07-26):
+Local and returned-native evidence (2026-07-27):
 
 - Win64 `art`, `dalvikvm`, and the focused probe build with `-j32`.
-- Wine reports exact 1 MiB default/explicit and exact 2 MiB reservations; the
-  focused probe passes all identity/lifetime/rejection stress.
+- Wine reports a 1 MiB default and clamps explicit 64 KiB/256 KiB reservations
+  to that default, while native Windows build 19044 returns exact 64 KiB and
+  256 KiB reservations. The probe now detects Wine explicitly, records that
+  compatibility fallback, and requires native request-based allocation-
+  granularity rounding with `wine_default_clamps=0`.
+- The first native candidate passes join/detach handle closure and otherwise
+  exposes no pthread lifetime failure. Its small-reservation failures were
+  probe-expectation defects, not pthread implementation failures.
 - Wine `Hello`, ThreadHeavy, every W-002 attach mode, and the complete Phase-4
   suite pass with clean process exit after the VEH/FLS findings.
 - Linux rebuild and `dalvikvm -showversion` pass.
 
-Remaining Stage A acceptance is native Windows validation of 64 KiB,
-256 KiB, 1 MiB, 2 MiB, and over-8-MiB reservations, handle-count closure,
+Remaining Stage A acceptance is a corrected native-package rerun proving exact
+64 KiB, 256 KiB, 1 MiB, 2 MiB, and over-8-MiB request-based reservations,
 fiber rejection, and exit-before/after-join-or-detach timing. It must also
 record Java's post-`FixStackSize()` reservations and representative ART pool
-threads. Wine's `GetProcessHandleCount()` result is unavailable and cannot
-close the native handle-lifetime proof point.
+threads. The first native run already closes the exercised join/detach handle-
+count point; Wine's zero handle-count report remains non-authoritative.
 
 ### Stage B — dormant fixed page — implemented locally
 

@@ -114,8 +114,11 @@ It must contain 30 PASS records and no FAIL record. Key evidence includes:
   `fullSelfTestMask=1023` is the authoritative XMM6-XMM15 self-test;
 - `logs\W010_W014_STRUCTURAL_REPORT.txt` with
   `boundary_unwind=win32_boundary_unwind OK ...`;
-- `logs\thread_stack.log` with all five nonzero requested sizes and zero
-  failures;
+- `logs\thread_stack.log` with exact
+  `requested=65536 actual=65536`,
+  `requested=262144 actual=262144`, all five nonzero requested sizes, zero
+  failures, and
+  `runtime=native reservation_rounding=request wine_default_clamps=0`;
 - `logs\sigchain.log` with
   `action_calls=3 foreign_before=2 foreign_after=2` and
   `sequence=1,2,1,2`;
