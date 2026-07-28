@@ -1,4 +1,4 @@
-# Port-policy overlay (Layer 2) for MinDalvikVM **Win64**.
+# Port-policy overlay (Layer 2) for MinDalvikVM **Windows x64**.
 # Use: python3 -m bp2cmake --os windows --overlay overlay/port_policy_windows.py ...
 #
 # Phase 0: foundational -> libartbase
@@ -120,7 +120,7 @@ OVERLAY = Overlay(
         ),
         "liblzma": ModulePolicy(
             kind="shared", force_enabled=True,
-            # AesOpt.c uses MSVC __m128i field access; skip Intel AES-NI opt on Win64 clang.
+            # AesOpt.c uses MSVC __m128i field access; skip Intel AES-NI opt on Windows x64 clang.
             remove_srcs=["AesOpt.c"],
         ),
         "libcpu_features": ModulePolicy(

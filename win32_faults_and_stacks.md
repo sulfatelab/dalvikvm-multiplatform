@@ -1,7 +1,7 @@
-# Win64 managed faults and ART stack design
+# Windows x64 managed faults and ART stack design
 
 **Status:** W-010/W-014 E9 is native-accepted 30/30 on Windows Server 2025
-build 26100. Win64 uses explicit pre-prologue stack checks and guarantee-aware
+build 26100. Windows x64 uses explicit pre-prologue stack checks and guarantee-aware
 bounds; switch/nterp/JIT managed SOE passes with zero handled dumps. Linux
 retains its implicit `RSP - 8192` probes. E5/E6 unwind repairs remain accepted,
 and five static/JIT/OSR fatal origins produce valid dumps. The work remains
@@ -32,7 +32,7 @@ boundaries.
 The stable decisions and currently implemented candidate are:
 
 1. Keep ART's existing implicit null-check model and Linux's existing implicit
-   stack probe unchanged. On Win64 only, emit a narrow pre-prologue
+   stack probe unchanged. On Windows x64 only, emit a narrow pre-prologue
    `RSP < Thread::stack_end_` check in optimizing code and nterp, allow
    equality, and tail-jump through the same ART overflow throw entrypoint.
 2. Implement a process-wide ART managed-fault VEH with
@@ -43,12 +43,12 @@ The stable decisions and currently implemented candidate are:
    `SIGSEGV` action that `FaultManager` registers. Do not emulate `sigaction`,
    signal masks, or general POSIX signal delivery.
 4. Pass a small non-owning Windows fault view through the x86_64 adapter. The
-   view points at the real Win64 `CONTEXT` and carries the documented AV access
+   view points at the real Windows x64 `CONTEXT` and carries the documented AV access
    kind; handlers modify the real `Rip`/`Rsp` in place. Construct only the
    small `siginfo_t` view needed by common `FaultManager`. Do not copy the
    Windows register set into a fabricated Linux `ucontext_t` and back.
 5. Reuse the common `FaultManager`, generated-code range registry, handler
-   ordering, null classifier, and quick exception entrypoints. Win64 managed
+   ordering, null classifier, and quick exception entrypoints. Windows x64 managed
    stack overflow bypasses fault classification and enters the common throw
    path from its explicit generated check.
 6. Treat Windows `EXCEPTION_STACK_OVERFLOW`, `PAGE_GUARD`, and the moving OS
@@ -73,20 +73,20 @@ The stable decisions and currently implemented candidate are:
 10. Disable caller-supplied `pthread_attr_setstack()` stacks for Windows ART
     thread pools. Pass the requested reservation size to the OS instead.
 11. Activate implicit null handling only with the managed VEH and common
-    handlers. Activate Win64 explicit stack checks only with validated,
+    handlers. Activate Windows x64 explicit stack checks only with validated,
     guarantee-aware thread bounds. A per-thread query, configuration, or
     layout failure rejects attachment or thread birth.
 12. Keep fatal crash diagnostics separate from managed fault translation.
     Expected faults do not log or dump. The unhandled-exception filter writes a
     best-effort dump, then chains to the previously installed filter.
 13. Do not support Windows CET user shadow stacks (Hardware-enforced Stack
-    Protection) in the current Win64 ART design. Every defined incompatible
+    Protection) in the current Win32 ART design. Every defined incompatible
     shadow-stack and context-IP-validation field must be disabled;
     compatibility, audit, and strict modes are unsupported. Classify named SDK
     fields rather than treating the raw policy word as a Boolean. Build every
-    project Win64 PE explicitly with `/CETCOMPAT:NO`, inspect packaged DLLs,
+    project Windows x64 PE explicitly with `/CETCOMPAT:NO`, inspect packaged DLLs,
     and reject an incompatible policy before managed threads or JIT startup.
-14. Provide correctness-grade Win64 unwind descriptions wherever Windows may
+14. Provide correctness-grade Windows x64 unwind descriptions wherever Windows may
     dispatch a fatal exception across ART-managed frames. Static invoke/JNI
     boundary records and the split OSR entry/return records are implemented.
     Dynamic optimizing/JNI code uses Windows-JIT-only fixed `RBP` anchors or a
@@ -101,11 +101,11 @@ The stable decisions and currently implemented candidate are:
 
 - Registration, promotion, and removal of the ART managed-fault VEH.
 - Cooperative handler-chain semantics and debugger coexistence.
-- Validation of `EXCEPTION_RECORD` and Win64 `CONTEXT`.
+- Validation of `EXCEPTION_RECORD` and Windows x64 `CONTEXT`.
 - Adaptation of recognized access violations to common ART fault handling.
-- In-place Win64 PC/SP context access in the x86_64 fault handler.
+- In-place Windows x64 PC/SP context access in the x86_64 fault handler.
 - Implicit null-pointer translation.
-- Explicit Win64 stack-check code generation and common throw-entry transfer.
+- Explicit Windows x64 stack-check code generation and common throw-entry transfer.
 - The activation gate for generated code that depends on implicit faults.
 - Separation of managed translation from fatal VEH/UEF diagnostics.
 
@@ -129,13 +129,13 @@ The stable decisions and currently implemented candidate are:
 - Translating native stack exhaustion into Java `StackOverflowError`.
 - Supporting caller-provided stack addresses through fibers.
 - Windows ARM64 in the first implementation. The interfaces should not prevent
-  it, but all concrete acceptance in this draft is Win64 x86_64.
+  it, but all concrete acceptance in this draft is Windows x64.
 - Full symbol-quality native unwinding through every quick assembly stub.
   Managed stack walking remains ART-owned. This does not make correctness-
   critical PE runtime-function data optional: Windows exception dispatch must
   be able to cross the native/managed boundary stubs and dynamically emitted
   JIT frames that can be present on a fatal exception path.
-- Enabling implicit suspend checks on Win64 x86_64. Current ART enables that
+- Enabling implicit suspend checks on Windows x64. Current ART enables that
   mechanism on Arm64, not x86_64.
 - Windows CET user shadow stacks, also exposed as Hardware-enforced Stack
   Protection. This is an explicit unsupported product configuration, not an
@@ -171,7 +171,7 @@ exception, restores the normal boundary, and protects the page again.
 
 Windows preserves the pre-prologue timing, caller-frame invariant, common
 throw entrypoint, 8192-byte ART recovery reserve, and Java-visible exception.
-The unavoidable OS-specific difference is detection: Win64 compares RSP with
+The unavoidable OS-specific difference is detection: Windows x64 compares RSP with
 `Thread::stack_end_` explicitly because Windows stack growth cannot preserve a
 fixed protected page, while Linux retains the implicit fault sequence.
 
@@ -208,15 +208,15 @@ The current tree now has the active W-010 product capability:
 
 - `sigchain_windows.cc` owns one immutable special-`SIGSEGV` action and a
   first VEH. It filters exact continuable access violations, adapts the real
-  Win64 `CONTEXT`, supports promotion/removal, and continues the search for
+  Windows x64 `CONTEXT`, supports promotion/removal, and continues the search for
   every unsupported or unrecognized exception.
 - `runtime_windows.cc` still owns a separate diagnostic VEH. It may log fatal
   first-chance events, but it never translates managed faults. The fatal UEF
   writes a best-effort dump and chains to its predecessor, or returns search.
-- Runtime initialization enables implicit null handling and explicit Win64
+- Runtime initialization enables implicit null handling and explicit Windows x64
   stack-overflow checks while keeping implicit suspend checks disabled.
   Linux handler order and implicit probes remain unchanged.
-- Win64 registers nterp's immutable generated-code range during fault-manager
+- Windows x64 registers nterp's immutable generated-code range during fault-manager
   initialization from `IsNterpSupported()`, before `Runtime::Start()` can
   publish nterp entrypoints. JIT ranges continue through common
   `Runtime::AddGeneratedCodeRange()`.
@@ -228,7 +228,7 @@ The current tree now has the active W-010 product capability:
   and consumes its managed stack trace, performs ordinary allocation/time
   operations, and resumes managed execution; the gate requests 16 collections
   across each NPE run and one collection after each of the four caught SOEs.
-- Win64 PE unwind records now cover `art_quick_invoke_stub`,
+- Windows x64 PE unwind records now cover `art_quick_invoke_stub`,
   `art_quick_invoke_static_stub`, `art_quick_generic_jni_trampoline`, and both
   contiguous ranges of `art_quick_osr_stub`. Structural inspection verifies
   their fixed allocations, nonvolatile GPR/XMM saves, frame anchors, and the
@@ -282,7 +282,7 @@ pending-range, and embedding coverage remain additional acceptance work.
 
 ### 4.1 Second native Stage E result and current diagnosis
 
-`/tmp/log-win64_w010_w014_host-run2.zip` exactly matches the issued package
+`/tmp/log-windows_x64_w010_w014_host-run2.zip` exactly matches the issued package
 and ran on Windows 10 Enterprise LTSC build 19044. It returns 20 PASS and 12
 FAIL records. The corrected CET classifier accepts raw `flags=0x00000100`
 because the named incompatible mask is zero. Native 64 KiB and 256 KiB
@@ -313,7 +313,7 @@ pre-reset re-protection succeeds. The error 13 was secondary. A passing direct
 page probe does not model recursive stack growth and cannot validate SOE.
 
 The fatal AV failures are a separate class. Static `-Xint`, JIT J-2/J-1, and
-OSR J-2/J-1 all reach `ART Win64 VEH: exception 0xc0000005`, then exit with
+OSR J-2/J-1 all reach `ART Win32 VEH: exception 0xc0000005`, then exit with
 the AV status without an ART UEF marker or dump. Identical behavior across all
 five origins is not evidence of a JIT unwind defect. The next distinction is
 whether ordinary top-level dispatch is being bypassed or the fatal dalvikvm
@@ -335,12 +335,12 @@ Wine verifies the baseline/writable/direct stack modes, all four standalone
 UEF modes, and the late chain where ART is the predecessor and writes a valid
 dump. Wine 10.0 itself segfaults in protected recursive stack growth, so that
 case is intentionally native-only. See
-`tools/verify/win64_phase4/W010_W014_DIAGNOSTICS.md` for the interpretation
+`tools/verify/windows_x64_phase4/W010_W014_DIAGNOSTICS.md` for the interpretation
 matrix.
 
 ### 4.2 Third native diagnostic result
 
-`/tmp/diag-log-win64_w010_w014_host-run3.zip` matches the issued package and
+`/tmp/diag-log-windows_x64_w010_w014_host-run3.zip` matches the issued package and
 completes every isolated diagnostic on Windows build 19044. The stack result is
 decisive:
 
@@ -367,7 +367,7 @@ and `_beginthreadex` worker AVs reach a UEF, direct predecessor chaining reaches
 both filters, and a frame SEH handler consumes its own AV before UEF as
 documented. No debugger is attached. Immediately before the ART fatal probe, a
 late filter observes that its predecessor is still inside `art.dll`; the crash
-then reaches `ART Win64 VEH` but reaches neither the late filter nor ART's UEF,
+then reaches `ART Win32 VEH` but reaches neither the late filter nor ART's UEF,
 creates no minidump marker, and creates no dump. UEF replacement, the runner,
 and dump-path/API failure are therefore ruled out at this stage.
 
@@ -403,7 +403,7 @@ The three ART exception shapes isolate the remaining fatal boundary:
 
 - the JNI hardware AV and continuable JNI
   `RaiseException(EXCEPTION_ACCESS_VIOLATION)` both report ART as the installed
-  predecessor, reach `ART Win64 VEH`, then exit with
+  predecessor, reach `ART Win32 VEH`, then exit with
   `STATUS_ACCESS_VIOLATION` without entering either late or ART UEF and without
   creating a dump;
 - the JNI-created `_beginthreadex` worker reports creation and entry, reaches
@@ -441,7 +441,7 @@ previous `art_jni_dlsym_lookup_stub` stack word is therefore not the first
 proven missing active frame.
 
 The product assembly change was held until native E4 reproduced this frame.
-It did, so the narrow repair is not only `.seh_pushreg`: Win64
+It did, so the narrow repair is not only `.seh_pushreg`: Windows x64
 `ExecuteSwitchImplAsm` also calls an MSVC-ABI C++ function without reserving
 the mandatory 32-byte outgoing home area. Add the home area and matching
 prologue/epilogue unwind description together under `_WIN32`, leave the
@@ -461,7 +461,7 @@ leaf fallback produces a stack address as PC and UEF dispatch is lost. The
 native worker instead traverses four registered frames to zero PC, reaches both
 UEFs, and writes a valid dump. Current Windows also repeats the fixed-page
 stack-growth failure. The diagnostic stage is therefore closed: repair the
-wrapper's Win64 home-area/unwind frame and verify native dispatch.
+wrapper's Windows x64 home-area/unwind frame and verify native dispatch.
 
 Native E5 verifies that repair. The live post-call PC is now
 `ExecuteSwitchImplAsm + 0xd` with a valid runtime-function lookup in both JNI
@@ -509,7 +509,7 @@ delivery.
 
 ### 4.4 E7-E9 managed-SOE replacement and acceptance
 
-E7 replaces Win64's rejected fixed-page probe with explicit pre-prologue
+E7 replaces Windows x64's rejected fixed-page probe with explicit pre-prologue
 checks in optimizing code and nterp. The generated comparison allows
 `RSP == Thread::stack_end_`, branches only when RSP is below the boundary, and
 tail-jumps through `Thread::pThrowStackOverflow`. Linux object inspection
@@ -543,7 +543,7 @@ The immutable E9 archive SHA-256 is
 Windows Server 2025 build 26100 returns 30/30 PASS, no handled dumps, and five
 valid fatal dumps. The independent reviewer reports
 `PASS (build=26100, pass_records=30, dumps=5, return=full-package)`. See
-`tools/verify/win64_phase4/evidence/w010_w014_e9/ACCEPTANCE.md`.
+`tools/verify/windows_x64_phase4/evidence/w010_w014_e9/ACCEPTANCE.md`.
 
 ## 5. Windows contracts and conclusions
 
@@ -569,7 +569,7 @@ AV before ART sees it is incompatible with any VEH-based managed runtime.
 
 Because debugger first-chance notification precedes VEH, a debugger configured
 to break on every access violation will stop on normal implicit null checks.
-Win64's explicit stack check does not deliberately fault. Native acceptance
+Windows x64's explicit stack check does not deliberately fault. Native acceptance
 must still prove that continuing a debugger resumes an implicit null fault into
 the managed exception path.
 
@@ -639,7 +639,7 @@ both main and pthread-created threads in the E9 page probe.
 
 ### 5.9 CET user shadow stacks conflict with ART's non-local transfers
 
-The current Win64 ART runtime does not support CET user shadow stacks. The
+The current Win32 ART runtime does not support CET user shadow stacks. The
 decisive conflict is ART's ordinary x86_64 managed exception and
 deoptimization transfer, not only W-010's proposed VEH context editing.
 
@@ -667,7 +667,7 @@ W-010 adds another incompatibility. Null translation changes both
 `CONTEXT.Rip`. A process with `SetContextIpValidation` can validate modified
 instruction pointers during context restoration. ART's quick and JIT
 continuation targets currently have no complete `/guard:ehcont` contract, and
-Win64 quick assembly does not provide complete PE unwind metadata. These are
+Windows x64 quick assembly does not provide complete PE unwind metadata. These are
 additional rejection reasons, but fixing them alone would not repair
 `art_quick_do_long_jump`.
 
@@ -689,7 +689,7 @@ Consequently:
   bits;
 - Windows compatibility mode is not accepted merely because non-CET modules
   may be tolerated there;
-- every project Win64 executable and DLL link must explicitly pass
+- every project Windows x64 executable and DLL link must explicitly pass
   `/CETCOMPAT:NO`; packaged LLVM libc++ and other DLLs must also be inspected
   for absence of `IMAGE_DLL_CHARACTERISTICS_EX_CET_COMPAT`;
 - the launcher or Windows Exploit Protection configuration must disable
@@ -699,7 +699,7 @@ Consequently:
   CET shadow-stack support.
 
 Stage 0 now implements both enforceable halves of this rule. The generated
-Win64 graph, all handwritten Win64 CMake harnesses, and all direct Clang/lld
+Windows x64 graph, all handwritten Windows x64 CMake harnesses, and all direct Clang/lld
 PE links pass `/CETCOMPAT:NO` explicitly. A structural verifier audits those
 sources and Ninja link commands, then scans the selected build/package trees
 and LLVM libc++ for the CET-compatible extended characteristic. The runtime
@@ -750,20 +750,20 @@ Advantages:
 A new abstract context type shared by every ISA and OS would be conceptually
 clean, but it would modify common fault signatures and every architecture
 handler. That creates substantially more Linux/Android regression surface
-than the narrow Win64 adapter and provides little immediate value for a
+than the narrow Windows x64 adapter and provides little immediate value for a
 single Windows ISA.
 
-This remains a possible upstream-oriented cleanup after Win64 behavior is
+This remains a possible upstream-oriented cleanup after Windows x64 behavior is
 proven.
 
-### 6.3 Selected for stack only: explicit Win64 stack checks
+### 6.3 Selected for stack only: explicit Windows x64 stack checks
 
 Native Windows disproved the lower-divergence fixed-page candidate. Optimizing
 code and nterp therefore compare RSP with `Thread::stack_end_` before the
 method prologue, allow equality, and tail-jump to the existing throw entrypoint
 when below it. This is intentionally stack-only: implicit null checks remain
 shared and VEH-based. Object-level audits verify that Linux keeps its original
-implicit probe and that the Win64 branch contains the exact comparison.
+implicit probe and that the Windows x64 branch contains the exact comparison.
 
 ### 6.4 Rejected: frame-based SEH around every ART transition
 
@@ -911,7 +911,7 @@ published action, and clears the state before returning. A nested fault while
 the state is set is never translated, preventing recursive validation loops
 without introducing a second OS TLS scheme.
 
-### 7.4 Non-owning Win64 context adaptation
+### 7.4 Non-owning Windows x64 context adaptation
 
 Under `_WIN32 && __x86_64__`, `fault_handler_x86.cc` should unwrap a minimal
 platform view such as:
@@ -937,7 +937,7 @@ interface refactor.
 
 This is preferable to fabricating a full `ucontext_t` because:
 
-- the common null handler modifies only the saved PC and SP for current Win64
+- the common null handler modifies only the saved PC and SP for current Windows x64
   AV-based implicit faults;
 - all untouched integer and vector registers remain in the real OS context;
 - rSELF in R15 is restored by Windows automatically;
@@ -974,7 +974,7 @@ publication edge before it is added to this contract.
 
 ### 7.6 Stack-overflow detection
 
-E9 does not route Win64 stack overflow through `FaultManager`. Optimizing code
+E9 does not route Windows x64 stack overflow through `FaultManager`. Optimizing code
 and nterp compare the live RSP with `Thread::stack_end_` before establishing a
 frame. `RSP == stack_end_` is allowed; `RSP < stack_end_` tail-jumps through
 `Thread::pThrowStackOverflow`. The bound already includes the native recovery
@@ -1043,7 +1043,7 @@ later UEF, teardown preserves that later filter. The fatal UEF now calls the
 saved predecessor after the best-effort dump when one exists, and otherwise
 returns `EXCEPTION_CONTINUE_SEARCH`.
 
-PE unwind metadata is part of exception-dispatch correctness on Win64, not
+PE unwind metadata is part of exception-dispatch correctness on Windows x64, not
 only minidump quality. Recursive `RtlVirtualUnwind2` tracing of the JNI fatal
 probe showed the exact failure mode: without a runtime-function record,
 Windows treats the current instruction as a leaf, pops whatever the managed
@@ -1056,7 +1056,7 @@ The first locally implemented boundary set is deliberately small:
   above its 5120-byte reserved area while preserving ART's canonical managed
   `RBP` meaning.
 - `art_quick_invoke_stub` and `art_quick_invoke_static_stub` schedule their
-  fixed Win64 saves before variable argument decoding, fit the PE prologue in
+  fixed Windows x64 saves before variable argument decoding, fit the PE prologue in
   255 bytes, and use `RBP` to anchor the frame above the variable argument
   area.
 - The invoke records describe RDI, RSI, RBP, RBX, R12-R15 and XMM6-XMM15; a
@@ -1064,7 +1064,7 @@ The first locally implemented boundary set is deliberately small:
   `.xdata` records instead of trusting assembly source annotations.
 - `art_quick_osr_stub` uses one R12-anchored entry range for the fixed save
   area and variable copied-stack body. Immediately before the OSR jump it sets
-  `RBP = RSP`, reproducing the anchor that normal Win64 JIT entry establishes
+  `RBP = RSP`, reproducing the anchor that normal Windows x64 JIT entry establishes
   after its prologue. The contiguous return range is RSP-based and does not
   assume OSR code preserved either anchor. The emitted verifier checks both
   records and exact save offsets; the live probe virtually unwinds the
@@ -1104,13 +1104,13 @@ or run before the managed translator.
 
 #### 7.9.1 Required result
 
-Every executable byte emitted into the Win64 JIT code cache must have a
+Every executable byte emitted into the Windows x64 JIT code cache must have a
 range-accurate Windows runtime-function entry before any thread can obtain an
 entrypoint to it. The record must remain registered, and every byte it
 references must remain allocated, until the code is no longer executable and
 cannot be present on a thread stack. This applies to optimizing JIT methods,
 OSR methods, and JIT-generated JNI stubs. The x86_64 fast compiler is Arm64-
-only in the current tree and therefore adds no separate Win64 producer.
+only in the current tree and therefore adds no separate Windows x64 producer.
 
 This metadata has one purpose: make Windows exception dispatch and
 `RtlVirtualUnwind2()` recover the caller's control state reliably enough to
@@ -1164,7 +1164,7 @@ documented chained-record model.
 
 #### 7.9.3 Selected frame rule
 
-All optimizing methods emitted by the Win64 JIT reserve `RBP` as a PE frame
+All optimizing methods emitted by the Windows x64 JIT reserve `RBP` as a PE frame
 anchor. Linux and non-JIT Windows compilation remain byte-for-byte on their
 existing path.
 
@@ -1182,7 +1182,7 @@ The Windows JIT code generator shall:
 6. restore it through the existing pop sequence on normal return.
 
 This adds one reserved register, one forced spill, and one frame-anchor
-instruction only to optimizing Win64 JIT methods. It does not change Java
+instruction only to optimizing Windows x64 JIT methods. It does not change Java
 exception checks, the managed calling convention, stack maps, Linux code
 generation, or the layout expected by common ART stack walking. The cost is
 some Windows-only register pressure and a small frame/code-size increase. That
@@ -1246,7 +1246,7 @@ The existing assembler CFI is not a suitable production source for PE data:
 - parsing it later would duplicate architecture decisions already known at
   the instruction emission sites.
 
-The x86_64 assembler shall therefore build a small explicit Win64 unwind
+The x86_64 assembler shall therefore build a small explicit Windows x64 unwind
 descriptor while it emits the prologue. It records actual instruction-end
 offsets for pushed GPRs, the fixed allocation, and the frame-anchor
 instruction, then serializes version-1 `UNWIND_INFO` bytes. It chooses the
@@ -1501,7 +1501,7 @@ XMM6-XMM15. Its executable body performs the same restores and ends in the
 canonical `add rsp, 248; ret` epilogue.
 
 This split is Windows-only. Linux retains the original call, shared restore
-sequence, CFI state, and control flow. The Win64 entry still uses the same
+sequence, CFI state, and control flow. The Windows x64 entry still uses the same
 248-byte components and the same copied managed stack; only the order of the
 fixed native saves and the placement of the variable-copy body differ.
 
@@ -1827,7 +1827,7 @@ additive. `win32_stack_growth_probe` retains baseline/protected/writable/direct
 modes and accepts an optional guarantee request so future Windows releases can
 repeat that observation without changing product state.
 
-## 9. Accepted Win64 stack-overflow event sequence
+## 9. Accepted Windows x64 stack-overflow event sequence
 
 ```text
 generated method/nterp entry, before prologue
@@ -1868,7 +1868,7 @@ win_managed_faults_ready =
     && special SIGSEGV action published
     && x86_64 WindowsFaultContext adapter built
     && implicit null handler registered
-    && explicit Win64 stack checks built
+    && explicit Windows x64 stack checks built
     && every attached thread has verified guarantee-aware bounds
 ```
 
@@ -1877,10 +1877,10 @@ Then:
 - startup must query the process CET/HSP policy before creating ART threads or
   enabling JIT and reject every defined incompatible policy field;
 - `implicit_null_checks_` may be true only when the capability is ready;
-- `implicit_so_checks_` is false on Win64 so common code does not install or
+- `implicit_so_checks_` is false on Windows x64 so common code does not install or
   classify a protected page; explicit stack checks are built unconditionally
-  for Win64 optimizing/nterp code and require verified guarantee-aware bounds;
-- Win64 nterp and JIT may be product-enabled only under those flags because
+  for Windows x64 optimizing/nterp code and require verified guarantee-aware bounds;
+- Windows x64 nterp and JIT may be product-enabled only under those flags because
   their normal code contains implicit accesses;
 - startup registration failure is fatal for the normal nterp/JIT product, not
   a silent continuation with inconsistent code;
@@ -1924,7 +1924,7 @@ necessary; do not increase it speculatively.
 
 ### Stage 0 — CET shadow-stack exclusion — implemented locally
 
-- Add explicit `/CETCOMPAT:NO` to every project Win64 executable and DLL link
+- Add explicit `/CETCOMPAT:NO` to every project Windows x64 executable and DLL link
   target instead of relying on lld's current default.
 - Inspect every packaged PE, including LLVM libc++, and reject packaging if
   `IMAGE_DLL_CHARACTERISTICS_EX_CET_COMPAT` is present.
@@ -1943,7 +1943,7 @@ necessary; do not increase it speculatively.
 
 Clean completion criteria:
 
-- generated and handwritten Win64 link commands contain `/CETCOMPAT:NO`;
+- generated and handwritten Windows x64 link commands contain `/CETCOMPAT:NO`;
 - packaged PE inspection finds no CET-compatible extended characteristic;
 - an HSP-disabled native process passes the startup guard;
 - compatibility, audit, and strict HSP policies are rejected before managed
@@ -1954,7 +1954,7 @@ Implementation and local evidence (2026-07-27):
 - `GlobalPolicy.add_ldflags` injects `LINKER:/CETCOMPAT:NO` into every
   generated non-static target; static archives intentionally receive no link
   options.
-- Nine handwritten Win64 CMake harnesses and three direct Clang/lld links use
+- Nine handwritten Windows x64 CMake harnesses and three direct Clang/lld links use
   the same explicit option.
 - The base Phase-3 host packager and the focused W-002/W-003/W-004/W-013
   packagers invoke the PE audit before writing their final manifests/archives.
@@ -1978,7 +1978,7 @@ Implementation and local evidence (2026-07-27):
   6 enforced host packagers, and 27 Ninja PE link targets. It inspects 27 PE
   files in the build tree and 58 when the focused W-010/W-014 staged package
   is included, with no CET-compatible marker, including external LLVM
-  `c++.dll`. The selected Win64 build completed 321 steps
+  `c++.dll`. The selected Windows x64 build completed 321 steps
   and `dalvikvm
   -showversion` reports `ART version 2.1.0 x86_64` under Wine.
 - The complete Phase-4 Wine suite passes after the change, including W-002,
@@ -2024,11 +2024,11 @@ Stage A because the build and early-runtime enforcement are now present.
 - **Adjacent lifecycle repair:** runtime teardown removes the diagnostic VEH
   before `art.dll` unload and restores, rather than clobbers, a later host UEF.
 - Stage D enabled the managed-fault product path after Stage A/C prerequisites;
-  E7 subsequently disables Win64 implicit SO and selects explicit checks.
+  E7 subsequently disables Windows x64 implicit SO and selects explicit checks.
 
 Local and returned-native evidence (2026-07-27):
 
-- Win64 `art`, `dalvikvm`, and the focused probe build with `-j32`.
+- Windows x64 `art`, `dalvikvm`, and the focused probe build with `-j32`.
 - Wine reports a 1 MiB default and clamps explicit 64 KiB/256 KiB reservations
   to that default, while native Windows build 19044 returns exact 64 KiB and
   256 KiB reservations. The probe now detects Wine explicitly, records that
@@ -2068,7 +2068,7 @@ the real host, and detach/reattach timing under deep native guard movement.
   violations redirected by a tiny probe-only VEH.
 - The W-002 attached-thread gate now proves detach, continued native stack
   use, reattach, and second detach on the same raw thread in all eight Wine
-  mode/repeat processes. Win64 Hello, the complete Phase-4 Wine suite, the
+  mode/repeat processes. Windows x64 Hello, the complete Phase-4 Wine suite, the
   Linux full rebuild, `dalvikvm -showversion`, and shared-boot imageless Hello
   remain green with the Windows-only state below native-visible TLS offsets.
 
@@ -2085,7 +2085,7 @@ Stage B is complete only as page-state diagnostic infrastructure.
   documented read/write access constants without leaking Windows SDK types to
   common headers.
 - The x86_64 handler reads and writes `CONTEXT.Rip`/`Rsp`/`Rax` in place,
-  preserves the Win64 `R15 == Thread*` managed-self invariant, rejects nested
+  preserves the Windows x64 `R15 == Thread*` managed-self invariant, rejects nested
   dispatch per thread, and requires stack faults to be reads whose exact
   address is inside the recorded protected page.
 - The VEH performs allocation-free exact filtering for continuable access
@@ -2106,13 +2106,13 @@ Stage B is complete only as page-state diagnostic infrastructure.
 
 ### Stage D — managed-fault activation — implemented (2026-07-27)
 
-- Win64 x86_64 enables common implicit null handling while leaving implicit
+- Windows x64 enables common implicit null handling while leaving implicit
   suspend checks off. E7 sets common implicit SO false and selects explicit
-  generated checks for Win64 only.
+  generated checks for Windows x64 only.
 - `FaultManager` retains common handler ordering; E9 stack overflow no longer
   depends on the stack fault classifier.
 - Nterp's immutable code range is registered before startup publishes nterp
-  entrypoints even though Win64 deliberately keeps `CanRuntimeUseNterp()`
+  entrypoints even though Windows x64 deliberately keeps `CanRuntimeUseNterp()`
   false during early initialization. JIT code-cache ranges retain the common
   registration path.
 - E9 requires the main and every later attached thread to have a verified
@@ -2127,7 +2127,7 @@ Stage B is complete only as page-state diagnostic infrastructure.
   caller/recursive methods. Handled faults emit no diagnostic VEH/UEF marker
   and do not change `run/crash/*.dmp`.
 - Unmanaged native AV still reaches fatal diagnostics. The full Phase-4 Wine
-  aggregate, Win64 build, Linux full `art`/`dalvikvm` rebuild,
+  aggregate, Windows x64 build, Linux full `art`/`dalvikvm` rebuild,
   `dalvikvm -showversion`, and shared-boot imageless Hello all pass.
 
 ### Stage E — fatal unwind, native acceptance, and cleanup
@@ -2141,7 +2141,7 @@ Stage B is complete only as page-state diagnostic infrastructure.
   managed-RBP-independent return unwinding, GPR/XMM restore, and the canonical
   return epilogue. The actual dual/J-1 default/switch OSR matrix passes 8/8.
 - **Dynamic compiler/runtime implementation:** the x86_64 assembler serializes
-  version-1 PE unwind bytes independently of DWARF CFI, optimizing Win64 JIT
+  version-1 PE unwind bytes independently of DWARF CFI, optimizing Windows x64 JIT
   methods reserve and force-spill `RBP` then establish it after the fixed
   allocation, normal/FastNative JNI stubs use the same anchor without assigning
   RBP/R15 as scratch, and CriticalNative retains a fixed-RSP descriptor. The
@@ -2151,7 +2151,7 @@ Stage B is complete only as page-state diagnostic infrastructure.
   publication, unregisters before reuse, and clears before teardown. Focused
   J-2/J-1 registry, collection/reuse, and threshold-zero fatal UEF/minidump
   gates pass.
-- **Native package candidate:** `package_win64_w010_w014.sh` stages the coupled
+- **Native package candidate:** `package_windows_x64_w010_w014.sh` stages the coupled
   automated matrix and passes its Linux-side Wine preflight. The PowerShell
   runner requires 30 PASS records, covers static, J-2/J-1 JIT-origin, and
   J-2/J-1 OSR-origin fatal AVs, validates a new `MDMP` for every fatal process,
@@ -2189,7 +2189,7 @@ Stage B is complete only as page-state diagnostic infrastructure.
   context reports module/runtime-function RVAs and terminal progress. Wine's
   first live lookup miss is `ExecuteSwitchImplAsm + 0x9`, where the wrapper's
   saved RBX is misread by leaf fallback. The product repair was held until
-  native confirmation before adding Win64 unwind metadata and the missing MSVC
+  native confirmation before adding Windows x64 unwind metadata and the missing MSVC
   outgoing home area.
 - **Native E4 confirmation:** Windows build 26100 reproduces the local
   `ExecuteSwitchImplAsm + 0x9` lookup miss in both JNI exception shapes. The
@@ -2215,7 +2215,7 @@ Stage B is complete only as page-state diagnostic infrastructure.
   reach VEH/UEF and create valid dumps on build 26100. The runner records
   25/30 PASS rows; only switch/nterp/JIT managed SOE and the two resulting
   handled-fault/dump aggregates fail.
-- **E7 explicit-check implementation:** optimizing Win64 and nterp perform a
+- **E7 explicit-check implementation:** optimizing Windows x64 and nterp perform a
   pre-prologue `RSP < Thread::stack_end_` check and tail-jump through the common
   throw entrypoint. Equality is valid. Linux retains its implicit probe and is
   checked at object level.
@@ -2241,7 +2241,7 @@ Stage B is complete only as page-state diagnostic infrastructure.
 
 ### 13.1 CET/HSP process policy
 
-- Structural link-command check proves every Win64 PE link explicitly includes
+- Structural link-command check proves every Windows x64 PE link explicitly includes
   `/CETCOMPAT:NO`.
 - `llvm-readobj --coff-debug-directory` or an equivalent PE parser proves
   `dalvikvm.exe`, `art.dll`, `sigchain.dll`, LLVM libc++, quick/JIT support
@@ -2294,7 +2294,7 @@ Stage B is complete only as page-state diagnostic infrastructure.
 - Repeated caught overflow, second overflow, mutual recursion, and
   `018-stack-overflow` output parity.
 - GC, JNI, stack walking, and exception stack-trace creation after overflow.
-- Win64 object-level `RSP < Thread::stack_end_` pre-prologue check with equality
+- Windows x64 object-level `RSP < Thread::stack_end_` pre-prologue check with equality
   accepted, plus Linux object-level `RSP - 8192` implicit-probe preservation.
 - Main and pthread guarantees queried, raised/preserved, queried back, and
   excluded-low accounting for prefix + guarantee + moving guard.
@@ -2328,7 +2328,7 @@ Stage B is complete only as page-state diagnostic infrastructure.
 - Linux `018-stack-overflow` and implicit-null tests.
 - Linux generated-code range registration/removal tests.
 - Shared boot.jar byte identity remains unchanged.
-- Win64 nterp/JIT ABI, XMM nonvolatile, JIT dual-view, W-002, W-003, W-004,
+- Windows x64 nterp/JIT ABI, XMM nonvolatile, JIT dual-view, W-002, W-003, W-004,
   W-013, and W-024 acceptance subsets remain green.
 
 ### 13.7 Deterministic host-side tests
@@ -2356,29 +2356,29 @@ and debugger evidence.
 
 | File | Responsibility and current status |
 |------|------------------------|
-| `overlay/port_policy_windows.py`, `tools/bp2cmake`, and Win64 CMake/shell harnesses | Implemented explicit `/CETCOMPAT:NO` on every generated and handwritten executable/DLL target; static archives excluded |
+| `overlay/port_policy_windows.py`, `tools/bp2cmake`, and Windows x64 CMake/shell harnesses | Implemented explicit `/CETCOMPAT:NO` on every generated and handwritten executable/DLL target; static archives excluded |
 | `runtime/multiplatform/windows/cet_compat.{h,cc}` | Implemented process-policy observation and fail-closed decision logic, independently probeable |
 | `runtime/multiplatform/windows/sigchain_windows.cc` | Implemented ART special-SIGSEGV facade, managed VEH handle, promotion/removal, immutable action publication, recursion gate, and exact exception filter |
 | `runtime/multiplatform/windows/runtime_windows.cc` | Implemented earliest CET/HSP policy rejection, separate diagnostic VEH/UEF teardown, and predecessor-preserving fatal UEF chaining |
 | `runtime/multiplatform/windows/fault_handler_windows.cc` | Not required; the Stage C dispatcher remains narrow enough to live in `sigchain_windows.cc` |
 | `runtime/multiplatform/windows/fault_handler_windows.h` | Windows-only non-owning context view and documented AV-kind constants; no common-header Win32 leakage |
-| `runtime/arch/x86/fault_handler_x86.cc` | Win64 non-owning context view and real `CONTEXT` PC/SP/RAX access for AV-based managed faults; fixed-page stack classification is not the E9 product path |
+| `runtime/arch/x86/fault_handler_x86.cc` | Windows x64 non-owning context view and real `CONTEXT` PC/SP/RAX access for AV-based managed faults; fixed-page stack classification is not the E9 product path |
 | `runtime/arch/x86_64/quick_entrypoints_x86_64.S` | Implemented PE unwind records for the two native invoke stubs, generic JNI trampoline, and split OSR entry/return ranges; GenericJNI now records RDI at completed-frame offset `0x1400` from its R12 anchor and passes realistic native-return virtual unwind; OSR uses R12 for the static copy anchor and sets RBP to copied RSP before the JIT handoff; preserves full-width XMM6-XMM15 in Windows-only boundary adapters with completed-frame unwind offsets; native normal-return sentinel and OSR live unwind pass, while repaired fatal dispatch still needs exception-unwind repetition |
-| `compiler/utils/x86_64/win64_unwind_info.h`, `assembler_x86_64.*`, and `compiler/optimizing/code_generator_x86_64.{h,cc}` | Implemented SDK-independent version-1 PE serializer plus Windows-JIT-only forced `RBP` anchor; Linux and non-JIT code paths unchanged |
+| `compiler/utils/x86_64/windows_x64_unwind_info.h`, `assembler_x86_64.*`, and `compiler/optimizing/code_generator_x86_64.{h,cc}` | Implemented SDK-independent version-1 PE serializer plus Windows-JIT-only forced `RBP` anchor; Linux and non-JIT code paths unchanged |
 | `compiler/jni/quick/jni_compiler.*`, calling-convention files, and `compiler/utils/x86_64/jni_macro_assembler_x86_64.*` | Implemented RBP-anchored normal/FastNative JIT stubs, fixed-RSP CriticalNative descriptors, reserved-frame scratch selection, and opaque metadata carry independent of DWARF CFI |
 | `runtime/multiplatform/windows/jit_unwind_windows.{h,cc}` and `runtime/jit/jit_code_cache.*` | Implemented stable one-entry dynamic-function registry, publish-after-register rule, exact deletion, unregister-before-free/reuse, and clear-before-teardown ownership |
 | `runtime/jit/jit_memory_region.*` | Implemented overflow-checked aligned xdata tail in each existing data allocation, written through the RW alias and referenced through the primary low-4-GiB view |
-| `runtime/thread.cc` | Implemented exact current-stack acceptance and attach failure; Win64 performs no fixed-page installation and adjusts common bounds by the platform-reported excluded-low sum |
+| `runtime/thread.cc` | Implemented exact current-stack acceptance and attach failure; Windows x64 performs no fixed-page installation and adjusts common bounds by the platform-reported excluded-low sum |
 | `runtime/multiplatform/windows/stack_windows.{h,cc}` | Read-only E9 layout inspection accounts for inaccessible prefix + configured guarantee + moving guard; Stage-B select/protect/restore helpers remain diagnostic-only |
 | `runtime/multiplatform/windows/thread_windows.cc` | Queries, raises/preserves, re-queries, and validates the four-page minimum guarantee, then supplies guarantee-aware layout accounting; no alternate signal stack |
-| `compiler/optimizing/code_generator_x86_64.cc` and nterp x86_64 assembly | E7 Win64-only explicit pre-prologue stack-end checks; Linux implicit probes remain unchanged and both objects are structurally audited |
+| `compiler/optimizing/code_generator_x86_64.cc` and nterp x86_64 assembly | E7 Windows x64-only explicit pre-prologue stack-end checks; Linux implicit probes remain unchanged and both objects are structurally audited |
 | `runtime/thread_pool.cc` | Implemented no-caller-allocated-stack Windows policy; requested reservation passes through pthread attributes |
 | `compat/include/pthread.h` | Implemented opaque Windows `pthread_t`, numeric-ID helper, and strict attribute contract |
-| `compat/src/win64_posix_stubs.c` | Implemented `_beginthreadex`, handle/result lifetime, join/detach, tagged external identity, exact current-stack bounds, and stack attributes |
-| `runtime/runtime.cc` | Implemented diagnostic handler shutdown, managed null/SO capability activation, Linux-like started-runtime sigchain invariant, early nterp range registration, and Win64 explicit-SO selection |
-| `tools/verify/win64_phase1/check_win32_cet_contract.py` and `win32_cet_policy_probe.cc` | Implemented link/PE audit plus deterministic and actual-policy probe |
-| `tools/verify/win64_phase1/check_win32_boundary_unwind.py`, `win32_osr_unwind_probe.cc`, `tools/verify/win64_phase4/run_osr_unwind_probe.sh`, `run_jit_fatal_unwind.sh`, `run_osr_fatal_unwind.sh`, and `run_crashnative.sh` | Implemented exact emitted boundary-record audit, live split-OSR lookup/virtual-unwind/epilogue gate, static JNI fatal gate, and J-2/J-1 JIT-origin plus OSR-origin fatal gates requiring new valid minidumps |
-| `tools/verify/win64_phase1/win32_thread_stack_probe.c`, `win32_stack_page_probe.cc`, `win32_stack_growth_probe.cc`, `win32_uef_probe.cc`, `win32_stack_page_fault_probe.S`, `win32_fault_record_probe.cc`, `win32_sigchain_probe.cc`, `win32_jit_unwind_info_probe.cc`, `win32_jit_unwind_registry_probe.cc`, and Phase 4 probe scripts | Implemented Stage A reservation/identity/lifetime gate, Stage B synthetic selection/restore/direct-fault gate, native recursive-growth and standalone-UEF diagnostics, Stage C deterministic record/live VEH gate, Stage D nterp/JIT managed-fault stress, and Stage E static OSR, serialization, runtime registry, collection/reuse lifecycle, and threshold-zero fatal-dispatch coverage |
+| `compat/src/windows_x64_posix_stubs.c` | Implemented `_beginthreadex`, handle/result lifetime, join/detach, tagged external identity, exact current-stack bounds, and stack attributes |
+| `runtime/runtime.cc` | Implemented diagnostic handler shutdown, managed null/SO capability activation, Linux-like started-runtime sigchain invariant, early nterp range registration, and Windows x64 explicit-SO selection |
+| `tools/verify/windows_x64_phase1/check_win32_cet_contract.py` and `win32_cet_policy_probe.cc` | Implemented link/PE audit plus deterministic and actual-policy probe |
+| `tools/verify/windows_x64_phase1/check_win32_boundary_unwind.py`, `win32_osr_unwind_probe.cc`, `tools/verify/windows_x64_phase4/run_osr_unwind_probe.sh`, `run_jit_fatal_unwind.sh`, `run_osr_fatal_unwind.sh`, and `run_crashnative.sh` | Implemented exact emitted boundary-record audit, live split-OSR lookup/virtual-unwind/epilogue gate, static JNI fatal gate, and J-2/J-1 JIT-origin plus OSR-origin fatal gates requiring new valid minidumps |
+| `tools/verify/windows_x64_phase1/win32_thread_stack_probe.c`, `win32_stack_page_probe.cc`, `win32_stack_growth_probe.cc`, `win32_uef_probe.cc`, `win32_stack_page_fault_probe.S`, `win32_fault_record_probe.cc`, `win32_sigchain_probe.cc`, `win32_jit_unwind_info_probe.cc`, `win32_jit_unwind_registry_probe.cc`, and Phase 4 probe scripts | Implemented Stage A reservation/identity/lifetime gate, Stage B synthetic selection/restore/direct-fault gate, native recursive-growth and standalone-UEF diagnostics, Stage C deterministic record/live VEH gate, Stage D nterp/JIT managed-fault stress, and Stage E static OSR, serialization, runtime registry, collection/reuse lifecycle, and threshold-zero fatal-dispatch coverage |
 
 The exact split between `sigchain_windows.cc` and
 `fault_handler_windows.cc` is an implementation detail. There must still be
@@ -2425,7 +2425,7 @@ Microsoft contracts:
 - [Vectored exception handling](https://learn.microsoft.com/windows/win32/debug/vectored-exception-handling)
 - [`PVECTORED_EXCEPTION_HANDLER`](https://learn.microsoft.com/windows/win32/api/winnt/nc-winnt-pvectored_exception_handler)
 - [`EXCEPTION_RECORD`](https://learn.microsoft.com/windows/win32/api/winnt/ns-winnt-exception_record)
-- [Win64 `CONTEXT`](https://learn.microsoft.com/windows/win32/api/winnt/ns-winnt-context)
+- [Windows x64 `CONTEXT`](https://learn.microsoft.com/windows/win32/api/winnt/ns-winnt-context)
 - [`SetUnhandledExceptionFilter`](https://learn.microsoft.com/windows/win32/api/errhandlingapi/nf-errhandlingapi-setunhandledexceptionfilter)
 - [`GetCurrentThreadStackLimits`](https://learn.microsoft.com/windows/win32/api/processthreadsapi/nf-processthreadsapi-getcurrentthreadstacklimits)
 - [`IsThreadAFiber`](https://learn.microsoft.com/windows/win32/api/fibersapi/nf-fibersapi-isthreadafiber)

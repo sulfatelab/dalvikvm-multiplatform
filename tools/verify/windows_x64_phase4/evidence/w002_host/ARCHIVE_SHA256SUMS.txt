@@ -1,0 +1,4 @@
+9efa883e1de06fe375d104b7c69be301b11c23c22d8a7e82a75ac27e56b56a4d  issued-windows_x64_w002_host.zip
+2c49fe7161f96e98ae74dcd4e610eee775dfff21234673c902c7d4bf58e5df7e  returned-w002-r2-log.zip
+8aea7af225f154678d50ea7b329ce8574242c2e8cea8c947170c4a58f916bc03  normalized-w002-r2-log.zip
+e48211612ce16c84acca6af1aca3f749b4c88112f99e31d76b0ace2bd519e125  issued-MANIFEST.json

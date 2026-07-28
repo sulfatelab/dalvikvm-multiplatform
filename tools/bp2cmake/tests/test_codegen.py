@@ -116,21 +116,21 @@ def test_windows_asm_defines_config():
 
 
 def test_windows_asm_defines_runtime_layout():
-    win64_env = os.environ.get("WIN64_DEV_ENV")
-    if not (HAVE_ART and HAVE_CLANG and win64_env):
+    windows_x64_env = os.environ.get("WINDOWS_X64_DEV_ENV")
+    if not (HAVE_ART and HAVE_CLANG and windows_x64_env):
         return
     includes = [
-        os.path.join(win64_env, "lib/libcxx/include/c++/v1"),
+        os.path.join(windows_x64_env, "lib/libcxx/include/c++/v1"),
         os.path.join(
             subprocess.check_output(
                 ["clang++", "-print-resource-dir"], text=True
             ).strip(),
             "include",
         ),
-        os.path.join(win64_env, "xwin/sdk/include/ucrt"),
-        os.path.join(win64_env, "xwin/sdk/include/shared"),
-        os.path.join(win64_env, "xwin/sdk/include/um"),
-        os.path.join(win64_env, "xwin/crt/include"),
+        os.path.join(windows_x64_env, "xwin/sdk/include/ucrt"),
+        os.path.join(windows_x64_env, "xwin/sdk/include/shared"),
+        os.path.join(windows_x64_env, "xwin/sdk/include/um"),
+        os.path.join(windows_x64_env, "xwin/crt/include"),
     ]
     if not all(os.path.isdir(path) for path in includes):
         return

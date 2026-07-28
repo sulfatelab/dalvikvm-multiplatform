@@ -1,17 +1,17 @@
 Product tree: **dalvikvm-multiplatform** (nested `vendor/libcore` on `artmp_*`).
 
-# Feasibility: Win64 Path / Filesystem Model for ART + libcore
+# Feasibility: Windows x64 Path / Filesystem Model for ART + libcore
 
-> **Scope:** Path semantics and file I/O for native Win64 ART (PE32+, no WSL).  
-> **Related:** [win64_art_port.md](win64_art_port.md) §4.7.1 (product path mandate), Phase 3 libcore bring-up.  
+> **Scope:** Path semantics and file I/O for native Win32 ART (PE32+, no WSL).  
+> **Related:** [win32_art_port.md](win32_art_port.md) §4.7.1 (product path mandate), Phase 3 libcore bring-up.  
 > **Updated:** 2026-07-25 (rev 6)
 > **Status:** **Option H implemented and accepted.** Wine path/file gates and
 > native Windows G12 pass; Windows NIO.2 remains a non-goal (see
-> `tools/verify/win64_phase3/RESULT.md`).
+> `tools/verify/windows_x64_phase3/RESULT.md`).
 
 ## 0. Why a separate document
 
-Win64 path handling is **not** “one FileSystem class.” libcore and ART open paths through **three loosely coupled layers**. Choosing `UnixFileSystem` vs `WinNTFileSystem` only fixes layer A. Mixed paths (`C:\User\example/some/file`) are a **product mandate** (see win64_art_port §4.7.1) and force a clear design before Phase 3 coding.
+Windows x64 path handling is **not** “one FileSystem class.” libcore and ART open paths through **three loosely coupled layers**. Choosing `UnixFileSystem` vs `WinNTFileSystem` only fixes layer A. Mixed paths (`C:\User\example/some/file`) are a **product mandate** (see win32_art_port §4.7.1) and force a clear design before Phase 3 coding.
 
 This note records:
 
@@ -78,11 +78,11 @@ When a program asks for an absolute or canonical form of a relative path (e.g. `
 | Return | Verdict |
 |--------|---------|
 | `C:\path\to\file.txt` (or current drive + resolved dirs) | **Preferred product form** |
-| `C:/path/to/file.txt` | Acceptable intermediate if FileSystem normalizes; prefer `\` as `file.separator` on Win64 product builds (WinNT-class) |
+| `C:/path/to/file.txt` | Acceptable intermediate if FileSystem normalizes; prefer `\` as `file.separator` on Windows x64 product builds (WinNT-class) |
 | `//?/C:/path/to/file.txt` or `\\?\C:\...` | **Do not return by default** — extended syntax is for kernel long-path edge cases, not app-facing Java paths |
-| `/path/to/file.txt` (POSIX absolute) | **Wrong for Win64 product** — pretends we are still Unix |
+| `/path/to/file.txt` (POSIX absolute) | **Wrong for Windows x64 product** — pretends we are still Unix |
 
-**Rationale:** Win64 ART is a **Win32-platform-aware** runtime. Programs that call `getAbsolutePath()` on Windows generally expect a Windows path. They are **unlikely** to require POSIX absolutes. If ART or libcore mis-handles `C:\…` (e.g. string joins that assume `/`, dalvik-cache name mangling, naive `:` splits), **fix those call sites** — do not paper over them by forcing a Unix path façade forever.
+**Rationale:** Win32 ART is a **Win32-platform-aware** runtime. Programs that call `getAbsolutePath()` on Windows generally expect a Windows path. They are **unlikely** to require POSIX absolutes. If ART or libcore mis-handles `C:\…` (e.g. string joins that assume `/`, dalvik-cache name mangling, naive `:` splits), **fix those call sites** — do not paper over them by forcing a Unix path façade forever.
 
 ### Normalization contract (all of layers A/B/C)
 
@@ -92,9 +92,9 @@ Shared rule before Win32 APIs and for Java path math:
 2. Preserve drive prefix (`X:`) and UNC prefix.
 3. Collapse redundant separators; resolve `.` / `..` for **canonical** (and for absolute resolve against `user.dir`).
 4. Emit **normal Win32 paths** for absolute results: `C:\a\b` style (no `\\?\` unless an explicit long-path API opt-in is added later).
-5. `user.dir` / `java.home` on Win64 product: real Windows directories (`GetCurrentDirectoryW` / install dir), not fake `/` or Linux wine paths in the final product story (wine gates may still see `Z:\…` — that is test env, not the model).
+5. `user.dir` / `java.home` on Windows x64 product: real Windows directories (`GetCurrentDirectoryW` / install dir), not fake `/` or Linux wine paths in the final product story (wine gates may still see `Z:\…` — that is test env, not the model).
 
-### Properties (Win64 product)
+### Properties (Windows x64 product)
 
 | Property | Product value |
 |----------|----------------|
@@ -107,7 +107,7 @@ Shared rule before Win32 APIs and for Java path math:
 
 ### Classpath / bootclasspath list separator — **`;` not `:`**
 
-**Decision:** On Win64 product builds, multi-path lists use **`;`**, same as OpenJDK on Windows.
+**Decision:** On Windows x64 product builds, multi-path lists use **`;`**, same as OpenJDK on Windows.
 
 #### Why `:` is unsafe on WinNT
 
@@ -133,7 +133,7 @@ Using `:` as the list separator on a platform where **absolute paths contain `:`
 
 #### Required tree changes — implemented
 
-| Site | Historical state | Implemented Win64 product |
+| Site | Historical state | Implemented Windows x64 product |
 |------|--------|----------------|
 | `parsed_options.cc` `-cp` help + storage | string as given | document `;`; store raw string |
 | `ParseStringList<':'>` for `-Xbootclasspath`, locations, images | split `:` | **`ParseStringList<';'>`** (or platform constant) under `ART_TARGET_WINDOWS` |
@@ -141,17 +141,17 @@ Using `:` as the list separator on a platform where **absolute paths contain `:`
 | env `BOOTCLASSPATH` / similar | `ParseStringList<':'>` | `;` on Windows |
 | `DexPathList` / `PathClassLoader` | `File.pathSeparator` | **automatic** once FileSystem returns `';` |
 | `java.class.path` property | from runtime | join with `;` on Windows |
-| Phase-2 / Linux scripts | `a.jar:b.jar` | Win64 scripts/docs use `a.jar;b.jar` |
+| Phase-2 / Linux scripts | `a.jar:b.jar` | Windows x64 scripts/docs use `a.jar;b.jar` |
 
 Linux/Android port **keeps** `:`. This is an intentional **OS divergence**, not a unified ART ABI across OSes.
 
 #### Dual-accept (`:` and `;`)?
 
-**Not required for v1.** Optional migration sugar later (e.g. accept `:` only for lists with **no** `X:` drive patterns) is complexity with little benefit if we document `;` clearly. Prefer **strict `;`** on Win64.
+**Not required for v1.** Optional migration sugar later (e.g. accept `:` only for lists with **no** `X:` drive patterns) is complexity with little benefit if we document `;` clearly. Prefer **strict `;`** on Windows x64.
 
 #### Explicit non-goals
 
-- Do not keep `path.separator=:` “for Android compatibility” on Win64 — it fights drive paths.
+- Do not keep `path.separator=:` “for Android compatibility” on Windows x64 — it fights drive paths.
 - Do not return `//?/` paths to dodge list-separator issues.
 
 ### Will apps be “unhappy” with `C:\…` absolutes?
@@ -160,7 +160,7 @@ Linux/Android port **keeps** `:`. This is an intentional **OS divergence**, not 
 
 | Concern | Response |
 |---------|----------|
-| Android code assumes absolute ⟺ starts with `/` | Fix or gate such checks on Win64; File.isAbsolute() must use Win rules |
+| Android code assumes absolute ⟺ starts with `/` | Fix or gate such checks on Windows x64; File.isAbsolute() must use Win rules |
 | `Character.isLetter` used for drive letters | **Broken without ICU** on imageless ART (`isLetter('C')==false`). Use ASCII `isDriveLetter` only |
 | Regex / split on `/` only | Prefer `File` API; fix hot spots when found |
 | ART inserts `/` into Windows abs paths | Fix `file_utils` / image path helpers under `kIsTargetWindows` |
@@ -228,11 +228,11 @@ ART native open does **not** go through `java.io.FileSystem`. Mixed-path support
 
 | Mechanism | Separator today |
 |-----------|-----------------|
-| ART `-cp` / `-Xbootclasspath` parsing | **`:`** hardcoded today (`ParseStringList<':'>`, `Split(..., ':')`) — **must become `;` on Win64** |
+| ART `-cp` / `-Xbootclasspath` parsing | **`:`** hardcoded today (`ParseStringList<':'>`, `Split(..., ':')`) — **must become `;` on Windows x64** |
 | `DexPathList` / `PathClassLoader` | `File.pathSeparator` (Unix today → `:`; **WinNT-class → `;`**) |
 | Path inside one element | `/` and/or `\` after normalize |
 
-**Product rule (Win64):** list separator is **`;`**. See §1.5. Do not use `:` for multi-jar lists on Windows.
+**Product rule (Windows x64):** list separator is **`;`**. See §1.5. Do not use `:` for multi-jar lists on Windows.
 
 ---
 
@@ -302,7 +302,7 @@ If code hits NIO paths, leave Linux-shaped stubs or fail clearly until a later e
 - Host/test code assumes POSIX paths.  
 - `OS::OpenFileWithFlags` ultimately needs a pathname the **Windows CRT or Win32** understands.
 
-For product Win64:
+For product Windows x64:
 
 - Layer C should accept the same mixed/drive paths as layer B (shared normalize helper recommended).  
 - Prefer not to invent a fourth path language for ART-only code.
@@ -348,12 +348,12 @@ No Windows `java.io` FileSystem in vendored Android-16-era libcore. Searching th
 
 ### Selected: **Option H — Hybrid** (locked)
 
-**Adopted** for Win64 ART path/filesystem work:
+**Adopted** for Win32 ART path/filesystem work:
 
 1. **Layer A:** WinNT-class `java.io.FileSystem` (port OpenJDK `WinNTFileSystem` lineage or faithful equivalent).  
 2. **Layer B:** `Linux`/`Os` PE natives with **shared path normalize** (UTF-16, slash unify) before Win32 calls.  
 3. **Layer C:** Same normalize in `OS::Open*` / zip open.  
-4. **List separator:** **`;`** on Win64 (`path.separator` + ART `ParseStringList` / `Split`). Linux keeps `:`. No dual-accept for v1.  
+4. **List separator:** **`;`** on Windows x64 (`path.separator` + ART `ParseStringList` / `Split`). Linux keeps `:`. No dual-accept for v1.  
 5. **NIO.2 Windows provider:** **non-goal for now** (§3.3 / §8.2).  
 6. **Phase-2 Unix stubs:** Keep only until WinNT-class + Os open land; then delete.
 
@@ -384,7 +384,7 @@ Correct for path *syntax*, but streams (IoBridge/Os) and ART jar open still need
 
 | Topic | Rating | Notes |
 |-------|--------|-------|
-| Mixed path mandate | **Required** | Product / win64_art_port §4.7.1 |
+| Mixed path mandate | **Required** | Product / win32_art_port §4.7.1 |
 | Layer A WinNT-class | **Feasible** | OpenJDK source exists; Android refit needed |
 | Layer B Os file ops | **Feasible, large** | Breadth (~file subset of 136 natives), not path math |
 | Layer C ART open | **Feasible** | Smaller surface; share normalize |
@@ -432,7 +432,7 @@ Correct for path *syntax*, but streams (IoBridge/Os) and ART jar open still need
 - **Windows NIO.2** (`sun.nio.fs.WindowsFileSystemProvider` / `WindowsPath` / native dispatcher) — **non-goal for now.**  
   Not a Phase 3 FS deliverable; do not schedule unless product reopens it.  
 - Every `Linux` socket/epoll method (network is a separate track).  
-- Keeping `path.separator=:` on Win64; naïve classpath `Split` on `:`.  
+- Keeping `path.separator=:` on Windows x64; naïve classpath `Split` on `:`.  
 - Wine-only validation as product sign-off (wine = agent01 gate; host Windows for drive/UNC confidence).  
 - Permanent `UnixFileSystem` product façade (Option U rejected).
 
@@ -453,7 +453,7 @@ Correct for path *syntax*, but streams (IoBridge/Os) and ART jar open still need
 
 | Risk | Mitigation |
 |------|------------|
-| Drive letter vs classpath list sep | **Use `;` on Win64**; change ART parsers; do not split on `:` |
+| Drive letter vs classpath list sep | **Use `;` on Windows x64**; change ART parsers; do not split on `:` |
 | UTF-8 vs UTF-16 Windows paths | Always wide APIs (`*W`); convert at boundary |
 | Android BlockGuard / hiddenapi | Keep Java wrappers; only replace FileSystem impl + natives |
 | Dual maintenance Unix + Win FileSystem | Nested `vendor/libcore` ojluni + `multiplatform/windows` mirrors |
@@ -468,7 +468,7 @@ Correct for path *syntax*, but streams (IoBridge/Os) and ART jar open still need
 - Layers: path syntax (A), Os I/O (B), ART open (C), shared normalize.  
 - Mixed/hybrid paths mandatory → WinNT-class layer A (not permanent `UnixFileSystem`).  
 - Absolute resolution → normal Win32 `C:\…` (not POSIX `/…`, not `\\?\` by default); fix ART/libcore if `\` breaks them.  
-- **`path.separator=;` on Win64**; ART boot/classpath parsers must match.  
+- **`path.separator=;` on Windows x64**; ART boot/classpath parsers must match.  
 - Reuse OpenJDK `WinNTFileSystem` for syntax/attrs; implement `Libcore.os` file ops with Win32; share normalize with ART `OS::Open*`.  
 - **Windows NIO.2 provider: non-goal for now.**  
 - **Implementation accepted:** Phase 3 A4/path/file gates pass under Wine and
@@ -476,7 +476,7 @@ Correct for path *syntax*, but streams (IoBridge/Os) and ART jar open still need
 
 ## 12. References (in-tree)
 
-- [win64_art_port.md](win64_art_port.md) — overall port; §4.7 / §4.7.1 path mandate  
+- [win32_art_port.md](win32_art_port.md) — overall port; §4.7 / §4.7.1 path mandate  
 - `vendor/libcore/ojluni/src/main/java/java/io/{File,FileSystem,DefaultFileSystem,UnixFileSystem}.java`  
 - `vendor/libcore/ojluni/src/main/native/UnixFileSystem_md.c`  
 - `vendor/libcore/luni/src/main/java/libcore/io/{IoBridge,Linux,Libcore}.java`  
@@ -484,7 +484,7 @@ Correct for path *syntax*, but streams (IoBridge/Os) and ART jar open still need
 - `vendor/art/libartbase/base/os_linux.cc`, `os.h`, `zip_archive.cc`, `mem_map*.cc`  
 - `vendor/art/runtime/parsed_options.cc`, `runtime.cc` (`Split` classpath)  
 - OpenJDK (external): `src/java.base/windows/classes/java/io/WinNTFileSystem.java`  
-- Phase-2 stubs: `tools/win64/jni_stubs/` (bootstrap only)
+- Phase-2 stubs: `tools/windows_x64/jni_stubs/` (bootstrap only)
 
 ---
 
@@ -494,7 +494,7 @@ letters retained; Windows NIO.2 remains a non-goal.*
 
 ## Appendix — ICU drive-letter pitfall (Phase 3 evidence)
 
-On imageless Win64 ART, unicode property natives are not fully wired:
+On imageless Win32 ART, unicode property natives are not fully wired:
 
 ```text
 Character.isLetter('C') == false
@@ -518,7 +518,7 @@ private static boolean isDriveLetter(char c) {
 }
 ```
 
-Gate: `tools/verify/win64_phase3/run_probe.sh` asserts drive/mixed/UNC absolute + multi-jar `;`.
+Gate: `tools/verify/windows_x64_phase3/run_probe.sh` asserts drive/mixed/UNC absolute + multi-jar `;`.
 
 *Rev 6 — Option H accepted on Wine and native Windows; Windows NIO still
 non-goal.*

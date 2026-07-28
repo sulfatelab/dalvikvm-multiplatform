@@ -3,7 +3,7 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/../../.." && pwd)"
 DALVIKVM="$REPO/build/native/dalvikvm"
-RUN="$REPO/build/win64_phase1/run"
+RUN="$REPO/build/windows_x64_phase1/run"
 JAR="$RUN/gcstressprobe.jar"
 DATA="/tmp/mdvm_linux_w013_data"
 LOG="$(mktemp /tmp/mdvm_linux_w013_gcstress.XXXXXX.log)"

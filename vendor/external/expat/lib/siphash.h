@@ -33,7 +33,7 @@
  *   - Ensure <=80 characters line length (assuming tab width 4)
  *
  * 2017-06-23  (Victor Stinner)
- *   - Address Win64 compile warnings
+ *   - Address Windows x64 compile warnings
  *
  * 2017-06-18  (Sebastian Pipping)
  *   - Clarify license note in the header

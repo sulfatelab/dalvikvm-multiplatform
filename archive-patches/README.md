@@ -35,7 +35,7 @@ runtime behavior is identical; it just stops the terminal overload from being a
 candidate for non-empty calls. After this, `libart.so` and `dalvikvm` build and
 run (ART version 2.1.0 x86_64).
 
-## Win64 Phase 0 (2026-07-16)
+## Windows x64 Phase 0 (2026-07-16)
 
 Temporary edits under MinDalvikVM-Archive for PE builds (re-apply on clean archive checkout):
 
@@ -48,15 +48,15 @@ Vendor art patches (in-tree):
 - `vendor/art/libartbase/base/mem_map.h` / `mem_map.cc` — `#undef ZeroMemory` on `_WIN32`
 - `vendor/art/libartbase/base/unix_file/fd_file.cc` — `FdReadOffset` = `off64_t` on Windows
 
-## Win64 Phase 3 (2026-07-16)
+## Windows x64 Phase 3 (2026-07-16)
 
 Vendor tree is gitignored; durable reapply notes:
 
-- `win64_phase3_classpath_separator.md` — classpath / `path.separator` is `;`
-- `win64_phase3_memmap_low4g_virtualquery.md` — Windows low-4G MemMap VirtualQuery free-region search for LOS
-- `win64_phase3_system_gc_hang_fix.md` — forced `System.gc` hang: ThreadCpuNanoTime + WaitOnAddress timeout
-- `win64_phase3_time_utils.cc` / `win64_phase3_mutex-inl.h` — snapshot sources for reapply
-- `win64_phase3_runtime_memory.md` — Runtime free/total/maxMemory PE+art JVM_* fix
-- `win64_phase3_java_version_version_class.md` — recompile sun.misc.Version for java.version=1.8.0
-- `win64_phase3_poll_select_win10.md` — real Win10 poll EINVAL → select()
-- `win64_phase3_dns_localhost_hang.md` — DnsProbe hang: localhost ::1 vs 127.0.0.1 + missing SO_TIMEOUT
+- `windows_x64_phase3_classpath_separator.md` — classpath / `path.separator` is `;`
+- `windows_x64_phase3_memmap_low4g_virtualquery.md` — Windows low-4G MemMap VirtualQuery free-region search for LOS
+- `windows_x64_phase3_system_gc_hang_fix.md` — forced `System.gc` hang: ThreadCpuNanoTime + WaitOnAddress timeout
+- `windows_x64_phase3_time_utils.cc` / `windows_x64_phase3_mutex-inl.h` — snapshot sources for reapply
+- `windows_x64_phase3_runtime_memory.md` — Runtime free/total/maxMemory PE+art JVM_* fix
+- `windows_x64_phase3_java_version_version_class.md` — recompile sun.misc.Version for java.version=1.8.0
+- `windows_x64_phase3_poll_select_win10.md` — real Win10 poll EINVAL → select()
+- `windows_x64_phase3_dns_localhost_hang.md` — DnsProbe hang: localhost ::1 vs 127.0.0.1 + missing SO_TIMEOUT

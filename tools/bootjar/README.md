@@ -9,7 +9,7 @@ Rebuilds the boot class library from nested **`vendor/libcore`** (android-16 /
 # from repo root (dalvikvm-multiplatform)
 bash tools/bootjar/build.sh       # javac -> /tmp/bootbuild/classes
 bash tools/bootjar/dex.sh         # vendor/r8 -> /tmp/bootbuild/boot.jar
-bash tools/bootjar/build_win64.sh # recompile shared selectors, re-dex, stage for both hosts
+bash tools/bootjar/build_windows_x64.sh # recompile shared selectors, re-dex, stage for both hosts
 ```
 
 Requires:
@@ -26,9 +26,9 @@ needed for product builds.
 
 ## Shared multipath staging
 
-`build_win64.sh` does not create a Windows-only jar. It recompiles the shared
+`build_windows_x64.sh` does not create a Windows-only jar. It recompiles the shared
 runtime-OS selection anchors from nested libcore, then stages identical
-`boot.jar` bytes to the Win64 product run tree and the Linux L-005 run tree.
+`boot.jar` bytes to the Windows x64 product run tree and the Linux L-005 run tree.
 
 The jar contains both `UnixFileSystem` and `WinNTFileSystem`; native ART injects
 `dalvik.vm.multiplatform.internal.os`, and `VMRuntime.isWindowsOs()` selects the
@@ -44,12 +44,12 @@ so `java.lang.Record` remains in boot dex (ART WellKnownClasses).
 
 ```bash
 bash tools/bootjar/build.sh            # or reuse existing /tmp/bootbuild/classes
-bash tools/bootjar/build_win64.sh      # stage the shared multipath jar
-bash tools/bootjar/build_conscrypt_win64.sh
+bash tools/bootjar/build_windows_x64.sh      # stage the shared multipath jar
+bash tools/bootjar/build_conscrypt_windows_x64.sh
 ```
 
 Merges jarjar `com.android.org.conscrypt` into boot classes, embeds
 `java/security/security.properties`, re-dexes, and stages
-`build/win64_phase1/run/boot.jar`. Requires host `g++` + boringssl headers for
+`build/windows_x64_phase1/run/boot.jar`. Requires host `g++` + boringssl headers for
 `NativeConstants`. The resulting jar remains the same shared multipath boot
 format; it adds the conscrypt classes and security resources used by TLS.

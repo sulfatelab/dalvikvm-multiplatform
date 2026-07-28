@@ -1,10 +1,10 @@
 # dalvikvm-multiplatform
 
-ART / Dalvik multiplatform product tree for **GNU/Linux** and **Windows (Win64)**.
+ART / Dalvik multiplatform product tree for **GNU/Linux** and **Win32 on x64**.
 
 This repository is the single entrypoint: a recursive clone yields **all project-controlled
 source dependencies** needed to build and test ART on those hosts. Host toolchains
-(Clang/LLVM, Windows SDK headers via xwin/win64-dev-env, optional Wine for PE gates)
+(Clang/LLVM, Windows SDK headers via xwin/windows_x64-dev-env, optional Wine for PE gates)
 remain machine-local and are documented separately.
 
 ## Clone
@@ -37,7 +37,7 @@ dalvikvm-multiplatform/
   compat/
     include/                  # product POSIX/Win prelude headers (kept on main)
     java-stubs/ openjdk_inc/ src/
-  tools/                      # bp2cmake, bootjar, win64, verify gates
+  tools/                      # bp2cmake, bootjar, windows_x64, verify gates
   overlay/                    # port policies
   *.md                        # project documentation; see Documentation map
   archived/                   # completed migration/design records
@@ -49,7 +49,7 @@ dalvikvm-multiplatform/
 |------------------------|-------------------------|
 | `compat/windows/art/*_windows.cc` | `vendor/art/runtime/multiplatform/windows/` |
 | `openjdkjvm_memory_windows.cc` | `vendor/art/openjdkjvm/` |
-| Win64 build stubs | `vendor/art/multiplatform/windows/` |
+| Windows x64 build stubs | `vendor/art/multiplatform/windows/` |
 | WinNT FileSystem / properties | `vendor/libcore/ojluni/...` + `vendor/libcore/multiplatform/windows/` |
 
 `compat/include` (and product stubs) stay on **main**.
@@ -92,14 +92,14 @@ GitHub naming: `sulfatelab/dalvikvm-multiplatform_<name>` (SSH).
 | `vendor/logging` | `logging` | `artmp_android-16.0.0_r4` |
 | `vendor/unwinding` | `unwinding` | `artmp_android-16.0.0_r4` |
 
-## Supported Win64 toolchain and ABI
+## Supported Windows x64 toolchain and ABI
 
 Windows artifacts are built with this selected toolchain:
 
 - **Compiler driver:** LLVM `clang` / `clang++`.
 - **Linker:** LLVM `lld` / `lld-link`.
 - **Platform headers and import libraries:** Windows SDK and MSVC SDK content,
-  typically provisioned through `xwin` and `win64-dev-env`.
+  typically provisioned through `xwin` and `windows_x64-dev-env`.
 - **C++ standard library/STL:** LLVM `libc++`; LLVM `compiler-rt` supplies
   target runtime support.
 - **Target:** 64-bit PE/COFF using the Microsoft x64 ABI
@@ -115,10 +115,10 @@ compiler/ABI paths are unsupported:
 
 Wine64 is optional for Linux-hosted PE development gates, but native Windows
 evidence is required for product acceptance. See
-[win64_art_port.md](win64_art_port.md) for the complete toolchain and platform
+[win32_art_port.md](win32_art_port.md) for the complete toolchain and platform
 design.
 
-## Win64 process mitigation requirement
+## Windows x64 process mitigation requirement
 
 Current x86_64 ART does not support Windows CET user shadow stacks, exposed by
 Windows as Hardware-enforced Stack Protection. All defined shadow-stack,
@@ -139,14 +139,14 @@ they must not require a sibling MinDalvikVM-Archive tree.
 ## Quick product scripts
 
 ```bash
-# Build classes for the single shared Linux+Win64 multipath boot.jar
+# Build classes for the single shared Linux+Windows x64 multipath boot.jar
 tools/bootjar/build.sh
 
 # Recompile the shared OS-selection anchors, dex, and stage the same jar for both hosts
-tools/bootjar/build_win64.sh
+tools/bootjar/build_windows_x64.sh
 
-# Win64 phase1 CMake (cross from Linux; needs win64-dev-env)
-# tools/verify/win64_phase1/CMakeLists.txt
+# Windows x64 phase1 CMake (cross from Linux; needs windows_x64-dev-env)
+# tools/verify/windows_x64_phase1/CMakeLists.txt
 ```
 
 ## Documentation map
@@ -159,12 +159,12 @@ current-work tracker.
 | Document | Purpose |
 |----------|---------|
 | [bp2cmake_linux_scope.md](bp2cmake_linux_scope.md) | Historical Linux scope, Android.bp-to-CMake converter design, and Linux native/runtime bring-up record |
-| [win64_art_port.md](win64_art_port.md) | Overall native Win64 architecture, toolchain policy, phased implementation record, and current platform position |
+| [win32_art_port.md](win32_art_port.md) | Overall native Windows x64 architecture, toolchain policy, phased implementation record, and current platform position |
 | [win32_filesystem.md](win32_filesystem.md) | Implemented Option H Windows path/filesystem model, mixed-path rules, classpath separator policy, and NIO.2 boundary |
-| [win32_faults_and_stacks.md](win32_faults_and_stacks.md) | Authoritative W-010/W-014 design for Win64 VEH/sigchain adaptation, implicit managed faults, stack bounds/protection, and the required CET-shadow-stack-disabled process contract |
+| [win32_faults_and_stacks.md](win32_faults_and_stacks.md) | Authoritative W-010/W-014 design for Windows x64 VEH/sigchain adaptation, implicit managed faults, stack bounds/protection, and the required CET-shadow-stack-disabled process contract |
 | [win32_heap_memory.md](win32_heap_memory.md) | Closed W-013 design for ART-owned virtual memory, embedded dlmalloc, MoreCore, low-address policy, and native acceptance |
-| [win32_jit_memory.md](win32_jit_memory.md) | Current Win64 JIT memory design, unnamed pagefile-section dual view, historical failure analysis, and W-025 residual work |
-| [win32_libcore_os_natives.md](win32_libcore_os_natives.md) | Current implementation map for Win64 `libcore.io.Linux`/Os natives, including implemented and intentional ENOSYS methods |
+| [win32_jit_memory.md](win32_jit_memory.md) | Current Windows x64 JIT memory design, unnamed pagefile-section dual view, historical failure analysis, and W-025 residual work |
+| [win32_libcore_os_natives.md](win32_libcore_os_natives.md) | Current implementation map for Windows x64 `libcore.io.Linux`/Os natives, including implemented and intentional ENOSYS methods |
 | [win32_open_items.md](win32_open_items.md) | Living authoritative tracker for open workarounds, product gaps, host-validation gaps, non-goals, and closed-item history |
 | [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md) | Implemented x86_64 TLS, managed ABI, quick invoke, nterp, and native/managed JIT contracts; interaction with the separate managed-fault/stack design; notes for other ISAs |
 

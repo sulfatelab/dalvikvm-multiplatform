@@ -1,7 +1,7 @@
 """Build configuration that Layer 1 resolves `arch{}`/`target{}` selects against.
 
 Default remains a glibc Linux host build. Windows is a first-class second OS
-(`os="windows"`) used by the Win64 port (win64_art_port.md Phase 0+).
+(`os="windows"`) used by the Windows x64 port (win32_art_port.md Phase 0+).
 """
 
 from __future__ import annotations
@@ -12,9 +12,9 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class Config:
     # linux_glibc (default) | windows
-    # musl deferred on Unix; windows is the Win64 PE target (x86_64-pc-windows-msvc).
+    # musl deferred on Unix; windows is the Windows x64 PE target (x86_64-pc-windows-msvc).
     os: str = "linux_glibc"
-    arch: str = "x86_64"       # x86_64 | x86 | arm64 | arm  (Win64 port: x86_64 only)
+    arch: str = "x86_64"       # x86_64 | x86 | arm64 | arm  (Windows x64 port: x86_64 only)
     bitness: int = 64           # 64 | 32
     host: bool = True
 

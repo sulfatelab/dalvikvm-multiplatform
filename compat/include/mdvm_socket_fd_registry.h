@@ -1,4 +1,4 @@
-/* Explicit socket ownership for Win64 CRT file descriptors.
+/* Explicit socket ownership for Windows x64 CRT file descriptors.
  *
  * Winsock SOCKET values and Win32 HANDLE values occupy independent namespaces.
  * A regular CRT fd's _get_osfhandle() value can therefore be numerically equal

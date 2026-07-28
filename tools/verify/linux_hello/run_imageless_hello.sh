@@ -4,7 +4,7 @@
 # Runs Hello.main against the converter-built host dalvikvm using imageless
 # boot.jar interpretation (-Ximage:/nonexistent-no-boot-image, -Xint).
 #
-# Linux and Win64 use the same shared multipath boot.jar bytes. The ELF runtime
+# Linux and Windows x64 use the same shared multipath boot.jar bytes. The ELF runtime
 # must select UnixFileSystem from a jar that also carries WinNTFileSystem and
 # the VMRuntime runtime-OS selector.
 #
@@ -62,7 +62,7 @@ if [[ -n "$BOOT_JAR" ]]; then
 else
   BOOT_JAR=""
   for cand in \
-      "$ROOT/build/win64_phase1/run/boot.jar" \
+      "$ROOT/build/windows_x64_phase1/run/boot.jar" \
       /tmp/vm/run/boot.jar \
       "$OUT_DIR/boot.jar" \
       "$ROOT/dist/linux_hello/boot.jar"; do
@@ -74,14 +74,14 @@ else
 fi
 if [[ -z "${BOOT_JAR:-}" ]]; then
   echo "ERROR: no shared multipath product boot.jar found." >&2
-  echo "  Build/stage the single Linux+Win64 jar with tools/bootjar/build_win64.sh." >&2
+  echo "  Build/stage the single Linux+Windows x64 jar with tools/bootjar/build_windows_x64.sh." >&2
   exit 2
 fi
 
 HELLO_JAR="${MDVM_HELLO:-}"
 if [[ -z "$HELLO_JAR" ]]; then
   HELLO_JAR="$(pick_first \
-    "$ROOT/build/win64_phase1/run/hello.jar" \
+    "$ROOT/build/windows_x64_phase1/run/hello.jar" \
     /tmp/vm/run/hello.jar || true)"
 fi
 
@@ -109,7 +109,7 @@ fi
 
 if [[ ! -f "$RUN_DIR/icu/icudt72l.dat" ]]; then
   for cand in \
-      "$ROOT/build/win64_phase1/run/icu/icudt72l.dat" \
+      "$ROOT/build/windows_x64_phase1/run/icu/icudt72l.dat" \
       "$ROOT/vendor/icu/icu4c/source/stubdata/icudt72l.dat" \
       /tmp/vm/run/icu/icudt72l.dat; do
     if [[ -f "$cand" ]]; then
@@ -173,7 +173,7 @@ if grep -q 'Hello from dalvikvm!' "$LOG" && grep -q '^exit=0$' "$LOG"; then
     echo
     echo "- \`dalvikvm -showversion\` prints ART version"
     echo "- Imageless \`-Xint\` Hello.main prints \`Hello from dalvikvm!\` and exits 0"
-    echo "- boot.jar is the shared Linux+Win64 multipath artifact; ELF selected UnixFileSystem"
+    echo "- boot.jar is the shared Linux+Windows x64 multipath artifact; ELF selected UnixFileSystem"
     echo
     echo "## Artifacts"
     echo

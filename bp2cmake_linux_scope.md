@@ -110,7 +110,7 @@ LD_LIBRARY_PATH=build/native build/native/dalvikvm -showversion
   generated.
 
 Subsequent project work completed the Java side, moved the maintained source
-graph to nested `vendor/` repositories, and established one shared Linux/Win64
+graph to nested `vendor/` repositories, and established one shared Linux/Windows x64
 boot.jar. Current platform debt is tracked in
 [win32_open_items.md](win32_open_items.md), not in this historical milestone
 list.

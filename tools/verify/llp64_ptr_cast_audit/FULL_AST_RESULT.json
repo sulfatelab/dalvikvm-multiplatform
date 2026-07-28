@@ -7,7 +7,7 @@
   "all_hits": [],
   "parse_fail_count": 0,
   "dbs": [
-    "build/win64_phase1",
-    "build/win64_libcore_icu"
+    "build/windows_x64_phase1",
+    "build/windows_x64_libcore_icu"
   ]
 }

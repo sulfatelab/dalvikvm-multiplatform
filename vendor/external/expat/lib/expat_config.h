@@ -1,4 +1,4 @@
-/* Minimal multipath config for static libexpat (Win64 PE + Linux host). */
+/* Minimal multipath config for static libexpat (Windows x64 PE + Linux host). */
 #ifndef EXPAT_CONFIG_H
 #define EXPAT_CONFIG_H
 #define BYTEORDER 1234

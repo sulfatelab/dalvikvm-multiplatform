@@ -2,7 +2,7 @@
 """Full AST LLP64 pointer/jlong cast scan for Windows compile_commands.
 
 Uses libclang to walk every TU in one or more compile_commands.json databases
-and report conversions that are unsafe on Win64 LLP64 (long is 32-bit):
+and report conversions that are unsafe on Windows x64 LLP64 (long is 32-bit):
 
   pointer <-> long / unsigned long
   jlong/long long <-> long / unsigned long  (address-width related)
@@ -10,7 +10,7 @@ and report conversions that are unsafe on Win64 LLP64 (long is 32-bit):
 
 Usage:
   /tmp/llp64_ast_venv/bin/python tools/verify/llp64_ptr_cast_audit/scan_ast_full.py \
-      build/win64_phase1 build/win64_libcore_icu \
+      build/windows_x64_phase1 build/windows_x64_libcore_icu \
       --jobs 32 --out tools/verify/llp64_ptr_cast_audit/FULL_AST_RESULT.md
 """
 from __future__ import annotations

@@ -6,9 +6,9 @@
 #   clang-query (LLVM 18+)
 #
 # Usage:
-#   tools/verify/llp64_ptr_cast_audit/scan_ast.sh build/win64_libcore_icu [file ...]
+#   tools/verify/llp64_ptr_cast_audit/scan_ast.sh build/windows_x64_libcore_icu [file ...]
 set -euo pipefail
-DB="${1:?compile_commands directory (e.g. build/win64_libcore_icu)}"
+DB="${1:?compile_commands directory (e.g. build/windows_x64_libcore_icu)}"
 shift || true
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 cd "$ROOT"
@@ -25,8 +25,8 @@ if [[ $# -eq 0 ]]; then
     vendor/libcore/ojluni/src/main/native/MappedByteBuffer.c \
     vendor/libcore/ojluni/src/main/native/IOUtil.c \
     vendor/libcore/luni/src/main/native/libcore_io_Memory.cpp \
-    tools/win64/jni_stubs/win_fs_natives.c \
-    tools/verify/win64_libcore_icu/openjdkjvm_memory_standalone.c
+    tools/windows_x64/jni_stubs/win_fs_natives.c \
+    tools/verify/windows_x64_libcore_icu/openjdkjvm_memory_standalone.c
 fi
 
 echo "clang-query via -p $DB"

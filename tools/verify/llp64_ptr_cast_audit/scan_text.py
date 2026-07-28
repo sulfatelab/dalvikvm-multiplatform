@@ -20,8 +20,8 @@ from pathlib import Path
 DEFAULT_ROOTS = [
     "vendor/libcore",
     "vendor/art",
-    "tools/win64",
-    "tools/verify/win64_libcore_icu",
+    "tools/windows_x64",
+    "tools/verify/windows_x64_libcore_icu",
     "compat",
 ]
 EXTS = {".c", ".cc", ".cpp", ".h", ".hpp"}

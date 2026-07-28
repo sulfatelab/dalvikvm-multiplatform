@@ -1,17 +1,17 @@
 # LLP64 pointer/jlong cast audit — RESULT
 
 **Date:** 2026-07-17 22:56:00  
-**Scope:** **full Windows build path** (all TUs in Win64 compile DBs), not only libcore  
+**Scope:** **full Windows build path** (all TUs in Windows x64 compile DBs), not only libcore  
 **Compile DBs:**
-- `build/win64_phase1/compile_commands.json` (ART / phase1)
-- `build/win64_libcore_icu/compile_commands.json` (libcore / ICU / openjdk natives)
+- `build/windows_x64_phase1/compile_commands.json` (ART / phase1)
+- `build/windows_x64_libcore_icu/compile_commands.json` (libcore / ICU / openjdk natives)
 **Union TUs scanned:** **1426**  
-**Motivation:** Win64 LLP64 `long` is 32-bit; W-020 was `(jlong)(unsigned long)mapAddress`.
+**Motivation:** Windows x64 LLP64 `long` is 32-bit; W-020 was `(jlong)(unsigned long)mapAddress`.
 
 ## Method
 
 1. **Text scanner** `scan_text.py` — high-precision patterns for pointer/`jlong` ↔ `long`/`unsigned long` under product trees.
-2. **Full frontend scan** `scan_compile_db_warnings.py` — LibTooling-class re-run of every Win64 `compile_commands` TU with:
+2. **Full frontend scan** `scan_compile_db_warnings.py` — LibTooling-class re-run of every Windows x64 `compile_commands` TU with:
    - triple/flags from the real compile DB (`x86_64-pc-windows-msvc`)
    - `-fsyntax-only -Wvoid-pointer-to-int-cast -Wint-to-void-pointer-cast`
    - Clang only warns when the integer type is **smaller than a pointer** → catches LLP64 `long`/`unsigned long` traps.
@@ -34,7 +34,7 @@ Artifacts:
 - `tools/verify/llp64_ptr_cast_audit/FULL_AST_RESULT.md`
 - `tools/verify/llp64_ptr_cast_audit/FULL_AST_RESULT.json`
 
-**Conclusion:** No product-path `void*` ↔ smaller-integer casts remain on the full Win64 compile graph.
+**Conclusion:** No product-path `void*` ↔ smaller-integer casts remain on the full Windows x64 compile graph.
 
 ## Findings
 
@@ -43,7 +43,7 @@ Artifacts:
 | Item | Status |
 |------|--------|
 | W-020 `FileChannelImpl_map0` | Already fixed: `return ptr_to_jlong(mapAddress)` |
-| Stock `ojluni/jlong_md.h` non-`_LP64` branch used `(int)` for ptr | **Hardened** to `_WIN64`/`x86_64`/… + `uintptr_t` |
+| Stock `ojluni/jlong_md.h` non-`_LP64` branch used `(int)` for ptr | **Hardened** to `_M_X64`/`x86_64`/… + `uintptr_t` |
 | Multipath `jlong_md.h` | Confirmed `uintptr_t`; documentation comment refreshed |
 
 ### Text scan (post-fix)
@@ -79,19 +79,19 @@ python3 tools/verify/llp64_ptr_cast_audit/scan_text.py
 # Full Windows compile-graph frontend scan (recommended)
 # Prefer jobs=16 on this host; jobs=32 OOM'd previously.
 python3 -u tools/verify/llp64_ptr_cast_audit/scan_compile_db_warnings.py \
-  build/win64_phase1 build/win64_libcore_icu \
+  build/windows_x64_phase1 build/windows_x64_libcore_icu \
   --jobs 16 \
   --out tools/verify/llp64_ptr_cast_audit/FULL_AST_RESULT.md \
   --json-out tools/verify/llp64_ptr_cast_audit/FULL_AST_RESULT.json
 
 # Optional clang-query (noisy):
-source $WIN64_DEV_ENV/env.sh
-cmake -S tools/verify/win64_libcore_icu -B build/win64_libcore_icu -G Ninja \
-  -DCMAKE_TOOLCHAIN_FILE=$WIN64_CMAKE_TOOLCHAIN -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-tools/verify/llp64_ptr_cast_audit/scan_ast.sh build/win64_libcore_icu
+source $WINDOWS_X64_DEV_ENV/env.sh
+cmake -S tools/verify/windows_x64_libcore_icu -B build/windows_x64_libcore_icu -G Ninja \
+  -DCMAKE_TOOLCHAIN_FILE=$WINDOWS_X64_CMAKE_TOOLCHAIN -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+tools/verify/llp64_ptr_cast_audit/scan_ast.sh build/windows_x64_libcore_icu
 ```
 
 ## Recommended project rule
 
-**Never** convert pointer/`jlong` addresses through `long`/`unsigned long` on Win64.  
+**Never** convert pointer/`jlong` addresses through `long`/`unsigned long` on Windows x64.  
 Always use `uintptr_t` / `ptr_to_jlong` / `jlong_to_ptr` / `LONG_PTR`/`UINT_PTR` as appropriate.

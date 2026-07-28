@@ -13,7 +13,7 @@ One command —
 git clone --recursive git@github.com:sulfatelab/dalvikvm-multiplatform.git
 ```
 
-— must yield **everything required to build and test ART for GNU/Linux and Windows** (all nested source repos: ART, libcore, ICU, BoringSSL/OpenSSL stack deps, libbase, ziparchive, unwind, etc.). No second manual hunt for MinDalvikVM-Archive trees. Host toolchains (system Clang/apt packages, optional Wine for Linux-hosted PE gates, Windows SDK via documented env such as win64-dev-env/xwin) may still be installed on the machine, but **all project-controlled source dependencies ship as nested repos under main**.
+— must yield **everything required to build and test ART for GNU/Linux and Windows** (all nested source repos: ART, libcore, ICU, BoringSSL/OpenSSL stack deps, libbase, ziparchive, unwind, etc.). No second manual hunt for MinDalvikVM-Archive trees. Host toolchains (system Clang/apt packages, optional Wine for Linux-hosted PE gates, Windows SDK via documented env such as windows_x64-dev-env/xwin) may still be installed on the machine, but **all project-controlled source dependencies ship as nested repos under main**.
 
 ---
 
@@ -110,7 +110,7 @@ The model (named `artmp_*` branches on nested AOSP-derived repos + main repo rec
 | `compat/windows/libcore/*` | Nested **libcore** `artmp_*` (**locked fold**) | WinNT FS / properties owned with libcore multipath branch |
 | `compat/include/*` | **Main** (**locked keep**) | Toolchain/POSIX shims for multiplatform product build |
 | `compat/src`, `java-stubs`, `openjdk_inc` | **Main** (default) | Product-only glue unless later absorbed |
-| PE `tools/win64/jni_stubs/*` | **Main** | PE stand-ins, not AOSP modules |
+| PE `tools/windows_x64/jni_stubs/*` | **Main** | PE stand-ins, not AOSP modules |
 | `tools/`, `overlay/`, verify gates, docs | **Main** | Multiplatform product |
 
 ---
@@ -155,7 +155,7 @@ Same branch name on each nested repo aids the mental model. Document **base pin*
 9. You create GitHub repos (main + one per nested name)
 10. Codex: set remotes/upstreams (when asked)
 11. You: push **all nested**, then main
-12. Smoke: `clone --recursive` on clean machine + Linux e2e + Win64 package/wine gates
+12. Smoke: `clone --recursive` on clean machine + Linux e2e + Windows x64 package/wine gates
 ```
 
 ---
@@ -185,7 +185,7 @@ cd vendor/art   # or copy-aside worktree
 # unshallow if needed
 git switch -c artmp_android-16.0.0_r4   # from android-16.0.0_r4 / 1690c69
 # stage intentional deltas only
-git commit -m "artmp: Win64/multiplatform deltas on android-16.0.0_r4"
+git commit -m "artmp: Windows x64/multiplatform deltas on android-16.0.0_r4"
 ```
 
 **Conflict:** committing inside `dalvikvm-linux/vendor/*` mutates the live build tree.  
@@ -220,7 +220,7 @@ dalvikvm-multiplatform/
 |---------|--------|
 | Size | `art` ~125M, `libcore` ~136M — fine for local copy |
 | Nested remotes after copy | Still googlesource until step 7 |
-| Build graph | Full build may still need MinDalvikVM-Archive / win64-dev-env for system deps |
+| Build graph | Full build may still need MinDalvikVM-Archive / windows_x64-dev-env for system deps |
 
 
 ### Step 4 — Copy docs and scripts from dalvikvm-linux
@@ -229,8 +229,8 @@ dalvikvm-multiplatform/
 
 **Copy (yes)**
 
-- Docs: `../win64_art_port.md`, `../win32_filesystem.md`, `../bp2cmake_linux_scope.md`, `archive-patches/` (historical notes), this plan  
-- Product: `compat/include/` (**keep**), other non-folded `compat/*` if any, `overlay/`, `tools/` (bp2cmake, bootjar, win64, verify), useful `native/` recipes  
+- Docs: `../win32_art_port.md`, `../win32_filesystem.md`, `../bp2cmake_linux_scope.md`, `archive-patches/` (historical notes), this plan  
+- Product: `compat/include/` (**keep**), other non-folded `compat/*` if any, `overlay/`, `tools/` (bp2cmake, bootjar, windows_x64, verify), useful `native/` recipes  
 - **Do not** keep `compat/windows/art` or `compat/windows/libcore` as long-term main overlays after fold (sources live in nested artmp)  
 - New `.gitignore` that does **not** blanket-ignore nested vendor pins  
 
@@ -415,7 +415,7 @@ Even “clean” deps get the branch (or a pin branch with zero delta) so remote
 These are **host/toolchain** (document in README), not nested AOSP git:
 
 - System packages: CMake, Ninja, Clang/LLD, Java, Python, Wine (optional Linux PE gates)
-- Windows cross kit: e.g. `win64-dev-env` / xwin SDK headers+libs, libc++ for Windows (may remain a documented bootstrap script that downloads/builds into a local env dir, **or** optionally a separate tool repo later)
+- Windows cross kit: e.g. `windows_x64-dev-env` / xwin SDK headers+libs, libc++ for Windows (may remain a documented bootstrap script that downloads/builds into a local env dir, **or** optionally a separate tool repo later)
 - Build output dirs (`build/`, `dist/`)
 
 If the project later wants zero external bootstrap, that is a **follow-on** (toolchain bootstrap repo); it is not required to satisfy “all AOSP/source deps in recursive clone.”
@@ -450,7 +450,7 @@ Expect **~15–20** submodule entries for a complete graph (not 2). Generation c
 - [ ] README states: `git clone --recursive` → full Linux+Windows ART source graph  
 - [ ] No reliance on `archive-patches` as **apply steps** for ART (docs only)  
 - [ ] Ready for you to push **all nested**, then main, when GitHub + SSH ready  
-- [ ] Optional smoke: fresh recursive clone configures/builds on Linux and produces Win64 PE package  
+- [ ] Optional smoke: fresh recursive clone configures/builds on Linux and produces Windows x64 PE package  
 
 ---
 
@@ -547,7 +547,7 @@ When ready to execute, say **execute**.
 | Copy product docs/tools/`compat/include` (omit folded windows overlays) | Done |
 | `.gitmodules` for all nested paths | Done |
 | README + `.gitignore` (no blanket `vendor/` ignore) | Done |
-| Path rewires for folded art/libcore | Done (bootjar + win64 phase1 CMake) |
+| Path rewires for folded art/libcore | Done (bootjar + windows_x64 phase1 CMake) |
 | Main first commit with 20 gitlinks | Done |
 | Create GitHub repos | **You** |
 | Set remotes / push | **You** (SSH); Codex only when asked |

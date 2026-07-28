@@ -26,7 +26,7 @@
 | **Total tracked natives** | **126** |
 
 The Windows product also uses one explicit process-wide socket-fd registry
-(`compat/src/win64_socket_fd_registry.c`) shared across `libjavacore`,
+(`compat/src/windows_x64_socket_fd_registry.c`) shared across `libjavacore`,
 `libopenjdk`, NIO, JVM I/O, dup/close, and socket creation. This replaces the
 unsafe HANDLE/SOCKET numeric-probing heuristic. The native W-013 R2 HandleLeak
 gate passes 400 file cycles and 80 socket cycles without handle growth or fd

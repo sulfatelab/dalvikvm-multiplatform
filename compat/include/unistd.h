@@ -1,4 +1,4 @@
-/* Project-owned: Win64 shim; on other OS forward to system. */
+/* Project-owned: Windows x64 shim; on other OS forward to system. */
 #pragma once
 #if defined(_WIN32)
 /* fdlibm may #define HUGE; UCRT math.h declares `extern double HUGE`. */
@@ -98,7 +98,7 @@ typedef long long off64_t;
 int fsync(int fd);
 int fdatasync(int fd);
 long long lseek64(int fd, long long off, int whence);
-/* ftruncate provided by win64_posix_stubs.c — declare without colliding macros */
+/* ftruncate provided by windows_x64_posix_stubs.c — declare without colliding macros */
 int mdvm_ftruncate(int fd, long long length);
 int open64(const char* path, int flags, ...);
 ssize_t pread64(int fd, void* buf, size_t count, long long offset);

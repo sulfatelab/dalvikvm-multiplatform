@@ -1,4 +1,4 @@
-# LLP64 pointer / jlong cast audit (Win64)
+# LLP64 pointer / jlong cast audit (Windows x64)
 
 ## Why
 
@@ -13,7 +13,7 @@ Any conversion of a **pointer** (or full `jlong` address) through `long` /
 `unsigned long` drops the high half. That was **W-020**:
 
 ```c
-// BAD (truncated on Win64)
+// BAD (truncated on Windows x64)
 return (jlong)(unsigned long)mapAddress;
 
 // GOOD
@@ -25,9 +25,9 @@ return ptr_to_jlong(mapAddress);  // via uintptr_t
 1. **`FileChannelImpl_map0`** returns `ptr_to_jlong(mapAddress)` (W-020 closed).
 2. Hybrid openjdk CMake puts **`vendor/libcore/multiplatform/windows/native`**
    first on the include path (`jlong_md.h` with `uintptr_t`).
-3. Openjdk C flags include **`-D_LP64=1`** even on Win64 so AOSP `#ifdef _LP64`
+3. Openjdk C flags include **`-D_LP64=1`** even on Windows x64 so AOSP `#ifdef _LP64`
    branches take the wide-pointer path if multipath headers are missed.
-4. Stock `ojluni/.../jlong_md.h` is hardened to treat `_WIN64` / x86_64 / arm64
+4. Stock `ojluni/.../jlong_md.h` is hardened to treat `_M_X64` / x86_64 / arm64
    as wide-pointer ABIs (not only `_LP64`).
 
 ## How to search
@@ -51,12 +51,12 @@ Looks for:
 
 ```bash
 python3 -u tools/verify/llp64_ptr_cast_audit/scan_compile_db_warnings.py \
-  build/win64_phase1 build/win64_libcore_icu --jobs 16 \
+  build/windows_x64_phase1 build/windows_x64_libcore_icu --jobs 16 \
   --out tools/verify/llp64_ptr_cast_audit/FULL_AST_RESULT.md \
   --json-out tools/verify/llp64_ptr_cast_audit/FULL_AST_RESULT.json
 ```
 
-Uses the real Win64 compile flags and Clang's size model (`long` is 32-bit on
+Uses the real Windows x64 compile flags and Clang's size model (`long` is 32-bit on
 `x86_64-pc-windows-msvc`). Prefer **jobs=16** on agent01; jobs=32 previously OOM'd.
 
 ### 2) AST via compile_commands + clang-query
@@ -64,21 +64,21 @@ Uses the real Win64 compile flags and Clang's size model (`long` is 32-bit on
 Generate compile DB:
 
 ```bash
-source $WIN64_DEV_ENV/env.sh
-cmake -S tools/verify/win64_libcore_icu -B build/win64_libcore_icu -G Ninja \
-  -DCMAKE_TOOLCHAIN_FILE=$WIN64_CMAKE_TOOLCHAIN \
+source $WINDOWS_X64_DEV_ENV/env.sh
+cmake -S tools/verify/windows_x64_libcore_icu -B build/windows_x64_libcore_icu -G Ninja \
+  -DCMAKE_TOOLCHAIN_FILE=$WINDOWS_X64_CMAKE_TOOLCHAIN \
   -DCMAKE_BUILD_TYPE=RelWithDebInfo \
   -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 # optional ART DB:
-cmake -S tools/verify/win64_phase1 -B build/win64_phase1 -G Ninja \
-  -DCMAKE_TOOLCHAIN_FILE=$WIN64_CMAKE_TOOLCHAIN \
+cmake -S tools/verify/windows_x64_phase1 -B build/windows_x64_phase1 -G Ninja \
+  -DCMAKE_TOOLCHAIN_FILE=$WINDOWS_X64_CMAKE_TOOLCHAIN \
   -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 ```
 
 Run:
 
 ```bash
-tools/verify/llp64_ptr_cast_audit/scan_ast.sh build/win64_libcore_icu
+tools/verify/llp64_ptr_cast_audit/scan_ast.sh build/windows_x64_libcore_icu
 ```
 
 Matchers (clang-query):

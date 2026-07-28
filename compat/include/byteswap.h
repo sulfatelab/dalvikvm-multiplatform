@@ -1,4 +1,4 @@
-/* Win64 compat: glibc byteswap.h */
+/* Windows x64 compat: glibc byteswap.h */
 #pragma once
 #include <stdint.h>
 #ifdef _MSC_VER

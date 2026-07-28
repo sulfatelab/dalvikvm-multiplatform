@@ -73,7 +73,7 @@ class CodegenConfig:
     # Default remains Linux for host/native builds.
     asm_target_os: str = "linux"
     # System include directories for a cross-target asm_defines compile.
-    # Win64 callers supply libc++, UCRT, SDK, and CRT headers from the selected
+    # Windows x64 callers supply libc++, UCRT, SDK, and CRT headers from the selected
     # toolchain so clang can use the Windows ABI while running on Linux.
     asm_target_include_dirs: list[str] = field(default_factory=list)
     # Defines for the asm_defines compile: the art.go-injected knobs (absent
@@ -218,7 +218,7 @@ def _asm_defines_macros_for(cfg: CodegenConfig) -> list[str]:
     """Return asm_defines macros adjusted for cfg.asm_target_os."""
     macros = list(cfg.asm_defines_macros)
     os_name = (cfg.asm_target_os or "linux").lower()
-    if os_name in ("windows", "win32", "win64", "pe"):
+    if os_name in ("windows", "win32", "windows_x64", "pe"):
         # PE layout: drop ART_TARGET_LINUX, force ART_TARGET_WINDOWS/_WIN32.
         macros = [m for m in macros if m != "ART_TARGET_LINUX" and not m.startswith("ART_TARGET_LINUX=")]
         for extra in ("ART_TARGET_WINDOWS", "_WIN32", "WIN32", "WIN32_LEAN_AND_MEAN", "NOMINMAX", "NOGDI"):
@@ -253,11 +253,11 @@ def gen_asm_defines(cfg: CodegenConfig) -> str:
     # PE target: use the Windows ABI and the same force-included compatibility
     # prelude as the real ART build before standard-library headers are parsed.
     os_name = (cfg.asm_target_os or "linux").lower()
-    if os_name in ("windows", "win32", "win64", "pe"):
+    if os_name in ("windows", "win32", "windows_x64", "pe"):
         cmd += ["--target=x86_64-pc-windows-msvc", "-nostdinc++"]
         for inc in cfg.asm_target_include_dirs:
             cmd += ["-isystem", inc]
-        cmd += ["-include", os.path.join(cfg.compat_inc(), "mdvm_win64_prelude.h")]
+        cmd += ["-include", os.path.join(cfg.compat_inc(), "mdvm_windows_x64_prelude.h")]
     for m in _asm_defines_macros_for(cfg):
         cmd += ["-D" + m]
     for fi in cfg.asm_force_includes:

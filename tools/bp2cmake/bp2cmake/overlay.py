@@ -119,7 +119,7 @@ class GlobalPolicy:
     drop_ldflags_containing: list[str] = field(default_factory=list)
     # Link options injected into every non-static target. This is used for
     # target-OS contracts that must not depend on linker defaults, such as the
-    # Win64 ART CET-shadow-stack exclusion marker.
+    # Win32 ART CET-shadow-stack exclusion marker.
     add_ldflags: list[str] = field(default_factory=list)
 
     strip_lib_prefix: bool = True

@@ -1,13 +1,13 @@
 # Full Windows AST LLP64 cast audit (compile_commands + clang frontend)
 
-- Method: **LibTooling-class** re-run of each Win64 `compile_commands` TU with
+- Method: **LibTooling-class** re-run of each Windows x64 `compile_commands` TU with
   `-fsyntax-only -Wvoid-pointer-to-int-cast -Wint-to-void-pointer-cast`
   (Clang only warns when integer is smaller than pointer — LLP64 `long` trap).
 - TUs: **1426**
 - Elapsed: 560.8s
 - Hits (repo vendor/tools/compat/native only): **0**
 - Worker failures: 0
-- DBs: build/win64_phase1, build/win64_libcore_icu
+- DBs: build/windows_x64_phase1, build/windows_x64_libcore_icu
 
 ## Findings
 

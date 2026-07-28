@@ -2,7 +2,7 @@
 """Full Windows-path LLP64 scan via compile_commands + clang frontend warnings.
 
 This is the practical LibTooling-class approach without writing a custom binary:
-for every TU in the Win64 compile DBs, re-run the same flags with
+for every TU in the Windows x64 compile DBs, re-run the same flags with
   -fsyntax-only
   -Wvoid-pointer-to-int-cast
   -Wint-to-void-pointer-cast
@@ -13,7 +13,7 @@ type is *smaller* than a pointer — exactly the LLP64 long/unsigned long trap.
 
 Usage:
   python3 tools/verify/llp64_ptr_cast_audit/scan_compile_db_warnings.py \
-    build/win64_phase1 build/win64_libcore_icu --jobs 32 \
+    build/windows_x64_phase1 build/windows_x64_libcore_icu --jobs 32 \
     --out tools/verify/llp64_ptr_cast_audit/FULL_AST_RESULT.md
 """
 from __future__ import annotations
@@ -198,7 +198,7 @@ def main() -> int:
 
     lines = []
     lines.append("# Full Windows AST LLP64 cast audit (compile_commands + clang frontend)\n")
-    lines.append(f"- Method: **LibTooling-class** re-run of each Win64 `compile_commands` TU with")
+    lines.append(f"- Method: **LibTooling-class** re-run of each Windows x64 `compile_commands` TU with")
     lines.append(f"  `-fsyntax-only -Wvoid-pointer-to-int-cast -Wint-to-void-pointer-cast`")
     lines.append(f"  (Clang only warns when integer is smaller than pointer — LLP64 `long` trap).")
     lines.append(f"- TUs: **{len(items)}**")

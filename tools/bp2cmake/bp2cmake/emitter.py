@@ -158,7 +158,7 @@ class Emitter:
         srcs = self._module_files(m)
         if pol.absorb_whole_static:
             # whole_static_libs are inlined transitively. Apply each absorbed
-            # module's overlay source edits so e.g. Win64 can drop
+            # module's overlay source edits so e.g. Windows x64 can drop
             # monitor_linux.cc from libart-runtime when folding into libart.
             for dep in self._absorbed_modules(m):
                 from .overlay import apply_module_policy

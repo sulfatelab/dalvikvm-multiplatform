@@ -3,7 +3,7 @@
 **Status:** **CLOSED** as D-001 — single shared boot.jar goal met (property inject + `VMRuntime.isWindowsOs` + dual FS + separators); name/values **LOCKED** (§11)  
 **Date:** 2026-07-17  
 **Decision context:** multipath will use **runtime selection** so Linux ART and Windows ART can share one `boot.jar` (instead of build-time WinNT overlay only).  
-**Related:** L-005 (Linux Hello rejects WinNT boot), Option H WinNT FS, `../win32_filesystem.md`, `tools/bootjar/build_win64.sh`
+**Related:** L-005 (Linux Hello rejects WinNT boot), Option H WinNT FS, `../win32_filesystem.md`, `tools/bootjar/build_windows_x64.sh`
 
 ---
 
@@ -65,7 +65,7 @@ That is incompatible with a shared jar unless those three stop being uncondition
 Win product stub:
 
 ```c
-// tools/win64/jni_stubs/libcore_hello3.c — makeUtsname
+// tools/windows_x64/jni_stubs/libcore_hello3.c — makeUtsname
 sysname = "Windows"
 ```
 
@@ -396,7 +396,7 @@ Gates:
 
 1. Introduce `OsDetection` (Java) + `isWindowsNative` (JNI) in libcore multipath.  
 2. Change `DefaultFileSystem.getFileSystem()` to runtime branch; ship **both** FS classes always.  
-3. Stop overlay-only WinNT-as-Default in `build_win64.sh` (or make overlay a no-op).  
+3. Stop overlay-only WinNT-as-Default in `build_windows_x64.sh` (or make overlay a no-op).  
 4. Move separators/line.separator out of unconditional hardcodes; set from `OsDetection`.  
 5. Produce **one** `boot.jar`; point Linux gate + Win stage scripts at it.  
 6. Close dual-boot special cases in packaging docs / L-005 comments.
@@ -487,7 +487,7 @@ Use a **closed lowercase enum**:
 
 | Value | Meaning | Selects |
 |-------|---------|---------|
-| **`windows`** | Win32/Win64 PE product (including wine guest) | `WinNTFileSystem`, `\`, `;`, `\r\n` |
+| **`windows`** | Win32 PE product on x64 (including wine guest) | `WinNTFileSystem`, `\`, `;`, `\r\n` |
 | **`unix`** | ELF host / POSIX-like multipath (Linux CI, future *BSD if any) | `UnixFileSystem`, `/`, `:`, `\n` |
 
 **Why `unix` not `linux`:**
@@ -500,7 +500,7 @@ Use a **closed lowercase enum**:
 
 **Forbidden / reserved for later (do not invent ad hoc):**
 
-- `win`, `win32`, `win64` — fold into `windows`
+- `win`, `win32`, `windows_x64` — fold into `windows`
 - `linux`, `android` — not OS-family for FS selection
 - empty / missing — treat as “unset”, fall through to native probe then default `unix`
 
@@ -580,7 +580,7 @@ Landed 2026-07-17:
 | Detection ladder | `VMRuntime.properties()` → System props / `os.name` → default `unix` |
 | `DefaultFileSystem` | runtime branch via `VMRuntime.isWindowsOs()` |
 | Separators | removed from hardcodes; set in `System.initUnchangeableSystemProperties` via `VMRuntime.isWindowsOsFromProperties` |
-| Boot packaging | `tools/bootjar/build_win64.sh` no longer applies WinNT-only overlay; stages shared jar |
+| Boot packaging | `tools/bootjar/build_windows_x64.sh` no longer applies WinNT-only overlay; stages shared jar |
 | L-005 | accepts shared jar (Unix + optional WinNT with multipath helpers) |
 
 Still out of scope: NIO.2 `DefaultFileSystemProvider` Windows path.

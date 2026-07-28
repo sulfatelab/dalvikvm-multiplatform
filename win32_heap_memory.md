@@ -1,11 +1,11 @@
-# Win64 heap memory and embedded dlmalloc design — W-013
+# Windows x64 heap memory and embedded dlmalloc design — W-013
 
 **Status:** CLOSED — Stages A–E and native Windows R2 acceptance PASS
 **Updated:** 2026-07-25
 **Target baseline:** Windows 10 version 1803 or later (NTDDI_WIN10_RS4)
 **Related:** [win32_open_items.md](win32_open_items.md) W-013,
 [win32_jit_memory.md](win32_jit_memory.md), and
-[win64_art_port.md](win64_art_port.md) §9c
+[win32_art_port.md](win32_art_port.md) §9c
 
 ## 0. Executive decision
 
@@ -45,7 +45,7 @@ manual hole scan with explicit `VirtualAlloc2` constraints, and added shared
 whole-allocation ownership for Windows `MemMap` ranges. Stage D then routed
 heap activation, deactivation, and discard through those owning mappings on
 both Windows and Linux. Stage E restored Linux-like placement for metadata
-arenas, LinearAlloc, and the card table, and removed the Win64-only card-mark
+arenas, LinearAlloc, and the card table, and removed the Windows x64-only card-mark
 skip. Native Windows R2 completed the closure matrix on 2026-07-25.
 
 ## 1. Goals and invariants
@@ -365,7 +365,7 @@ The Stage E audit produced these outcomes:
 | ordinary `arena_pool_` and `jit_arena_pool_` | anywhere | verifier/compiler/JIT native metadata has no compressed-reference representation |
 | ordinary LinearAlloc | anywhere | 64-bit runtime `ArtMethod`, field, IMT, and dex-cache metadata uses pointer-size-aware storage; only the existing AOT cross-compilation case retains the upstream low pool |
 | card table | anywhere | x86-64 card marking loads the full biased pointer from `Thread` and adds a 64-bit shifted object address; the table does not need to share the heap's address range |
-| space bitmaps, read-barrier tables, allocation-info maps, reference tables, stacks, and temporary buffers | anywhere | these call sites were already unrestricted; Stage E found no Win64 blanket-low branch to remove |
+| space bitmaps, read-barrier tables, allocation-info maps, reference tables, stacks, and temporary buffers | anywhere | these call sites were already unrestricted; Stage E found no Windows x64 blanket-low branch to remove |
 
 The removed Phase-2 policy forced `arena_pool_`, `jit_arena_pool_`,
 `linear_alloc_arena_pool_`, and the card table below 4 GiB. Stage E also
@@ -406,15 +406,15 @@ state its encoding or exact-address reason.
 
 Landed as external dlmalloc `f3356ce` and ART `8c900a9e4b`. Verification:
 
-- focused Win64 allocator probe: page 4096, granularity 4096, eight break
+- focused Windows x64 allocator probe: page 4096, granularity 4096, eight break
   queries, four positive growth calls, two negative trims, one injected owner
   failure, regrowth, recovery, and `ENOMEM` behavior;
-- Win64 `art.dll` and `dalvikvm.exe` rebuild;
-- Win64 JIT smoke 12/12 under Wine;
+- Windows x64 `art.dll` and `dalvikvm.exe` rebuild;
+- Windows x64 JIT smoke 12/12 under Wine;
 - full Linux `art`/`dalvikvm` rebuild; and
 - Linux imageless Hello PASS.
 
-Evidence: `tools/verify/win64_w013/RESULT.md`.
+Evidence: `tools/verify/windows_x64_w013/RESULT.md`.
 
 ### Stage B — attach mspaces to their owners
 
@@ -430,9 +430,9 @@ Evidence: `tools/verify/win64_w013/RESULT.md`.
 The source gate now rejects raw `create_mspace*()` calls outside
 `art-dlmalloc.cc` and rejects restoration of the global owner-discovery path.
 Landed as ART `d011d72d56`.
-Verification covered the Win64 ART/dalvikvm build, JIT smoke 12/12, GCStress,
+Verification covered the Win32 ART/dalvikvm build, JIT smoke 12/12, GCStress,
 ThreadHeavy, HandleLeak, the Linux ART/dalvikvm build, and Linux imageless
-Hello. Evidence: `tools/verify/win64_w013/RESULT.md`.
+Hello. Evidence: `tools/verify/windows_x64_w013/RESULT.md`.
 
 ### Stage C — correct Windows anonymous mapping policy
 
@@ -454,10 +454,10 @@ focused Wine probe covers anywhere/low/exact placement, exact collision, zero
 and overflowing requests, the 4-GiB boundary, 2-MiB alignment, 3,854-way
 low-VA fragmentation, complete low-VA exhaustion without a high fallback,
 recovery, reservation transfer, reuse-view lifetime, logical shrink,
-exactly-once whole release, and 128 repeated owner-destruction cycles. Win64
+exactly-once whole release, and 128 repeated owner-destruction cycles. Windows x64
 JIT smoke 12/12, GCStress, ThreadHeavy, HandleLeak, the Linux `-j16` build, and
 Linux imageless Hello also pass. Evidence:
-`tools/verify/win64_w013/RESULT.md`.
+`tools/verify/windows_x64_w013/RESULT.md`.
 
 Stage C intentionally does not emulate fixed file-view replacement over an
 ordinary `VirtualAlloc` reservation. Windows cannot perform that operation
@@ -485,15 +485,15 @@ matrix rather than introducing lazy commitment in this stage.
 The focused Wine probe performs 32 discard/deactivate/activate cycles,
 including discard while `PAGE_NOACCESS`, verifies adjacent-page contents and
 protections, and checks that logical shrink leaves its excluded tail
-`PAGE_NOACCESS`. Win64 JIT smoke 12/12, GCStress, ThreadHeavy, HandleLeak, the
+`PAGE_NOACCESS`. Windows x64 JIT smoke 12/12, GCStress, ThreadHeavy, HandleLeak, the
 Linux `-j16` build, Linux imageless Hello, and Linux GCStress pass. Evidence:
-`tools/verify/win64_w013/RESULT.md`.
+`tools/verify/windows_x64_w013/RESULT.md`.
 
 ### Stage E — reduce low-address use
 
 **Completed:** 2026-07-25
 
-1. Inventory every `low_4gb=true` call site and every Win64-only forced-low
+1. Inventory every `low_4gb=true` call site and every Windows x64-only forced-low
    branch.
 2. Classify the exact encoding/reference constraint.
 3. Remove low placement from metadata and native storage when unneeded.
@@ -508,13 +508,13 @@ same Phase-2 pattern around the allocation-time class write barrier;
 ART `1509b1f95e` removes its range-check/log/skip branch and restores the common
 unconditional barrier there as well.
 
-`tools/verify/win64_w013/run_low_4gb_policy_probe.sh` rejects the old forced-low
+`tools/verify/windows_x64_w013/run_low_4gb_policy_probe.sh` rejects the old forced-low
 branches, rejects both Windows-specific write-barrier shortcuts, and pins the
 remaining required-low source inventory. The product non-moving probe churns
-75,497,472 bytes of sub-LOS arrays on both Win64/Wine and Linux with stable low
-addresses and post-GC regrowth. Win64 `-j16` build, JIT smoke 12/12, GCStress,
+75,497,472 bytes of sub-LOS arrays on both Windows x64/Wine and Linux with stable low
+addresses and post-GC regrowth. Windows x64 `-j16` build, JIT smoke 12/12, GCStress,
 ThreadHeavy, HandleLeak, Linux `-j16` build, imageless Hello, and Linux
-GCStress pass. Evidence: `tools/verify/win64_w013/RESULT.md`.
+GCStress pass. Evidence: `tools/verify/windows_x64_w013/RESULT.md`.
 
 Stages A through E implement the W-013 design. Native Windows R2 passes
 pressure, commit-charge, protection/extent, and repeated-start acceptance.
@@ -570,14 +570,14 @@ pressure, commit-charge, protection/extent, and repeated-start acceptance.
   fragmentation.
 
 The focused native package used for closure is generated by
-`tools/win64/host_package/package_win64_w013.sh`. Its PowerShell runner records
+`tools/windows_x64/host_package/package_windows_x64_w013.sh`. Its PowerShell runner records
 the native mapping/config/owner probes, including fragmented and exhausted low
 VA; non-moving pressure at 128-MiB and 1-GiB `-Xmx`; moving/LOS GC stress;
 ThreadHeavy and HandleLeak; 512-MiB and 1-GiB heap startup memory metrics;
 default dual-view and J-1 JIT smoke plus the fourteen-case JIT matrix; twenty
 repeated default-JIT starts; host memory/pagefile data; fatal-log scanning; and
 a recursive dump scan. See
-`tools/verify/win64_w013/W013_HOST_CHECKLIST.md`.
+`tools/verify/windows_x64_w013/W013_HOST_CHECKLIST.md`.
 
 ### 10.4 Cross-platform regression
 
@@ -610,7 +610,7 @@ W-013 was eligible to move to CLOSED only when all of the following became true:
 All eight conditions are satisfied by the recorded Wine/Linux gates and native
 Windows R2 evidence. No macro-masking, blanket forced-low metadata, or
 skipped-card workaround remains in the product path. Acceptance details are in
-`tools/verify/win64_w013/evidence/native_r2/ACCEPTANCE.md`.
+`tools/verify/windows_x64_w013/evidence/native_r2/ACCEPTANCE.md`.
 
 ## 12. Code anchors
 
