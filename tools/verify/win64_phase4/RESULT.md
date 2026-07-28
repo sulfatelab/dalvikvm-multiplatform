@@ -1,6 +1,6 @@
 # Win64 Phase 4 — RESULT
 
-**Status:** **WINE COMPLETE; FOCUSED NATIVE SUBSETS ACCEPTED; W-010/W-014 REPAIR ACTIVE** — W-002, W-003, W-004, and W-024 native matrices are accepted. Native E5 on Windows Server 2025 build 26100 verifies the `ExecuteSwitchImplAsm` frame repair and moves the first live unwind miss to `art_quick_to_interpreter_bridge + 0x82`. Fatal UEF dispatch and the independent managed-SOE redesign remain open.
+**Status:** **WINE COMPLETE; FOCUSED NATIVE SUBSETS ACCEPTED; W-010/W-014 REPAIR ACTIVE** — W-002, W-003, W-004, and W-024 native matrices are accepted. Native E5 verifies the switch-wrapper repair and moves the first live miss to `art_quick_to_interpreter_bridge + 0x82`. Local E6 adds distinct records for its 200-byte primary and 88-byte pending frames and passes the complete Wine aggregate; native E6 and the independent managed-SOE redesign remain open.
 **Date:** 2026-07-28
 **Depends on:** Phase 3 complete (real Win10 G12 goldens)
 
@@ -27,6 +27,7 @@
 | W-010 static OSR/invoke lookup and virtual unwind | **PASS** | `run_osr_unwind_probe.sh` (R12-anchored variable RSP entry, explicit RBP JIT handoff, managed-clobbered RBP return, GPR plus XMM6-XMM15 restore, invoke records, epilogue) |
 | W-010 GenericJNI native-return virtual unwind | **PASS** | same probe: captured `+0xc5` return, variable native RSP, 5120-byte R12 anchor, repaired RDI `offset=0x1400`, caller RIP/RSP and all nonvolatile GPRs |
 | W-010 switch-wrapper unwind | **PASS on native build 26100** | E5: live `ExecuteSwitchImplAsm + 0xd` lookup succeeds after the Windows-only RBX/home-area/unwind repair |
+| W-010 interpreter-bridge unwind | **PASS under Wine; native pending** | E6: two records; entry, `+0x82`, restore, normal/tail epilogues, and 88-byte pending body virtually unwind |
 | W-003 attributed frame families | **PASS, 8/8** | `run_w003_frame_probe.sh` |
 | W-003 historical XMM6-XMM11 / W-010 full XMM6-XMM15 sentinel | **PASS, 6/6** | `run_w003_xmm_sentinel.sh` (`selfTestMask=63`, `fullSelfTestMask=1023`) |
 | W-002 OSR matrix | **PASS, 8/8** | `run_w002_osr_probe.sh` |
@@ -210,6 +211,17 @@ bundle SHA-256 is
 `1a58bb0f318eae82882ea1bd0e5b0fa403202d02ae95a889b07a1e7b3524b3d9`;
 see `evidence/w010_w014_e5/DIAGNOSIS.md`.
 
+Local E6 repairs the new boundary without changing the ART frame contract. The
+primary record describes the existing 200-byte save-refs-and-args frame;
+fixed-offset restores end in canonical normal and pending tail-jump epilogues.
+The pending target has its own contiguous record for the existing 88-byte
+save-all frame. The static audit requires both ranges, and the live probe
+reports `interpreter_bridge_records=2`, call return `0x82`, pending offset
+`0x140`, and frame sizes 200/88 after unwinding entry, body, restore,
+epilogues, and pending body. The complete Wine aggregate, W-003 frame/XMM
+matrices, Linux rebuild/showversion/imageless Hello, and unchanged Linux bridge
+disassembly pass.
+
 ## Non-goals
 
 - Windows NIO.2
@@ -218,9 +230,9 @@ see `evidence/w010_w014_e5/DIAGNOSIS.md`.
 
 ## Next
 
-- Add range-accurate Win64 unwind descriptions and live probes for the primary
-  200-byte frame and post-frame pending-exception tail in
-  `art_quick_to_interpreter_bridge`, then issue and run native E6.
+- Generate the exact-commit E6 package and run it on native Windows. Require
+  live lookup at `art_quick_to_interpreter_bridge + 0x82`; if a later first
+  miss remains, diagnose that exact frame before another metadata change.
   Design a replacement Windows SOE delivery mechanism that
   does not rely on retaining a fixed no-access page inside the system stack.
   Then repeat the repaired SOE and static/JIT/OSR

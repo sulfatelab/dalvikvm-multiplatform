@@ -149,7 +149,10 @@ def main() -> int:
             "entry_frame_offset=0 return_prologue=0 fixed_frame=248 "
             "xmm_count=10 invoke_records=2 generic_jni_records=1 "
             "generic_jni_native_return=0xc5 switch_impl_records=1 "
-            "switch_impl_call_return=0xd variable_rsp_delta=256",
+            "switch_impl_call_return=0xd interpreter_bridge_records=2 "
+            "interpreter_bridge_call_return=0x82 interpreter_bridge_pending=0x140 "
+            "interpreter_bridge_frame=200 interpreter_bridge_pending_frame=88 "
+            "variable_rsp_delta=256",
             "win32_osr_unwind_probe OK",
         ),
     )

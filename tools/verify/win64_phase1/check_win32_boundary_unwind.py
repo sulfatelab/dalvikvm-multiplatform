@@ -75,6 +75,17 @@ BOUNDARIES = {
         "PUSH_NONVOL reg=RBX",
         "SAVE_NONVOL reg=RDI, offset=0x1400",
     ),
+    "art_quick_to_interpreter_bridge": (
+        "FrameRegister: -",
+        "ALLOC_SMALL size=112",
+        "PUSH_NONVOL reg=RSI",
+        "PUSH_NONVOL reg=RBP",
+        "PUSH_NONVOL reg=RBX",
+        "PUSH_NONVOL reg=R12",
+        "PUSH_NONVOL reg=R13",
+        "PUSH_NONVOL reg=R14",
+        "PUSH_NONVOL reg=R15",
+    ),
 }
 
 
@@ -214,6 +225,43 @@ def main() -> int:
                 for marker in return_required:
                     if marker not in return_record:
                         errors.append(f"art_quick_osr_return: missing {marker}")
+
+        bridge_address = base + rvas["art_quick_to_interpreter_bridge"]
+        bridge_record = records.get(bridge_address, "")
+        if bridge_record.count("ALLOC_SMALL size=8") != 4:
+            errors.append(
+                "art_quick_to_interpreter_bridge: expected four volatile push slots"
+            )
+        bridge_end_match = re.search(
+            r"EndAddress:\s*\((0x[0-9A-Fa-f]+)\)", bridge_record
+        )
+        if bridge_end_match is None:
+            errors.append("art_quick_to_interpreter_bridge: missing end address")
+        else:
+            pending_address = int(bridge_end_match.group(1), 16)
+            pending_record = unwind_records(readobj, dll, {pending_address}).get(
+                pending_address
+            )
+            if pending_record is None:
+                errors.append(
+                    "art_quick_to_interpreter_bridge: missing contiguous pending range"
+                )
+            else:
+                pending_required = (
+                    "FrameRegister: -",
+                    "ALLOC_SMALL size=40",
+                    "PUSH_NONVOL reg=RBX",
+                    "PUSH_NONVOL reg=RBP",
+                    "PUSH_NONVOL reg=R12",
+                    "PUSH_NONVOL reg=R13",
+                    "PUSH_NONVOL reg=R14",
+                    "PUSH_NONVOL reg=R15",
+                )
+                for marker in pending_required:
+                    if marker not in pending_record:
+                        errors.append(
+                            f"art_quick_to_interpreter_pending: missing {marker}"
+                        )
         if errors:
             print("Win64 boundary unwind audit failed:", file=sys.stderr)
             for error in errors:

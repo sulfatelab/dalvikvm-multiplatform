@@ -409,6 +409,244 @@ size_t TestExecuteSwitchImplUnwind(HMODULE art) {
   return call_return_offset;
 }
 
+struct InterpreterBridgeUnwindResult {
+  size_t call_return_offset;
+  size_t pending_offset;
+};
+
+InterpreterBridgeUnwindResult TestInterpreterBridgeUnwind(HMODULE art) {
+  constexpr const char* kSymbol = "art_quick_to_interpreter_bridge";
+  auto* entry = reinterpret_cast<uint8_t*>(GetProcAddress(art, kSymbol));
+  ExpectForSymbol(entry != nullptr, kSymbol, "export resolves");
+  if (entry == nullptr) {
+    return {};
+  }
+
+  DWORD64 image_base = 0u;
+  PRUNTIME_FUNCTION function =
+      RtlLookupFunctionEntry(reinterpret_cast<DWORD64>(entry), &image_base, nullptr);
+  ExpectForSymbol(function != nullptr, kSymbol, "primary runtime-function record resolves");
+  if (function == nullptr) {
+    return {};
+  }
+  auto* function_begin = reinterpret_cast<uint8_t*>(image_base + function->BeginAddress);
+  auto* function_end = reinterpret_cast<uint8_t*>(image_base + function->EndAddress);
+  ExpectForSymbol(function_begin == entry, kSymbol, "primary range starts at export");
+  ExpectForSymbol(function_end > function_begin, kSymbol, "primary range is nonempty");
+
+  const uint8_t* unwind = reinterpret_cast<const uint8_t*>(image_base + function->UnwindData);
+  ExpectForSymbol((unwind[0] & 0x7u) == 1u, kSymbol, "primary unwind info uses version 1");
+  ExpectForSymbol(unwind[1] == 21u, kSymbol, "primary prologue covers the 200-byte frame");
+  ExpectForSymbol((unwind[3] & 0x0fu) == 0u, kSymbol, "primary frame is RSP-based");
+
+  constexpr size_t kCallReturnOffset = 0x82u;
+  uint8_t* call_return = entry + kCallReturnOffset;
+  constexpr uint8_t kPostCallRestore[] = {
+      0xf3u, 0x0fu, 0x7eu, 0x44u, 0x24u, 0x10u,  // movq 16(%rsp), %xmm0
+  };
+  ExpectForSymbol(call_return[-5] == 0xe8u, kSymbol, "captured call is direct rel32");
+  ExpectForSymbol(std::memcmp(call_return, kPostCallRestore, sizeof(kPostCallRestore)) == 0,
+                  kSymbol,
+                  "captured +0x82 return starts the restore sequence");
+
+  constexpr uint8_t kFixedRestore[] = {
+      0x48u, 0x8bu, 0x4cu, 0x24u, 0x70u,  // mov 112(%rsp), %rcx
+  };
+  uint8_t* fixed_restore = FindBytes(function_begin, function_end, kFixedRestore);
+  ExpectForSymbol(fixed_restore != nullptr, kSymbol, "fixed-offset GPR restore is found");
+
+  constexpr uint8_t kNormalEpilogue[] = {
+      0x48u, 0x81u, 0xc4u, 0xc8u, 0x00u, 0x00u, 0x00u,  // add rsp, 200
+      0xc3u,                                              // ret
+  };
+  uint8_t* normal_epilogue = FindBytes(function_begin, function_end, kNormalEpilogue);
+  ExpectForSymbol(normal_epilogue != nullptr, kSymbol, "normal canonical epilogue is found");
+
+  constexpr uint8_t kPendingEpilogue[] = {
+      0x48u, 0x81u, 0xc4u, 0xc8u, 0x00u, 0x00u, 0x00u,  // add rsp, 200
+      0xebu, 0x00u,                                       // jmp pending range
+  };
+  uint8_t* pending_epilogue = FindBytes(function_begin, function_end, kPendingEpilogue);
+  ExpectForSymbol(pending_epilogue != nullptr, kSymbol, "pending tail epilogue is found");
+
+  DWORD64 pending_image_base = 0u;
+  PRUNTIME_FUNCTION pending_function = RtlLookupFunctionEntry(
+      reinterpret_cast<DWORD64>(function_end), &pending_image_base, nullptr);
+  ExpectForSymbol(pending_function != nullptr, kSymbol, "pending runtime-function record resolves");
+  ExpectForSymbol(pending_function != function, kSymbol, "pending range has a distinct record");
+  ExpectForSymbol(pending_image_base == image_base, kSymbol, "pending range belongs to art.dll");
+  if (pending_function == nullptr) {
+    return {kCallReturnOffset, static_cast<size_t>(function_end - entry)};
+  }
+  auto* pending_begin =
+      reinterpret_cast<uint8_t*>(pending_image_base + pending_function->BeginAddress);
+  auto* pending_end =
+      reinterpret_cast<uint8_t*>(pending_image_base + pending_function->EndAddress);
+  const size_t pending_offset = static_cast<size_t>(pending_begin - entry);
+  ExpectForSymbol(pending_begin == function_end, kSymbol, "pending range is contiguous");
+  ExpectForSymbol(pending_offset == 0x140u, kSymbol, "pending range starts at expected offset");
+  ExpectForSymbol(pending_end > pending_begin, kSymbol, "pending range is nonempty");
+  const uint8_t* pending_unwind =
+      reinterpret_cast<const uint8_t*>(pending_image_base + pending_function->UnwindData);
+  ExpectForSymbol((pending_unwind[0] & 0x7u) == 1u,
+                  kSymbol,
+                  "pending unwind info uses version 1");
+  ExpectForSymbol(pending_unwind[1] == 21u,
+                  kSymbol,
+                  "pending prologue covers the 88-byte frame");
+  ExpectForSymbol((pending_unwind[3] & 0x0fu) == 0u,
+                  kSymbol,
+                  "pending frame is RSP-based");
+
+  SYSTEM_INFO system_info = {};
+  GetSystemInfo(&system_info);
+  VirtualStack stack(system_info.dwPageSize);
+  ExpectForSymbol(stack.address != nullptr, kSymbol, "synthetic stack allocation succeeds");
+  if (stack.address == nullptr || fixed_restore == nullptr || normal_epilogue == nullptr ||
+      pending_epilogue == nullptr) {
+    return {kCallReturnOffset, pending_offset};
+  }
+
+  uintptr_t entry_rsp = reinterpret_cast<uintptr_t>(stack.address + system_info.dwPageSize - 512u);
+  entry_rsp = (entry_rsp & ~uintptr_t{15u}) + 8u;
+  constexpr uintptr_t kPrimaryFrameSize = 200u;
+  constexpr uintptr_t kPendingFrameSize = 88u;
+  const uintptr_t primary_rsp = entry_rsp - kPrimaryFrameSize;
+  const uintptr_t pending_rsp = entry_rsp - kPendingFrameSize;
+
+  constexpr uint64_t kReturnAddress = UINT64_C(0x56789abcdef01234);
+  constexpr uint64_t kRbp = UINT64_C(0x1020304050607080);
+  constexpr uint64_t kRsi = UINT64_C(0x1122334455667788);
+  constexpr uint64_t kRbx = UINT64_C(0x2233445566778899);
+  constexpr uint64_t kR12 = UINT64_C(0x33445566778899aa);
+  constexpr uint64_t kR13 = UINT64_C(0x445566778899aabb);
+  constexpr uint64_t kR14 = UINT64_C(0x5566778899aabbcc);
+  constexpr uint64_t kR15 = UINT64_C(0x66778899aabbccdd);
+
+  *reinterpret_cast<uint64_t*>(entry_rsp) = kReturnAddress;
+  *reinterpret_cast<uint64_t*>(primary_rsp + 128u) = kRbx;
+  *reinterpret_cast<uint64_t*>(primary_rsp + 136u) = kRbp;
+  *reinterpret_cast<uint64_t*>(primary_rsp + 144u) = kRsi;
+  *reinterpret_cast<uint64_t*>(primary_rsp + 168u) = kR12;
+  *reinterpret_cast<uint64_t*>(primary_rsp + 176u) = kR13;
+  *reinterpret_cast<uint64_t*>(primary_rsp + 184u) = kR14;
+  *reinterpret_cast<uint64_t*>(primary_rsp + 192u) = kR15;
+
+  auto expect_caller = [&](const CONTEXT& context, const char* point) {
+    ExpectForSymbol(context.Rip == kReturnAddress, kSymbol, point);
+    ExpectForSymbol(context.Rsp == entry_rsp + 8u, kSymbol, "restores caller RSP");
+    ExpectForSymbol(context.Rbp == kRbp && context.Rsi == kRsi && context.Rbx == kRbx &&
+                        context.R12 == kR12 && context.R13 == kR13 && context.R14 == kR14 &&
+                        context.R15 == kR15,
+                    kSymbol,
+                    "restores primary nonvolatile GPRs");
+  };
+  auto unwind_primary = [&](uint8_t* pc, const char* point) {
+    CONTEXT context = {};
+    context.ContextFlags = CONTEXT_FULL;
+    context.Rip = reinterpret_cast<DWORD64>(pc);
+    context.Rsp = primary_rsp;
+    context.Rbp = context.Rsi = context.Rbx = context.R12 = context.R13 = context.R14 =
+        context.R15 = UINT64_C(0xcccccccccccccccc);
+    PVOID handler_data = nullptr;
+    DWORD64 establisher_frame = 0u;
+    RtlVirtualUnwind(UNW_FLAG_NHANDLER,
+                     image_base,
+                     context.Rip,
+                     function,
+                     &context,
+                     &handler_data,
+                     &establisher_frame,
+                     nullptr);
+    expect_caller(context, point);
+  };
+  unwind_primary(call_return, "call-return unwind restores return address");
+  unwind_primary(fixed_restore, "fixed-restore unwind restores return address");
+
+  CONTEXT entry_context = {};
+  entry_context.ContextFlags = CONTEXT_FULL;
+  entry_context.Rip = reinterpret_cast<DWORD64>(entry);
+  entry_context.Rsp = entry_rsp;
+  entry_context.Rbp = kRbp;
+  entry_context.Rsi = kRsi;
+  entry_context.Rbx = kRbx;
+  entry_context.R12 = kR12;
+  entry_context.R13 = kR13;
+  entry_context.R14 = kR14;
+  entry_context.R15 = kR15;
+  PVOID handler_data = nullptr;
+  DWORD64 establisher_frame = 0u;
+  RtlVirtualUnwind(UNW_FLAG_NHANDLER,
+                   image_base,
+                   entry_context.Rip,
+                   function,
+                   &entry_context,
+                   &handler_data,
+                   &establisher_frame,
+                   nullptr);
+  expect_caller(entry_context, "entry unwind restores return address");
+
+  for (uint8_t* epilogue : {normal_epilogue, pending_epilogue}) {
+    CONTEXT epilogue_context = {};
+    epilogue_context.ContextFlags = CONTEXT_FULL;
+    epilogue_context.Rip = reinterpret_cast<DWORD64>(epilogue);
+    epilogue_context.Rsp = primary_rsp;
+    epilogue_context.Rbp = kRbp;
+    epilogue_context.Rsi = kRsi;
+    epilogue_context.Rbx = kRbx;
+    epilogue_context.R12 = kR12;
+    epilogue_context.R13 = kR13;
+    epilogue_context.R14 = kR14;
+    epilogue_context.R15 = kR15;
+    handler_data = nullptr;
+    establisher_frame = 0u;
+    RtlVirtualUnwind(UNW_FLAG_NHANDLER,
+                     image_base,
+                     epilogue_context.Rip,
+                     function,
+                     &epilogue_context,
+                     &handler_data,
+                     &establisher_frame,
+                     nullptr);
+    expect_caller(epilogue_context, "epilogue unwind restores return address");
+  }
+
+  *reinterpret_cast<uint64_t*>(pending_rsp + 40u) = kRbx;
+  *reinterpret_cast<uint64_t*>(pending_rsp + 48u) = kRbp;
+  *reinterpret_cast<uint64_t*>(pending_rsp + 56u) = kR12;
+  *reinterpret_cast<uint64_t*>(pending_rsp + 64u) = kR13;
+  *reinterpret_cast<uint64_t*>(pending_rsp + 72u) = kR14;
+  *reinterpret_cast<uint64_t*>(pending_rsp + 80u) = kR15;
+  CONTEXT pending_context = {};
+  pending_context.ContextFlags = CONTEXT_FULL;
+  pending_context.Rip = reinterpret_cast<DWORD64>(pending_begin + pending_unwind[1]);
+  pending_context.Rsp = pending_rsp;
+  pending_context.Rbp = pending_context.Rbx = pending_context.R12 = pending_context.R13 =
+      pending_context.R14 = pending_context.R15 = UINT64_C(0xdddddddddddddddd);
+  handler_data = nullptr;
+  establisher_frame = 0u;
+  RtlVirtualUnwind(UNW_FLAG_NHANDLER,
+                   pending_image_base,
+                   pending_context.Rip,
+                   pending_function,
+                   &pending_context,
+                   &handler_data,
+                   &establisher_frame,
+                   nullptr);
+  ExpectForSymbol(pending_context.Rip == kReturnAddress,
+                  kSymbol,
+                  "pending body restores return address");
+  ExpectForSymbol(pending_context.Rsp == entry_rsp + 8u,
+                  kSymbol,
+                  "pending body restores caller RSP");
+  ExpectForSymbol(pending_context.Rbp == kRbp && pending_context.Rbx == kRbx &&
+                      pending_context.R12 == kR12 && pending_context.R13 == kR13 &&
+                      pending_context.R14 == kR14 && pending_context.R15 == kR15,
+                  kSymbol,
+                  "pending body restores nonvolatile GPRs");
+  return {kCallReturnOffset, pending_offset};
+}
+
 }  // namespace
 
 int main() {
@@ -423,6 +661,7 @@ int main() {
   TestInvokeUnwind(art, "art_quick_invoke_static_stub");
   const size_t generic_jni_native_return = TestGenericJniUnwind(art);
   const size_t switch_impl_call_return = TestExecuteSwitchImplUnwind(art);
+  const InterpreterBridgeUnwindResult interpreter_bridge = TestInterpreterBridgeUnwind(art);
 
   auto* osr = reinterpret_cast<uint8_t*>(GetProcAddress(art, "art_quick_osr_stub"));
   Expect(osr != nullptr, "art_quick_osr_stub export resolves");
@@ -721,6 +960,13 @@ int main() {
             << " switch_impl_records=1"
             << " switch_impl_call_return=0x" << std::hex << switch_impl_call_return
             << std::dec
+            << " interpreter_bridge_records=2"
+            << " interpreter_bridge_call_return=0x" << std::hex
+            << interpreter_bridge.call_return_offset
+            << " interpreter_bridge_pending=0x" << interpreter_bridge.pending_offset
+            << std::dec
+            << " interpreter_bridge_frame=200"
+            << " interpreter_bridge_pending_frame=88"
             << " variable_rsp_delta=" << fixed_rsp - variable_rsp << '\n';
   if (g_failures == 0) {
     std::cout << "win32_osr_unwind_probe OK\n";

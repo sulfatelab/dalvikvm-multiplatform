@@ -64,7 +64,10 @@ def parse_report(path: Path) -> dict[str, str]:
         r"entry_frame_offset=0 return_prologue=0 fixed_frame=248 "
         r"xmm_count=10 invoke_records=2 generic_jni_records=1 "
         r"generic_jni_native_return=0xc5 switch_impl_records=1 "
-        r"switch_impl_call_return=0xd variable_rsp_delta=256",
+        r"switch_impl_call_return=0xd interpreter_bridge_records=2 "
+        r"interpreter_bridge_call_return=0x82 interpreter_bridge_pending=0x140 "
+        r"interpreter_bridge_frame=200 interpreter_bridge_pending_frame=88 "
+        r"variable_rsp_delta=256",
         values.get("osr_unwind", ""),
     ):
         fail("structural report does not contain the OSR unwind PASS marker")
@@ -152,8 +155,8 @@ def check_package(root: Path) -> None:
             fail(f"required package file is missing: {relative}")
 
     build_info = (root / "BUILD_INFO.txt").read_text(encoding="utf-8").splitlines()
-    if "stage=E5-switch-wrapper-unwind-repair" not in build_info:
-        fail("BUILD_INFO.txt does not identify the E5 switch-wrapper repair stage")
+    if "stage=E6-interpreter-bridge-unwind-repair" not in build_info:
+        fail("BUILD_INFO.txt does not identify the E6 interpreter-bridge repair stage")
 
     if list(root.rglob("*.dmp")):
         fail("clean issued package unexpectedly contains a crash dump")
@@ -182,7 +185,10 @@ def check_package(root: Path) -> None:
         "entry_frame_offset=0 return_prologue=0 fixed_frame=248 "
         "xmm_count=10 invoke_records=2 generic_jni_records=1 "
         "generic_jni_native_return=0xc5 switch_impl_records=1 "
-        "switch_impl_call_return=0xd variable_rsp_delta=256",
+        "switch_impl_call_return=0xd interpreter_bridge_records=2 "
+        "interpreter_bridge_call_return=0x82 interpreter_bridge_pending=0x140 "
+        "interpreter_bridge_frame=200 interpreter_bridge_pending_frame=88 "
+        "variable_rsp_delta=256",
         "actual=disabled",
         "known_incompatible=0x00000000",
         "requested=65536 actual=65536",

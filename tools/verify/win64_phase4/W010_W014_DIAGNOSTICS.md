@@ -270,3 +270,32 @@ The native-worker control again reaches both UEFs and writes one valid
 747,073-byte dump with SHA-256
 `99bff7ef07986eb4c2c15506056664f1a7d39db6fc6f685482e93fadbacc19f5`.
 See `evidence/w010_w014_e5/DIAGNOSIS.md`.
+
+## Local E6 interpreter-bridge repair
+
+The E6 candidate preserves ART's existing 200-byte save-refs-and-args frame
+and gives its Win64 primary range a complete stack/GPR unwind description.
+Windows-only fixed-offset restores keep the frame intact through the captured
+`+0x82` return and end in recognized normal and pending tail-jump epilogues.
+The pending target begins a second contiguous runtime-function range for its
+separate 88-byte save-all frame. A single record never spans both shapes.
+
+The static audit requires both records. The live probe exercises entry,
+`+0x82`, the fixed restore sequence, both epilogues, and the pending body, and
+reports:
+
+```text
+interpreter_bridge_records=2
+interpreter_bridge_call_return=0x82
+interpreter_bridge_pending=0x140
+interpreter_bridge_frame=200
+interpreter_bridge_pending_frame=88
+failures=0
+```
+
+The complete Phase-4 Wine aggregate passes, including static/JIT/OSR fatal
+dispatch. W-003 frame and XMM matrices pass, and Linux rebuild, showversion,
+imageless Hello, and emitted bridge-disassembly parity pass. The package and
+native reviewers are labeled E6. Run the three diagnostic exception shapes on
+native Windows next; require live lookup at `+0x82` and use any later first
+miss as the only basis for another unwind repair.

@@ -71,7 +71,7 @@ function Test-StructuralReport {
         '^status=PASS$'
         '^cet_contract=WIN32_CET_CONTRACT PASS '
         '^boundary_unwind=win32_boundary_unwind OK '
-        '^osr_unwind=win32_osr_unwind_probe failures=0 prologue=[0-9]+ entry_frame_register=R12 compiled_frame_register=RBP entry_frame_offset=0 return_prologue=0 fixed_frame=248 xmm_count=10 invoke_records=2 generic_jni_records=1 generic_jni_native_return=0xc5 switch_impl_records=1 switch_impl_call_return=0xd variable_rsp_delta=256$'
+        '^osr_unwind=win32_osr_unwind_probe failures=0 prologue=[0-9]+ entry_frame_register=R12 compiled_frame_register=RBP entry_frame_offset=0 return_prologue=0 fixed_frame=248 xmm_count=10 invoke_records=2 generic_jni_records=1 generic_jni_native_return=0xc5 switch_impl_records=1 switch_impl_call_return=0xd interpreter_bridge_records=2 interpreter_bridge_call_return=0x82 interpreter_bridge_pending=0x140 interpreter_bridge_frame=200 interpreter_bridge_pending_frame=88 variable_rsp_delta=256$'
         '^windows_minimum_build=17134$'
         '^requested_stack_sizes=0,65536,262144,1048576,2097152,9437184$'
         '^sigchain_action_calls=3$'
@@ -323,7 +323,7 @@ try {
 Invoke-CheckedProcess -Name 'osr_unwind' -Executable 'win32_osr_unwind_probe.exe' -Markers @(
     'win32_osr_unwind_probe failures=0'
     'entry_frame_register=R12 compiled_frame_register=RBP'
-    'entry_frame_offset=0 return_prologue=0 fixed_frame=248 xmm_count=10 invoke_records=2 generic_jni_records=1 generic_jni_native_return=0xc5 switch_impl_records=1 switch_impl_call_return=0xd variable_rsp_delta=256'
+    'entry_frame_offset=0 return_prologue=0 fixed_frame=248 xmm_count=10 invoke_records=2 generic_jni_records=1 generic_jni_native_return=0xc5 switch_impl_records=1 switch_impl_call_return=0xd interpreter_bridge_records=2 interpreter_bridge_call_return=0x82 interpreter_bridge_pending=0x140 interpreter_bridge_frame=200 interpreter_bridge_pending_frame=88 variable_rsp_delta=256'
     'win32_osr_unwind_probe OK'
 )
 
