@@ -6,11 +6,12 @@ mechanism and rule out UEF replacement. Windows commits/reprotects the fixed
 page as ordinary `PAGE_READWRITE` during stack growth, then raises
 `STATUS_STACK_OVERFLOW`; fatal JNI AV reaches ART's VEH while ART still owns
 the UEF slot, but top-level UEF dispatch is not reached through a JNI/managed
-caller chain. Managed SOE delivery must be redesigned. A realistic GenericJNI
-virtual unwind exposed and repaired an RDI save-offset defect, but native run 4
-proves that repair is insufficient: JNI hardware and raised AVs still miss UEF,
-while a JNI-created native worker reaches both UEFs and writes a valid dump.
-Bounded live unwind tracing above GenericJNI is the next fatal-dispatch gate.
+caller chain. Managed SOE delivery must be redesigned. Native E5 verifies the
+Windows-only `ExecuteSwitchImplAsm` frame repair and moves the first live
+unwind miss to `art_quick_to_interpreter_bridge + 0x82`; JNI hardware and
+raised AVs still miss UEF, while a native worker reaches both UEFs and writes a
+valid dump. Range-accurate coverage for both interpreter-bridge stack shapes is
+the next fatal-dispatch gate.
 **Created:** 2026-07-26
 **Updated:** 2026-07-28
 **Target:** x86_64 Windows 10 build 17134+
@@ -477,6 +478,17 @@ native worker instead traverses four registered frames to zero PC, reaches both
 UEFs, and writes a valid dump. Current Windows also repeats the fixed-page
 stack-growth failure. The diagnostic stage is therefore closed: repair the
 wrapper's Win64 home-area/unwind frame and verify native dispatch.
+
+Native E5 verifies that repair. The live post-call PC is now
+`ExecuteSwitchImplAsm + 0xd` with a valid runtime-function lookup in both JNI
+traces, and unwind crosses the wrapper plus four later registered ART C++
+frames. The new first miss is `art_quick_to_interpreter_bridge + 0x82`, the
+return PC after `call artQuickToInterpreterBridge`. The bridge's normal path
+has a 200-byte save-refs-and-args frame, while its pending-exception tail runs
+after that frame has been removed and constructs a different save-all frame.
+They require separate, range-accurate unwind descriptions. The native worker
+again reaches both UEFs and writes a valid dump. Thus E5 closes the wrapper
+defect but not fatal dispatch or the independent managed-SOE redesign.
 
 ## 5. Windows contracts and conclusions
 
@@ -2180,9 +2192,15 @@ not as the final managed-overflow mechanism.
   `ExecuteSwitchImplAsm + 0x9` lookup miss in both JNI exception shapes. The
   native-worker chain is fully registered and reaches UEF/dump. The wrapper
   frame repair is now evidence-backed rather than speculative.
+- **E5 wrapper repair and native result:** the Windows-only RBX save, 32-byte
+  MSVC outgoing home area, canonical epilogue, and PE unwind record pass
+  structural, Wine, Linux-parity, and native lookup/unwind checks. Native E5
+  crosses `ExecuteSwitchImplAsm + 0xd`, then identifies the next first miss at
+  `art_quick_to_interpreter_bridge + 0x82`. Its two distinct stack shapes are
+  the next range-accurate unwind repair.
 - **Still open:** repeat the static ranges, full-width XMM6-XMM15
   exception-unwind sentinel and fatal paths after UEF dispatch is repaired,
-  repair the confirmed `ExecuteSwitchImplAsm` frame, redesign managed SOE
+  repair both `art_quick_to_interpreter_bridge` ranges, redesign managed SOE
   delivery, and pass native debugger,
   large-table churn/sampling, rollback-injection, and debugger-quality
   dump-stack gates. Native normal-return XMM, OSR live unwind, and foreign
@@ -2367,12 +2385,13 @@ fallbacks:
 7. Does the locally implemented full-width XMM6-XMM15 adapter survive native
    Windows normal managed return and exception unwind through several
    optimizing and JNI frames?
-8. After repairing the native-confirmed `ExecuteSwitchImplAsm + 0x9` lookup
-   gap, do JNI hardware and raised AVs both traverse the wrapper and reach UEF?
-   Repair the Win64 PE unwind record and mandatory MSVC outgoing home area
-   together, then rerun E4 automatically. ART UEF replacement, standalone UEF
-   behavior, debugger/runner effects, dump creation, exception shape, and
-   process-wide ART startup state are already ruled out.
+8. Native E5 proves JNI hardware and raised AVs now traverse the repaired
+   `ExecuteSwitchImplAsm` record, then both stop at
+   `art_quick_to_interpreter_bridge + 0x82`. Describe and probe its primary
+   200-byte frame and post-frame pending-exception tail separately, then rerun
+   the native exception-shape matrix automatically. ART UEF replacement,
+   standalone UEF behavior, debugger/runner effects, dump creation, exception
+   shape, and process-wide ART startup state are already ruled out.
 
 ## 16. Primary references and comparative implementation
 

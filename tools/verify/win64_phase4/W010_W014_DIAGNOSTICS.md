@@ -244,3 +244,29 @@ Windows. See `evidence/w010_w014_e4/DIAGNOSIS.md`.
 The diagnosis is closed: `ExecuteSwitchImplAsm` is the first missing live
 runtime-function record. Repair its Win64 RBX/home-area frame, add structural
 and body/epilogue virtual-unwind gates, then repeat the three exception shapes.
+
+## Native E5 result
+
+The E5 switch-wrapper package was run automatically on Windows Server 2025
+build 26100. Its archive SHA-256 is
+`231322dd1261bb7a592929005cef85079110466462cadfef8fc996fbfaae2a05`, and
+the returned result bundle SHA-256 is
+`1a58bb0f318eae82882ea1bd0e5b0fa403202d02ae95a889b07a1e7b3524b3d9`.
+The package checker and complete diagnostic runner pass.
+
+The Win64-only RBX save, 32-byte MSVC home area, canonical epilogue, and PE
+unwind metadata work natively. Both JNI traces report `lookup=1` at
+`ExecuteSwitchImplAsm + 0xd` (`rva=0x9b608d`, runtime-function range
+`0x009b6080..0x009b6093`) and unwind past it.
+
+The new first miss is `art_quick_to_interpreter_bridge + 0x82`
+(`rva=0x9d3652`), the return PC after `call artQuickToInterpreterBridge`.
+It appears at hardware trace frame 11 and raised trace frame 12. Both JNI cases
+still miss late and ART UEF. The bridge's primary 200-byte frame and its
+post-frame pending-exception tail have different stack shapes and must receive
+range-accurate descriptions; do not cover both with one blanket unwind record.
+
+The native-worker control again reaches both UEFs and writes one valid
+747,073-byte dump with SHA-256
+`99bff7ef07986eb4c2c15506056664f1a7d39db6fc6f685482e93fadbacc19f5`.
+See `evidence/w010_w014_e5/DIAGNOSIS.md`.

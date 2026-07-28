@@ -1,6 +1,6 @@
 # Win64 Phase 4 — RESULT
 
-**Status:** **WINE COMPLETE; FOCUSED NATIVE SUBSETS ACCEPTED; W-010/W-014 REPAIR ACTIVE** — W-002, W-003, W-004, and W-024 native matrices are accepted. Run 3 invalidates fixed-page recursive SOE delivery and rules out UEF replacement. Run 4 proves the repaired GenericJNI RDI metadata is necessary but insufficient. Native E4 on Windows Server 2025 build 26100 confirms the first missing live unwind record at `ExecuteSwitchImplAsm + 0x9`; the native worker retains a complete UEF/dump path. The narrow wrapper repair and independent SOE redesign remain.
+**Status:** **WINE COMPLETE; FOCUSED NATIVE SUBSETS ACCEPTED; W-010/W-014 REPAIR ACTIVE** — W-002, W-003, W-004, and W-024 native matrices are accepted. Native E5 on Windows Server 2025 build 26100 verifies the `ExecuteSwitchImplAsm` frame repair and moves the first live unwind miss to `art_quick_to_interpreter_bridge + 0x82`. Fatal UEF dispatch and the independent managed-SOE redesign remain open.
 **Date:** 2026-07-28
 **Depends on:** Phase 3 complete (real Win10 G12 goldens)
 
@@ -26,6 +26,7 @@
 | W-003 quick boundary/trap parity | **PASS** | `check_w003_quick_boundaries.py` |
 | W-010 static OSR/invoke lookup and virtual unwind | **PASS** | `run_osr_unwind_probe.sh` (R12-anchored variable RSP entry, explicit RBP JIT handoff, managed-clobbered RBP return, GPR plus XMM6-XMM15 restore, invoke records, epilogue) |
 | W-010 GenericJNI native-return virtual unwind | **PASS** | same probe: captured `+0xc5` return, variable native RSP, 5120-byte R12 anchor, repaired RDI `offset=0x1400`, caller RIP/RSP and all nonvolatile GPRs |
+| W-010 switch-wrapper unwind | **PASS on native build 26100** | E5: live `ExecuteSwitchImplAsm + 0xd` lookup succeeds after the Windows-only RBX/home-area/unwind repair |
 | W-003 attributed frame families | **PASS, 8/8** | `run_w003_frame_probe.sh` |
 | W-003 historical XMM6-XMM11 / W-010 full XMM6-XMM15 sentinel | **PASS, 6/6** | `run_w003_xmm_sentinel.sh` (`selfTestMask=63`, `fullSelfTestMask=1023`) |
 | W-002 OSR matrix | **PASS, 8/8** | `run_w002_osr_probe.sh` |
@@ -198,6 +199,17 @@ The JNI-created native worker unwinds through four registered frames, reaches
 both UEFs, and creates a valid 747,491-byte dump. The result bundle SHA-256 is
 `4616e8622dba2977b5472264f099de9449aa5c8b0a4bc1d1d568f9af8c6987b8`.
 
+E5 verifies the resulting switch-wrapper repair on the same native host. The
+post-call `ExecuteSwitchImplAsm + 0xd` PC now has a runtime-function record in
+both JNI traces, and virtual unwind crosses it plus four later registered ART
+C++ frames. The new first miss is `art_quick_to_interpreter_bridge + 0x82`
+(`art.dll` RVA `0x9d3652`), immediately after its call to
+`artQuickToInterpreterBridge`. The JNI cases still miss both UEFs. The native
+worker reaches both UEFs and writes one valid 747,073-byte dump. The result
+bundle SHA-256 is
+`1a58bb0f318eae82882ea1bd0e5b0fa403202d02ae95a889b07a1e7b3524b3d9`;
+see `evidence/w010_w014_e5/DIAGNOSIS.md`.
+
 ## Non-goals
 
 - Windows NIO.2
@@ -206,8 +218,9 @@ both UEFs, and creates a valid 747,491-byte dump. The result bundle SHA-256 is
 
 ## Next
 
-- Add a Win64 frame and PE unwind record to `ExecuteSwitchImplAsm`, including
-  its mandatory 32-byte MSVC outgoing home area, and repeat native E4.
+- Add range-accurate Win64 unwind descriptions and live probes for the primary
+  200-byte frame and post-frame pending-exception tail in
+  `art_quick_to_interpreter_bridge`, then issue and run native E6.
   Design a replacement Windows SOE delivery mechanism that
   does not rely on retaining a fixed no-access page inside the system stack.
   Then repeat the repaired SOE and static/JIT/OSR
