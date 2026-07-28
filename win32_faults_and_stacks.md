@@ -1,20 +1,14 @@
 # Win64 managed faults and ART stack design
 
-**Status:** W-010 Stages 0/C/D and W-014 Stages A-B are implemented; native
-Windows 10 build-19044 diagnostics now invalidate the fixed-page recursive SOE
-mechanism and rule out UEF replacement. Windows commits/reprotects the fixed
-page as ordinary `PAGE_READWRITE` during stack growth, then raises
-`STATUS_STACK_OVERFLOW`; fatal JNI AV reaches ART's VEH while ART still owns
-the UEF slot, but top-level UEF dispatch is not reached through a JNI/managed
-caller chain. Managed SOE delivery must be redesigned. Native E5 verifies the
-Windows-only `ExecuteSwitchImplAsm` frame repair and moves the first live
-unwind miss to `art_quick_to_interpreter_bridge + 0x82`; JNI hardware and
-raised AVs still miss UEF, while a native worker reaches both UEFs and writes a
-valid dump. E6 provides range-accurate records for the bridge's 200-byte
-primary and 88-byte pending frames. Native E6 now crosses the primary record
-and every remaining registered frame to zero PC, enters both UEFs for hardware
-and raised JNI AVs, and writes valid dumps. Full native fatal-origin repetition
-and the independent managed-SOE redesign remain.
+**Status:** W-010 Stages 0/C/D and W-014 Stages A-B are implemented. Native
+Windows 10 build 19044 and Windows Server 2025 build 26100 invalidate the
+fixed-page recursive SOE mechanism: Windows consumes its protection as stack
+backing and ultimately raises `STATUS_STACK_OVERFLOW`. E5/E6 repair the live
+switch-wrapper and interpreter-bridge unwind gaps. Native E6 diagnostics cross
+the complete JNI chain, and the subsequent full host run accepts static, JIT
+J-2/J-1, and OSR J-2/J-1 fatal UEF/dump dispatch. The 30-record runner remains
+red only for switch/nterp/JIT managed SOE and the resulting handled-fault/dump
+aggregates. Managed SOE delivery must be redesigned independently.
 **Created:** 2026-07-26
 **Updated:** 2026-07-28
 **Target:** x86_64 Windows 10 build 17134+
@@ -515,6 +509,16 @@ The native-worker control also passes. No further missing record appears in
 these chains. The result accepts the primary record natively; the pending
 range remains static/synthetic coverage because these fatal cases do not enter
 it.
+
+The complete E6 host runner then accepts every fatal origin on Windows Server
+2025 build 26100: static `-Xint`, threshold-zero JIT J-2/J-1, and switch-OSR
+J-2/J-1 each reach VEH and UEF and create a valid named minidump. It records
+25/30 PASS rows overall. The remaining rows expose only managed-SOE behavior:
+switch mode fails page re-protection with unexpected state/error 13 and exits
+with `0xC0000005`; nterp and JIT reach `0xC00000FD`; JIT also reaches UEF and
+writes an unwanted sixth dump. This closes native fatal-origin repetition but
+strengthens, rather than changes, the requirement to replace fixed-page SOE
+delivery.
 
 ## 5. Windows contracts and conclusions
 
@@ -2233,12 +2237,13 @@ not as the final managed-overflow mechanism.
 - **Native E6 result:** both JNI traces resolve the primary bridge at `+0x82`,
   cross all later frames with `lookup=1`, terminate at zero PC, enter both
   UEFs, and write valid dumps. The primary bridge/fatal-dispatch diagnosis is
-  closed; run the complete native fatal-origin matrix next. The pending record
-  was not entered by these cases.
-- **Still open:** repeat the static ranges, full-width XMM6-XMM15
-  exception-unwind sentinel and fatal paths after UEF dispatch is repaired,
-  repeat all static/JIT/OSR fatal origins natively, redesign managed SOE
-  delivery, and pass native debugger,
+  closed. The pending record was not entered by these cases.
+- **Complete native E6 host result:** all five static/JIT/OSR fatal origins
+  reach VEH/UEF and create valid dumps on build 26100. The runner records
+  25/30 PASS rows; only switch/nterp/JIT managed SOE and the two resulting
+  handled-fault/dump aggregates fail.
+- **Still open:** redesign managed SOE delivery, add full-width XMM6-XMM15
+  exception-unwind coverage, and pass native debugger,
   large-table churn/sampling, rollback-injection, and debugger-quality
   dump-stack gates. Native normal-return XMM, OSR live unwind, and foreign
   VEH/frame-SEH already pass in the second run.
@@ -2397,9 +2402,9 @@ one VEH owner and one managed dispatch path.
 These are validation questions, not permission to improvise new product
 fallbacks:
 
-1. Repeat the build-19044 recursive result on a current Windows release: the
-   selected page becomes ordinary committed `PAGE_READWRITE`, not
-   `PAGE_GUARD`, before `STATUS_STACK_OVERFLOW`, while direct protection works.
+1. After replacing fixed-page delivery, repeat managed SOE on build 19044 and
+   current Windows. Build 26100 already repeats the native-overflow failure in
+   the full host runner; it does not rehabilitate the fixed-page design.
 2. How much stack do Windows exception dispatch, the ART VEH, the quick throw
    stub, and the code before `UnprotectStack()` consume in release and debug
    builds?
@@ -2422,12 +2427,10 @@ fallbacks:
 7. Does the locally implemented full-width XMM6-XMM15 adapter survive native
    Windows normal managed return and exception unwind through several
    optimizing and JNI frames?
-8. Native E6 resolves `art_quick_to_interpreter_bridge + 0x82`, crosses every
-   later frame with `lookup=1`, reaches zero PC and both UEFs, and writes valid
-   dumps for hardware and raised JNI AVs. Repeat static, JIT J-2/J-1, and OSR
-   J-2/J-1 fatal origins in the complete native host matrix. Add a native
-   pending-range exception probe only if it can exercise that brief path
-   without changing product semantics.
+8. Native E6 resolves `art_quick_to_interpreter_bridge + 0x82`, and the full
+   host matrix accepts static, JIT J-2/J-1, and OSR J-2/J-1 fatal origins. Add
+   a native pending-range exception probe only if it can exercise that brief
+   path without changing product semantics.
 
 ## 16. Primary references and comparative implementation
 

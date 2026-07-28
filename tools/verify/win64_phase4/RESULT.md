@@ -1,6 +1,6 @@
 # Win64 Phase 4 — RESULT
 
-**Status:** **WINE COMPLETE; FOCUSED NATIVE SUBSETS ACCEPTED; W-010/W-014 REPAIR ACTIVE** — W-002, W-003, W-004, and W-024 native matrices are accepted. Native E6 resolves `art_quick_to_interpreter_bridge + 0x82`, crosses every later registered frame to zero PC, enters both UEFs for hardware and raised JNI AVs, and writes valid dumps. The complete native fatal-origin matrix and independent managed-SOE redesign remain open.
+**Status:** **WINE COMPLETE; FOCUSED NATIVE SUBSETS ACCEPTED; W-010/W-014 REPAIR ACTIVE** — W-002, W-003, W-004, and W-024 native matrices are accepted. Native E6 resolves the interpreter-bridge unwind gap, and the complete native host run accepts static, JIT J-2/J-1, and OSR J-2/J-1 fatal dispatch. The 30-record runner remains red only around W-014 managed SOE delivery and its handled-fault/dump aggregates; that mechanism must be redesigned.
 **Date:** 2026-07-28
 **Depends on:** Phase 3 complete (real Win10 G12 goldens)
 
@@ -42,6 +42,7 @@
 | W-010 OSR-origin fatal dispatch | **PASS, J-2/J-1** | `run_osr_fatal_unwind.sh` (real switch OSR jump, VEH, UEF, new valid `MDMP`) |
 | W-010/W-014 native package preflight | **PASS under Wine** | `package_win64_w010_w014.sh` (unchanged 30-record acceptance runner plus separate stack-growth/UEF diagnostics) |
 | W-010/W-014 isolated failure diagnostics | **PASS on native build 19044** | runs 3-4: fixed-page SOE invalidated; UEF replacement ruled out; JNI hardware/raised AVs miss UEF while the JNI-created native worker reaches UEF/dump, isolating traversal through managed/GenericJNI frames. |
+| W-010/W-014 complete E6 native host matrix | **PARTIAL, 25/30 on build 26100** | all five static/JIT/OSR fatal origins pass with valid dumps; switch/nterp/JIT managed SOE plus handled-log/dump aggregates fail |
 | Full suite | **PASS** | `run_all_wine_gates.sh` |
 
 Evidence: `evidence/all_wine_gates.txt`, `evidence/crashnative.txt`
@@ -230,6 +231,23 @@ dump. The native-worker control also passes. The returned bundle SHA-256 is
 `a1c6af0ceff198f6b4543aa832dbf40ced81dcf72800b77c55dd5f2959302736`;
 see `evidence/w010_w014_e6/DIAGNOSIS.md`.
 
+The subsequent complete E6 host run records 25 of the 30 required PASS rows on
+Windows Server 2025 build 26100. Static `-Xint`, threshold-zero JIT J-2/J-1,
+and switch-OSR J-2/J-1 fatal AVs all enter VEH and UEF, terminate nonzero, and
+produce five valid named 14-stream minidumps. Structural/CET, live unwind, all
+six XMM runs, thread/page/fault/sigchain checks, no-chain rejection, and
+nterp/JIT NPE also pass.
+
+Only managed SOE remains red. Switch mode reports an unexpected fixed-page
+state while protecting the page and exits with `0xC0000005`. Nterp and JIT
+reach native `0xC00000FD`; nterp stops after VEH, while JIT reaches UEF and
+writes an unwanted sixth dump. Those outcomes also fail the handled-log and
+handled-dump aggregates. The authentic returned payload passes issued-package
+identity checking; the reviewer then rejects the expected `OVERALL FAIL`.
+The raw returned bundle SHA-256 is
+`d6bb85c1529496cb384bebcc1495378ade0e253041e01a9605f3f6c90b8538e5`;
+see `evidence/w010_w014_e6_full/DIAGNOSIS.md`.
+
 ## Non-goals
 
 - Windows NIO.2
@@ -238,13 +256,11 @@ see `evidence/w010_w014_e6/DIAGNOSIS.md`.
 
 ## Next
 
-- Run the complete E6 native host matrix to repeat static, JIT J-2/J-1, and
-  OSR J-2/J-1 fatal origins through the repaired chain and isolate the
-  remaining managed-SOE failures.
-  Design a replacement Windows SOE delivery mechanism that
+- Design a replacement Windows SOE delivery mechanism that
   does not rely on retaining a fixed no-access page inside the system stack.
-  Then repeat the repaired SOE and static/JIT/OSR
-  fatal matrix, debugger/stack-budget work, forced named-incompatible CET
+  Then repeat the repaired managed-SOE and full 30-record runner, keeping the
+  now-native-accepted fatal matrix as a regression gate. Complete debugger/
+  stack-budget work, forced named-incompatible CET
   policies, exception-unwind XMM coverage, and dynamic-table churn/sampling on
   Windows 10/current Windows.
 - Complete W-025 broader JIT-mapping native acceptance and hardening

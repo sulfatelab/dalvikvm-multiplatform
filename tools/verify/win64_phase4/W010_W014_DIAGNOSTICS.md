@@ -324,6 +324,35 @@ valid 14-stream `MDMP` files are 748,487, 744,355, and 748,587 bytes.
 
 This closes the diagnosed fatal-dispatch lookup chain. It natively validates
 the primary record; the separate pending record is still structural/synthetic
-coverage because these cases do not enter that path. Run the complete host
-matrix next to repeat all five static/JIT/OSR fatal origins. See
-`evidence/w010_w014_e6/DIAGNOSIS.md`.
+coverage because these cases do not enter that path. The subsequent complete
+host matrix repeats all five static/JIT/OSR fatal origins as described below.
+See `evidence/w010_w014_e6/DIAGNOSIS.md`.
+
+## Complete native E6 host matrix
+
+The exact package then ran from a fresh directory on Windows Server 2025 build
+26100. It produced 25 of the required 30 PASS records and `OVERALL FAIL`.
+Package identity, structural/CET policy, static/live unwind, all six full-width
+XMM runs, thread/page/fault/sigchain probes, no-chain rejection, nterp/JIT NPE,
+and every fatal origin pass.
+
+The five fatal cases are static `-Xint`, threshold-zero JIT J-2/J-1, and
+switch-OSR J-2/J-1. Each reports the required VEH and UEF markers, exits with
+`0xC0000005`, and creates a new valid named 14-stream minidump. This accepts
+the complete native fatal-origin subset after the E5/E6 unwind repairs.
+
+The remaining failures are all consequences of the rejected fixed-page SOE
+design:
+
+- switch mode cannot re-protect the selected page from the observed state,
+  logs `error=13`, and exits with `0xC0000005` before managed recovery;
+- nterp reaches `0xC00000FD`, logs VEH, and terminates without managed SOE;
+- threshold-zero JIT reaches `0xC00000FD`, logs VEH and UEF, and writes an
+  unwanted 1,768,325-byte dump; and
+- handled-log and handled-dump aggregate checks consequently fail.
+
+The full returned payload matches the issued identity. The reviewer reaches
+and correctly rejects `RESULT_W010_W014.txt` because it ends in `OVERALL FAIL`.
+The raw returned archive SHA-256 is
+`d6bb85c1529496cb384bebcc1495378ade0e253041e01a9605f3f6c90b8538e5`.
+See `evidence/w010_w014_e6_full/DIAGNOSIS.md`.

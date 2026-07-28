@@ -45,6 +45,7 @@ The three dumps are valid 14-stream `MDMP` files:
 This closes the diagnosed fatal-dispatch lookup chain and natively accepts the
 primary interpreter-bridge record. The separate 88-byte pending range remains
 structurally and synthetically verified but was not entered by these fatal JNI
-cases. W-010/W-014 are not complete: run the full native host matrix to verify
-static/JIT/OSR fatal origins, while the Windows managed-SOE redesign remains
-independent open work.
+cases. The subsequent full native host matrix accepts all five static/JIT/OSR
+fatal origins and isolates the remaining runner failures to managed SOE. The
+Windows managed-SOE redesign remains independent open work; see
+`../w010_w014_e6_full/DIAGNOSIS.md`.
