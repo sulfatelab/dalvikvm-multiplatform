@@ -2,7 +2,7 @@
 
 **Target:** Windows 10 version 1803 (RS4, build 17134) or later, x64
 
-**State:** native acceptance and GenericJNI fatal-diagnostic candidate; not yet accepted
+**State:** E7 explicit-stack-check native acceptance candidate; not yet accepted
 
 ## Purpose
 
@@ -17,6 +17,14 @@ first-chance behavior, forced Hardware-enforced Stack Protection policies,
 handler stack high-water measurement, and predecessor-UEF embedding remain
 separate manual or launcher-assisted evidence after this automated run passes.
 These items are tracked as the remaining forced-policy and embedding matrix.
+
+E7 replaces the rejected Win64 fixed-page recursive-SOE mechanism with narrow
+explicit `RSP < Thread::stack_end_` checks in optimizing code and nterp. An
+equal stack pointer is allowed. Overflow tail-jumps through
+`Thread::pThrowStackOverflow`; Windows owns stack growth and mapping state, and
+ART only excludes the inaccessible low prefix when recording usable bounds.
+Linux retains its original implicit `RSP - 8192` probes. The issued structural
+report records a disassembly-backed cross-target check of both object files.
 
 If the acceptance runner fails in managed SOE or fatal UEF/minidump cases, run
 the separate diagnostic matrix before changing product code:
@@ -80,7 +88,10 @@ The runner verifies:
   allocation-granularity rounding; it is not clamped to the executable
   default;
 - join/detach handle stress, raw `CreateThread`, and fiber rejection;
-- deterministic protected-page selection plus committed/reserved restoration;
+- read-only Windows stack-layout inspection and usable-bound selection;
+- deterministic protected-page selection plus committed/reserved restoration
+  as test-only page-state diagnostics; these probes do not describe the E7
+  product SOE mechanism;
 - exact exception-record filtering;
 - two handled page faults, one unrecognized fault forwarded through foreign
   VEH registered before and after ART to frame-based SEH, promotion, and
@@ -131,7 +142,10 @@ It must contain 30 PASS records and no FAIL record. Key evidence includes:
   `selfTestMask=63` field is the historical XMM6-XMM11 compatibility marker;
   `fullSelfTestMask=1023` is the authoritative XMM6-XMM15 self-test;
 - `logs\W010_W014_STRUCTURAL_REPORT.txt` with
-  `boundary_unwind=win32_boundary_unwind OK ...`;
+  `boundary_unwind=win32_boundary_unwind OK ...`, the cross-target
+  `explicit_stack_checks=... PASS (Win64 object, Linux object)` marker,
+  `stack_overflow_delivery=explicit-rsp-below-thread-stack-end`, and
+  `windows_stack_mapping_ownership=os`;
 - `logs\thread_stack.log` with exact
   `requested=65536 actual=65536`,
   `requested=262144 actual=262144`, all five nonzero requested sizes, zero

@@ -48,6 +48,10 @@ def parse_report(path: Path) -> dict[str, str]:
         "fatal_unwind_trace": "bounded-32-live-veh",
         "fatal_minidumps_required": "5",
         "host_llvm_tools_required": "no",
+        "stack_overflow_delivery": "explicit-rsp-below-thread-stack-end",
+        "win32_implicit_so_checks": "false",
+        "windows_stack_mapping_ownership": "os",
+        "linux_stack_probe_contract": "implicit-rsp-minus-8192",
     }
     for key, expected in required.items():
         if values.get(key) != expected:
@@ -58,6 +62,13 @@ def parse_report(path: Path) -> dict[str, str]:
         "win32_boundary_unwind OK "
     ):
         fail("structural report does not contain the boundary unwind PASS marker")
+    if values.get("explicit_stack_checks") != (
+        "Win64 explicit stack-check contract: PASS (Win64 object, Linux object)"
+    ):
+        fail(
+            "structural report does not contain the cross-target explicit "
+            "stack-check PASS marker"
+        )
     if not re.fullmatch(
         r"win32_osr_unwind_probe failures=0 prologue=\d+ "
         r"entry_frame_register=R12 compiled_frame_register=RBP "
@@ -155,8 +166,8 @@ def check_package(root: Path) -> None:
             fail(f"required package file is missing: {relative}")
 
     build_info = (root / "BUILD_INFO.txt").read_text(encoding="utf-8").splitlines()
-    if "stage=E6-interpreter-bridge-unwind-repair" not in build_info:
-        fail("BUILD_INFO.txt does not identify the E6 interpreter-bridge repair stage")
+    if "stage=E7-explicit-stack-checks" not in build_info:
+        fail("BUILD_INFO.txt does not identify the E7 explicit-stack-check stage")
 
     if list(root.rglob("*.dmp")):
         fail("clean issued package unexpectedly contains a crash dump")
@@ -189,6 +200,11 @@ def check_package(root: Path) -> None:
         "interpreter_bridge_call_return=0x82 interpreter_bridge_pending=0x140 "
         "interpreter_bridge_frame=200 interpreter_bridge_pending_frame=88 "
         "variable_rsp_delta=256",
+        "explicit_stack_checks=Win64 explicit stack-check contract: PASS",
+        "stack_overflow_delivery=explicit-rsp-below-thread-stack-end",
+        "win32_implicit_so_checks=false",
+        "windows_stack_mapping_ownership=os",
+        "linux_stack_probe_contract=implicit-rsp-minus-8192",
         "actual=disabled",
         "known_incompatible=0x00000000",
         "requested=65536 actual=65536",
@@ -233,6 +249,8 @@ def check_package(root: Path) -> None:
         "debugger",
         "forced-policy",
         "review_w010_w014_host_result.py",
+        "explicit `RSP < Thread::stack_end_` checks",
+        "test-only page-state diagnostics",
     ):
         if marker not in checklist_normalized:
             fail(f"host checklist is missing required scope text: {marker}")

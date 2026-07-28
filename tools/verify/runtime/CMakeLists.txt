@@ -28,6 +28,19 @@ set(MDVM_BP2CMAKE "${CMAKE_CURRENT_SOURCE_DIR}/../../../tools/bp2cmake")
 
 # Run the Python codegen driver for mterp + asm_defines (configure-time). The
 # operator_out files are produced by the emitter's add_custom_commands.
+file(GLOB _mdvm_mterp_inputs
+    "${MDVM_NATIVE_SRC_ROOT_DIR}/art/runtime/interpreter/mterp/x86_64ng/*.S")
+file(GLOB _mdvm_asm_define_inputs
+    "${MDVM_NATIVE_SRC_ROOT_DIR}/art/tools/cpp-define-generator/*.def")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    ${_mdvm_mterp_inputs}
+    ${_mdvm_asm_define_inputs}
+    "${MDVM_NATIVE_SRC_ROOT_DIR}/art/runtime/interpreter/mterp/gen_mterp.py"
+    "${MDVM_NATIVE_SRC_ROOT_DIR}/art/runtime/interpreter/mterp/common/gen_setup.py"
+    "${MDVM_NATIVE_SRC_ROOT_DIR}/art/tools/cpp-define-generator/asm_defines.cc"
+    "${MDVM_NATIVE_SRC_ROOT_DIR}/art/tools/cpp-define-generator/make_header.py"
+    "${MDVM_BP2CMAKE}/bp2cmake/codegen.py"
+    "${MDVM_BP2CMAKE}/bp2cmake/codegen_main.py")
 execute_process(
     COMMAND ${CMAKE_COMMAND} -E env "PYTHONPATH=${MDVM_BP2CMAKE}"
             ${Python3_EXECUTABLE} -m bp2cmake.codegen_main

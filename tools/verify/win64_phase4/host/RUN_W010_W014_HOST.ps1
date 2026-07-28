@@ -72,6 +72,11 @@ function Test-StructuralReport {
         '^cet_contract=WIN32_CET_CONTRACT PASS '
         '^boundary_unwind=win32_boundary_unwind OK '
         '^osr_unwind=win32_osr_unwind_probe failures=0 prologue=[0-9]+ entry_frame_register=R12 compiled_frame_register=RBP entry_frame_offset=0 return_prologue=0 fixed_frame=248 xmm_count=10 invoke_records=2 generic_jni_records=1 generic_jni_native_return=0xc5 switch_impl_records=1 switch_impl_call_return=0xd interpreter_bridge_records=2 interpreter_bridge_call_return=0x82 interpreter_bridge_pending=0x140 interpreter_bridge_frame=200 interpreter_bridge_pending_frame=88 variable_rsp_delta=256$'
+        '^explicit_stack_checks=Win64 explicit stack-check contract: PASS \(Win64 object, Linux object\)$'
+        '^stack_overflow_delivery=explicit-rsp-below-thread-stack-end$'
+        '^win32_implicit_so_checks=false$'
+        '^windows_stack_mapping_ownership=os$'
+        '^linux_stack_probe_contract=implicit-rsp-minus-8192$'
         '^windows_minimum_build=17134$'
         '^requested_stack_sizes=0,65536,262144,1048576,2097152,9437184$'
         '^sigchain_action_calls=3$'
@@ -261,7 +266,7 @@ function Invoke-CheckedProcess {
 $Common = '-Xbootclasspath:run\boot.jar -Xbootclasspath-locations:run\boot.jar -Ximage:/nonexistent-no-boot-image -XjdwpProvider:none -Xms64m -Xmx512m'
 $HandledForbidden = @('ART Win64 VEH', 'ART Win64 UEF', 'minidump written', 'unexpected_continue')
 
-Add-Result "W-010/W-014 native Stage E acceptance $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+Add-Result "W-010/W-014 native Stage E7 acceptance $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 try {
     $os = Get-CimInstance -ClassName Win32_OperatingSystem
     $script:WindowsBuild = [int]$os.BuildNumber

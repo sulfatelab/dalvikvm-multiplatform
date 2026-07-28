@@ -10,6 +10,7 @@
 namespace {
 
 using art::Win32MemoryRegion;
+using art::Win32StackLayout;
 using art::Win32StackPageRecord;
 using art::Win32StackPageSelection;
 using art::Win32StackPageState;
@@ -71,6 +72,25 @@ bool SelectFake(const Win32MemoryRegion* regions,
                                    &layout,
                                    selection,
                                    &failure);
+}
+
+bool InspectFake(const Win32MemoryRegion* regions,
+                 size_t count,
+                 uintptr_t low,
+                 uintptr_t high,
+                 size_t page_size,
+                 size_t minimum_usable_size,
+                 Win32StackLayout* layout) {
+  FakeLayout fake_layout{regions, count};
+  const char* failure = nullptr;
+  return art::InspectWin32StackLayout(low,
+                                      high,
+                                      page_size,
+                                      minimum_usable_size,
+                                      FakeQuery,
+                                      &fake_layout,
+                                      layout,
+                                      &failure);
 }
 
 void CheckDeterministicSelection() {
@@ -198,6 +218,57 @@ void CheckDeterministicSelection() {
   }
 
   std::puts("selection_cases count=8");
+}
+
+void CheckReadOnlyLayoutInspection() {
+  constexpr uintptr_t low = 0x200000u;
+  constexpr size_t page = 4096u;
+  constexpr uintptr_t high = low + 1024u * 1024u;
+  constexpr size_t minimum_usable = 3u * page;
+  Win32StackLayout layout;
+
+  const Win32MemoryRegion reserved[] = {
+      {low, low, high - low, MEM_RESERVE, 0u, 0u},
+  };
+  if (!InspectFake(reserved,
+                   std::size(reserved),
+                   low,
+                   high,
+                   page,
+                   minimum_usable,
+                   &layout) ||
+      layout.allocation_base != low || layout.usable_begin != low + page ||
+      layout.excluded_low_size != page) {
+    Fail("layout-reserved", "did not exclude exactly the terminal bottom page");
+  }
+
+  const Win32MemoryRegion guarded[] = {
+      {low, low, page, MEM_COMMIT, PAGE_NOACCESS, MEM_PRIVATE},
+      {low + page, low, page, MEM_COMMIT, PAGE_READWRITE | PAGE_GUARD, MEM_PRIVATE},
+      {low + 2u * page, low, high - low - 2u * page,
+       MEM_COMMIT, PAGE_READWRITE, MEM_PRIVATE},
+  };
+  if (!InspectFake(guarded,
+                   std::size(guarded),
+                   low,
+                   high,
+                   page,
+                   minimum_usable,
+                   &layout) ||
+      layout.usable_begin != low + 2u * page || layout.excluded_low_size != 2u * page) {
+    Fail("layout-guarded", "did not exclude the complete bottom guard prefix");
+  }
+
+  if (InspectFake(reserved,
+                  std::size(reserved),
+                  low,
+                  low + 3u * page,
+                  page,
+                  minimum_usable,
+                  &layout)) {
+    Fail("layout-small", "accepted a layout without the requested usable stack");
+  }
+  std::puts("layout_cases count=3");
 }
 
 LONG WINAPI PageFaultHandler(EXCEPTION_POINTERS* exception) {
@@ -399,6 +470,7 @@ int main() {
     return 1;
   }
   CheckDeterministicSelection();
+  CheckReadOnlyLayoutInspection();
   CheckActualPage("main", kRestoreIterations);
   CheckReservedAllocation();
 

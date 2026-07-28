@@ -45,6 +45,22 @@ file(MAKE_DIRECTORY "${MDVM_GENSRC_DIR}")
 # aconfig + mterp + asm_defines (host Python/codegen; asm_defines uses host clang)
 # Codegen runs on the *build* host. Prefer a native Linux clang++ even when
 # CMAKE_CXX_COMPILER is a Windows-target clang (cross builds).
+# These generators run at configure time. Make their complete direct input set
+# part of CMake's regeneration dependencies so an incremental build cannot use
+# stale target assembly or stale Thread/Runtime offsets.
+file(GLOB _mdvm_mterp_inputs
+  "${MDVM_ART_DIR}/runtime/interpreter/mterp/x86_64ng/*.S")
+file(GLOB _mdvm_asm_define_inputs
+  "${MDVM_ART_DIR}/tools/cpp-define-generator/*.def")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  ${_mdvm_mterp_inputs}
+  ${_mdvm_asm_define_inputs}
+  "${MDVM_ART_DIR}/runtime/interpreter/mterp/gen_mterp.py"
+  "${MDVM_ART_DIR}/runtime/interpreter/mterp/common/gen_setup.py"
+  "${MDVM_ART_DIR}/tools/cpp-define-generator/asm_defines.cc"
+  "${MDVM_ART_DIR}/tools/cpp-define-generator/make_header.py"
+  "${_repo}/tools/bp2cmake/bp2cmake/codegen.py"
+  "${_repo}/tools/bp2cmake/bp2cmake/codegen_main.py")
 find_program(MDVM_HOST_CLANGXX NAMES clang++ REQUIRED)
 execute_process(
   COMMAND ${MDVM_HOST_CLANGXX} -print-resource-dir

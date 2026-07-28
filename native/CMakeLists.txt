@@ -54,6 +54,19 @@ set(MDVM_FDLIBM_DIR "${_repo}/vendor/java-external/fdlibm" CACHE PATH "fdlibm tr
 # operator_out is emitted as add_custom_commands inside the generated file; the
 # aconfig headers + two-stage asm_defines + mterp are run here at configure time.
 # art/* inputs come from nested vendor/art (--art-root).
+file(GLOB _mdvm_mterp_inputs
+    "${MDVM_ART_ROOT_DIR}/art/runtime/interpreter/mterp/x86_64ng/*.S")
+file(GLOB _mdvm_asm_define_inputs
+    "${MDVM_ART_ROOT_DIR}/art/tools/cpp-define-generator/*.def")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    ${_mdvm_mterp_inputs}
+    ${_mdvm_asm_define_inputs}
+    "${MDVM_ART_ROOT_DIR}/art/runtime/interpreter/mterp/gen_mterp.py"
+    "${MDVM_ART_ROOT_DIR}/art/runtime/interpreter/mterp/common/gen_setup.py"
+    "${MDVM_ART_ROOT_DIR}/art/tools/cpp-define-generator/asm_defines.cc"
+    "${MDVM_ART_ROOT_DIR}/art/tools/cpp-define-generator/make_header.py"
+    "${MDVM_BP2CMAKE}/bp2cmake/codegen.py"
+    "${MDVM_BP2CMAKE}/bp2cmake/codegen_main.py")
 foreach(_kind aconfig mterp asm_defines)
     execute_process(
         COMMAND ${CMAKE_COMMAND} -E env "PYTHONPATH=${MDVM_BP2CMAKE}"

@@ -4,6 +4,7 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/../../.." && pwd)"
 BUILD="${BUILD:-$REPO/build/win64_phase1}"
+LINUX_BUILD="${LINUX_BUILD:-$REPO/build/native}"
 HYBRID="${MDVM_HYBRID_BUILD:-$REPO/build/win64_libcore_icu}"
 OUT="${1:-$REPO/dist/win64_w010_w014_host}"
 JOBS="${JOBS:-32}"
@@ -38,6 +39,12 @@ osr_unwind_summary="$(
     grep '^win32_osr_unwind_probe failures=0 '
 )"
 WINEDEBUG="$WINEDEBUG" "$REPO/tools/verify/win64_phase4/run_w010_managed_fault_probe.sh"
+explicit_stack_output="$(
+  python3 "$REPO/tools/verify/win64_phase1/check_win32_explicit_stack_checks.py" \
+    --win-build "$BUILD" \
+    --linux-build "$LINUX_BUILD"
+)"
+printf '%s\n' "$explicit_stack_output"
 WINEDEBUG="$WINEDEBUG" REPEATS=2 \
   "$REPO/tools/verify/win64_phase4/run_w003_xmm_sentinel.sh"
 WINEDEBUG="$WINEDEBUG" "$REPO/tools/verify/win64_phase4/run_jit_fatal_unwind.sh"
@@ -110,6 +117,11 @@ status=PASS
 cet_contract=$cet_output
 boundary_unwind=$boundary_unwind_output
 osr_unwind=$osr_unwind_summary
+explicit_stack_checks=$explicit_stack_output
+stack_overflow_delivery=explicit-rsp-below-thread-stack-end
+win32_implicit_so_checks=false
+windows_stack_mapping_ownership=os
+linux_stack_probe_contract=implicit-rsp-minus-8192
 windows_minimum_build=17134
 requested_stack_sizes=0,65536,262144,1048576,2097152,9437184
 sigchain_action_calls=3
@@ -146,7 +158,7 @@ art_branch=$(git -C "$REPO/vendor/art" branch --show-current)
 art_commit=$(git -C "$REPO/vendor/art" rev-parse HEAD)
 win64_build=$BUILD
 windows_minimum_build=17134
-stage=E6-interpreter-bridge-unwind-repair
+stage=E7-explicit-stack-checks
 EOF
 
 clean_runtime_outputs() {
