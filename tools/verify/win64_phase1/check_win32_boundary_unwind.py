@@ -17,6 +17,11 @@ FULL_XMM_UNWIND = tuple(
 )
 
 BOUNDARIES = {
+    "ExecuteSwitchImplAsm": (
+        "FrameRegister: -",
+        "ALLOC_SMALL size=32",
+        "PUSH_NONVOL reg=RBX",
+    ),
     "art_quick_invoke_stub": (
         "FrameRegister: RBP",
         "ALLOC_LARGE size=160",

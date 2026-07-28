@@ -31,6 +31,7 @@ OSR_UNWIND_MARKERS = (
     "entry_frame_register=R12 compiled_frame_register=RBP",
     "entry_frame_offset=0 return_prologue=0 fixed_frame=248 xmm_count=10 "
     "invoke_records=2 generic_jni_records=1 generic_jni_native_return=0xc5 "
+    "switch_impl_records=1 switch_impl_call_return=0xd "
     "variable_rsp_delta=256",
     "win32_osr_unwind_probe OK",
 )

@@ -293,6 +293,122 @@ size_t TestGenericJniUnwind(HMODULE art) {
   return native_return_offset;
 }
 
+size_t TestExecuteSwitchImplUnwind(HMODULE art) {
+  constexpr const char* kSymbol = "ExecuteSwitchImplAsm";
+  auto* entry = reinterpret_cast<uint8_t*>(GetProcAddress(art, kSymbol));
+  ExpectForSymbol(entry != nullptr, kSymbol, "export resolves");
+  if (entry == nullptr) {
+    return 0u;
+  }
+
+  DWORD64 image_base = 0u;
+  PRUNTIME_FUNCTION function =
+      RtlLookupFunctionEntry(reinterpret_cast<DWORD64>(entry), &image_base, nullptr);
+  ExpectForSymbol(function != nullptr, kSymbol, "entry runtime-function record resolves");
+  if (function == nullptr) {
+    return 0u;
+  }
+  auto* function_begin = reinterpret_cast<uint8_t*>(image_base + function->BeginAddress);
+  auto* function_end = reinterpret_cast<uint8_t*>(image_base + function->EndAddress);
+  ExpectForSymbol(function_begin == entry, kSymbol, "runtime-function starts at export");
+  ExpectForSymbol(function_end > function_begin, kSymbol, "runtime-function range is nonempty");
+
+  const uint8_t* unwind = reinterpret_cast<const uint8_t*>(image_base + function->UnwindData);
+  ExpectForSymbol((unwind[0] & 0x7u) == 1u, kSymbol, "unwind info uses version 1");
+  ExpectForSymbol(unwind[1] == 5u, kSymbol, "prologue covers RBX save and home area");
+  ExpectForSymbol((unwind[3] & 0x0fu) == 0u, kSymbol, "frame is RSP-based");
+
+  constexpr uint8_t kCallAndEpilogue[] = {
+      0xffu, 0xd6u,                    // call *%rsi
+      0x48u, 0x83u, 0xc4u, 0x20u,     // add $32, %rsp
+      0x5bu,                           // pop %rbx
+      0xc3u,                           // ret
+  };
+  uint8_t* call = FindBytes(function_begin, function_end, kCallAndEpilogue);
+  ExpectForSymbol(call != nullptr, kSymbol, "call and canonical epilogue are found");
+  if (call == nullptr) {
+    return 0u;
+  }
+  uint8_t* post_call = call + 2u;
+  const size_t call_return_offset = static_cast<size_t>(post_call - entry);
+  ExpectForSymbol(call_return_offset == 0xdu, kSymbol, "call return has expected offset");
+
+  DWORD64 body_image_base = 0u;
+  PRUNTIME_FUNCTION body_function =
+      RtlLookupFunctionEntry(reinterpret_cast<DWORD64>(call), &body_image_base, nullptr);
+  ExpectForSymbol(body_function == function && body_image_base == image_base,
+                  kSymbol,
+                  "body resolves to the wrapper runtime-function record");
+  DWORD64 epilogue_image_base = 0u;
+  PRUNTIME_FUNCTION epilogue_function =
+      RtlLookupFunctionEntry(reinterpret_cast<DWORD64>(post_call), &epilogue_image_base, nullptr);
+  ExpectForSymbol(epilogue_function == function && epilogue_image_base == image_base,
+                  kSymbol,
+                  "epilogue resolves to the wrapper runtime-function record");
+  if (body_function == nullptr || epilogue_function == nullptr) {
+    return call_return_offset;
+  }
+
+  SYSTEM_INFO system_info = {};
+  GetSystemInfo(&system_info);
+  VirtualStack stack(system_info.dwPageSize);
+  ExpectForSymbol(stack.address != nullptr, kSymbol, "synthetic stack allocation succeeds");
+  if (stack.address == nullptr) {
+    return call_return_offset;
+  }
+
+  uintptr_t entry_rsp = reinterpret_cast<uintptr_t>(stack.address + system_info.dwPageSize - 512u);
+  entry_rsp = (entry_rsp & ~uintptr_t{15u}) + 8u;
+  const uintptr_t body_rsp = entry_rsp - 40u;
+  constexpr uint64_t kReturnAddress = UINT64_C(0x456789abcdef0123);
+  constexpr uint64_t kRbx = UINT64_C(0x3141592653589793);
+  *reinterpret_cast<uint64_t*>(entry_rsp) = kReturnAddress;
+  *reinterpret_cast<uint64_t*>(entry_rsp - 8u) = kRbx;
+
+  CONTEXT body_context = {};
+  body_context.ContextFlags = CONTEXT_FULL;
+  body_context.Rip = reinterpret_cast<DWORD64>(call);
+  body_context.Rsp = body_rsp;
+  body_context.Rbx = UINT64_C(0xcccccccccccccccc);
+  PVOID handler_data = nullptr;
+  DWORD64 establisher_frame = 0u;
+  RtlVirtualUnwind(UNW_FLAG_NHANDLER,
+                   body_image_base,
+                   body_context.Rip,
+                   body_function,
+                   &body_context,
+                   &handler_data,
+                   &establisher_frame,
+                   nullptr);
+  ExpectForSymbol(body_context.Rip == kReturnAddress, kSymbol, "body restores return address");
+  ExpectForSymbol(body_context.Rsp == entry_rsp + 8u, kSymbol, "body restores caller RSP");
+  ExpectForSymbol(body_context.Rbx == kRbx, kSymbol, "body restores RBX");
+
+  CONTEXT epilogue_context = {};
+  epilogue_context.ContextFlags = CONTEXT_FULL;
+  epilogue_context.Rip = reinterpret_cast<DWORD64>(post_call);
+  epilogue_context.Rsp = body_rsp;
+  epilogue_context.Rbx = UINT64_C(0xdddddddddddddddd);
+  handler_data = nullptr;
+  establisher_frame = 0u;
+  RtlVirtualUnwind(UNW_FLAG_NHANDLER,
+                   epilogue_image_base,
+                   epilogue_context.Rip,
+                   epilogue_function,
+                   &epilogue_context,
+                   &handler_data,
+                   &establisher_frame,
+                   nullptr);
+  ExpectForSymbol(epilogue_context.Rip == kReturnAddress,
+                  kSymbol,
+                  "epilogue restores return address");
+  ExpectForSymbol(epilogue_context.Rsp == entry_rsp + 8u,
+                  kSymbol,
+                  "epilogue restores caller RSP");
+  ExpectForSymbol(epilogue_context.Rbx == kRbx, kSymbol, "epilogue restores RBX");
+  return call_return_offset;
+}
+
 }  // namespace
 
 int main() {
@@ -306,6 +422,7 @@ int main() {
   TestInvokeUnwind(art, "art_quick_invoke_stub");
   TestInvokeUnwind(art, "art_quick_invoke_static_stub");
   const size_t generic_jni_native_return = TestGenericJniUnwind(art);
+  const size_t switch_impl_call_return = TestExecuteSwitchImplUnwind(art);
 
   auto* osr = reinterpret_cast<uint8_t*>(GetProcAddress(art, "art_quick_osr_stub"));
   Expect(osr != nullptr, "art_quick_osr_stub export resolves");
@@ -600,6 +717,9 @@ int main() {
             << " invoke_records=2"
             << " generic_jni_records=1"
             << " generic_jni_native_return=0x" << std::hex << generic_jni_native_return
+            << std::dec
+            << " switch_impl_records=1"
+            << " switch_impl_call_return=0x" << std::hex << switch_impl_call_return
             << std::dec
             << " variable_rsp_delta=" << fixed_rsp - variable_rsp << '\n';
   if (g_failures == 0) {

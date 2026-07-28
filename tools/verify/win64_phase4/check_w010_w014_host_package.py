@@ -63,7 +63,8 @@ def parse_report(path: Path) -> dict[str, str]:
         r"entry_frame_register=R12 compiled_frame_register=RBP "
         r"entry_frame_offset=0 return_prologue=0 fixed_frame=248 "
         r"xmm_count=10 invoke_records=2 generic_jni_records=1 "
-        r"generic_jni_native_return=0xc5 variable_rsp_delta=256",
+        r"generic_jni_native_return=0xc5 switch_impl_records=1 "
+        r"switch_impl_call_return=0xd variable_rsp_delta=256",
         values.get("osr_unwind", ""),
     ):
         fail("structural report does not contain the OSR unwind PASS marker")
@@ -176,7 +177,8 @@ def check_package(root: Path) -> None:
         "entry_frame_register=R12 compiled_frame_register=RBP",
         "entry_frame_offset=0 return_prologue=0 fixed_frame=248 "
         "xmm_count=10 invoke_records=2 generic_jni_records=1 "
-        "generic_jni_native_return=0xc5 variable_rsp_delta=256",
+        "generic_jni_native_return=0xc5 switch_impl_records=1 "
+        "switch_impl_call_return=0xd variable_rsp_delta=256",
         "actual=disabled",
         "known_incompatible=0x00000000",
         "requested=65536 actual=65536",

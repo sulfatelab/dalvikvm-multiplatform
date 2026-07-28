@@ -121,7 +121,8 @@ It must contain 30 PASS records and no FAIL record. Key evidence includes:
   `entry_frame_register=R12 compiled_frame_register=RBP`, the zero-offset
   entry frame, zero-prologue return range, `fixed_frame=248`,
   `xmm_count=10`, two invoke records, `generic_jni_records=1`,
-  `generic_jni_native_return=0xc5`, and the `OK` marker;
+  `generic_jni_native_return=0xc5`, `switch_impl_records=1`,
+  `switch_impl_call_return=0xd`, and the `OK` marker;
 - six `logs\xmm_full_*_run*.log` files with `mask=0`,
   `fullSelfTestMask=1023`, and `W003XmmSentinelProbe OK`. The retained
   `selfTestMask=63` field is the historical XMM6-XMM11 compatibility marker;
