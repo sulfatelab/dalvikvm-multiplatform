@@ -10,6 +10,8 @@ full per-thread commit, irreversible high-water state, and fatal native
 collision keep it diagnostic-only. The product work remains open only for
 broader debugger, stack-budget, forced CET-policy, dynamic-table
 sampling/churn, exception-unwind XMM, pending-range, and embedding coverage.
+The post-JIT-1 W-004 regression also passes 28/28 on the same Windows Server
+2025 build 26100 with clean log, trace, and recursive dump scans.
 **Created:** 2026-07-26
 **Updated:** 2026-07-29
 **Target:** x86_64 Windows 10 build 17134+
@@ -2461,6 +2463,22 @@ fallbacks:
    a native pending-range exception probe only if it can exercise that brief
    path without changing product semantics.
 
+### JIT-1 shared native cross-regression — 2026-07-29
+
+The direct signed-int32 JIT-root and uint32 CodeInfo construction guards in ART
+`146016f83e` do not change the managed-fault or unwind format. The rebuilt
+runtime passed the local JIT smoke, matrix, unwind-info, unwind-registry, and
+J-2/J-1 collection-lifecycle gates. Its focused W-004 package then passed all
+22 child cases and 28 aggregate records on Windows Server 2025 build 26100,
+including dual-view JIT, J-1 CriticalNative/native-ABI/JVMTI comparison arms,
+GC/thread/handle stress, and ten clean default-JIT starts. Log and trace scans
+pass and the recursive dump scan reports `NO_DMP_FILES`.
+
+This is a cross-regression for the already accepted E9 fault/unwind design; it
+does not replace the 30-record E9 fatal/managed-fault archive. The independently
+reviewed identities and result are archived under
+`tools/verify/windows_x64_phase4/evidence/jit1_encoding_guards/`.
+
 ### Next execution schedule — dependency order
 
 This schedule closes product proof points before optional mechanism research.
@@ -2470,7 +2488,7 @@ It is evidence-gated rather than date-gated.
 |------:|------|-----------|
 | FS-1 | Add allocation-free high-water instrumentation around the explicit check, quick throw, temporary stack-end expansion, exception construction, and non-local transfer; run release and debug builds | The result records the lowest RSP and margin to the configured guarantee/ART reserve for switch, nterp, and JIT without changing fault behavior |
 | FS-2 | Extend the combined native package with debugger first-chance/continue, every named forced-incompatible CET policy, foreign VEH/frame-SEH/predecessor-UEF embedding, and XMM6-XMM15 sentinels during exception unwind | Expected NPE continues into Java, explicit SOE remains fault-free, incompatible CET starts reject before Java/JIT with no dump, foreign search handlers coexist, and full-width XMM state survives unwind |
-| FS-3 | Share the JIT closure load test: compile, invalidate, collect, reuse, and re-register many optimizing/JNI allocations while another thread performs lookup and virtual unwind | No published PC lacks its table, no dead PC retains one, lookup cost is recorded, and callback tables remain unnecessary |
+| FS-3 | With the JIT-1 encoding prerequisite complete, share the JIT closure load test: compile, invalidate, collect, reuse, and re-register many optimizing/JNI allocations while another thread performs lookup and virtual unwind | No published PC lacks its table, no dead PC retains one, lookup cost is recorded, and callback tables remain unnecessary |
 | FS-4 | Run FS-1 through FS-3 on the accepted build-26100 class host, then repeat the E9 core runner, parameterized guarantee geometry, fiber/manual-stack rejection, and deep detach/continue/reattach lifecycle on a second supported Windows 10 or later host | Immutable archives pass their independent review and either confirm the additive stack layout or document a new supported-host constraint |
 | FS-5 | Attempt the brief pending bridge-range exception only if a deterministic probe can enter it without changing product control flow; otherwise record it as impractical and close it as conditional coverage | A real native exception validates the pending record, or the result document explains why the already accepted primary/fatal matrix is the closure boundary |
 

@@ -1,0 +1,8 @@
+created=2026-07-29 02:13:40 +0800
+host=agent01
+root_branch=main
+root_commit=f18d1b53cb3033c87a8ca07361025578bfd4ec14
+art_branch=artmp_android-16.0.0_r4
+art_commit=146016f83e5c6df8481eab6119f30c9077141179
+windows_x64_build=/home/agent/Projects/dalvikvm-multiplatform/build/windows_x64_phase1
+windows_minimum_build=17134

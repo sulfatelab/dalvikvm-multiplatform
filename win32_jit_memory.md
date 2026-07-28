@@ -2,8 +2,9 @@
 
 **Status:** pagefile-backed dual mapping is the default; Wine gates plus the
 W-013 heap/JIT, W-003 boundary, and W-010 dynamic-unwind native subsets pass.
-Direct encoding guards, broader W-025 native policy/load acceptance, and
-removal of the J-1 diagnostic opt-out remain.
+Direct JIT-root and CodeInfo encoding guards are landed and native-regressed;
+broader W-025 native policy/load acceptance and removal of the J-1 diagnostic
+opt-out remain.
 **Updated:** 2026-07-29
 **Target baseline:** Windows 10 version 1803 or later (NTDDI_WIN10_RS4)
 **Related:** [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md),
@@ -28,11 +29,14 @@ The selected end state is:
    complete views as ART's existing four logical `MemMap` ranges.
 4. Keep the Windows-specific work in the mapping helpers, then use the common
    mspace, growth, translation, commit, collection, and cache-flush code.
-5. Keep `ART_WINDOWS_X64_JIT_DUAL=0` temporarily as a diagnostic J-1 opt-out until
+5. Check every x86_64 JIT-root disp32 and CodeInfo uint32 encoding before
+   patching or committing code. Reject an unrepresentable compilation without
+   changing the encoded format.
+6. Keep `ART_WINDOWS_X64_JIT_DUAL=0` temporarily as a diagnostic J-1 opt-out until
    real-Windows acceptance is complete, then remove the gate.
-6. Keep ART's ordinary single-view RWX-toggle path temporarily as a Windows
+7. Keep ART's ordinary single-view RWX-toggle path temporarily as a Windows
    diagnostic fallback; it is not the default product path.
-7. Keep CET user shadow stacks outside W-025. Current Win32 ART does not
+8. Keep CET user shadow stacks outside W-025. Current Win32 ART does not
    support Hardware-enforced Stack Protection because its shared managed
    exception/deoptimization long jump does not maintain CET's protected return
    stack. All defined incompatible HSP/context-validation fields must be
@@ -66,6 +70,7 @@ Measured on agent01 under Wine:
 | Default Hello | About 28–30 successful compilation records after native-JIT cleanup; PASS |
 | Default JIT smoke | 12/12, including default-silent compile diagnostics |
 | Default probe matrix | 14/14 |
+| Relative metadata encoding | Checked signed-int32 JIT-root and uint32 CodeInfo construction; deterministic boundary/overflow tests pass |
 | Native JIT | Common ART default policy; direct CriticalNative and 7/7 mixed/high-FP normal/FastNative matrices pass through binding, method-tracing, and JVMTI forced-interpreter transitions in both memory modes; Math native surfaces and native Windows 10 acceptance pass |
 | J-1 fallback | Diagnostic opt-out with `ART_WINDOWS_X64_JIT_DUAL=0`; Hello passes |
 | Code cache | 64 KiB initial release capacity; 64 MiB maximum |
@@ -914,6 +919,7 @@ None of this justifies retaining the RWX J-1 path as the product default.
 | Section-layout probe | 64 MiB and non-64-KiB capacity cases pass under Wine; low primary remains contiguous under forced low-space fragmentation |
 | dlmalloc and `MemMap` ownership | W-013 CLOSED: Stages A–E plus native R2 mapping, ownership, discard, pressure, metrics, and repeated-start acceptance pass |
 | Root-cause correction | JIT-root signed displacement plus latent CodeInfo overflow |
+| Direct encoding checks | ART `146016f83e` validates every x86_64 JIT-root disp32 before patching and CodeInfo placement before code/header writes; deterministic bounds pass, both native builds pass, and Windows Server 2025 W-004 regression returns 28/28 with no dump |
 | PE asm definitions | Windows-target generator test enforces `RUNTIME_INSTRUMENTATION_OFFSET=0x328` |
 | W-002 managed OSR entries | W-002 CLOSED: quick and nterp OSR adapters pass structural, Wine, Linux, and native R2 controls; native R2 returns 8/8 OSR with deterministic thresholds/checksum |
 | W-002 native attach entries | Regular and daemon native threads call a pre-JITed Java callback, allocate, validate daemon state and exact values, detach, and verify `JNI_EDETACHED` in both memory and interpreter modes |
@@ -931,7 +937,6 @@ None of this justifies retaining the RWX J-1 path as the product default.
 
 | Item | Blocker |
 |------|---------|
-| Direct encoding checks | Add deterministic signed-int32 JIT-root and uint32 CodeInfo construction guards before the native closure package |
 | P5 mapping/policy native acceptance | W-013 covers protections, metrics, J-1/default JIT, and repeated starts; CFG/dynamic-code policy, low-VA failure, large-cache pressure, and the complete W-025 host matrix remain |
 | Collection plus unwind sampling | Stress allocation, invalidation, collection, exact-address reuse, re-registration, and concurrent `RtlLookupFunctionEntry()`/virtual-unwind in both memory modes |
 | J-1 diagnostic opt-out | Remove only after the preceding default-path native gates pass and the final default/JIT-disabled regressions are clean |
@@ -960,6 +965,8 @@ unsupported for current Win32 ART rather than a pending W-025 feature; see
 | Attached-thread JNI, default nterp | PASS, 2/2 Wine + 2/2 native R2; 16 threads/run | PASS, 2/2 Wine + 2/2 native R2; 16 threads/run |
 | Attached-thread JNI, switch interpreter | PASS, 2/2 Wine + 2/2 native R2; 16 threads/run | PASS, 2/2 Wine + 2/2 native R2; 16 threads/run |
 | Restored Math ceil/floor | PASS, 3/3 threshold-zero and 3/3 `-Xint` | PASS, 3/3 threshold-zero and 3/3 `-Xint` |
+| Direct encoder boundary/overflow | PASS | PASS |
+| Post-guard native W-004 regression | PASS: CriticalNative, normal/FastNative, and JVMTI J-1 arms | PASS: dual-view JIT, threshold-zero, native/JVMTI, stress, and ten repeated starts; 28/28 aggregate |
 
 ### Next execution schedule — dependency order
 
@@ -969,7 +976,7 @@ independent package.
 
 | Order | Work | Exit gate |
 |------:|------|-----------|
-| JIT-1 | Add direct range checks at every signed-int32 JIT-root patch and uint32 CodeInfo construction site, with positive boundary and deterministic overflow tests | Focused compiler/runtime tests, Windows x64 build, Linux build, JIT smoke, and matrix pass without changing the encoded format |
+| JIT-1 (done) | Direct range checks at every signed-int32 JIT-root patch and uint32 CodeInfo construction site, with positive boundary and deterministic overflow tests | Accepted 2026-07-29: focused checks, Windows x64/Linux builds, Wine JIT/unwind gates, and native Windows Server 2025 W-004 regression pass without changing the encoded format; see `RESULT-jit-encoding-guards.md` |
 | JIT-2 | Build one W-025 native closure package for mapping protections, no-filesystem/no-RWX assertions, CFG and dynamic-code-policy observations, low-VA failure, and large `SEC_COMMIT` pressure | Package is reproducible, self-identifying, Wine-preflighted where meaningful, and documents expected policy rejection separately from mapping defects |
 | JIT-3 | Run default J-2 allocation/compile/invalidate/collect/reuse stress with concurrent `RtlLookupFunctionEntry()` and virtual-unwind sampling; retain J-1 only as a comparison arm | Real Windows returns clean lookup/lifecycle records, exact-address reuse re-registers before publication, dead PCs disappear, and no stale table, dump, or protection violation appears |
 | JIT-4 | Repeat smoke, matrix, JIT-disabled, and representative managed/native/OSR/fatal gates on the accepted default build | Default dual view passes the final native regression archive; all W-025 evidence is linked from the result document |
@@ -1021,6 +1028,7 @@ JIT-2/JIT-3 native package where practical. It does not block JIT-1.
 | 2026-07-24 | Native Windows 10 build 19044 tripwire matrix passes all nine cases with exact required native compile records and no crash dump; W-024 cleanup is authorized |
 | 2026-07-24 | ART `42a03f2ea0` restores exact upstream interpreter scope and common default native-JIT policy; final Windows x64 and Linux regressions pass and W-011/W-012/W-024 close |
 | 2026-07-29 | Treat direct encoding guards as the first W-025 closure change, then run one combined native mapping/pressure/collection/dynamic-unwind gate before removing the J-1 diagnostic opt-out |
+| 2026-07-29 | Complete JIT-1 in ART `146016f83e`: reject unrepresentable JIT-root and CodeInfo encodings before mutation; Windows Server 2025 build 26100 independently accepts the returned 28/28 W-004 regression archive with no dump |
 
 ## 15. Code anchors
 
@@ -1032,8 +1040,8 @@ JIT-2/JIT-3 native package where practical. It does not block JIT-1.
 | Windows mapping implementation | `vendor/art/libartbase/base/mem_map_windows.cc` |
 | Generic `RemapAtEnd` | `vendor/art/libartbase/base/mem_map.cc` |
 | Windows CPU-cache flush | `vendor/art/libartbase/base/utils.cc` |
-| JIT root patching | `vendor/art/compiler/optimizing/code_generator_x86_64.cc` |
-| CodeInfo offset | `vendor/art/runtime/oat/oat_quick_method_header.h` |
+| JIT root patching | `vendor/art/compiler/optimizing/code_generator_x86_64.cc`; `vendor/art/runtime/jit/jit_encoding.h` |
+| CodeInfo offset | `vendor/art/runtime/jit/jit_encoding.h`; `vendor/art/runtime/jit/jit_memory_region.cc`; `vendor/art/runtime/oat/oat_quick_method_header.h` |
 | Dynamic PE unwind metadata | `vendor/art/compiler/utils/x86_64/windows_x64_unwind_info.h`; `vendor/art/runtime/multiplatform/windows/jit_unwind_windows.*`; `vendor/art/runtime/jit/{jit_code_cache,jit_memory_region}.*` |
 | D-1 Thread-address helper | `vendor/art/compiler/utils/x86_64/assembler_x86_64.*` |
 | W-002 OSR entry adapters | `vendor/art/runtime/arch/x86_64/quick_entrypoints_x86_64.S`; `vendor/art/runtime/interpreter/mterp/x86_64ng/main.S` |

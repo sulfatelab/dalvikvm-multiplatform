@@ -2,7 +2,7 @@
 
 **Status:** living tracker  
 **Created:** 2026-07-17  
-**Updated:** 2026-07-28
+**Updated:** 2026-07-29
 **Rule:** Every **temporary workaround** that future work must remove belongs here as **OPEN**.  
 When the proper fix lands, mark the item **CLOSED**, move it into §Closed (sorted), and keep the full history.  
 Do **not** list permanent non-goals as OPEN workarounds—list them under §Non-goals.
@@ -51,14 +51,14 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 
 ---
 
-## Snapshot (2026-07-28)
+## Snapshot (2026-07-29)
 
 | Bucket | Summary |
 |--------|---------|
 | Phases 0–3 | **Gate-complete** (P3 G12 real Win10 + wine) |
 | Phase 4 | **Wine complete**; host re-run still recommended |
 | PE libcore/ICU/openjdk | **Product-default real PE** (icu/javacore/openjdk); NIO.2 non-goal; NetProbe OK |
-| Quick/JIT/TLS | **Managed and native JIT ON with the corrected dual view by default:** rSELF=r15; nterp N-1 default ON; D-1 complete (37/37 Thread sites); W-002 CLOSED after native R2 passes 21/21 records; W-003 CLOSED after native R1 passes 19/19 records with 8/8 frame attribution and 6/6 XMM sentinel; JIT smoke 12/12; JIT matrix 14/14; W-004 direct Runtime singleton load native-accepted; compile records opt-in |
+| Quick/JIT/TLS | **Managed and native JIT ON with the corrected dual view by default:** rSELF=r15; nterp N-1 default ON; D-1 complete (37/37 Thread sites); W-002 CLOSED after native R2 passes 21/21 records; W-003 CLOSED after native R1 passes 19/19 records with 8/8 frame attribution and 6/6 XMM sentinel; JIT smoke 12/12; JIT matrix 14/14; W-004 direct Runtime singleton load native-accepted; JIT-1 checked JIT-root/CodeInfo encodings and its post-change native W-004 regression passes 28/28; compile records opt-in |
 | Memory | One unnamed pagefile section is mapped as a contiguous low R/RX primary view plus a full RW alias; J-1 remains only as the temporary `ART_WINDOWS_X64_JIT_DUAL=0` diagnostic opt-out |
 | Heap memory | **W-013 CLOSED:** explicit MoreCore-only dlmalloc, direct mspace owners, constrained `VirtualAlloc2`, page-state operations, Linux-like metadata placement, and native R2 pressure/JIT/repeated-start acceptance PASS |
 | Threads / managed faults | **W-010/W-014 core path native-accepted:** E9 passes 30/30 on Windows Server 2025 build 26100. Windows x64 uses explicit pre-prologue stack checks; each attached thread has a verified minimum four-page stack guarantee; bounds debit the inaccessible prefix, configured guarantee, and moving guard before ART's unchanged 8192-byte reserve. Linux retains implicit probes. Zero handled dumps and five fatal static/JIT/OSR dumps pass. The items remain OPEN only for broader debugger, forced-policy, stack-budget, sampling/churn, exception-unwind XMM, pending-range, and embedding coverage. |
@@ -146,10 +146,10 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Opened:** 2026-07-17
 
 ### W-025 — JIT code cache + x86_64 codegen TLS (Windows)
-- **State:** OPEN (P5 implementation, Wine verification, and focused W-013/W-003 native subsets complete; broader real-Windows acceptance and residual hardening remain)
-- **Kind:** host-validation gap / temporary diagnostic workaround / hardening debt
+- **State:** OPEN (P5 implementation, JIT-1 encoding hardening, Wine verification, and focused native subsets complete; broader native policy/load acceptance and the temporary J-1 opt-out remain)
+- **Kind:** host-validation gap / temporary diagnostic workaround
 - **Area:** art / jit / compiler
-- **Symptom / why:** The corrected default now reproduces ART's Linux-visible `[data R][code RX]` contiguous primary layout with a coherent RW updater alias. Remaining W-025 work is real-Windows acceptance, direct encoding-site checks, and removal of the J-1 diagnostic fallback. Threshold zero is no longer a JIT-memory unknown; its implementation work is tracked under W-024.
+- **Symptom / why:** The corrected default now reproduces ART's Linux-visible `[data R][code RX]` contiguous primary layout with a coherent RW updater alias. JIT-1 completed the direct encoding-site checks. Remaining W-025 work is the combined real-Windows mapping/policy/load and collection/unwind acceptance, followed by removal of the J-1 diagnostic fallback. Threshold zero is no longer a JIT-memory unknown; its implementation work is tracked under W-024.
 - **Current behavior:**
   - **Default corrected dual view:** one unnamed `CreateFileMappingW(INVALID_HANDLE_VALUE, PAGE_EXECUTE_READWRITE)` section is mapped twice at offset zero. The complete primary view is below 4 GiB and split into data R plus code RX; the unrestricted alias is split into data RW plus code RW.
   - **Shared ART path:** mspace initialization, growth, address translation, commit, collection, and metadata handling remain on ART's common Linux/Windows path after mapping construction.
@@ -168,13 +168,13 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Why full views:** Both mappings start at section offset zero, so custom JIT maximum sizes need only ART's existing page alignment. This avoids a Windows-only 64 KiB divider rule and avoids placeholder split/remap rollback.
 - **Backing-store rule:** The selected section is backed by the Windows paging system, not by a named or temporary filesystem file. It can consume commit/pagefile backing, so large-capacity behavior up to 1 GiB remains an explicit test item.
 - **Rejected fixes:** moving stack maps alone (does not fix root loads); Win-only far-root codegen plus an extended header; moving all method metadata into the code arena; forcing every alias below 4 GiB.
-- **Safety checks:** mapping-time contiguity, low-4-GiB placement, logical sizes, and R/RX/RW protection roles are implemented. Direct signed-int32 JIT-root and uint32 CodeInfo construction checks remain open hardening.
-- **Separate residual:** W-024 is closed. W-025's broader mapping, CFG/dynamic-code-policy real-host acceptance, direct-encoding hardening, and J-1 diagnostic-opt-out removal remain separate. CET user shadow-stack support is not W-025 work: it is an explicit non-goal, and the process must run with HSP disabled under W-010's activation contract.
+- **Safety checks:** mapping-time contiguity, low-4-GiB placement, logical sizes, and R/RX/RW protection roles are implemented. ART `146016f83e` checks every signed-int32 JIT-root displacement and uint32 CodeInfo construction before mutation; deterministic boundary/overflow tests and the post-change native W-004 regression pass.
+- **Separate residual:** W-024 is closed and JIT-1 direct-encoding hardening is complete. W-025's broader mapping, CFG/dynamic-code-policy, large-commit-pressure, collection/unwind real-host acceptance, and J-1 diagnostic-opt-out removal remain separate. CET user shadow-stack support is not W-025 work: it is an explicit non-goal, and the process must run with HSP disabled under W-010's activation contract.
 - **Code anchors:** `mem_map_windows.cc` constrained section mapping; `mem_map.cc` Windows in-place split ownership; `jit_memory_region.cc` corrected dual-view branch and common post-mapping logic; `utils.cc` cache flush; `code_generator_x86_64.cc` `PatchJitRootUse`; `oat_quick_method_header.h` `code_info_offset_`; `jit.cc` opt-in compile records; `art-dlmalloc.cc` `USE_LOCKS=0`
-- **Verified:** default corrected dual-view Hello passes with about 28–30 total successful compile records after native-JIT gate removal; JIT smoke 12/12, including default-silent compile diagnostics; JIT matrix 14/14; J-1 diagnostic Hello passes; D-1 audit complete (37/37 GS sites); threshold-zero, registered, unresolved mixed-dlsym, method-traced, and JVMTI-forced native probes pass in both memory modes; the normal/FastNative mixed/high-FP matrix compiles 7/7 targets by default and survives rebinding plus method tracing without extra target compilation; standalone section-layout probe passes coherence, execution, protection, forced low-space fragmentation, and non-64-KiB capacity cases under Wine; W-013 native R2 validates J-2 protections, metrics, pressure, and repeated starts; W-003 native R1 validates four additional threshold-zero J-2 processes with successful frame/XMM compilation and clean fatal/dump scans
+- **Verified:** default corrected dual-view Hello passes with about 28–30 total successful compile records after native-JIT gate removal; JIT smoke 12/12, including default-silent compile diagnostics; JIT matrix 14/14; J-1 diagnostic Hello passes; D-1 audit complete (37/37 GS sites); threshold-zero, registered, unresolved mixed-dlsym, method-traced, and JVMTI-forced native probes pass in both memory modes; the normal/FastNative mixed/high-FP matrix compiles 7/7 targets by default and survives rebinding plus method tracing without extra target compilation; standalone section-layout probe passes coherence, execution, protection, forced low-space fragmentation, and non-64-KiB capacity cases under Wine; W-013 native R2 validates J-2 protections, metrics, pressure, and repeated starts; W-003 native R1 validates four additional threshold-zero J-2 processes with successful frame/XMM compilation and clean fatal/dump scans; JIT-1 encoder boundary/overflow tests, Windows/Linux builds, Wine JIT/unwind gates, and the Windows Server 2025 post-change W-004 regression pass 28/28 with no dump
 - **Design:** [win32_jit_memory.md](win32_jit_memory.md) §2–§13 (Linux low-4-GiB contract, historical diagnosis, implemented Windows 10 section design, verification, and residual work)
 - **Opened:** 2026-07-19
-- **Updated:** 2026-07-26 — corrected pagefile-section dual view remains verified; W-013 and W-003 focused native subsets pass; temporary J-1 diagnostic opt-out, direct-encoding hardening, and broader real-Windows acceptance remain
+- **Updated:** 2026-07-29 — JIT-1 direct-encoding hardening and its 28/28 native cross-regression pass; JIT-2/JIT-3 real-host acceptance and temporary J-1 diagnostic-opt-out removal remain
 
 
 ## Product leftovers (not single-line workarounds)
@@ -758,4 +758,4 @@ _No open design notes. Closed D- items live under §Closed._
 - [ ] CLOSED items: move full item into §Closed (sorted by ID); keep State CLOSED history  
 
 
-*Last snapshot: 2026-07-28 — W-001/W-002/W-003/W-004/W-011/W-012/W-013/W-024 are closed; nterp and the corrected pagefile-section JIT dual view are product defaults; D-1, W-002 native R2, W-003 native R1, W-004, W-013 native R2, and W-024 are accepted. W-010/W-014 E9 is native-accepted 30/30 on Windows Server 2025 build 26100: explicit Windows x64 stack checks, guarantee-aware bounds, switch/nterp/JIT SOE, zero handled dumps, and five fatal static/JIT/OSR dumps all pass. Linux keeps implicit probes. Fixed-page recursion remains rejected and its machinery is diagnostic-only. W-010/W-014 remain open only for broader debugger, forced-policy, stack-budget, dynamic-table sampling/churn, exception-unwind XMM, pending-range, and embedding coverage. W-025 broader real-host acceptance and five open workarounds remain.*
+*Last snapshot: 2026-07-29 — W-001/W-002/W-003/W-004/W-011/W-012/W-013/W-024 are closed; nterp and the corrected pagefile-section JIT dual view are product defaults; D-1, W-002 native R2, W-003 native R1, W-004, W-013 native R2, W-024, and W-025 JIT-1 are accepted. W-010/W-014 E9 is native-accepted 30/30 on Windows Server 2025 build 26100: explicit Windows x64 stack checks, guarantee-aware bounds, switch/nterp/JIT SOE, zero handled dumps, and five fatal static/JIT/OSR dumps all pass. The post-JIT-1 W-004 cross-regression passes 28/28 with no dump. Linux keeps implicit probes. Fixed-page recursion remains rejected and its machinery is diagnostic-only. W-010/W-014 remain open only for broader debugger, forced-policy, stack-budget, dynamic-table sampling/churn, exception-unwind XMM, pending-range, and embedding coverage. W-025 JIT-2/JIT-3 real-host acceptance and the temporary J-1 opt-out remain.*
