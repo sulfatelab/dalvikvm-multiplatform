@@ -82,6 +82,107 @@ Wine 10.0 can run `baseline`, `writable`, and `direct`, but its host process
 segfaults in `protected`. The protected recursion result therefore must come
 from real Windows and is intentionally excluded from Wine smoke.
 
+### Dirty RX stack-page experiment
+
+`win32_stack_growth_rx_probe.exe` is a standalone Win32/CRT probe with no ART
+headers or libraries. It repeats the recursive-growth experiment after
+selecting the same first page above the terminal low prefix, committing it
+read/write, filling the complete page with a deterministic pattern, flushing
+the instruction cache, and changing it to `PAGE_EXECUTE_READ`. A first VEH
+captures the exception access type, terminal page protection, and marker bytes
+before frame SEH handles the exception. The worker then calls
+`_resetstkoflw()` when required and restores the page to its original state.
+
+Ten fresh processes on Windows build `10.0.26100.32230` produced the same
+result. Immediately before recursion the page was a standalone 4096-byte
+`PAGE_EXECUTE_READ` region and the marker matched 64/64 bytes. At first
+terminal dispatch:
+
+- Windows reported `STATUS_STACK_OVERFLOW` with write access at `low + 0x3000`;
+- the selected page at `low + 0x1000` belonged to one 2,093,056-byte committed
+  `PAGE_READWRITE` region extending through the rest of the stack allocation;
+- the selected page was RW, never RWX, in every run; and
+- its marker still matched 64/64 bytes, proving Windows removed RX before a
+  recursive frame overwrote that page.
+
+This rules out dirty executable protection as a fixed tripwire inside a
+Windows-owned stack reservation. Native stack growth is willing to replace RX
+with ordinary non-executable RW stack backing. It also would not directly fit
+ART's Linux implicit SOE instruction: that instruction reads its probe address,
+and an RX page is readable.
+
+### Windows prior art and available designs
+
+No public report of the exact dirty-RX-to-RW transition was found. The closest
+published reproductions establish the broader rule behind it: protection in the
+current native stack reservation participates in Windows stack management and
+must not be treated as a persistent application-owned tripwire.
+
+- Microsoft's [Creating Guard
+  Pages](https://learn.microsoft.com/en-us/windows/win32/memory/creating-guard-pages)
+  documentation defines `PAGE_GUARD` as a one-shot alarm whose first access
+  clears the guard bit. [Thread Stack
+  Size](https://learn.microsoft.com/en-us/windows/win32/procthread/thread-stack-size)
+  says Windows commits reserved stack pages as they are needed. Microsoft's
+  supported native recovery sequence is to unwind out of the overflow handler
+  and then call
+  [`_resetstkoflw()`](https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/resetstkoflw)
+  to restore a guard page; this does not by itself preserve a managed catch at
+  the faulting JIT frame.
+- Raymond Chen's [A closer look at the stack guard
+  page](https://devblogs.microsoft.com/oldnewthing/20220203-00/?p=106215)
+  explains that the default stack-growth handler turns the accessed guard into
+  ordinary committed memory, moves the guard, and resumes the instruction.
+- The Stack Overflow reproducer [PAGE_GUARD protection on stack pages but
+  exception handler is not
+  executed](https://stackoverflow.com/questions/75175712/) observes that
+  neither VEH nor SEH receives ordinary guard accesses in the current stack.
+  Its answer demonstrates Windows removing the guard, installing lower guards,
+  and changing `NT_TIB.StackLimit`. An older local-variable reproducer reports
+  the same special behavior in [VirtualProtect With PAGE_GUARD Not Working With
+  Local Variables](https://stackoverflow.com/questions/37148399/).
+
+Existing runtimes use one of these designs instead of a fixed Linux-style
+`PROT_NONE` page in the Windows-owned native stack:
+
+- HotSpot uses compiler stack banging, handles `EXCEPTION_STACK_OVERFLOW`, and
+  manages yellow/red/reserved zones. Its Windows handler explicitly notes that
+  the OS has already unprotected the first yellow-zone page, reconstructs the
+  Java frame at the stack-banging point, redirects to the shared stack-overflow
+  continuation, and later reguards the zones. See
+  [`os_windows.cpp`](https://github.com/openjdk/jdk/blob/master/src/hotspot/os/windows/os_windows.cpp),
+  [`os_windows_x86.cpp`](https://github.com/openjdk/jdk/blob/master/src/hotspot/os_cpu/windows_x86/os_windows_x86.cpp),
+  and
+  [`stackOverflow.cpp`](https://github.com/openjdk/jdk/blob/master/src/hotspot/share/runtime/stackOverflow.cpp).
+- CoreCLR calls `SetThreadStackGuarantee`, translates `STATUS_STACK_OVERFLOW`
+  using a preallocated managed exception, physically checks for a missing guard
+  with `VirtualQuery`, and restores `PAGE_READWRITE | PAGE_GUARD` only after
+  sufficient unwind. It verifies the protection because setting a guard too
+  close to the current SP can race or fail, and terminates if it cannot restore
+  one above its hard guard region. See
+  [`threads.cpp`](https://github.com/dotnet/runtime/blob/main/src/coreclr/vm/threads.cpp)
+  and
+  [`excep.cpp`](https://github.com/dotnet/runtime/blob/main/src/coreclr/vm/excep.cpp).
+- Rust's standard library takes the smaller diagnostic-only route on Windows:
+  reserve emergency exception stack with `SetThreadStackGuarantee`, report
+  `EXCEPTION_STACK_OVERFLOW` from a VEH, and continue searching rather than try
+  to recover. See
+  [`stack_overflow.rs`](https://github.com/rust-lang/rust/blob/master/library/std/src/sys/pal/windows/stack_overflow.rs).
+- A recent WasmEdge proposal uses the same class of workaround selected here:
+  a soft per-thread stack limit checked at compiled-function entry with a 64 KiB
+  safety margin, producing a deterministic runtime trap before the native guard
+  is reached. The proposal is
+  [WasmEdge PR 4649](https://github.com/WasmEdge/WasmEdge/pull/4649); it was
+  closed without merge, so it is supporting prior art rather than a shipped
+  dependency.
+
+For this port, the existing Windows x64 pre-prologue `RSP < Thread::stack_end_`
+check remains the least invasive reliable design. A HotSpot/CoreCLR-style
+native-SOE subsystem is possible, but would require stack banging, reserved
+recovery budget, preallocated failure paths, frame reconstruction, and guard
+restoration. Application-owned stacks could regain mapping control only through
+a larger fiber/manual-stack ABI, unwind, GC, and native-transition redesign.
+
 ## Standalone UEF probe
 
 `win32_uef_probe.exe` has four isolated modes:

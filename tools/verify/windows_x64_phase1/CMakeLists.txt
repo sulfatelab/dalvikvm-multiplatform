@@ -145,6 +145,11 @@ add_executable(win32_stack_growth_probe EXCLUDE_FROM_ALL
 target_include_directories(win32_stack_growth_probe PRIVATE
   "${MDVM_ART_WIN_RUNTIME}")
 
+# Standalone experiment: does native stack growth replace a committed dirty
+# PAGE_EXECUTE_READ page inside the thread's own stack reservation?
+add_executable(win32_stack_growth_rx_probe EXCLUDE_FROM_ALL
+  "${CMAKE_CURRENT_SOURCE_DIR}/win32_stack_growth_rx_probe.c")
+
 add_executable(win32_uef_probe EXCLUDE_FROM_ALL
   "${CMAKE_CURRENT_SOURCE_DIR}/win32_uef_probe.cc")
 
@@ -339,6 +344,11 @@ get_property(_all_targets DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" PROPERTY BUILD
 foreach(_t IN LISTS _all_targets)
   get_target_property(_ttype ${_t} TYPE)
   if(_ttype STREQUAL "INTERFACE_LIBRARY" OR _ttype STREQUAL "UTILITY")
+    continue()
+  endif()
+  # Keep the dirty-RX stack experiment independent of ART and the POSIX
+  # compatibility prelude so its behavior is attributable to Windows alone.
+  if(_t STREQUAL "win32_stack_growth_rx_probe")
     continue()
   endif()
   target_include_directories(${_t} BEFORE PRIVATE "${MDVM_COMPAT_INCLUDE_DIR}")
