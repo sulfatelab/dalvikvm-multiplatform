@@ -1,6 +1,6 @@
 # Win64 Phase 4 — RESULT
 
-**Status:** **WINE COMPLETE; FOCUSED NATIVE SUBSETS ACCEPTED; W-010/W-014 REDESIGN/DIAGNOSIS ACTIVE** — W-002, W-003, W-004, and W-024 native matrices are accepted. Run 3 invalidates fixed-page recursive SOE delivery and rules out UEF replacement. Run 4 proves the repaired GenericJNI RDI metadata is necessary but insufficient: JNI hardware and raised AVs still stop after ART's VEH, while a JNI-created native worker reaches both UEFs and writes a valid dump. E4 bounded live unwind diagnostics pass the complete `-j32` package/Wine preflight and await native confirmation of the local `ExecuteSwitchImplAsm + 0x9` lookup gap.
+**Status:** **WINE COMPLETE; FOCUSED NATIVE SUBSETS ACCEPTED; W-010/W-014 REPAIR ACTIVE** — W-002, W-003, W-004, and W-024 native matrices are accepted. Run 3 invalidates fixed-page recursive SOE delivery and rules out UEF replacement. Run 4 proves the repaired GenericJNI RDI metadata is necessary but insufficient. Native E4 on Windows Server 2025 build 26100 confirms the first missing live unwind record at `ExecuteSwitchImplAsm + 0x9`; the native worker retains a complete UEF/dump path. The narrow wrapper repair and independent SOE redesign remain.
 **Date:** 2026-07-28
 **Depends on:** Phase 3 complete (real Win10 G12 goldens)
 
@@ -172,15 +172,15 @@ complete dispatch fix; the next package must trace bounded recursive native
 unwind progress from the live VEH context before any further product metadata
 change.
 
-That E4 live-VEH trace is now implemented behind
+That E4 live-VEH trace was implemented behind
 `ART_WIN64_FATAL_UNWIND_TRACE=1` and enabled only for the three late-UEF
 diagnostic children. It copies the context, records module-relative runtime-
 function data, walks at most 32 frames, validates leaf pops and stack bounds,
 and does not change dispatch. A direct Wine smoke reaches an end marker after
 15 frames. Its first live lookup gap is `ExecuteSwitchImplAsm + 0x9` at the
 post-call `pop %rbx`: the wrapper has pushed RBX but has no PE runtime-function
-record, so leaf fallback consumes saved RBX as the return PC. Native E4 return
-must confirm this same boundary before the assembly is changed. A confirmed
+record, so leaf fallback consumes saved RBX as the return PC. The assembly was
+held for native E4 confirmation; the native result below supplies it. The
 repair must also account for the wrapper's missing 32-byte MSVC outgoing home
 area while leaving its Linux/SysV path unchanged.
 
@@ -190,6 +190,14 @@ fatal dispatch, 14-15 valid Wine minidumps across two complete runs, final dump 
 regeneration, and the final clean-package checker. This is package readiness,
 not native proof of the candidate frame.
 
+Native E4 then confirms the candidate on Windows build 26100. JNI hardware and
+raised AV traces both unwind through GenericJNI, the static invoke stub, and
+ordinary ART frames to `ExecuteSwitchImplAsm + 0x9`, where runtime-function
+lookup fails. Leaf fallback consumes saved RBX as PC and both UEFs are missed.
+The JNI-created native worker unwinds through four registered frames, reaches
+both UEFs, and creates a valid 747,491-byte dump. The result bundle SHA-256 is
+`4616e8622dba2977b5472264f099de9449aa5c8b0a4bc1d1d568f9af8c6987b8`.
+
 ## Non-goals
 
 - Windows NIO.2
@@ -198,8 +206,8 @@ not native proof of the candidate frame.
 
 ## Next
 
-- Return the bounded live-VEH recursive unwind trace and confirm whether
-  `ExecuteSwitchImplAsm + 0x9` is the first native lookup gap after GenericJNI.
+- Add a Win64 frame and PE unwind record to `ExecuteSwitchImplAsm`, including
+  its mandatory 32-byte MSVC outgoing home area, and repeat native E4.
   Design a replacement Windows SOE delivery mechanism that
   does not rely on retaining a fixed no-access page inside the system stack.
   Then repeat the repaired SOE and static/JIT/OSR

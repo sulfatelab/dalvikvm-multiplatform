@@ -455,8 +455,8 @@ which is the exact failure shape expected from missing unwind metadata. The
 previous `art_jni_dlsym_lookup_stub` stack word is therefore not the first
 proven missing active frame.
 
-Native E4 must reproduce this frame before product assembly changes land. If
-it does, the narrow repair is not only `.seh_pushreg`: Win64
+The product assembly change was held until native E4 reproduced this frame.
+It did, so the narrow repair is not only `.seh_pushreg`: Win64
 `ExecuteSwitchImplAsm` also calls an MSVC-ABI C++ function without reserving
 the mandatory 32-byte outgoing home area. Add the home area and matching
 prologue/epilogue unwind description together under `_WIN32`, leave the
@@ -468,6 +468,15 @@ and Wine smoke. All three late-UEF modes emit bounded trace begin/frame/end
 records; two full fatal smokes preserve 14-15 valid minidumps before final cleanup
 and clean manifest regeneration. This verifies the diagnostic transport and
 non-regression surface, not the candidate frame on native Windows.
+
+Native E4 on Windows Server 2025 build 26100 reproduces the candidate exactly.
+The JNI hardware trace reaches `ExecuteSwitchImplAsm + 0x9` at frame 7 and the
+raised trace reaches it at frame 8. Both report `rva=0x9b6089 lookup=0`, then
+leaf fallback produces a stack address as PC and UEF dispatch is lost. The
+native worker instead traverses four registered frames to zero PC, reaches both
+UEFs, and writes a valid dump. Current Windows also repeats the fixed-page
+stack-growth failure. The diagnostic stage is therefore closed: repair the
+wrapper's Win64 home-area/unwind frame and verify native dispatch.
 
 ## 5. Windows contracts and conclusions
 
@@ -2164,12 +2173,17 @@ not as the final managed-overflow mechanism.
 - **E4 live trace implemented:** a bounded opt-in walk from the copied VEH
   context reports module/runtime-function RVAs and terminal progress. Wine's
   first live lookup miss is `ExecuteSwitchImplAsm + 0x9`, where the wrapper's
-  saved RBX is misread by leaf fallback. Native confirmation is required before
-  adding Win64 unwind metadata and the missing MSVC outgoing home area.
+  saved RBX is misread by leaf fallback. The product repair was held until
+  native confirmation before adding Win64 unwind metadata and the missing MSVC
+  outgoing home area.
+- **Native E4 confirmation:** Windows build 26100 reproduces the local
+  `ExecuteSwitchImplAsm + 0x9` lookup miss in both JNI exception shapes. The
+  native-worker chain is fully registered and reaches UEF/dump. The wrapper
+  frame repair is now evidence-backed rather than speculative.
 - **Still open:** repeat the static ranges, full-width XMM6-XMM15
   exception-unwind sentinel and fatal paths after UEF dispatch is repaired,
-  identify the first failing live unwind frame above GenericJNI, redesign
-  managed SOE delivery, and pass native debugger,
+  repair the confirmed `ExecuteSwitchImplAsm` frame, redesign managed SOE
+  delivery, and pass native debugger,
   large-table churn/sampling, rollback-injection, and debugger-quality
   dump-stack gates. Native normal-return XMM, OSR live unwind, and foreign
   VEH/frame-SEH already pass in the second run.
@@ -2353,14 +2367,12 @@ fallbacks:
 7. Does the locally implemented full-width XMM6-XMM15 adapter survive native
    Windows normal managed return and exception unwind through several
    optimizing and JNI frames?
-8. Does native E4 confirm Wine's first live lookup gap at
-   `ExecuteSwitchImplAsm + 0x9` after the repaired GenericJNI and invoke frames?
-   The bounded trace is implemented and does not infer active frames from
-   unstructured stack words. If confirmed, repair the wrapper's Win64 PE
-   unwind record and mandatory MSVC outgoing home area together. ART UEF
-   replacement, standalone UEF behavior, debugger/runner effects, dump
-   creation, exception shape, and process-wide ART startup state are already
-   ruled out.
+8. After repairing the native-confirmed `ExecuteSwitchImplAsm + 0x9` lookup
+   gap, do JNI hardware and raised AVs both traverse the wrapper and reach UEF?
+   Repair the Win64 PE unwind record and mandatory MSVC outgoing home area
+   together, then rerun E4 automatically. ART UEF replacement, standalone UEF
+   behavior, debugger/runner effects, dump creation, exception shape, and
+   process-wide ART startup state are already ruled out.
 
 ## 16. Primary references and comparative implementation
 

@@ -195,8 +195,8 @@ The diagnostic result rows require a begin marker, at least one frame, and an
 end marker. Use the module-relative RVA rather than the process-specific PC
 when comparing Wine and native Windows.
 
-A local Wine smoke already finds a concrete candidate that the native trace
-must confirm. The walk crosses the crashing `libopenjdk.dll` native method,
+Before the native run, a local Wine smoke found a concrete candidate. The walk
+crosses the crashing `libopenjdk.dll` native method,
 the repaired `art_quick_generic_jni_trampoline + 0xc5`,
 `art_quick_invoke_static_stub`, ordinary ART C++ frames, and
 `ExecuteSwitchImplCpp`. That last registered frame unwinds to
@@ -207,15 +207,40 @@ and leaves the real return address behind. This is the first proven live
 lookup gap in the local trace; `art_jni_dlsym_lookup_stub` is not the missing
 active frame in that walk.
 
-Do not land the product repair from Wine evidence alone. If native run 5
-repeats this boundary, repair `ExecuteSwitchImplAsm` as one Win64 ABI change:
+The product repair was deliberately held until native evidence repeated this
+boundary. Native E4 did so, therefore repair `ExecuteSwitchImplAsm` as one
+Win64 ABI change:
 describe its prologue/epilogue with PE unwind directives and provide the
 mandatory 32-byte MSVC outgoing home area for its call to
 `ExecuteSwitchImplCpp`. Keep the Linux/SysV body unchanged, then add structural
 lookup and realistic virtual-unwind coverage before repeating fatal dispatch.
 
-The complete E4 `-j32` package preflight passes under Wine. It requires begin,
+The complete E4 `-j32` package preflight passed under Wine. It requires begin,
 frame, and end trace markers in JNI hardware, JNI raised, and native-worker
-cases; preserves 14-15 valid fatal minidumps across two complete smokes; then removes all
-runtime dumps and regenerates the clean package manifests. Native run 5 is the
-remaining evidence gate.
+cases; preserved 14-15 valid fatal minidumps across two complete smokes; then
+removed all runtime dumps and regenerated the clean package manifests. This
+preflight preceded the native E4 result below.
+
+## Native E4 result
+
+The exact package was run automatically on Windows Server 2025 build 26100.
+The archive, manifest, structural report, and package checker passed before
+execution. The returned result bundle has SHA-256
+`4616e8622dba2977b5472264f099de9449aa5c8b0a4bc1d1d568f9af8c6987b8`.
+
+Both JNI-thread traces confirm Wine's candidate:
+
+- hardware AV reaches `ExecuteSwitchImplAsm + 0x9` at trace frame 7;
+- raised AV reaches the same PC at trace frame 8; and
+- both report `module=art.dll rva=0x9b6089 lookup=0`, then leaf fallback
+  produces a stack address as PC and UEF dispatch is lost.
+
+The native worker trace has four registered native/OS frames, reaches zero PC,
+enters both UEFs, and creates one valid 747,491-byte minidump. Its SHA-256 is
+`8d854b1e25d561dd8515e6ceb17c9e58574c9e766e3a0e6a1a82091fb7815bf6`.
+Stack and standalone UEF rows repeat the prior native result on current
+Windows. See `evidence/w010_w014_e4/DIAGNOSIS.md`.
+
+The diagnosis is closed: `ExecuteSwitchImplAsm` is the first missing live
+runtime-function record. Repair its Win64 RBX/home-area frame, add structural
+and body/epilogue virtual-unwind gates, then repeat the three exception shapes.
