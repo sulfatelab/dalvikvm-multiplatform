@@ -151,6 +151,10 @@ def check_package(root: Path) -> None:
         if not (root / relative).is_file():
             fail(f"required package file is missing: {relative}")
 
+    build_info = (root / "BUILD_INFO.txt").read_text(encoding="utf-8").splitlines()
+    if "stage=E5-switch-wrapper-unwind-repair" not in build_info:
+        fail("BUILD_INFO.txt does not identify the E5 switch-wrapper repair stage")
+
     if list(root.rglob("*.dmp")):
         fail("clean issued package unexpectedly contains a crash dump")
 

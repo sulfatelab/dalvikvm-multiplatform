@@ -146,7 +146,7 @@ art_branch=$(git -C "$REPO/vendor/art" branch --show-current)
 art_commit=$(git -C "$REPO/vendor/art" rev-parse HEAD)
 win64_build=$BUILD
 windows_minimum_build=17134
-stage=E4-live-fatal-unwind-diagnostics
+stage=E5-switch-wrapper-unwind-repair
 EOF
 
 clean_runtime_outputs() {
