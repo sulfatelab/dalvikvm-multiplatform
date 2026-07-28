@@ -68,18 +68,6 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 
 ## Temporary workarounds (must be removed later)
 
-### W-001 — Force interpreter invoke (quick entrypoints effectively disabled)
-- **State:** CLOSED (product default uses quick invoke)
-- **Kind:** workaround (removed as product default)
-- **Area:** art / invoke
-- **Symptom / why:** Windows x64 used to force interpreter invoke until quick path was smoke-validated.
-- **Current behavior:** On `_WIN32`, invokable non-proxy methods use `art_quick_invoke_*` (MS entry → SysV body, rSELF=r15) by default, matching Linux. Opt-out with `ART_WINDOWS_X64_QUICK_INVOKE=0` forces `EnterInterpreterFromInvoke`. Debugger/`-Xint` still force interpreter via normal ART paths.
-- **Proper fix:** Done for product default. The separate Microsoft-nonvolatile XMM boundary gap was repaired and native-accepted under closed W-003; optional deletion of the env force path remains later cleanup.
-- **Code anchors:** `vendor/art/runtime/art_method.cc`; `quick_entrypoints_x86_64.S` Win prologues; [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md) §12b / §17.8
-- **Blocked on:** n/a (default ON as of 2026-07-19)
-- **Opened:** 2026-07-16 (Phase 2)
-- **Updated:** 2026-07-19 — product default ON (Linux-like); opt-out `ART_WINDOWS_X64_QUICK_INVOKE=0`
-
 ### W-008 — Some product smoke still passes `-Xint` / imageless
 - **State:** OPEN (partial — managed JIT suites run without `-Xint`; older interpreter-specific probes retain it)
 - **Kind:** workaround (policy flags)
@@ -124,29 +112,6 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Opened:** 2026-07-16
 - **Updated:** 2026-07-28 — E9 accepts the complete native 30-record managed-fault/fatal matrix on build 26100
 
-### W-011 — Legacy expanded InterpreterJni shorty fallback
-- **State:** CLOSED (2026-07-24) — upstream interpreter fallback restored after Wine and native Windows acceptance
-- **Kind:** workaround
-- **Area:** art / jni
-- **Current behavior:** ART commit `42a03f2ea0` restores `runtime/interpreter/interpreter.cc` byte-for-byte to `android-16.0.0_r4`. `ArtInterpreterToInterpreterBridge` again enforces the upstream pre-start-only native invariant; runtime-started native calls retain JNI compiler/generated entrypoints under `-Xint`, tracing, and JVMTI.
-- **Shared-artifact implication:** Linux and Windows x64 use identical `boot.jar` dex/annotation bytes (`3cbe9a7...`), so no Windows-only boot shorty or native annotation set exists to justify this expansion.
-- **Proper fix:** Complete. The interpreter file has exact upstream parity and the complete Linux/Windows x64 post-change matrix passes.
-- **Evidence:** `tools/verify/windows_x64_phase4/RESULT-interpreter-jni-fallback.md`; accepted native-host evidence: `tools/verify/windows_x64_phase4/evidence/w024_host/ACCEPTANCE.md`
-- **Code anchors:** `vendor/art/runtime/interpreter/interpreter.cc` (`InterpreterJni`, `EnterInterpreterFromInvoke`, `ArtInterpreterToInterpreterBridge`)
-- **Opened:** 2026-07-16
-- **Closed:** 2026-07-24 — native Windows tripwire acceptance plus final Wine/Linux regression
-
-### W-012 — Legacy InterpreterJni direct JNI resolver
-- **State:** CLOSED (2026-07-24) — `ResolveJniEntryPoint` removed with the legacy fallback expansion
-- **Kind:** workaround
-- **Area:** art / jni
-- **Current behavior:** Product and upstream fallback paths use ART's normal registered entrypoint and generated dlsym-stub policy. The Windows x64-only direct resolver no longer exists.
-- **Proper fix:** Complete with ART commit `42a03f2ea0`.
-- **Evidence:** `tools/verify/windows_x64_phase4/RESULT-interpreter-jni-fallback.md`, `tools/verify/windows_x64_phase4/RESULT-critical-native.md`, `tools/verify/windows_x64_phase4/RESULT-native-abi.md`, `tools/verify/windows_x64_phase4/evidence/w024_host/ACCEPTANCE.md`
-- **Code anchors:** `vendor/art/runtime/interpreter/interpreter.cc`; generated JNI dlsym stubs
-- **Opened:** 2026-07-16
-- **Closed:** 2026-07-24 — upstream resolver behavior restored
-
 ### W-014 — Windows stack bounds, pthread sizes, and stack guarantees
 
 - **State:** OPEN for broader host coverage; guarantee-aware bounds and explicit managed SOE are native-accepted in E9
@@ -179,6 +144,367 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Proper fix:** Keep NIO.2 non-goal; deepen channel/options matrix; optional IOCP epoll later if needed.
 - **Code anchors:** `tools/verify/windows_x64_libcore_icu/CMakeLists.txt` (`_OJ_SRCS` filters); `compat/src/windows_x64_socket_posix.c`
 - **Opened:** 2026-07-17
+
+### W-025 — JIT code cache + x86_64 codegen TLS (Windows)
+- **State:** OPEN (P5 implementation, Wine verification, and focused W-013/W-003 native subsets complete; broader real-Windows acceptance and residual hardening remain)
+- **Kind:** host-validation gap / temporary diagnostic workaround / hardening debt
+- **Area:** art / jit / compiler
+- **Symptom / why:** The corrected default now reproduces ART's Linux-visible `[data R][code RX]` contiguous primary layout with a coherent RW updater alias. Remaining W-025 work is real-Windows acceptance, direct encoding-site checks, and removal of the J-1 diagnostic fallback. Threshold zero is no longer a JIT-memory unknown; its implementation work is tracked under W-024.
+- **Current behavior:**
+  - **Default corrected dual view:** one unnamed `CreateFileMappingW(INVALID_HANDLE_VALUE, PAGE_EXECUTE_READWRITE)` section is mapped twice at offset zero. The complete primary view is below 4 GiB and split into data R plus code RX; the unrestricted alias is split into data RW plus code RW.
+  - **Shared ART path:** mspace initialization, growth, address translation, commit, collection, and metadata handling remain on ART's common Linux/Windows path after mapping construction.
+  - **Temporary J-1 diagnostic workaround:** `ART_WINDOWS_X64_JIT_DUAL=0` selects the single-view `VirtualAlloc` path for comparison or emergency diagnosis. It writes code through an RX-to-RWX-to-RX transition and is not the product default.
+  - **No disk file:** the section is unnamed and backed by the Windows paging system; no temporary filesystem object, pseudo-fd, or Windows memfd emulation is created.
+  - **Historical separated-view defect:** the retired layout placed code far from roots and stack maps, overflowing signed 32-bit JIT-root displacements and uint32 CodeInfo distance. The corrected topology removes that layout.
+  - **Threshold-zero stress:** resolved outside memory topology. The direct `@CriticalNative` path has Windows x64 shadow/unified-argument handling. W-024 originally added a caller-PC reload around the helper-based runtime load; W-004 subsequently replaced that helper with a direct load that does not clobber `r11` and removed the reload. Repeated J-1 and dual-view acceptance passes; W-024 is closed.
+  - Native methods follow the common ART JIT policy by default. The 7/7 mixed/high-FP normal/FastNative matrix passes across rebinding and tracing; the separate CriticalNative suite passes tracing in both memory modes; the JVMTI forced-interpreter matrix passes 3/3 per mode; and restored Math CriticalNative passes dual/J-1/-Xint plus Linux controls.
+- **Implemented proper fix:** Keep ART's observable layout and post-mapping JIT logic Linux-like while containing the Windows difference in the section-allocation helper:
+  1. Require Windows 10 version 1803 or later and link `onecore.lib` for `MapViewOfFile3`.
+  2. Create one unnamed pagefile-backed section and map the two complete views described above.
+  3. Split both views logically into ART's four existing ranges without a placeholder unmap/remap transaction or Windows-only 64 KiB capacity rule.
+  4. Use explicit Windows `FlushInstructionCache` and `VirtualQuery` layout/protection checks.
+  5. Keep the common ART mspace and JIT lifecycle code unchanged after mapping construction.
+  6. Remove the temporary `ART_WINDOWS_X64_JIT_DUAL=0` opt-out after real-Windows acceptance.
+- **Why full views:** Both mappings start at section offset zero, so custom JIT maximum sizes need only ART's existing page alignment. This avoids a Windows-only 64 KiB divider rule and avoids placeholder split/remap rollback.
+- **Backing-store rule:** The selected section is backed by the Windows paging system, not by a named or temporary filesystem file. It can consume commit/pagefile backing, so large-capacity behavior up to 1 GiB remains an explicit test item.
+- **Rejected fixes:** moving stack maps alone (does not fix root loads); Win-only far-root codegen plus an extended header; moving all method metadata into the code arena; forcing every alias below 4 GiB.
+- **Safety checks:** mapping-time contiguity, low-4-GiB placement, logical sizes, and R/RX/RW protection roles are implemented. Direct signed-int32 JIT-root and uint32 CodeInfo construction checks remain open hardening.
+- **Separate residual:** W-024 is closed. W-025's broader mapping, CFG/dynamic-code-policy real-host acceptance, direct-encoding hardening, and J-1 diagnostic-opt-out removal remain separate. CET user shadow-stack support is not W-025 work: it is an explicit non-goal, and the process must run with HSP disabled under W-010's activation contract.
+- **Code anchors:** `mem_map_windows.cc` constrained section mapping; `mem_map.cc` Windows in-place split ownership; `jit_memory_region.cc` corrected dual-view branch and common post-mapping logic; `utils.cc` cache flush; `code_generator_x86_64.cc` `PatchJitRootUse`; `oat_quick_method_header.h` `code_info_offset_`; `jit.cc` opt-in compile records; `art-dlmalloc.cc` `USE_LOCKS=0`
+- **Verified:** default corrected dual-view Hello passes with about 28–30 total successful compile records after native-JIT gate removal; JIT smoke 12/12, including default-silent compile diagnostics; JIT matrix 14/14; J-1 diagnostic Hello passes; D-1 audit complete (37/37 GS sites); threshold-zero, registered, unresolved mixed-dlsym, method-traced, and JVMTI-forced native probes pass in both memory modes; the normal/FastNative mixed/high-FP matrix compiles 7/7 targets by default and survives rebinding plus method tracing without extra target compilation; standalone section-layout probe passes coherence, execution, protection, forced low-space fragmentation, and non-64-KiB capacity cases under Wine; W-013 native R2 validates J-2 protections, metrics, pressure, and repeated starts; W-003 native R1 validates four additional threshold-zero J-2 processes with successful frame/XMM compilation and clean fatal/dump scans
+- **Design:** [win32_jit_memory.md](win32_jit_memory.md) §2–§13 (Linux low-4-GiB contract, historical diagnosis, implemented Windows 10 section design, verification, and residual work)
+- **Opened:** 2026-07-19
+- **Updated:** 2026-07-26 — corrected pagefile-section dual view remains verified; W-013 and W-003 focused native subsets pass; temporary J-1 diagnostic opt-out, direct-encoding hardening, and broader real-Windows acceptance remain
+
+
+## Product leftovers (not single-line workarounds)
+
+_No open product leftovers. Closed L- items live under §Closed._
+
+## Host / validation gaps
+
+### H-001 — Phase 4 re-run on real Windows host
+- **State:** OPEN
+- **Kind:** host-gap
+- **Gap:** Wine Phase 4 PASS (incl. multiplatform rebuild 2026-07-17). Real Win10 Phase-4 subset (gcstress, threadheavy, handleleak, crash native/abort) not re-proven with multiplatform PE.
+- **Exit criteria:** Host logs under `tools/verify/windows_x64_phase4/evidence/host/` (or successor) OVERALL PASS.
+- **Opened:** 2026-07-16
+
+### H-002 — Phase 3 G12 with multiplatform-built PE (not only pre-migration tree)
+- **State:** OPEN
+- **Kind:** host-gap
+- **Gap:** Authoritative G12 used earlier host package; multiplatform in-tree PE rebuild should re-package and smoke on Win10 when convenient.
+- **Opened:** 2026-07-17
+
+### H-003 — Wine is not product acceptance
+- **State:** OPEN (policy reminder, not a code fix)
+- **Kind:** host-gap / process
+- **Note:** Keep wine as agent01 oracle; product claims need real Windows for VEH/TEB/network.
+- **Opened:** 2026-07-16
+
+---
+
+## Non-goals (do not track as OPEN workarounds)
+
+| Item | Decision |
+|------|----------|
+| Windows NIO.2 (`sun.nio.fs`) | Non-goal for now ([win32_filesystem.md](win32_filesystem.md)) |
+| WSL2 / Wine as product runtime | Rejected |
+| Win32 x86 product SKU | Out of scope (x64 first) |
+| Full Android framework / zygote / binder | Out of scope |
+| In-process dual JIT ISA (x64+Arm64EC) | Rejected in TLS/JIT draft |
+| CET user shadow stacks / Hardware-enforced Stack Protection | Unsupported for current Win32 ART; all defined incompatible HSP/context-validation fields must be disabled, while `CetDynamicApisOutOfProcOnly` and reserved fields are not treated as HSP enablement ([win32_faults_and_stacks.md](win32_faults_and_stacks.md)) |
+
+If product reopens a non-goal, add an **L-** item and link the decision.
+
+---
+
+## Closed
+
+Summary (details below; do not delete history):
+
+- **W-002** — No managed GS / Thread base on Windows (2026-07-26) — r15 managed-self design, OSR adapters, and attached-thread entry accepted on native Windows R2
+- **W-003** — Quick entrypoint SETUP frames and Microsoft XMM boundary (2026-07-26) — all four frame families and XMM6-XMM11 preservation accepted on native Windows R1
+- **W-004** — `LOAD_RUNTIME_INSTANCE` direct PE singleton load (2026-07-25) — helper removed; direct same-image load passes structural, Wine, Linux, and native Windows acceptance
+- **W-005** — Combined PE JNI stub DLL aliased as libjavacore/libopenjdk/libicu_jni (2026-07-17) — product packaging uses stage_native_modules.sh (real PE only); libcombined is legacy non-product
+- **W-006** — Minimal NativeConverter / ICU version shims (not full ICU4C) (2026-07-17) — product uses real icu_jni NativeConverter + icuuc/icui18n + icudt; native_converter.c obsolete and removed from libcombined; charset stub no longer product path
+- **W-007** — Classic sockets / poll via Winsock `select` (not full Os/NIO) (2026-07-17) — permanent WinNT design: classic Os sockets use Winsock + **`select()`-based poll/timeouts** (not CRT-fd `WSAPoll`)
+- **W-009** — Phase-1 grade `compat` POSIX/pthread stubs (2026-07-17) — hot paths hardened; remaining ENOSYS is intentional Linux-only surface
+- **W-011** — Legacy expanded InterpreterJni shorty fallback (2026-07-24) — removed after Wine and native Windows tripwire acceptance; upstream pre-start-only invariant restored
+- **W-012** — Legacy InterpreterJni direct JNI resolver (2026-07-24) — removed with upstream `interpreter.cc` restoration
+- **W-013** — dlmalloc WIN32 / low-4GB / MORECORE choices for imageless ART (2026-07-25) — accepted design and native Windows R2 closure matrix pass
+- **W-015** — openjdkjvm memory exports minimal PE surface (2026-07-17) — product ships comprehensive standalone `libopenjdkjvm.dll`
+- **W-016** — ICU needs external `ICU_DATA` / `icudt72l.dat` for wine smoke (2026-07-17) — product always stages run/icu/icudt72l.dat via tools/windows_x64/stage_run_assets.sh (same class as boot.jar); libicu_jni defaults ICU_DATA to run/icu when unset
+- **W-018** — NetProbe StructLinger NPE (getsockopt SO_LINGER incomplete in javacore Win bridge) (2026-07-17) — implemented getsockoptLinger/setsockoptLinger in win_net_natives; NetProbe wine PASS
+- **W-019** — Math @CriticalNative / FastNative double ABI on Windows x64 (2026-07-17; superseded 2026-07-24) — historical interpreter DD/DDD workaround replaced by Linux-like entrypoints and restored native Math surface
+- **W-020** — FileChannelImpl.map0 pointer truncation on Windows x64 (LLP64) (2026-07-17) — `ptr_to_jlong(mapAddress)` instead of `(jlong)(unsigned long)`
+- **W-021** — Default KeyStore type Android-compatible (AndroidCAStore) (2026-07-17)
+- **W-022** — Product default CA bundle (AndroidCAStore cacerts) (2026-07-17)
+- **W-023** — OkHttp Http(s)Handler on bootclasspath + ASCII IDN/Normalizer multipath (2026-07-17)
+- **W-024** — Restore original CriticalNative/FastNative surfaces (2026-07-24) — ABI, binding, tracing, JVMTI, native-host acceptance, upstream fallback cleanup, and default native JIT complete
+- **L-001** — Real PE libcore / openjdk / ICU module build (2026-07-17)
+- **L-002** — boringssl / conscrypt / SSL PE (2026-07-17) — product TLS stack green under wine (providers + SSLContext.init + HTTPS GET)
+- **L-003** — Process/exec, rich locale, zip edge, UDP/IPv6 matrix (2026-07-17)
+- **L-004** — Shrink or replace multi-name DLL staging (2026-07-17) — product ships one PE soname each: `libicu_jni`/`libjavacore`/`libopenjdk`/`libopenjdkjvm`/`libcrypto`/`libssl`/`libjavacrypto` (+ `icuuc`/`icui18n`); short-name twins removed from packaging
+- **L-005** — Linux multiplatform imageless Hello / boot.jar CI gate (2026-07-17)
+- **L-006** — phase1.cmake / generated Win graph pure-vendor consistency (2026-07-17)
+- **D-001** — Shared boot.jar via runtime OS selection (2026-07-17)
+
+<!-- keep full CLOSED item bodies for history -->
+
+
+### W-001 — Force interpreter invoke (quick entrypoints effectively disabled)
+- **State:** CLOSED (product default uses quick invoke)
+- **Kind:** workaround (removed as product default)
+- **Area:** art / invoke
+- **Symptom / why:** Windows x64 used to force interpreter invoke until quick path was smoke-validated.
+- **Current behavior:** On `_WIN32`, invokable non-proxy methods use `art_quick_invoke_*` (MS entry → SysV body, rSELF=r15) by default, matching Linux. Opt-out with `ART_WINDOWS_X64_QUICK_INVOKE=0` forces `EnterInterpreterFromInvoke`. Debugger/`-Xint` still force interpreter via normal ART paths.
+- **Proper fix:** Done for product default. The separate Microsoft-nonvolatile XMM boundary gap was repaired and native-accepted under closed W-003; optional deletion of the env force path remains later cleanup.
+- **Code anchors:** `vendor/art/runtime/art_method.cc`; `quick_entrypoints_x86_64.S` Win prologues; [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md) §12b / §17.8
+- **Blocked on:** n/a (default ON as of 2026-07-19)
+- **Opened:** 2026-07-16 (Phase 2)
+- **Updated:** 2026-07-19 — product default ON (Linux-like); opt-out `ART_WINDOWS_X64_QUICK_INVOKE=0`
+
+### W-002 — No managed GS / Thread base on Windows (`InitCpu` no-op for GS)
+- **State:** CLOSED (2026-07-26) — managed-entry implementation and native Windows R2 acceptance complete
+- **Kind:** resolved managed-entry ABI, TLS, OSR, and host-validation gap
+- **Area:** art / TLS
+- **Symptom / why:** Linux x86_64 uses `ARCH_SET_GS` so quick/nterp use `%gs:OFFSET`; Windows GS is the TEB and cannot be repurposed.
+- **Current behavior:** `InitCpu` correctly leaves GS untouched. Windows managed code uses r15 as rSELF while Linux retains GS. Quick invoke and OSR boundaries publish rSELF, and nterp N-1 retains rbp as rREFS.
+- **Quick OSR fix:** `art_quick_osr_stub` keeps its Microsoft-x64 C++ declaration. Its local Windows prologue converts six arguments to the shared SysV-shaped body, preserves Microsoft nonvolatile rdi/rsi/r15, and publishes the explicit `Thread*` in r15. Linux keeps its original instruction path. W-003 subsequently repaired XMM6–XMM11 preservation at this default-C++ boundary; W-002 remains closed for the accepted rSELF/OSR transition contract.
+- **Nterp OSR fix:** Windows cleanup uses the `NterpFree` SysV-to-Microsoft bridge. A Windows return adapter keeps nterp's save block separate from the compiled OSR frame, then restores XMM12–XMM15 and rbx/rbp/r12–r15 after compiled code returns.
+- **Attach contract:** native regular and daemon threads establish ART C++ TLS without owning caller r15. JNI invocation crosses the existing quick boundary, which preserves native r15 and publishes managed rSELF. The probe pre-JITs the Java callback and validates allocation, daemon state, exact results, detach, and `JNI_EDETACHED`.
+- **Native R1:** package identity, structure, 8/8 attach, and 4/4 switch OSR passed with no fatal marker or dump. Four clean default-nterp runs missed the jump because the harness left warmup at 65535 and its 300,000-iteration loop finished before another post-compilation hotness check.
+- **Deterministic R2:** every OSR runner pins warmup and optimize thresholds to 100, verifies the reported values, and runs 2,000,000 iterations with checksum `65553463744`. Unit tests, focused Wine, Phase 3/4 Wine aggregates, and Linux Hello/GC/OSR controls pass.
+- **Native R2 acceptance:** Windows 10 build 19044 returns 21 PASS records and `OVERALL PASS`. All 16 children exit zero without timeout; OSR passes 8/8 across dual/J-1 and default-nterp/switch; attach passes 8/8; fatal and dump scans pass with `NO_DMP_FILES`.
+- **Evidence transport note:** `/tmp/w002-r2-log.zip` omitted root `MANIFEST.json` while copying evidence. The host-side `PASS package_integrity` proves it existed and matched during the run; returned `BUILD_INFO.txt`, `SHA256SUMS.txt`, and both structural reports exactly match the issued package, and the exact returned sums record the retained manifest hash. A normalized copy adds only that byte-identical retained manifest and passes the unchanged strict reviewer. No runtime log was changed.
+- **Evidence:** [RESULT-w002-managed-entry.md](tools/verify/windows_x64_phase4/RESULT-w002-managed-entry.md), [W002_HOST_CHECKLIST.md](tools/verify/windows_x64_phase4/W002_HOST_CHECKLIST.md), and [native acceptance](tools/verify/windows_x64_phase4/evidence/w002_host/ACCEPTANCE.md)
+- **Code anchors:** `jit.cc` `art_quick_osr_stub`; `quick_entrypoints_x86_64.S`; `mterp/x86_64ng/main.S` `NterpHotnessCheck`; `nterp.cc` `NterpFree`; `thread_x86_64.cc`; `asm_support_x86_64.S` `THREAD_*`
+- **Design:** [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md) §15, §17, and §17.9
+- **Opened:** 2026-07-16
+- **Closed:** 2026-07-26 — deterministic native R2 acceptance plus final evidence review
+
+
+### W-003 — Quick entrypoint SETUP frames `int3` on Windows
+- **State:** CLOSED (2026-07-26) — shared frame bodies, native-boundary XMM repair, and native Windows R1 acceptance complete
+- **Kind:** resolved frame stub / latent ABI defect / validation gap
+- **Area:** art / quick asm / Microsoft-to-managed boundaries
+- **Historical defect:** Upstream x86-64 deliberately trapped `_WIN32` in `SETUP_SAVE_REFS_ONLY_FRAME` and `SETUP_SAVE_ALL_CALLEE_SAVES_FRAME`. `SETUP_SAVE_REFS_AND_ARGS_FRAME` and `SETUP_SAVE_EVERYTHING_FRAME` were never Windows-trapped; they already shared the non-Apple body.
+- **Current frame behavior:** All four ART runtime callee-save families use the Linux-shaped frame body on Windows. Only the Thread base and Runtime singleton load differ: `THREAD_STORE_Q` addresses through r15 and `LOAD_RUNTIME_INSTANCE` uses the direct PE same-image load. Shared frame sizes and spill masks remain unchanged. Apple still traps.
+- **Emitted-object finding:** With the accepted matched Linux/Windows x64 configuration, the quick PE and ELF objects have the same `int3` distribution: 212 functions and 401 instructions. Remaining traps are shared `UNIMPLEMENTED`/`UNREACHABLE`/read-barrier assertions, not Windows-only SETUP expansions. The checker compares the complete symbol/instruction multiset rather than hard-coding these snapshot totals.
+- **Managed/helper ABI:** Quick assembly and JIT retain ART's Linux-shaped managed register convention. Assembly-called C++ helpers use `ART_QUICK_ENTRYPOINT_ABI` (`sysv_abi`) on Windows x64, so SETUP macros do not grow Microsoft shadow space or adopt Microsoft argument registers.
+- **Native-boundary repair:** W-003 originally made `art_quick_invoke_stub`, `art_quick_invoke_static_stub`, and `art_quick_osr_stub` reserve a Windows-only 96-byte area for XMM6-XMM11, which is the accepted native R1 contract. The later W-010 exception-unwind work expands only that adapter to 160 bytes and preserves the lower 128 bits of XMM6-XMM15 before managed argument setup or OSR. The area remains outside canonical ART frames, preserves alignment, changes the Windows x64 OSR conceptual CFA to 256, and leaves Linux at 80. Native build 19044 passes all six `fullSelfTestMask=1023` normal-return sentinel runs; exception-unwind repetition remains W-010 work without reopening W-003.
+- **rSELF constraint:** r15 remains the live Thread base until each frame publishes `top_quick_frame`. Runtime callee-save frames spill and restore r15 in the shared canonical slot; optimizing Windows x64 code separately reserves r15 rather than allocating it as a general callee-save.
+- **Wine and structural evidence:** `check_w003_quick_boundaries.py` verifies all four SETUP source contracts, the three PE save/restore sequences, Linux absence of the Windows save area, and matched PE/ELF trap multisets. The opt-in frame probe is absent from product PE/ELF artifacts and passes 8/8 Wine processes; nterp and threshold-zero JIT each attribute refs-only, refs-and-args, all-callee-saves, and save-everything. The XMM sentinel passes 6/6 Wine processes and returns the exact `0x3f` intentional-clobber self-test mask.
+- **Native R1 acceptance:** Windows 10 build 19044 returns exactly 19 PASS records and `OVERALL PASS`. All 14 children exit zero without timeout. The frame matrix passes 8/8; the XMM sentinel passes 6/6 with `mask=0 selfTestMask=63 iterations=128`; JIT logs confirm the corrected pagefile-section J-2 dual view and successful probe compilation; fatal and dump scans pass with `NO_DMP_FILES`. Package metadata and structural reports match the issued package byte for byte.
+- **Unwind and W-010 scope:** W-003 closed the frame/XMM ABI defect independently of Windows exception dispatch. Later W-010 substages added emitted PE unwind records to `art_quick_invoke_stub`, `art_quick_invoke_static_stub`, `art_quick_generic_jni_trampoline`, and split OSR entry/return ranges after recursive unwind tracing proved those records are required for fatal dispatch correctness. Dynamic JIT code now has allocation-lifetime runtime-function registration as well. W-010 also owns the full XMM6-XMM15 follow-up, exact VEH/non-owning-`CONTEXT` managed-fault adapter, cooperative VEH/SEH chaining, and the independent nterp implicit-null fault formerly observed at `nterp_op_invoke_virtual+0x3a`; Stage D translates that product path in the dedicated W-010 gate. The W-003 probe still excludes only that implicit-null case and retains class-cast, array-store, and bounds paths; no W-003 product fallback was added.
+- **Close bar:** Satisfied: no Windows-only SETUP trap; XMM6–XMM11 preserved at ordinary Microsoft C++-to-managed boundaries; all four frame families have focused attributed Wine and native coverage; Linux frame bodies remain unchanged; and native Windows acceptance passes.
+- **Evidence:** [RESULT-w003-quick-frames-analysis.md](tools/verify/windows_x64_phase4/RESULT-w003-quick-frames-analysis.md); [RESULT-w003-frame-probe.md](tools/verify/windows_x64_phase4/RESULT-w003-frame-probe.md); [RESULT-w003-xmm-sentinel.md](tools/verify/windows_x64_phase4/RESULT-w003-xmm-sentinel.md); [W003_HOST_CHECKLIST.md](tools/verify/windows_x64_phase4/W003_HOST_CHECKLIST.md); [native acceptance](tools/verify/windows_x64_phase4/evidence/w003_host/ACCEPTANCE.md)
+- **Code anchors:** `asm_support_x86_64.S`; `quick_entrypoints_x86_64.S`; `callee_save_frame_x86_64.h`; `art_method.cc`; `jit.cc`; `ART_QUICK_ENTRYPOINT_ABI` in `libartbase/base/macros.h` and quick helper declarations
+- **Depends on:** W-001 and W-002 are closed prerequisites; W-004 direct Runtime load is closed. W-010 owns the managed-fault and handler-chain work defined in [win32_faults_and_stacks.md](win32_faults_and_stacks.md).
+- **Opened:** 2026-07-16
+- **Closed:** 2026-07-26 — native R1 19/19 acceptance plus final evidence review
+
+
+### W-004 — `LOAD_RUNTIME_INSTANCE` direct PE singleton load
+- **State:** CLOSED (2026-07-25) — direct same-image load accepted on native Windows 10 build 19044
+- **Kind:** resolved assembly ABI debt
+- **Area:** art / asm
+- **Symptom / why:** The retired Windows macro crossed the Microsoft x64 C ABI merely to read `Runtime::instance_`. It mutated the stack and flags and introduced volatile-register side effects that the Linux/other-ISA data-load macros do not have. The `rcx` destination and later `r11` caller-PC collisions required path-specific repairs; generic JNI also re-materialized `xmm0` after the helper.
+- **Current behavior:** Windows x64 directly loads `?instance_@Runtime@art@@0PEAV12@EA` with one same-image RIP-relative `movq`. The accepted RelWithDebInfo objects contain 574 direct `IMAGE_REL_AMD64_REL32` relocations (563 quick, 10 generated nterp, 1 JNI), zero retired helper references, and no helper-specific `r11` or immediate `xmm0` compensation. Linux retains its original two-instruction GOT sequence.
+- **Research finding:** `Runtime::instance_` is already explicitly exported/imported by `LIBART_PROTECTED`. With the selected clang GNU driver, lld, and MSVC ABI, a quoted direct reference to `?instance_@Runtime@art@@0PEAV12@EA` assembles as `IMAGE_REL_AMD64_REL32` and links inside `art.dll` to one 7-byte RIP-relative load. Same-image ASLR preserves the displacement. External consumers keep normal `dllimport`/IAT behavior.
+- **Implemented proper fix:** Replaced only the Windows macro body with the direct same-image load; deleted `art_Runtime_instance_ptr`, helper-only `Runtime::InstanceLocation()`, and the obsolete helper-specific `r11`/`xmm0` compensations. Explicit dependencies make all five assembly consumers rebuild when shared assembly support changes.
+- **Verification:** Clean and incremental `-j32` builds, the structural/source/dependency gate, Phase 3/4 Wine aggregates, JIT 12/12 and 14/14, CriticalNative, normal/FastNative, JVMTI, Linux shared-boot Hello, and Linux GC stress pass. Native Windows 10 build 19044 adds 28 PASS records over 22 child processes: nterp, dual-view JIT, threshold-zero FloatProbe, dual/J-1 native ABI and JVMTI paths, GC/thread/handle stress, and ten repeated starts. Package metadata and the structural report match the issued package byte for byte; all children exit zero without timeout, fatal marker, trace leak, or dump.
+- **Important scope:** Dynamically generated JIT code does not use this macro. Do not reuse this same-image RIP-relative sequence for the low-4-GiB JIT cache, which may be more than signed 32-bit reach from `art.dll`; that remains W-025 territory.
+- **Rejected permanent designs:** Retaining/hardening the call helper; importing `art.dll` from itself; caching `Runtime*` in `Thread`. A stable C assembly label on the existing member remains the first fallback if maintaining the MS-mangled spelling becomes unacceptable; an exported `Runtime**` address cell is second fallback.
+- **Evidence:** [RESULT-w004-runtime-load.md](tools/verify/windows_x64_phase4/RESULT-w004-runtime-load.md), [W004_HOST_CHECKLIST.md](tools/verify/windows_x64_phase4/W004_HOST_CHECKLIST.md), and [native acceptance](tools/verify/windows_x64_phase4/evidence/w004_host/ACCEPTANCE.md)
+- **Code anchors:** `vendor/art/runtime/arch/x86_64/asm_support_x86_64.S` (`LOAD_RUNTIME_INSTANCE`); `tools/verify/windows_x64_phase1/CMakeLists.txt`; `tools/verify/windows_x64_phase1/check_w004_runtime_load.py`; `tools/windows_x64/host_package/package_windows_x64_w004.sh`
+- **Opened:** 2026-07-16
+- **Closed:** 2026-07-25 — implementation plus structural, Wine, Linux, and native Windows acceptance complete
+
+
+### W-005 — Combined PE JNI stub DLL aliased as libjavacore/libopenjdk/libicu_jni
+- **State:** CLOSED (2026-07-17) — product packaging uses stage_native_modules.sh (real PE only); libcombined is legacy non-product
+- **Kind:** workaround
+- **Area:** libcore-stub / packaging
+- **Symptom / why:** Full ojluni + ICU4C PE ports not built; ART `InitNativeMethods` still dlopens those sonames.
+- **Current behavior:** `tools/windows_x64/jni_stubs/libcombined.dll` copied to six names (`libjavacore.dll`, `libopenjdk.dll`, `libicu_jni.dll`, and short names). ~160 `Java_*` exports, hand-written (~2.3k LOC).
+- **Proper fix:** Real PE modules (or fewer real DLLs) from Soong/bp2cmake Windows x64 graph: javacore, openjdk, icu_jni + icuuc/i18n, etc.; stop multi-name aliasing of one stub.
+- **Code anchors:** `tools/windows_x64/jni_stubs/build_combined.sh`, `tools/windows_x64/host_package/package_windows_x64_phase3.sh`, stage scripts in phase2 RESULT
+- **Opened:** 2026-07-16 (Phase 2; expanded Phase 3)
+
+### W-006 — Minimal NativeConverter / ICU version shims (not full ICU4C)
+- **State:** CLOSED (2026-07-17) — product uses real icu_jni NativeConverter + icuuc/icui18n + icudt; native_converter.c obsolete and removed from libcombined; charset stub no longer product path
+- **Kind:** workaround
+- **Area:** icu
+- **Current behavior:** Phase-3 package historically used `native_converter.c` stubs. **Phase A progress:** real PE `icuuc.dll` / `icui18n.dll` / `icu_jni.dll` now build from AOSP sources (`tools/verify/windows_x64_libcore_icu/`) and can replace stub `libicu_jni` in `build/windows_x64_phase1`. `libjavacore`/`libopenjdk` still combined stubs (may still register overlapping charset helpers until removed).
+- **Proper fix:** Default package/install to real ICU PE only; remove charset exports from `libcombined`; verify full data (`ICU_DATA` / icudt) vs stubdata; complete L-001 for javacore/openjdk.
+- **Code anchors:** `tools/verify/windows_x64_libcore_icu/`, `tools/windows_x64/jni_stubs/native_converter.c`
+- **Opened:** 2026-07-16
+- **Progress:** 2026-07-17 — real ICU PE + CoreProbe wine OK with hybrid package
+
+### W-007 — Classic sockets / poll via Winsock `select` (not full Os/NIO)
+- **State:** CLOSED (2026-07-17) — permanent WinNT design: classic Os sockets use Winsock + **`select()`-based poll/timeouts** (not CRT-fd `WSAPoll`)
+- **Kind:** workaround → **permanent platform design**
+- **Area:** libcore-stub / net
+- **Symptom / why:** Full AOSP `libcore.io.Linux` PE not used on Windows x64; real Win10 rejected CRT `_open_osfhandle` + `WSAPoll` (`WSAEINVAL` on accept poll).
+- **Fix / design:**
+  - Product `libjavacore` Win bridge (`win_net_natives.c`) implements classic socket surface with **`select()`** for `poll`, SO_TIMEOUT waits, and connect write-readiness.
+  - NIO epoll path similarly select-emulated in `compat/src/windows_x64_socket_posix.c` (bounded `FD_SETSIZE`).
+  - 2026-07-17: registered `bind`/`connect` **`SocketAddress`** overloads for `InetSocketAddress` (AF_UNIX still out of product scope).
+  - 2026-07-25: removed `_get_osfhandle` + `SO_TYPE` fd probing. Win32 HANDLE and Winsock SOCKET values use independent namespaces and can alias numerically. The permanent design is an explicit process-wide socket-fd registry exported by the already required `libopenjdkjvm.dll`; javacore, openjdk, JVM I/O, NIO, socket/accept/socketpair, dup/dup2, and close paths share it. This is not a temporary heuristic or a disk-backed side channel.
+- **Evidence:**
+  - Host G12 (2026-07-16): net/dns/goldenapp PASS after select poll fix (`tools/verify/windows_x64_phase3/evidence/host/ANALYSIS_20260716T205926.md`).
+  - Wine (2026-07-17): NetProbe, DnsProbe, UdpProbe, AsyncCloseProbe, GoldenApp, **SocketAddressProbe** PASS.
+  - Wine (2026-07-25): native socket/file fd-reuse probe PASS; HandleLeak 5/5; NetProbe, IoProbe, dual-view JIT 12/12, and J-1 Hello PASS.
+- **Non-goals residual:** AF_UNIX SocketAddress; full AOSP `libcore_io_Linux.cpp` (L-001 closed with Win bridge map); NIO.2.
+- **Code anchors:** `tools/windows_x64/jni_stubs/win_net_natives.c`, `tools/windows_x64/jni_stubs/win_fs_natives.c`, `register_libcore_io_Linux_win.cpp`, `compat/src/windows_x64_socket_posix.c`, `compat/src/windows_x64_socket_fd_registry.c`, `compat/include/mdvm_socket_fd_registry.h`
+- **Opened:** 2026-07-16
+- **Closed:** 2026-07-17
+
+### W-009 — Phase-1 grade `compat` POSIX/pthread stubs
+- **State:** CLOSED (2026-07-17) — hot paths hardened; remaining ENOSYS is intentional Linux-only surface
+- **Kind:** workaround → **platform compat layer** (ongoing shrink is maintenance, not open product gap)
+- **Area:** compat
+- **Fix / evidence:**
+  - `pthread_rwlock_*` now real **SRWLOCK** shared/exclusive (was CRITICAL_SECTION exclusive-only) — ART `Mutex`/`ReaderWriterMutex` ABI rebuilt into product `art.dll`.
+  - `pthread_once` now uses uninitialized/initializing/initialized states. Waiters no longer return while the winning initializer is still running; the former one-bit CAS caused intermittent null `JniConstants` field IDs during JIT-timed NetProbe socket close.
+  - `uname` uses `RtlGetVersion` + computer name; `clock_gettime(CLOCK_MONOTONIC)` via QPC; `pthread_setname_np`/`getname_np` via `SetThreadDescription` when available.
+  - Socket-aware `poll`/epoll already select-based (W-007); mmap/mprotect/pthread mutex/cond already real Win32.
+  - Wine: `dalvikvm -showversion`, CoreProbe, NetProbe, GoldenApp PASS after ART rebuild; 32-thread `pthread_once` stress 10/10; JIT-enabled NetProbe 10/10; final JIT matrix 14/14.
+- **Residual (not OPEN product work):** fork/ptrace/sendfile/tgkill etc. remain ENOSYS; further shrink only when a product path needs them.
+- **Code anchors:** `compat/src/windows_x64_posix_stubs.c`, `compat/include/pthread.h`
+- **Focused result:** `tools/verify/windows_x64_phase4/RESULT-pthread-once.md`
+- **Opened:** 2026-07-16 (Phase 0/1)
+- **Closed:** 2026-07-17
+- **Updated:** 2026-07-24 — fixed `pthread_once` early-return race exposed by repeated JIT NetProbe
+
+### W-011 — Legacy expanded InterpreterJni shorty fallback
+- **State:** CLOSED (2026-07-24) — upstream interpreter fallback restored after Wine and native Windows acceptance
+- **Kind:** workaround
+- **Area:** art / jni
+- **Current behavior:** ART commit `42a03f2ea0` restores `runtime/interpreter/interpreter.cc` byte-for-byte to `android-16.0.0_r4`. `ArtInterpreterToInterpreterBridge` again enforces the upstream pre-start-only native invariant; runtime-started native calls retain JNI compiler/generated entrypoints under `-Xint`, tracing, and JVMTI.
+- **Shared-artifact implication:** Linux and Windows x64 use identical `boot.jar` dex/annotation bytes (`3cbe9a7...`), so no Windows-only boot shorty or native annotation set exists to justify this expansion.
+- **Proper fix:** Complete. The interpreter file has exact upstream parity and the complete Linux/Windows x64 post-change matrix passes.
+- **Evidence:** `tools/verify/windows_x64_phase4/RESULT-interpreter-jni-fallback.md`; accepted native-host evidence: `tools/verify/windows_x64_phase4/evidence/w024_host/ACCEPTANCE.md`
+- **Code anchors:** `vendor/art/runtime/interpreter/interpreter.cc` (`InterpreterJni`, `EnterInterpreterFromInvoke`, `ArtInterpreterToInterpreterBridge`)
+- **Opened:** 2026-07-16
+- **Closed:** 2026-07-24 — native Windows tripwire acceptance plus final Wine/Linux regression
+
+### W-012 — Legacy InterpreterJni direct JNI resolver
+- **State:** CLOSED (2026-07-24) — `ResolveJniEntryPoint` removed with the legacy fallback expansion
+- **Kind:** workaround
+- **Area:** art / jni
+- **Current behavior:** Product and upstream fallback paths use ART's normal registered entrypoint and generated dlsym-stub policy. The Windows x64-only direct resolver no longer exists.
+- **Proper fix:** Complete with ART commit `42a03f2ea0`.
+- **Evidence:** `tools/verify/windows_x64_phase4/RESULT-interpreter-jni-fallback.md`, `tools/verify/windows_x64_phase4/RESULT-critical-native.md`, `tools/verify/windows_x64_phase4/RESULT-native-abi.md`, `tools/verify/windows_x64_phase4/evidence/w024_host/ACCEPTANCE.md`
+- **Code anchors:** `vendor/art/runtime/interpreter/interpreter.cc`; generated JNI dlsym stubs
+- **Opened:** 2026-07-16
+- **Closed:** 2026-07-24 — upstream resolver behavior restored
+
+### W-013 — dlmalloc WIN32 / low-4GB / MORECORE choices for imageless ART
+- **State:** CLOSED (2026-07-25) — accepted design and native Windows R2 closure matrix pass
+- **Kind:** workaround removal / platform-memory design
+- **Area:** art / heap
+- **Symptom / why:** dlmalloc's standalone Win32 defaults forced mmap-style `VirtualAlloc` growth outside ART's arena, risking Java objects above 4 GiB. The Phase-2 recovery workaround hid `_WIN32`/`WIN32` while including `dlmalloc.c`, preserving ART MoreCore but accidentally changing unrelated platform defaults.
+- **Current behavior:** `_WIN32`/`WIN32` remain visible; dlmalloc respects ART's explicit MoreCore-only, mspace-only, externally locked configuration. Each heap and JIT mspace stores its direct owner provider in `malloc_state::extp/exts`; no runtime/global owner scan remains. Windows address policy is explicit, low/aligned allocation uses `VirtualAlloc2` constraints, logical views share whole-allocation ownership, heap page-state operations route through `MemMap`, and discard handles mixed protection including `PAGE_NOACCESS`. Runtime/compiler metadata and the card table use Linux-like anywhere placement while audited object/image/heap/JIT-primary consumers remain low. Executable JIT mspace metadata updates use `ScopedCodeCacheWrite`. Full heap capacity remains initially committed.
+- **Accepted design:** ART owns virtual memory; dlmalloc manages chunks inside an owner-attached ART arena. Windows-specific address, protection, discard, and release behavior stays behind `MemMap`.
+- **Low-address policy:** Java object spaces, non-moving/LOS, required image/heap ranges, and the JIT primary view remain below 4 GiB. LinearAlloc, compiler/JIT metadata arenas, and the card table are unrestricted after the encoding audit. The source gate pins the remaining required-low inventory.
+- **Native acceptance:** R1 on Windows 10 build 19044 found `DiscardVirtualMemory(PAGE_NOACCESS)`, J-1 RX provider-metadata writes, socket-fd namespace aliasing, blank runner accounting, and a nondeterministic marker. ART `6253d01afc` / `27a1ac74a4`, root `c943f1f` / `caad337`, and libcore `67ec4ab8dd70` repaired them. R2 from root `c909ca7` and ART `27a1ac74a4` returns 56 PASS, zero FAIL, complete metrics for 52 children, native mapping/config/owner probes, 128-MiB and 1-GiB non-moving pressure, GC/ThreadHeavy/HandleLeak, 512-MiB and 1-GiB startup, default dual-view and J-1 JIT, the fourteen-case matrix, 20/20 repeated starts, clean fatal-log scan, and `NO_DMP_FILES`.
+- **Boundary / non-goal:** Fixed file-view replacement over an ordinary `VirtualAlloc` reservation remains unsupported and unused by the imageless/JIT product path. Any future placeholder-overlay or reserve-only/lazy-commit design is separate work.
+- **Code anchors:** `art-dlmalloc.{h,cc}`; `dlmalloc.c` Win32 defaults and `malloc_state::extp/exts`; `dlmalloc_space.cc`; `malloc_space.cc`; `jit_memory_region.cc`; `mem_map.{h,cc}`; `mem_map_windows.cc`; `runtime.cc`
+- **Design:** [win32_heap_memory.md](win32_heap_memory.md)
+- **Evidence:** `tools/verify/windows_x64_w013/RESULT.md`; `tools/verify/windows_x64_w013/evidence/native_r2/ACCEPTANCE.md`; returned archive SHA-256 `456e297d70c2f166308c869812ddec262fa38bc6dcd2852ea56edd5b2205078e`; external dlmalloc `f3356ce`; ART `8c900a9e4b`, `d011d72d56`, `2fa301a13b`, `9ea15456a2`, `6253d01afc`, `47567cebcc`, `1509b1f95e`, `27a1ac74a4`; root `c943f1f`, `caad337`; libcore `67ec4ab8dd70`
+- **Opened:** 2026-07-16
+- **Closed:** 2026-07-25 — native Windows R2 acceptance plus final evidence review
+
+### W-015 — openjdkjvm memory exports minimal PE surface
+- **State:** CLOSED (2026-07-17) — product ships comprehensive standalone `libopenjdkjvm.dll`
+- **Kind:** workaround
+- **Area:** art / openjdkjvm
+- **Fix / evidence:**
+  - Product PE from `tools/verify/windows_x64_libcore_icu/openjdkjvm_memory_standalone.c`: memory/GC + file I/O + sockets + raw monitors + time (`JVM_*` set used by hybrid openjdk).
+  - Added `JVM_ActiveProcessorCount`.
+  - Product `JVM_NativeLoad` delegates to `art.dll!ART_LoadNativeLibrary`; the ART-tree helper calls `JavaVMExt::LoadNativeLibrary`, preserving ART library ownership and unresolved JNI lookup.
+  - The standalone DLL remains the product soname and broad `JVM_*` surface; the ART-tree Windows file supplies ART heap/GC exports plus the narrow native-load bridge.
+  - It also owns the process-wide Windows x64 socket-fd registry because Libcore.os creates sockets in `libjavacore` while java.net stream natives consume them in `libopenjdk`. Reusing this already required bridge avoids a new product DLL and keeps classification exact across module boundaries.
+  - Wine CoreProbe/GoldenApp/NetProbe with staged `libopenjdkjvm` PASS.
+- **Code anchors:** `tools/verify/windows_x64_libcore_icu/openjdkjvm_memory_standalone.c`; stage via `stage_native_modules.sh`
+- **Opened:** 2026-07-16
+- **Closed:** 2026-07-17
+
+---
+
+### W-016 — ICU needs external `ICU_DATA` / `icudt72l.dat` for wine smoke
+- **State:** CLOSED (2026-07-17) — product always stages run/icu/icudt72l.dat via tools/windows_x64/stage_run_assets.sh (same class as boot.jar); libicu_jni defaults ICU_DATA to run/icu when unset
+- **Kind:** workaround
+- **Area:** icu / packaging
+- **Symptom / why:** Linked stubdata alone yields `u_init` `U_FILE_ACCESS_ERROR` under wine; full data file works.
+- **Current behavior:** Stage `run/icu/icudt72l.dat` and set `ICU_DATA=run/icu` (or absolute path). `Register.cpp` also calls `udata_setCommonData(&U_ICUDATA_ENTRY_POINT)` on Win.
+- **Proper fix:** Package full ICU data by default in host package scripts; verify embedded data path or always set ICU_DATA in runners.
+- **Code anchors:** `vendor/icu/android_icu4j/libcore_bridge/src/native/Register.cpp`; `build/windows_x64_phase1/run/icu/`
+- **Opened:** 2026-07-17
+- **Progress:** 2026-07-17 — `package_windows_x64_phase3.sh` fails if `icudt72l.dat` missing; phase3/4 runners and install_into_phase1 default/export `ICU_DATA=run/icu`
+
+### W-018 — NetProbe StructLinger NPE (getsockopt SO_LINGER incomplete in javacore Win bridge)
+- **State:** CLOSED (2026-07-17) — implemented getsockoptLinger/setsockoptLinger in win_net_natives; NetProbe wine PASS
+- **Kind:** leftover / bug
+- **Area:** libcore-stub / net
+- **Symptom / why:** `NetProbe` fails: `StructLinger.isOn()` on null from linger get.
+- **Proper fix:** Implement linger get/set in `win_net_natives` / Linux Os bridge returning real `StructLinger`.
+- **Code anchors:** `tools/windows_x64/jni_stubs/win_net_natives.c`; NetProbe client path
+- **Opened:** 2026-07-17
+
+### W-019 — Math @CriticalNative / FastNative double ABI on Windows x64
+- **State:** CLOSED (2026-07-17; workaround superseded 2026-07-24) — Math.ceil/floor/sqrt + HashSet wine passed after interpreter CriticalNative DD/DDD; W-024 now restores Linux-like entrypoints and the native Math surface
+- **See also:** **W-024** — Math.ceil/floor and the common ELF/PE registration table are restored; the temporary interpreter shorties were subsequently deleted
+- **Kind:** workaround / runtime ABI
+- **Area:** libcore Math / ART interpreter JNI (Windows x64 -Xint)
+- **Historical root cause:** Official AOSP CriticalNative is fine on Linux quick/generic-JNI. Windows x64 multipath formerly forced `ArtMethod::Invoke` through the interpreter; `InterpreterJniGeneric` only handled CriticalNative shorties `II`/`I`/`Z`/`ZI`. `Math.ceil` is shorty `DD` (`(D)D`), so dispatch fell through and crashed. Secondary: registering `Math_*_jni(JNIEnv*,jclass,jdouble)` under CriticalNative is the wrong ABI.
+- **Historical fix:** interpreter CriticalNative `DD`/`DDD`/`FF`/`J`; `Math.c` `gMethodsWin` → `Math_ceil(jdouble)` etc.; posix stubs for the ART rebuild. W-024 removed `gMethodsWin`, restored ceil/floor native declarations, stopped routing native methods through the Windows-only interpreter detour, and finally deleted the temporary shorties.
+- **Exit criteria:** `MathProbe` + `SslProviderProbe` wine PASS with rebuilt `art.dll`.
+- **Code anchors:** `vendor/art/runtime/interpreter/interpreter.cc`, `vendor/libcore/ojluni/src/main/native/Math.c`, `compat/src/windows_x64_posix_stubs.c`
+- **Opened:** 2026-07-17
+- **Progress:** 2026-07-17 — root cause + source fix; full art PE rebuild running
+
+### W-020 — FileChannelImpl.map0 pointer truncation on Windows x64 (LLP64)
+- **State:** CLOSED (2026-07-17) — `ptr_to_jlong(mapAddress)` instead of `(jlong)(unsigned long)`
+- **Kind:** bug / ABI
+- **Area:** openjdk NIO / boot classpath ZIP mmap
+- **Root cause:** AOSP `FileChannelImpl_map0` returned `(jlong)(unsigned long)mapAddress`. On Windows x64 LLP64 `unsigned long` is 32-bit, so mapped addresses like `0x6ffff…` were truncated (high bits zeroed). `Memory.peekByteArray` then crashed in CRT (`fault_addr=0xff0e0eec` pattern) while `VMClassLoader` clinit mapped `boot.jar` for `ClassPathURLStreamHandler`.
+- **Symptom chain:** `Security.getProviders` → provider class load → `BootClassLoader.loadClass` → `findLoadedClass` path / resource handlers → ZIP mmap via NIO → AV. Earlier W-019-style AV signature was coincidental.
+- **Historical supporting workaround:** Windows x64 `-Xint` once forced natives through `InterpreterJni` and kept FastNative Runnable. W-024 removed that Windows-only branch after the real JVMTI transition passed through Linux-like JNI entrypoints; the old detour aborted on mixed shorty `DJDIF`. The temporary interpreter shorties were deleted after native-host acceptance.
+- **Exit criteria:** SecStep17 `BootClassLoader.loadClass` + SecStep3 `Security.getProviders` wine PASS.
+- **Code anchors:** `vendor/libcore/ojluni/src/main/native/FileChannelImpl.c`; `vendor/art/runtime/interpreter/interpreter.cc`; `interpreter_common.cc`
+- **Opened:** 2026-07-17
+- **Closed:** 2026-07-17
+
+### W-021 — Default KeyStore type Android-compatible (AndroidCAStore)
+- **State:** CLOSED (2026-07-17)
+- **Kind:** config / compatibility
+- **Area:** JCA / conscrypt SSL defaults
+- **Root cause:** Windows x64 multipath deferred BouncyCastle, so `keystore.type=BKS` could not resolve. `Security.initializeStatic()` also omitted `keystore.type`, so `KeyStore.getDefaultType()` fell back to desktop `jks`, which is not registered. `KeyManagerFactory.init(null,null)` → `KeyStore.getInstance("jks")` failed and `SSLContext.init` aborted.
+- **Fix:** default `keystore.type=AndroidCAStore` (HarmonyJSSE/`TrustedCertificateKeyStoreSpi`, empty-loadable); restore loading `security.properties` on Windows after W-020; mirror in `build_conscrypt_windows_x64.sh` and boot.jar resource.
+- **Exit criteria:** KeyStoreProbe + SslProviderProbe `sslcontext.init=ok` under wine.
+- **Opened/Closed:** 2026-07-17
+
+### W-022 — Product default CA bundle (AndroidCAStore cacerts)
+- **State:** CLOSED (2026-07-17)
+- **Kind:** packaging / product asset
+- **Area:** TLS trust / AndroidCAStore
+- **Root cause:** Android `TrustedCertificateStore` reads `$ANDROID_ROOT/etc/security/cacerts/<subject_hash_old>.N`. Product previously shipped empty dirs, so SSLContext.init worked but trust set was empty.
+- **Fix:** generate Mozilla/system PEM bundle into OpenSSL hash_old layout (`tools/windows_x64/generate_cacerts.sh`), hermetic assets under `tools/windows_x64/assets/cacerts`, stage via `stage_run_assets.sh` as required asset (with `boot.jar` / `icudt72l.dat`). LocaleData hard-coded fallback so OpenSSLX509Certificate date parsing works without full ICU4J resource bundles in boot.jar.
+- **Exit criteria:** TrustStoreProbe AndroidCAStore.size>=50 and acceptedIssuers>=50 under wine with ANDROID_ROOT=run.
+- **Opened/Closed:** 2026-07-17
+
+### W-023 — OkHttp Http(s)Handler on bootclasspath + ASCII IDN/Normalizer multipath
+- **State:** CLOSED (2026-07-17)
+- **Kind:** packaging / compatibility
+- **Area:** java.net URL / HTTPS
+- **Root cause:** Android resolves `http/https` via `com.android.okhttp.HttpHandler`/`HttpsHandler`, not packaged in multipath boot.jar. After packaging, pure-ASCII OkHttp/TLS paths still required ICU4J StringPrep/Normalizer tables not present in boot.jar.
+- **Fix:** `tools/bootjar/build_okhttp_windows_x64.sh` merges repackaged OkHttp+okio into boot; `IDN.toASCII` and `java.text.Normalizer` short-circuit pure-ASCII; product ICU data preferred over stub in `libicu_jni` Register.cpp; cacerts already staged.
+- **Exit criteria:** HttpsProbe handler resolution + `https://example.com/` status 200 under wine.
+- **Opened/Closed:** 2026-07-17
 
 ### W-024 — Restore original @CriticalNative / @FastNative surfaces after JIT/TLS/entrypoints
 - **State:** CLOSED (2026-07-24) — surfaces, ABI, transitions, native-host acceptance, and cleanup complete
@@ -296,300 +622,6 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Related:** W-019 (CLOSED temporary Math ABI fix), W-011/W-012 (legacy InterpreterJni fallback), W-025 (JIT memory; threshold-zero proved unrelated)
 - **Opened:** 2026-07-17
 - **Closed:** 2026-07-24 — upstream interpreter scope and default native-JIT policy restored after complete native-host and post-change regression acceptance
-
-## Product leftovers (not single-line workarounds)
-
-_No open product leftovers. Closed L- items live under §Closed._
-
-## Host / validation gaps
-
-### H-001 — Phase 4 re-run on real Windows host
-- **State:** OPEN
-- **Kind:** host-gap
-- **Gap:** Wine Phase 4 PASS (incl. multiplatform rebuild 2026-07-17). Real Win10 Phase-4 subset (gcstress, threadheavy, handleleak, crash native/abort) not re-proven with multiplatform PE.
-- **Exit criteria:** Host logs under `tools/verify/windows_x64_phase4/evidence/host/` (or successor) OVERALL PASS.
-- **Opened:** 2026-07-16
-
-### H-002 — Phase 3 G12 with multiplatform-built PE (not only pre-migration tree)
-- **State:** OPEN
-- **Kind:** host-gap
-- **Gap:** Authoritative G12 used earlier host package; multiplatform in-tree PE rebuild should re-package and smoke on Win10 when convenient.
-- **Opened:** 2026-07-17
-
-### H-003 — Wine is not product acceptance
-- **State:** OPEN (policy reminder, not a code fix)
-- **Kind:** host-gap / process
-- **Note:** Keep wine as agent01 oracle; product claims need real Windows for VEH/TEB/network.
-- **Opened:** 2026-07-16
-
----
-
-## Non-goals (do not track as OPEN workarounds)
-
-| Item | Decision |
-|------|----------|
-| Windows NIO.2 (`sun.nio.fs`) | Non-goal for now ([win32_filesystem.md](win32_filesystem.md)) |
-| WSL2 / Wine as product runtime | Rejected |
-| Win32 x86 product SKU | Out of scope (x64 first) |
-| Full Android framework / zygote / binder | Out of scope |
-| In-process dual JIT ISA (x64+Arm64EC) | Rejected in TLS/JIT draft |
-| CET user shadow stacks / Hardware-enforced Stack Protection | Unsupported for current Win32 ART; all defined incompatible HSP/context-validation fields must be disabled, while `CetDynamicApisOutOfProcOnly` and reserved fields are not treated as HSP enablement ([win32_faults_and_stacks.md](win32_faults_and_stacks.md)) |
-
-If product reopens a non-goal, add an **L-** item and link the decision.
-
----
-
-## Closed
-
-Summary (details below; do not delete history):
-
-- **W-002** — No managed GS / Thread base on Windows (2026-07-26) — r15 managed-self design, OSR adapters, and attached-thread entry accepted on native Windows R2
-- **W-003** — Quick entrypoint SETUP frames and Microsoft XMM boundary (2026-07-26) — all four frame families and XMM6-XMM11 preservation accepted on native Windows R1
-- **W-004** — `LOAD_RUNTIME_INSTANCE` direct PE singleton load (2026-07-25) — helper removed; direct same-image load passes structural, Wine, Linux, and native Windows acceptance
-- **W-005** — Combined PE JNI stub DLL aliased as libjavacore/libopenjdk/libicu_jni (2026-07-17) — product packaging uses stage_native_modules.sh (real PE only); libcombined is legacy non-product
-- **W-006** — Minimal NativeConverter / ICU version shims (not full ICU4C) (2026-07-17) — product uses real icu_jni NativeConverter + icuuc/icui18n + icudt; native_converter.c obsolete and removed from libcombined; charset stub no longer product path
-- **W-007** — Classic sockets / poll via Winsock `select` (not full Os/NIO) (2026-07-17) — permanent WinNT design: classic Os sockets use Winsock + **`select()`-based poll/timeouts** (not CRT-fd `WSAPoll`)
-- **W-009** — Phase-1 grade `compat` POSIX/pthread stubs (2026-07-17) — hot paths hardened; remaining ENOSYS is intentional Linux-only surface
-- **W-011** — Legacy expanded InterpreterJni shorty fallback (2026-07-24) — removed after Wine and native Windows tripwire acceptance; upstream pre-start-only invariant restored
-- **W-012** — Legacy InterpreterJni direct JNI resolver (2026-07-24) — removed with upstream `interpreter.cc` restoration
-- **W-013** — dlmalloc WIN32 / low-4GB / MORECORE choices for imageless ART (2026-07-25) — accepted design and native Windows R2 closure matrix pass
-- **W-015** — openjdkjvm memory exports minimal PE surface (2026-07-17) — product ships comprehensive standalone `libopenjdkjvm.dll`
-- **W-016** — ICU needs external `ICU_DATA` / `icudt72l.dat` for wine smoke (2026-07-17) — product always stages run/icu/icudt72l.dat via tools/windows_x64/stage_run_assets.sh (same class as boot.jar); libicu_jni defaults ICU_DATA to run/icu when unset
-- **W-018** — NetProbe StructLinger NPE (getsockopt SO_LINGER incomplete in javacore Win bridge) (2026-07-17) — implemented getsockoptLinger/setsockoptLinger in win_net_natives; NetProbe wine PASS
-- **W-019** — Math @CriticalNative / FastNative double ABI on Windows x64 (2026-07-17; superseded 2026-07-24) — historical interpreter DD/DDD workaround replaced by Linux-like entrypoints and restored native Math surface
-- **W-020** — FileChannelImpl.map0 pointer truncation on Windows x64 (LLP64) (2026-07-17) — `ptr_to_jlong(mapAddress)` instead of `(jlong)(unsigned long)`
-- **W-021** — Default KeyStore type Android-compatible (AndroidCAStore) (2026-07-17)
-- **W-022** — Product default CA bundle (AndroidCAStore cacerts) (2026-07-17)
-- **W-023** — OkHttp Http(s)Handler on bootclasspath + ASCII IDN/Normalizer multipath (2026-07-17)
-- **W-024** — Restore original CriticalNative/FastNative surfaces (2026-07-24) — ABI, binding, tracing, JVMTI, native-host acceptance, upstream fallback cleanup, and default native JIT complete
-- **L-001** — Real PE libcore / openjdk / ICU module build (2026-07-17)
-- **L-002** — boringssl / conscrypt / SSL PE (2026-07-17) — product TLS stack green under wine (providers + SSLContext.init + HTTPS GET)
-- **L-003** — Process/exec, rich locale, zip edge, UDP/IPv6 matrix (2026-07-17)
-- **L-004** — Shrink or replace multi-name DLL staging (2026-07-17) — product ships one PE soname each: `libicu_jni`/`libjavacore`/`libopenjdk`/`libopenjdkjvm`/`libcrypto`/`libssl`/`libjavacrypto` (+ `icuuc`/`icui18n`); short-name twins removed from packaging
-- **L-005** — Linux multiplatform imageless Hello / boot.jar CI gate (2026-07-17)
-- **L-006** — phase1.cmake / generated Win graph pure-vendor consistency (2026-07-17)
-- **D-001** — Shared boot.jar via runtime OS selection (2026-07-17)
-
-<!-- keep full CLOSED item bodies for history -->
-
-
-### W-002 — No managed GS / Thread base on Windows (`InitCpu` no-op for GS)
-- **State:** CLOSED (2026-07-26) — managed-entry implementation and native Windows R2 acceptance complete
-- **Kind:** resolved managed-entry ABI, TLS, OSR, and host-validation gap
-- **Area:** art / TLS
-- **Symptom / why:** Linux x86_64 uses `ARCH_SET_GS` so quick/nterp use `%gs:OFFSET`; Windows GS is the TEB and cannot be repurposed.
-- **Current behavior:** `InitCpu` correctly leaves GS untouched. Windows managed code uses r15 as rSELF while Linux retains GS. Quick invoke and OSR boundaries publish rSELF, and nterp N-1 retains rbp as rREFS.
-- **Quick OSR fix:** `art_quick_osr_stub` keeps its Microsoft-x64 C++ declaration. Its local Windows prologue converts six arguments to the shared SysV-shaped body, preserves Microsoft nonvolatile rdi/rsi/r15, and publishes the explicit `Thread*` in r15. Linux keeps its original instruction path. W-003 subsequently repaired XMM6–XMM11 preservation at this default-C++ boundary; W-002 remains closed for the accepted rSELF/OSR transition contract.
-- **Nterp OSR fix:** Windows cleanup uses the `NterpFree` SysV-to-Microsoft bridge. A Windows return adapter keeps nterp's save block separate from the compiled OSR frame, then restores XMM12–XMM15 and rbx/rbp/r12–r15 after compiled code returns.
-- **Attach contract:** native regular and daemon threads establish ART C++ TLS without owning caller r15. JNI invocation crosses the existing quick boundary, which preserves native r15 and publishes managed rSELF. The probe pre-JITs the Java callback and validates allocation, daemon state, exact results, detach, and `JNI_EDETACHED`.
-- **Native R1:** package identity, structure, 8/8 attach, and 4/4 switch OSR passed with no fatal marker or dump. Four clean default-nterp runs missed the jump because the harness left warmup at 65535 and its 300,000-iteration loop finished before another post-compilation hotness check.
-- **Deterministic R2:** every OSR runner pins warmup and optimize thresholds to 100, verifies the reported values, and runs 2,000,000 iterations with checksum `65553463744`. Unit tests, focused Wine, Phase 3/4 Wine aggregates, and Linux Hello/GC/OSR controls pass.
-- **Native R2 acceptance:** Windows 10 build 19044 returns 21 PASS records and `OVERALL PASS`. All 16 children exit zero without timeout; OSR passes 8/8 across dual/J-1 and default-nterp/switch; attach passes 8/8; fatal and dump scans pass with `NO_DMP_FILES`.
-- **Evidence transport note:** `/tmp/w002-r2-log.zip` omitted root `MANIFEST.json` while copying evidence. The host-side `PASS package_integrity` proves it existed and matched during the run; returned `BUILD_INFO.txt`, `SHA256SUMS.txt`, and both structural reports exactly match the issued package, and the exact returned sums record the retained manifest hash. A normalized copy adds only that byte-identical retained manifest and passes the unchanged strict reviewer. No runtime log was changed.
-- **Evidence:** [RESULT-w002-managed-entry.md](tools/verify/windows_x64_phase4/RESULT-w002-managed-entry.md), [W002_HOST_CHECKLIST.md](tools/verify/windows_x64_phase4/W002_HOST_CHECKLIST.md), and [native acceptance](tools/verify/windows_x64_phase4/evidence/w002_host/ACCEPTANCE.md)
-- **Code anchors:** `jit.cc` `art_quick_osr_stub`; `quick_entrypoints_x86_64.S`; `mterp/x86_64ng/main.S` `NterpHotnessCheck`; `nterp.cc` `NterpFree`; `thread_x86_64.cc`; `asm_support_x86_64.S` `THREAD_*`
-- **Design:** [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md) §15, §17, and §17.9
-- **Opened:** 2026-07-16
-- **Closed:** 2026-07-26 — deterministic native R2 acceptance plus final evidence review
-
-
-### W-003 — Quick entrypoint SETUP frames `int3` on Windows
-- **State:** CLOSED (2026-07-26) — shared frame bodies, native-boundary XMM repair, and native Windows R1 acceptance complete
-- **Kind:** resolved frame stub / latent ABI defect / validation gap
-- **Area:** art / quick asm / Microsoft-to-managed boundaries
-- **Historical defect:** Upstream x86-64 deliberately trapped `_WIN32` in `SETUP_SAVE_REFS_ONLY_FRAME` and `SETUP_SAVE_ALL_CALLEE_SAVES_FRAME`. `SETUP_SAVE_REFS_AND_ARGS_FRAME` and `SETUP_SAVE_EVERYTHING_FRAME` were never Windows-trapped; they already shared the non-Apple body.
-- **Current frame behavior:** All four ART runtime callee-save families use the Linux-shaped frame body on Windows. Only the Thread base and Runtime singleton load differ: `THREAD_STORE_Q` addresses through r15 and `LOAD_RUNTIME_INSTANCE` uses the direct PE same-image load. Shared frame sizes and spill masks remain unchanged. Apple still traps.
-- **Emitted-object finding:** With the accepted matched Linux/Windows x64 configuration, the quick PE and ELF objects have the same `int3` distribution: 212 functions and 401 instructions. Remaining traps are shared `UNIMPLEMENTED`/`UNREACHABLE`/read-barrier assertions, not Windows-only SETUP expansions. The checker compares the complete symbol/instruction multiset rather than hard-coding these snapshot totals.
-- **Managed/helper ABI:** Quick assembly and JIT retain ART's Linux-shaped managed register convention. Assembly-called C++ helpers use `ART_QUICK_ENTRYPOINT_ABI` (`sysv_abi`) on Windows x64, so SETUP macros do not grow Microsoft shadow space or adopt Microsoft argument registers.
-- **Native-boundary repair:** W-003 originally made `art_quick_invoke_stub`, `art_quick_invoke_static_stub`, and `art_quick_osr_stub` reserve a Windows-only 96-byte area for XMM6-XMM11, which is the accepted native R1 contract. The later W-010 exception-unwind work expands only that adapter to 160 bytes and preserves the lower 128 bits of XMM6-XMM15 before managed argument setup or OSR. The area remains outside canonical ART frames, preserves alignment, changes the Windows x64 OSR conceptual CFA to 256, and leaves Linux at 80. Native build 19044 passes all six `fullSelfTestMask=1023` normal-return sentinel runs; exception-unwind repetition remains W-010 work without reopening W-003.
-- **rSELF constraint:** r15 remains the live Thread base until each frame publishes `top_quick_frame`. Runtime callee-save frames spill and restore r15 in the shared canonical slot; optimizing Windows x64 code separately reserves r15 rather than allocating it as a general callee-save.
-- **Wine and structural evidence:** `check_w003_quick_boundaries.py` verifies all four SETUP source contracts, the three PE save/restore sequences, Linux absence of the Windows save area, and matched PE/ELF trap multisets. The opt-in frame probe is absent from product PE/ELF artifacts and passes 8/8 Wine processes; nterp and threshold-zero JIT each attribute refs-only, refs-and-args, all-callee-saves, and save-everything. The XMM sentinel passes 6/6 Wine processes and returns the exact `0x3f` intentional-clobber self-test mask.
-- **Native R1 acceptance:** Windows 10 build 19044 returns exactly 19 PASS records and `OVERALL PASS`. All 14 children exit zero without timeout. The frame matrix passes 8/8; the XMM sentinel passes 6/6 with `mask=0 selfTestMask=63 iterations=128`; JIT logs confirm the corrected pagefile-section J-2 dual view and successful probe compilation; fatal and dump scans pass with `NO_DMP_FILES`. Package metadata and structural reports match the issued package byte for byte.
-- **Unwind and W-010 scope:** W-003 closed the frame/XMM ABI defect independently of Windows exception dispatch. Later W-010 substages added emitted PE unwind records to `art_quick_invoke_stub`, `art_quick_invoke_static_stub`, `art_quick_generic_jni_trampoline`, and split OSR entry/return ranges after recursive unwind tracing proved those records are required for fatal dispatch correctness. Dynamic JIT code now has allocation-lifetime runtime-function registration as well. W-010 also owns the full XMM6-XMM15 follow-up, exact VEH/non-owning-`CONTEXT` managed-fault adapter, cooperative VEH/SEH chaining, and the independent nterp implicit-null fault formerly observed at `nterp_op_invoke_virtual+0x3a`; Stage D translates that product path in the dedicated W-010 gate. The W-003 probe still excludes only that implicit-null case and retains class-cast, array-store, and bounds paths; no W-003 product fallback was added.
-- **Close bar:** Satisfied: no Windows-only SETUP trap; XMM6–XMM11 preserved at ordinary Microsoft C++-to-managed boundaries; all four frame families have focused attributed Wine and native coverage; Linux frame bodies remain unchanged; and native Windows acceptance passes.
-- **Evidence:** [RESULT-w003-quick-frames-analysis.md](tools/verify/windows_x64_phase4/RESULT-w003-quick-frames-analysis.md); [RESULT-w003-frame-probe.md](tools/verify/windows_x64_phase4/RESULT-w003-frame-probe.md); [RESULT-w003-xmm-sentinel.md](tools/verify/windows_x64_phase4/RESULT-w003-xmm-sentinel.md); [W003_HOST_CHECKLIST.md](tools/verify/windows_x64_phase4/W003_HOST_CHECKLIST.md); [native acceptance](tools/verify/windows_x64_phase4/evidence/w003_host/ACCEPTANCE.md)
-- **Code anchors:** `asm_support_x86_64.S`; `quick_entrypoints_x86_64.S`; `callee_save_frame_x86_64.h`; `art_method.cc`; `jit.cc`; `ART_QUICK_ENTRYPOINT_ABI` in `libartbase/base/macros.h` and quick helper declarations
-- **Depends on:** W-001 and W-002 are closed prerequisites; W-004 direct Runtime load is closed. W-010 owns the managed-fault and handler-chain work defined in [win32_faults_and_stacks.md](win32_faults_and_stacks.md).
-- **Opened:** 2026-07-16
-- **Closed:** 2026-07-26 — native R1 19/19 acceptance plus final evidence review
-
-
-### W-004 — `LOAD_RUNTIME_INSTANCE` direct PE singleton load
-- **State:** CLOSED (2026-07-25) — direct same-image load accepted on native Windows 10 build 19044
-- **Kind:** resolved assembly ABI debt
-- **Area:** art / asm
-- **Symptom / why:** The retired Windows macro crossed the Microsoft x64 C ABI merely to read `Runtime::instance_`. It mutated the stack and flags and introduced volatile-register side effects that the Linux/other-ISA data-load macros do not have. The `rcx` destination and later `r11` caller-PC collisions required path-specific repairs; generic JNI also re-materialized `xmm0` after the helper.
-- **Current behavior:** Windows x64 directly loads `?instance_@Runtime@art@@0PEAV12@EA` with one same-image RIP-relative `movq`. The accepted RelWithDebInfo objects contain 574 direct `IMAGE_REL_AMD64_REL32` relocations (563 quick, 10 generated nterp, 1 JNI), zero retired helper references, and no helper-specific `r11` or immediate `xmm0` compensation. Linux retains its original two-instruction GOT sequence.
-- **Research finding:** `Runtime::instance_` is already explicitly exported/imported by `LIBART_PROTECTED`. With the selected clang GNU driver, lld, and MSVC ABI, a quoted direct reference to `?instance_@Runtime@art@@0PEAV12@EA` assembles as `IMAGE_REL_AMD64_REL32` and links inside `art.dll` to one 7-byte RIP-relative load. Same-image ASLR preserves the displacement. External consumers keep normal `dllimport`/IAT behavior.
-- **Implemented proper fix:** Replaced only the Windows macro body with the direct same-image load; deleted `art_Runtime_instance_ptr`, helper-only `Runtime::InstanceLocation()`, and the obsolete helper-specific `r11`/`xmm0` compensations. Explicit dependencies make all five assembly consumers rebuild when shared assembly support changes.
-- **Verification:** Clean and incremental `-j32` builds, the structural/source/dependency gate, Phase 3/4 Wine aggregates, JIT 12/12 and 14/14, CriticalNative, normal/FastNative, JVMTI, Linux shared-boot Hello, and Linux GC stress pass. Native Windows 10 build 19044 adds 28 PASS records over 22 child processes: nterp, dual-view JIT, threshold-zero FloatProbe, dual/J-1 native ABI and JVMTI paths, GC/thread/handle stress, and ten repeated starts. Package metadata and the structural report match the issued package byte for byte; all children exit zero without timeout, fatal marker, trace leak, or dump.
-- **Important scope:** Dynamically generated JIT code does not use this macro. Do not reuse this same-image RIP-relative sequence for the low-4-GiB JIT cache, which may be more than signed 32-bit reach from `art.dll`; that remains W-025 territory.
-- **Rejected permanent designs:** Retaining/hardening the call helper; importing `art.dll` from itself; caching `Runtime*` in `Thread`. A stable C assembly label on the existing member remains the first fallback if maintaining the MS-mangled spelling becomes unacceptable; an exported `Runtime**` address cell is second fallback.
-- **Evidence:** [RESULT-w004-runtime-load.md](tools/verify/windows_x64_phase4/RESULT-w004-runtime-load.md), [W004_HOST_CHECKLIST.md](tools/verify/windows_x64_phase4/W004_HOST_CHECKLIST.md), and [native acceptance](tools/verify/windows_x64_phase4/evidence/w004_host/ACCEPTANCE.md)
-- **Code anchors:** `vendor/art/runtime/arch/x86_64/asm_support_x86_64.S` (`LOAD_RUNTIME_INSTANCE`); `tools/verify/windows_x64_phase1/CMakeLists.txt`; `tools/verify/windows_x64_phase1/check_w004_runtime_load.py`; `tools/windows_x64/host_package/package_windows_x64_w004.sh`
-- **Opened:** 2026-07-16
-- **Closed:** 2026-07-25 — implementation plus structural, Wine, Linux, and native Windows acceptance complete
-
-
-### W-005 — Combined PE JNI stub DLL aliased as libjavacore/libopenjdk/libicu_jni
-- **State:** CLOSED (2026-07-17) — product packaging uses stage_native_modules.sh (real PE only); libcombined is legacy non-product
-- **Kind:** workaround
-- **Area:** libcore-stub / packaging
-- **Symptom / why:** Full ojluni + ICU4C PE ports not built; ART `InitNativeMethods` still dlopens those sonames.
-- **Current behavior:** `tools/windows_x64/jni_stubs/libcombined.dll` copied to six names (`libjavacore.dll`, `libopenjdk.dll`, `libicu_jni.dll`, and short names). ~160 `Java_*` exports, hand-written (~2.3k LOC).
-- **Proper fix:** Real PE modules (or fewer real DLLs) from Soong/bp2cmake Windows x64 graph: javacore, openjdk, icu_jni + icuuc/i18n, etc.; stop multi-name aliasing of one stub.
-- **Code anchors:** `tools/windows_x64/jni_stubs/build_combined.sh`, `tools/windows_x64/host_package/package_windows_x64_phase3.sh`, stage scripts in phase2 RESULT
-- **Opened:** 2026-07-16 (Phase 2; expanded Phase 3)
-
-### W-006 — Minimal NativeConverter / ICU version shims (not full ICU4C)
-- **State:** CLOSED (2026-07-17) — product uses real icu_jni NativeConverter + icuuc/icui18n + icudt; native_converter.c obsolete and removed from libcombined; charset stub no longer product path
-- **Kind:** workaround
-- **Area:** icu
-- **Current behavior:** Phase-3 package historically used `native_converter.c` stubs. **Phase A progress:** real PE `icuuc.dll` / `icui18n.dll` / `icu_jni.dll` now build from AOSP sources (`tools/verify/windows_x64_libcore_icu/`) and can replace stub `libicu_jni` in `build/windows_x64_phase1`. `libjavacore`/`libopenjdk` still combined stubs (may still register overlapping charset helpers until removed).
-- **Proper fix:** Default package/install to real ICU PE only; remove charset exports from `libcombined`; verify full data (`ICU_DATA` / icudt) vs stubdata; complete L-001 for javacore/openjdk.
-- **Code anchors:** `tools/verify/windows_x64_libcore_icu/`, `tools/windows_x64/jni_stubs/native_converter.c`
-- **Opened:** 2026-07-16
-- **Progress:** 2026-07-17 — real ICU PE + CoreProbe wine OK with hybrid package
-
-### W-007 — Classic sockets / poll via Winsock `select` (not full Os/NIO)
-- **State:** CLOSED (2026-07-17) — permanent WinNT design: classic Os sockets use Winsock + **`select()`-based poll/timeouts** (not CRT-fd `WSAPoll`)
-- **Kind:** workaround → **permanent platform design**
-- **Area:** libcore-stub / net
-- **Symptom / why:** Full AOSP `libcore.io.Linux` PE not used on Windows x64; real Win10 rejected CRT `_open_osfhandle` + `WSAPoll` (`WSAEINVAL` on accept poll).
-- **Fix / design:**
-  - Product `libjavacore` Win bridge (`win_net_natives.c`) implements classic socket surface with **`select()`** for `poll`, SO_TIMEOUT waits, and connect write-readiness.
-  - NIO epoll path similarly select-emulated in `compat/src/windows_x64_socket_posix.c` (bounded `FD_SETSIZE`).
-  - 2026-07-17: registered `bind`/`connect` **`SocketAddress`** overloads for `InetSocketAddress` (AF_UNIX still out of product scope).
-  - 2026-07-25: removed `_get_osfhandle` + `SO_TYPE` fd probing. Win32 HANDLE and Winsock SOCKET values use independent namespaces and can alias numerically. The permanent design is an explicit process-wide socket-fd registry exported by the already required `libopenjdkjvm.dll`; javacore, openjdk, JVM I/O, NIO, socket/accept/socketpair, dup/dup2, and close paths share it. This is not a temporary heuristic or a disk-backed side channel.
-- **Evidence:**
-  - Host G12 (2026-07-16): net/dns/goldenapp PASS after select poll fix (`tools/verify/windows_x64_phase3/evidence/host/ANALYSIS_20260716T205926.md`).
-  - Wine (2026-07-17): NetProbe, DnsProbe, UdpProbe, AsyncCloseProbe, GoldenApp, **SocketAddressProbe** PASS.
-  - Wine (2026-07-25): native socket/file fd-reuse probe PASS; HandleLeak 5/5; NetProbe, IoProbe, dual-view JIT 12/12, and J-1 Hello PASS.
-- **Non-goals residual:** AF_UNIX SocketAddress; full AOSP `libcore_io_Linux.cpp` (L-001 closed with Win bridge map); NIO.2.
-- **Code anchors:** `tools/windows_x64/jni_stubs/win_net_natives.c`, `tools/windows_x64/jni_stubs/win_fs_natives.c`, `register_libcore_io_Linux_win.cpp`, `compat/src/windows_x64_socket_posix.c`, `compat/src/windows_x64_socket_fd_registry.c`, `compat/include/mdvm_socket_fd_registry.h`
-- **Opened:** 2026-07-16
-- **Closed:** 2026-07-17
-
-### W-009 — Phase-1 grade `compat` POSIX/pthread stubs
-- **State:** CLOSED (2026-07-17) — hot paths hardened; remaining ENOSYS is intentional Linux-only surface
-- **Kind:** workaround → **platform compat layer** (ongoing shrink is maintenance, not open product gap)
-- **Area:** compat
-- **Fix / evidence:**
-  - `pthread_rwlock_*` now real **SRWLOCK** shared/exclusive (was CRITICAL_SECTION exclusive-only) — ART `Mutex`/`ReaderWriterMutex` ABI rebuilt into product `art.dll`.
-  - `pthread_once` now uses uninitialized/initializing/initialized states. Waiters no longer return while the winning initializer is still running; the former one-bit CAS caused intermittent null `JniConstants` field IDs during JIT-timed NetProbe socket close.
-  - `uname` uses `RtlGetVersion` + computer name; `clock_gettime(CLOCK_MONOTONIC)` via QPC; `pthread_setname_np`/`getname_np` via `SetThreadDescription` when available.
-  - Socket-aware `poll`/epoll already select-based (W-007); mmap/mprotect/pthread mutex/cond already real Win32.
-  - Wine: `dalvikvm -showversion`, CoreProbe, NetProbe, GoldenApp PASS after ART rebuild; 32-thread `pthread_once` stress 10/10; JIT-enabled NetProbe 10/10; final JIT matrix 14/14.
-- **Residual (not OPEN product work):** fork/ptrace/sendfile/tgkill etc. remain ENOSYS; further shrink only when a product path needs them.
-- **Code anchors:** `compat/src/windows_x64_posix_stubs.c`, `compat/include/pthread.h`
-- **Focused result:** `tools/verify/windows_x64_phase4/RESULT-pthread-once.md`
-- **Opened:** 2026-07-16 (Phase 0/1)
-- **Closed:** 2026-07-17
-- **Updated:** 2026-07-24 — fixed `pthread_once` early-return race exposed by repeated JIT NetProbe
-
-### W-013 — dlmalloc WIN32 / low-4GB / MORECORE choices for imageless ART
-- **State:** CLOSED (2026-07-25) — accepted design and native Windows R2 closure matrix pass
-- **Kind:** workaround removal / platform-memory design
-- **Area:** art / heap
-- **Symptom / why:** dlmalloc's standalone Win32 defaults forced mmap-style `VirtualAlloc` growth outside ART's arena, risking Java objects above 4 GiB. The Phase-2 recovery workaround hid `_WIN32`/`WIN32` while including `dlmalloc.c`, preserving ART MoreCore but accidentally changing unrelated platform defaults.
-- **Current behavior:** `_WIN32`/`WIN32` remain visible; dlmalloc respects ART's explicit MoreCore-only, mspace-only, externally locked configuration. Each heap and JIT mspace stores its direct owner provider in `malloc_state::extp/exts`; no runtime/global owner scan remains. Windows address policy is explicit, low/aligned allocation uses `VirtualAlloc2` constraints, logical views share whole-allocation ownership, heap page-state operations route through `MemMap`, and discard handles mixed protection including `PAGE_NOACCESS`. Runtime/compiler metadata and the card table use Linux-like anywhere placement while audited object/image/heap/JIT-primary consumers remain low. Executable JIT mspace metadata updates use `ScopedCodeCacheWrite`. Full heap capacity remains initially committed.
-- **Accepted design:** ART owns virtual memory; dlmalloc manages chunks inside an owner-attached ART arena. Windows-specific address, protection, discard, and release behavior stays behind `MemMap`.
-- **Low-address policy:** Java object spaces, non-moving/LOS, required image/heap ranges, and the JIT primary view remain below 4 GiB. LinearAlloc, compiler/JIT metadata arenas, and the card table are unrestricted after the encoding audit. The source gate pins the remaining required-low inventory.
-- **Native acceptance:** R1 on Windows 10 build 19044 found `DiscardVirtualMemory(PAGE_NOACCESS)`, J-1 RX provider-metadata writes, socket-fd namespace aliasing, blank runner accounting, and a nondeterministic marker. ART `6253d01afc` / `27a1ac74a4`, root `c943f1f` / `caad337`, and libcore `67ec4ab8dd70` repaired them. R2 from root `c909ca7` and ART `27a1ac74a4` returns 56 PASS, zero FAIL, complete metrics for 52 children, native mapping/config/owner probes, 128-MiB and 1-GiB non-moving pressure, GC/ThreadHeavy/HandleLeak, 512-MiB and 1-GiB startup, default dual-view and J-1 JIT, the fourteen-case matrix, 20/20 repeated starts, clean fatal-log scan, and `NO_DMP_FILES`.
-- **Boundary / non-goal:** Fixed file-view replacement over an ordinary `VirtualAlloc` reservation remains unsupported and unused by the imageless/JIT product path. Any future placeholder-overlay or reserve-only/lazy-commit design is separate work.
-- **Code anchors:** `art-dlmalloc.{h,cc}`; `dlmalloc.c` Win32 defaults and `malloc_state::extp/exts`; `dlmalloc_space.cc`; `malloc_space.cc`; `jit_memory_region.cc`; `mem_map.{h,cc}`; `mem_map_windows.cc`; `runtime.cc`
-- **Design:** [win32_heap_memory.md](win32_heap_memory.md)
-- **Evidence:** `tools/verify/windows_x64_w013/RESULT.md`; `tools/verify/windows_x64_w013/evidence/native_r2/ACCEPTANCE.md`; returned archive SHA-256 `456e297d70c2f166308c869812ddec262fa38bc6dcd2852ea56edd5b2205078e`; external dlmalloc `f3356ce`; ART `8c900a9e4b`, `d011d72d56`, `2fa301a13b`, `9ea15456a2`, `6253d01afc`, `47567cebcc`, `1509b1f95e`, `27a1ac74a4`; root `c943f1f`, `caad337`; libcore `67ec4ab8dd70`
-- **Opened:** 2026-07-16
-- **Closed:** 2026-07-25 — native Windows R2 acceptance plus final evidence review
-
-### W-015 — openjdkjvm memory exports minimal PE surface
-- **State:** CLOSED (2026-07-17) — product ships comprehensive standalone `libopenjdkjvm.dll`
-- **Kind:** workaround
-- **Area:** art / openjdkjvm
-- **Fix / evidence:**
-  - Product PE from `tools/verify/windows_x64_libcore_icu/openjdkjvm_memory_standalone.c`: memory/GC + file I/O + sockets + raw monitors + time (`JVM_*` set used by hybrid openjdk).
-  - Added `JVM_ActiveProcessorCount`.
-  - Product `JVM_NativeLoad` delegates to `art.dll!ART_LoadNativeLibrary`; the ART-tree helper calls `JavaVMExt::LoadNativeLibrary`, preserving ART library ownership and unresolved JNI lookup.
-  - The standalone DLL remains the product soname and broad `JVM_*` surface; the ART-tree Windows file supplies ART heap/GC exports plus the narrow native-load bridge.
-  - It also owns the process-wide Windows x64 socket-fd registry because Libcore.os creates sockets in `libjavacore` while java.net stream natives consume them in `libopenjdk`. Reusing this already required bridge avoids a new product DLL and keeps classification exact across module boundaries.
-  - Wine CoreProbe/GoldenApp/NetProbe with staged `libopenjdkjvm` PASS.
-- **Code anchors:** `tools/verify/windows_x64_libcore_icu/openjdkjvm_memory_standalone.c`; stage via `stage_native_modules.sh`
-- **Opened:** 2026-07-16
-- **Closed:** 2026-07-17
-
----
-
-### W-016 — ICU needs external `ICU_DATA` / `icudt72l.dat` for wine smoke
-- **State:** CLOSED (2026-07-17) — product always stages run/icu/icudt72l.dat via tools/windows_x64/stage_run_assets.sh (same class as boot.jar); libicu_jni defaults ICU_DATA to run/icu when unset
-- **Kind:** workaround
-- **Area:** icu / packaging
-- **Symptom / why:** Linked stubdata alone yields `u_init` `U_FILE_ACCESS_ERROR` under wine; full data file works.
-- **Current behavior:** Stage `run/icu/icudt72l.dat` and set `ICU_DATA=run/icu` (or absolute path). `Register.cpp` also calls `udata_setCommonData(&U_ICUDATA_ENTRY_POINT)` on Win.
-- **Proper fix:** Package full ICU data by default in host package scripts; verify embedded data path or always set ICU_DATA in runners.
-- **Code anchors:** `vendor/icu/android_icu4j/libcore_bridge/src/native/Register.cpp`; `build/windows_x64_phase1/run/icu/`
-- **Opened:** 2026-07-17
-- **Progress:** 2026-07-17 — `package_windows_x64_phase3.sh` fails if `icudt72l.dat` missing; phase3/4 runners and install_into_phase1 default/export `ICU_DATA=run/icu`
-
-### W-018 — NetProbe StructLinger NPE (getsockopt SO_LINGER incomplete in javacore Win bridge)
-- **State:** CLOSED (2026-07-17) — implemented getsockoptLinger/setsockoptLinger in win_net_natives; NetProbe wine PASS
-- **Kind:** leftover / bug
-- **Area:** libcore-stub / net
-- **Symptom / why:** `NetProbe` fails: `StructLinger.isOn()` on null from linger get.
-- **Proper fix:** Implement linger get/set in `win_net_natives` / Linux Os bridge returning real `StructLinger`.
-- **Code anchors:** `tools/windows_x64/jni_stubs/win_net_natives.c`; NetProbe client path
-- **Opened:** 2026-07-17
-
-### W-019 — Math @CriticalNative / FastNative double ABI on Windows x64
-- **State:** CLOSED (2026-07-17; workaround superseded 2026-07-24) — Math.ceil/floor/sqrt + HashSet wine passed after interpreter CriticalNative DD/DDD; W-024 now restores Linux-like entrypoints and the native Math surface
-- **See also:** **W-024** — Math.ceil/floor and the common ELF/PE registration table are restored; the temporary interpreter shorties were subsequently deleted
-- **Kind:** workaround / runtime ABI
-- **Area:** libcore Math / ART interpreter JNI (Windows x64 -Xint)
-- **Historical root cause:** Official AOSP CriticalNative is fine on Linux quick/generic-JNI. Windows x64 multipath formerly forced `ArtMethod::Invoke` through the interpreter; `InterpreterJniGeneric` only handled CriticalNative shorties `II`/`I`/`Z`/`ZI`. `Math.ceil` is shorty `DD` (`(D)D`), so dispatch fell through and crashed. Secondary: registering `Math_*_jni(JNIEnv*,jclass,jdouble)` under CriticalNative is the wrong ABI.
-- **Historical fix:** interpreter CriticalNative `DD`/`DDD`/`FF`/`J`; `Math.c` `gMethodsWin` → `Math_ceil(jdouble)` etc.; posix stubs for the ART rebuild. W-024 removed `gMethodsWin`, restored ceil/floor native declarations, stopped routing native methods through the Windows-only interpreter detour, and finally deleted the temporary shorties.
-- **Exit criteria:** `MathProbe` + `SslProviderProbe` wine PASS with rebuilt `art.dll`.
-- **Code anchors:** `vendor/art/runtime/interpreter/interpreter.cc`, `vendor/libcore/ojluni/src/main/native/Math.c`, `compat/src/windows_x64_posix_stubs.c`
-- **Opened:** 2026-07-17
-- **Progress:** 2026-07-17 — root cause + source fix; full art PE rebuild running
-
-### W-020 — FileChannelImpl.map0 pointer truncation on Windows x64 (LLP64)
-- **State:** CLOSED (2026-07-17) — `ptr_to_jlong(mapAddress)` instead of `(jlong)(unsigned long)`
-- **Kind:** bug / ABI
-- **Area:** openjdk NIO / boot classpath ZIP mmap
-- **Root cause:** AOSP `FileChannelImpl_map0` returned `(jlong)(unsigned long)mapAddress`. On Windows x64 LLP64 `unsigned long` is 32-bit, so mapped addresses like `0x6ffff…` were truncated (high bits zeroed). `Memory.peekByteArray` then crashed in CRT (`fault_addr=0xff0e0eec` pattern) while `VMClassLoader` clinit mapped `boot.jar` for `ClassPathURLStreamHandler`.
-- **Symptom chain:** `Security.getProviders` → provider class load → `BootClassLoader.loadClass` → `findLoadedClass` path / resource handlers → ZIP mmap via NIO → AV. Earlier W-019-style AV signature was coincidental.
-- **Historical supporting workaround:** Windows x64 `-Xint` once forced natives through `InterpreterJni` and kept FastNative Runnable. W-024 removed that Windows-only branch after the real JVMTI transition passed through Linux-like JNI entrypoints; the old detour aborted on mixed shorty `DJDIF`. The temporary interpreter shorties were deleted after native-host acceptance.
-- **Exit criteria:** SecStep17 `BootClassLoader.loadClass` + SecStep3 `Security.getProviders` wine PASS.
-- **Code anchors:** `vendor/libcore/ojluni/src/main/native/FileChannelImpl.c`; `vendor/art/runtime/interpreter/interpreter.cc`; `interpreter_common.cc`
-- **Opened:** 2026-07-17
-- **Closed:** 2026-07-17
-
-### W-021 — Default KeyStore type Android-compatible (AndroidCAStore)
-- **State:** CLOSED (2026-07-17)
-- **Kind:** config / compatibility
-- **Area:** JCA / conscrypt SSL defaults
-- **Root cause:** Windows x64 multipath deferred BouncyCastle, so `keystore.type=BKS` could not resolve. `Security.initializeStatic()` also omitted `keystore.type`, so `KeyStore.getDefaultType()` fell back to desktop `jks`, which is not registered. `KeyManagerFactory.init(null,null)` → `KeyStore.getInstance("jks")` failed and `SSLContext.init` aborted.
-- **Fix:** default `keystore.type=AndroidCAStore` (HarmonyJSSE/`TrustedCertificateKeyStoreSpi`, empty-loadable); restore loading `security.properties` on Windows after W-020; mirror in `build_conscrypt_windows_x64.sh` and boot.jar resource.
-- **Exit criteria:** KeyStoreProbe + SslProviderProbe `sslcontext.init=ok` under wine.
-- **Opened/Closed:** 2026-07-17
-
-### W-022 — Product default CA bundle (AndroidCAStore cacerts)
-- **State:** CLOSED (2026-07-17)
-- **Kind:** packaging / product asset
-- **Area:** TLS trust / AndroidCAStore
-- **Root cause:** Android `TrustedCertificateStore` reads `$ANDROID_ROOT/etc/security/cacerts/<subject_hash_old>.N`. Product previously shipped empty dirs, so SSLContext.init worked but trust set was empty.
-- **Fix:** generate Mozilla/system PEM bundle into OpenSSL hash_old layout (`tools/windows_x64/generate_cacerts.sh`), hermetic assets under `tools/windows_x64/assets/cacerts`, stage via `stage_run_assets.sh` as required asset (with `boot.jar` / `icudt72l.dat`). LocaleData hard-coded fallback so OpenSSLX509Certificate date parsing works without full ICU4J resource bundles in boot.jar.
-- **Exit criteria:** TrustStoreProbe AndroidCAStore.size>=50 and acceptedIssuers>=50 under wine with ANDROID_ROOT=run.
-- **Opened/Closed:** 2026-07-17
-
-### W-023 — OkHttp Http(s)Handler on bootclasspath + ASCII IDN/Normalizer multipath
-- **State:** CLOSED (2026-07-17)
-- **Kind:** packaging / compatibility
-- **Area:** java.net URL / HTTPS
-- **Root cause:** Android resolves `http/https` via `com.android.okhttp.HttpHandler`/`HttpsHandler`, not packaged in multipath boot.jar. After packaging, pure-ASCII OkHttp/TLS paths still required ICU4J StringPrep/Normalizer tables not present in boot.jar.
-- **Fix:** `tools/bootjar/build_okhttp_windows_x64.sh` merges repackaged OkHttp+okio into boot; `IDN.toASCII` and `java.text.Normalizer` short-circuit pure-ASCII; product ICU data preferred over stub in `libicu_jni` Register.cpp; cacerts already staged.
-- **Exit criteria:** HttpsProbe handler resolution + `https://example.com/` status 200 under wine.
-- **Opened/Closed:** 2026-07-17
 
 ### L-001 — Real PE libcore / openjdk / ICU module build
 - **State:** CLOSED (2026-07-17)
@@ -724,38 +756,6 @@ _No open design notes. Closed D- items live under §Closed._
 - [ ] Gate newly green on host → close matching **H-**  
 - [ ] Permanent design choice (e.g. VEH forever) → move from W- to documented architecture; close workaround  
 - [ ] CLOSED items: move full item into §Closed (sorted by ID); keep State CLOSED history  
-
-
-### W-025 — JIT code cache + x86_64 codegen TLS (Windows)
-- **State:** OPEN (P5 implementation, Wine verification, and focused W-013/W-003 native subsets complete; broader real-Windows acceptance and residual hardening remain)
-- **Kind:** host-validation gap / temporary diagnostic workaround / hardening debt
-- **Area:** art / jit / compiler
-- **Symptom / why:** The corrected default now reproduces ART's Linux-visible `[data R][code RX]` contiguous primary layout with a coherent RW updater alias. Remaining W-025 work is real-Windows acceptance, direct encoding-site checks, and removal of the J-1 diagnostic fallback. Threshold zero is no longer a JIT-memory unknown; its implementation work is tracked under W-024.
-- **Current behavior:**
-  - **Default corrected dual view:** one unnamed `CreateFileMappingW(INVALID_HANDLE_VALUE, PAGE_EXECUTE_READWRITE)` section is mapped twice at offset zero. The complete primary view is below 4 GiB and split into data R plus code RX; the unrestricted alias is split into data RW plus code RW.
-  - **Shared ART path:** mspace initialization, growth, address translation, commit, collection, and metadata handling remain on ART's common Linux/Windows path after mapping construction.
-  - **Temporary J-1 diagnostic workaround:** `ART_WINDOWS_X64_JIT_DUAL=0` selects the single-view `VirtualAlloc` path for comparison or emergency diagnosis. It writes code through an RX-to-RWX-to-RX transition and is not the product default.
-  - **No disk file:** the section is unnamed and backed by the Windows paging system; no temporary filesystem object, pseudo-fd, or Windows memfd emulation is created.
-  - **Historical separated-view defect:** the retired layout placed code far from roots and stack maps, overflowing signed 32-bit JIT-root displacements and uint32 CodeInfo distance. The corrected topology removes that layout.
-  - **Threshold-zero stress:** resolved outside memory topology. The direct `@CriticalNative` path has Windows x64 shadow/unified-argument handling. W-024 originally added a caller-PC reload around the helper-based runtime load; W-004 subsequently replaced that helper with a direct load that does not clobber `r11` and removed the reload. Repeated J-1 and dual-view acceptance passes; W-024 is closed.
-  - Native methods follow the common ART JIT policy by default. The 7/7 mixed/high-FP normal/FastNative matrix passes across rebinding and tracing; the separate CriticalNative suite passes tracing in both memory modes; the JVMTI forced-interpreter matrix passes 3/3 per mode; and restored Math CriticalNative passes dual/J-1/-Xint plus Linux controls.
-- **Implemented proper fix:** Keep ART's observable layout and post-mapping JIT logic Linux-like while containing the Windows difference in the section-allocation helper:
-  1. Require Windows 10 version 1803 or later and link `onecore.lib` for `MapViewOfFile3`.
-  2. Create one unnamed pagefile-backed section and map the two complete views described above.
-  3. Split both views logically into ART's four existing ranges without a placeholder unmap/remap transaction or Windows-only 64 KiB capacity rule.
-  4. Use explicit Windows `FlushInstructionCache` and `VirtualQuery` layout/protection checks.
-  5. Keep the common ART mspace and JIT lifecycle code unchanged after mapping construction.
-  6. Remove the temporary `ART_WINDOWS_X64_JIT_DUAL=0` opt-out after real-Windows acceptance.
-- **Why full views:** Both mappings start at section offset zero, so custom JIT maximum sizes need only ART's existing page alignment. This avoids a Windows-only 64 KiB divider rule and avoids placeholder split/remap rollback.
-- **Backing-store rule:** The selected section is backed by the Windows paging system, not by a named or temporary filesystem file. It can consume commit/pagefile backing, so large-capacity behavior up to 1 GiB remains an explicit test item.
-- **Rejected fixes:** moving stack maps alone (does not fix root loads); Win-only far-root codegen plus an extended header; moving all method metadata into the code arena; forcing every alias below 4 GiB.
-- **Safety checks:** mapping-time contiguity, low-4-GiB placement, logical sizes, and R/RX/RW protection roles are implemented. Direct signed-int32 JIT-root and uint32 CodeInfo construction checks remain open hardening.
-- **Separate residual:** W-024 is closed. W-025's broader mapping, CFG/dynamic-code-policy real-host acceptance, direct-encoding hardening, and J-1 diagnostic-opt-out removal remain separate. CET user shadow-stack support is not W-025 work: it is an explicit non-goal, and the process must run with HSP disabled under W-010's activation contract.
-- **Code anchors:** `mem_map_windows.cc` constrained section mapping; `mem_map.cc` Windows in-place split ownership; `jit_memory_region.cc` corrected dual-view branch and common post-mapping logic; `utils.cc` cache flush; `code_generator_x86_64.cc` `PatchJitRootUse`; `oat_quick_method_header.h` `code_info_offset_`; `jit.cc` opt-in compile records; `art-dlmalloc.cc` `USE_LOCKS=0`
-- **Verified:** default corrected dual-view Hello passes with about 28–30 total successful compile records after native-JIT gate removal; JIT smoke 12/12, including default-silent compile diagnostics; JIT matrix 14/14; J-1 diagnostic Hello passes; D-1 audit complete (37/37 GS sites); threshold-zero, registered, unresolved mixed-dlsym, method-traced, and JVMTI-forced native probes pass in both memory modes; the normal/FastNative mixed/high-FP matrix compiles 7/7 targets by default and survives rebinding plus method tracing without extra target compilation; standalone section-layout probe passes coherence, execution, protection, forced low-space fragmentation, and non-64-KiB capacity cases under Wine; W-013 native R2 validates J-2 protections, metrics, pressure, and repeated starts; W-003 native R1 validates four additional threshold-zero J-2 processes with successful frame/XMM compilation and clean fatal/dump scans
-- **Design:** [win32_jit_memory.md](win32_jit_memory.md) §2–§13 (Linux low-4-GiB contract, historical diagnosis, implemented Windows 10 section design, verification, and residual work)
-- **Opened:** 2026-07-19
-- **Updated:** 2026-07-26 — corrected pagefile-section dual view remains verified; W-013 and W-003 focused native subsets pass; temporary J-1 diagnostic opt-out, direct-encoding hardening, and broader real-Windows acceptance remain
 
 
 *Last snapshot: 2026-07-28 — W-001/W-002/W-003/W-004/W-011/W-012/W-013/W-024 are closed; nterp and the corrected pagefile-section JIT dual view are product defaults; D-1, W-002 native R2, W-003 native R1, W-004, W-013 native R2, and W-024 are accepted. W-010/W-014 E9 is native-accepted 30/30 on Windows Server 2025 build 26100: explicit Windows x64 stack checks, guarantee-aware bounds, switch/nterp/JIT SOE, zero handled dumps, and five fatal static/JIT/OSR dumps all pass. Linux keeps implicit probes. Fixed-page recursion remains rejected and its machinery is diagnostic-only. W-010/W-014 remain open only for broader debugger, forced-policy, stack-budget, dynamic-table sampling/churn, exception-unwind XMM, pending-range, and embedding coverage. W-025 broader real-host acceptance and five open workarounds remain.*
