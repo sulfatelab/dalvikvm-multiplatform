@@ -299,3 +299,31 @@ imageless Hello, and emitted bridge-disassembly parity pass. The package and
 native reviewers are labeled E6. Run the three diagnostic exception shapes on
 native Windows next; require live lookup at `+0x82` and use any later first
 miss as the only basis for another unwind repair.
+
+## Native E6 result
+
+The archive SHA-256 is
+`9ab66c9a7b2e8e40210f9c47971cbf5ac9f86c0ca729c25a05448f12346499bc`.
+The transferred bytes and Python package checker pass on Windows Server 2025
+build 26100. The returned result bundle SHA-256 is
+`a1c6af0ceff198f6b4543aa832dbf40ced81dcf72800b77c55dd5f2959302736`.
+
+Both JNI cases now resolve the native E5 miss:
+
+```text
+art_quick_to_interpreter_bridge + 0x82
+rva=0x9d3652 lookup=1
+begin=0x009d35d0 end=0x009d3710 unwind=0x0100df80
+```
+
+Hardware frame 11 and raised frame 12 cross the primary bridge record. Every
+later frame has `lookup=1`; the walks end at zero PC after 23 and 24 frames.
+Both cases enter the late UEF, chain into ART's UEF, and create valid dumps.
+The native-worker control also reaches both UEFs and creates a dump. The three
+valid 14-stream `MDMP` files are 748,487, 744,355, and 748,587 bytes.
+
+This closes the diagnosed fatal-dispatch lookup chain. It natively validates
+the primary record; the separate pending record is still structural/synthetic
+coverage because these cases do not enter that path. Run the complete host
+matrix next to repeat all five static/JIT/OSR fatal origins. See
+`evidence/w010_w014_e6/DIAGNOSIS.md`.

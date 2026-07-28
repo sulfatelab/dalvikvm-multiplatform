@@ -10,9 +10,11 @@ caller chain. Managed SOE delivery must be redesigned. Native E5 verifies the
 Windows-only `ExecuteSwitchImplAsm` frame repair and moves the first live
 unwind miss to `art_quick_to_interpreter_bridge + 0x82`; JNI hardware and
 raised AVs still miss UEF, while a native worker reaches both UEFs and writes a
-valid dump. Local E6 now provides range-accurate records for the bridge's
-200-byte primary and 88-byte pending frames and passes structural/live Wine
-gates; native E6 is the next fatal-dispatch gate.
+valid dump. E6 provides range-accurate records for the bridge's 200-byte
+primary and 88-byte pending frames. Native E6 now crosses the primary record
+and every remaining registered frame to zero PC, enters both UEFs for hardware
+and raised JNI AVs, and writes valid dumps. Full native fatal-origin repetition
+and the independent managed-SOE redesign remain.
 **Created:** 2026-07-26
 **Updated:** 2026-07-28
 **Target:** x86_64 Windows 10 build 17134+
@@ -501,9 +503,18 @@ constructs the original 88-byte save-all frame; one blanket record never spans
 the two shapes. `RtlVirtualUnwind()` recognizes both epilogues and restores the
 caller from entry, `+0x82`, the restore body, and the completed pending body.
 Linux continues to use the original setup/restore macros, and its emitted
-bridge disassembly is unchanged. Native E6 must now prove the live dispatcher
-crosses the repaired range and either reaches UEF or exposes a later first
-miss.
+bridge disassembly is unchanged. This made the live dispatcher crossing the
+repaired range, with any later first miss reported explicitly, the native E6
+acceptance criterion.
+
+Native E6 supplies that proof. Hardware frame 11 and raised frame 12 resolve
+`art_quick_to_interpreter_bridge + 0x82` to the primary range. Every later
+frame reports `lookup=1`; the walks end with `reason=zero_pc` after 23 and 24
+frames. Both late filters enter, chain to ART's UEF, and create valid dumps.
+The native-worker control also passes. No further missing record appears in
+these chains. The result accepts the primary record natively; the pending
+range remains static/synthetic coverage because these fatal cases do not enter
+it.
 
 ## 5. Windows contracts and conclusions
 
@@ -2217,11 +2228,16 @@ not as the final managed-overflow mechanism.
   describe the unchanged 200-byte primary layout and the 88-byte pending tail.
   Fixed-offset restores and canonical normal/tail epilogues make entry,
   `+0x82`, restore-body, epilogue, and pending-body virtual unwind pass. The
-  complete Wine aggregate and unchanged Linux/SysV bridge pass; native E6 is
-  pending.
+  complete Wine aggregate and unchanged Linux/SysV bridge pass. Native E6
+  subsequently accepted the primary record as described below.
+- **Native E6 result:** both JNI traces resolve the primary bridge at `+0x82`,
+  cross all later frames with `lookup=1`, terminate at zero PC, enter both
+  UEFs, and write valid dumps. The primary bridge/fatal-dispatch diagnosis is
+  closed; run the complete native fatal-origin matrix next. The pending record
+  was not entered by these cases.
 - **Still open:** repeat the static ranges, full-width XMM6-XMM15
   exception-unwind sentinel and fatal paths after UEF dispatch is repaired,
-  run native E6 and repair any later proven lookup gap, redesign managed SOE
+  repeat all static/JIT/OSR fatal origins natively, redesign managed SOE
   delivery, and pass native debugger,
   large-table churn/sampling, rollback-injection, and debugger-quality
   dump-stack gates. Native normal-return XMM, OSR live unwind, and foreign
@@ -2406,14 +2422,12 @@ fallbacks:
 7. Does the locally implemented full-width XMM6-XMM15 adapter survive native
    Windows normal managed return and exception unwind through several
    optimizing and JNI frames?
-8. Native E5 proves JNI hardware and raised AVs traverse the repaired switch
-   wrapper, then stop at `art_quick_to_interpreter_bridge + 0x82`. Local E6
-   separately describes and probes the primary 200-byte frame and 88-byte
-   pending tail. Run its exact package automatically and require live lookup
-   at `+0x82`; if dispatch still stops, use the trace's next first miss rather
-   than guessing. ART UEF replacement, standalone UEF behavior,
-   debugger/runner effects, dump creation, exception shape, and process-wide
-   ART startup state are already ruled out.
+8. Native E6 resolves `art_quick_to_interpreter_bridge + 0x82`, crosses every
+   later frame with `lookup=1`, reaches zero PC and both UEFs, and writes valid
+   dumps for hardware and raised JNI AVs. Repeat static, JIT J-2/J-1, and OSR
+   J-2/J-1 fatal origins in the complete native host matrix. Add a native
+   pending-range exception probe only if it can exercise that brief path
+   without changing product semantics.
 
 ## 16. Primary references and comparative implementation
 
