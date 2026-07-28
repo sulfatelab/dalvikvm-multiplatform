@@ -217,6 +217,39 @@ set_target_properties(jitunwindlifecycleprobe PROPERTIES
   OUTPUT_NAME "jitunwindlifecycleprobe"
   WINDOWS_EXPORT_ALL_SYMBOLS ON)
 
+add_library(w025jitmappingprobe SHARED EXCLUDE_FROM_ALL
+  "${_repo}/tools/verify/windows_x64_w025/W025JitMappingProbe.cc")
+target_compile_options(w025jitmappingprobe PRIVATE
+  -fno-rtti
+  -Wno-thread-safety
+  -Wno-unused-command-line-argument
+  -Wno-microsoft-cast
+  -Wno-invalid-offsetof)
+target_compile_definitions(w025jitmappingprobe PRIVATE ART_CONSUMING_LIBART)
+target_include_directories(w025jitmappingprobe PRIVATE
+  "${MDVM_ART_DIR}/runtime"
+  "${MDVM_ART_DIR}/libartbase")
+target_link_libraries(w025jitmappingprobe art psapi)
+set_target_properties(w025jitmappingprobe PROPERTIES
+  PREFIX "lib"
+  OUTPUT_NAME "w025jitmappingprobe"
+  WINDOWS_EXPORT_ALL_SYMBOLS ON)
+
+add_executable(windows_x64_w025_section_policy_probe EXCLUDE_FROM_ALL
+  "${_repo}/tools/verify/windows_x64_w025/W025SectionPolicyProbe.cc")
+target_compile_options(windows_x64_w025_section_policy_probe PRIVATE
+  -Xclang -cfguard)
+target_link_options(windows_x64_w025_section_policy_probe PRIVATE
+  "LINKER:/guard:cf")
+target_link_libraries(windows_x64_w025_section_policy_probe onecore psapi)
+set_target_properties(windows_x64_w025_section_policy_probe PROPERTIES
+  OUTPUT_NAME "W025SectionPolicyProbe")
+
+add_executable(windows_x64_w025_policy_launcher EXCLUDE_FROM_ALL
+  "${_repo}/tools/verify/windows_x64_w025/W025PolicyLauncher.cc")
+set_target_properties(windows_x64_w025_policy_launcher PROPERTIES
+  OUTPUT_NAME "W025PolicyLauncher")
+
 add_executable(windows_x64_w013_mem_map_probe EXCLUDE_FROM_ALL
   "${_repo}/tools/verify/windows_x64_w013/W013MemMapPolicyProbe.cc")
 target_include_directories(windows_x64_w013_mem_map_probe PRIVATE
