@@ -172,6 +172,30 @@ def review_xmm_log(logs: Path, name: str, mode: str) -> None:
     require_exit(text, nonzero=False)
 
 
+def review_stack_guarantees(log_text: str) -> None:
+    pattern = re.compile(
+        r"^stack_guarantee label=(main|pthread) before=(\d+) "
+        r"configured=(\d+) minimum=(\d+)\s*$",
+        re.MULTILINE,
+    )
+    records: dict[str, tuple[int, int, int]] = {}
+    for match in pattern.finditer(log_text):
+        label = match.group(1)
+        if label in records:
+            fail(f"stack_page.log contains duplicate {label} stack guarantee records")
+        records[label] = tuple(int(match.group(index)) for index in range(2, 5))
+    for label in ("main", "pthread"):
+        if label not in records:
+            fail(f"stack_page.log is missing the {label} stack guarantee record")
+        before, configured, minimum = records[label]
+        if minimum <= 0:
+            fail(f"{label} stack guarantee minimum is not positive")
+        if configured < minimum:
+            fail(f"{label} configured stack guarantee is below the minimum")
+        if configured < before:
+            fail(f"{label} configured stack guarantee did not preserve the existing value")
+
+
 def review(returned: Path, issued: Path) -> None:
     return_form = verify_issued_payload(returned, issued)
     logs = returned / "logs"
@@ -289,6 +313,7 @@ def review(returned: Path, issued: Path) -> None:
         common_handled_forbidden,
     )
     require_exit(stack_page_text, nonzero=False)
+    review_stack_guarantees(stack_page_text)
     fault_record_text = require_markers(
         logs / "fault_record.log",
         ("win32_fault_record_probe failures=0 cases=8", "win32_fault_record_probe OK"),

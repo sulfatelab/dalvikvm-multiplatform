@@ -118,9 +118,12 @@ cet_contract=$cet_output
 boundary_unwind=$boundary_unwind_output
 osr_unwind=$osr_unwind_summary
 explicit_stack_checks=$explicit_stack_output
-stack_overflow_delivery=explicit-rsp-below-thread-stack-end
+stack_overflow_delivery=explicit-rsp-below-guarantee-aware-thread-stack-end
 win32_implicit_so_checks=false
 windows_stack_mapping_ownership=os
+windows_stack_guarantee=minimum-four-pages-preserve-larger-query-actual
+windows_excluded_low=sum-memory-prefix-guarantee-moving-guard
+art_stack_overflow_reserve=8192
 linux_stack_probe_contract=implicit-rsp-minus-8192
 windows_minimum_build=17134
 requested_stack_sizes=0,65536,262144,1048576,2097152,9437184
@@ -158,7 +161,7 @@ art_branch=$(git -C "$REPO/vendor/art" branch --show-current)
 art_commit=$(git -C "$REPO/vendor/art" rev-parse HEAD)
 win64_build=$BUILD
 windows_minimum_build=17134
-stage=E7-explicit-stack-checks
+stage=E9-configured-guarantee-explicit-stack-checks
 EOF
 
 clean_runtime_outputs() {

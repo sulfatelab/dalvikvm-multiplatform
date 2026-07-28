@@ -2,7 +2,8 @@
 
 **Target:** Windows 10 version 1803 (RS4, build 17134) or later, x64
 
-**State:** E7 explicit-stack-check native acceptance candidate; not yet accepted
+**State:** E9 configured-guarantee explicit-stack-check native acceptance
+accepted on Windows Server 2025 build 26100
 
 ## Purpose
 
@@ -18,13 +19,18 @@ handler stack high-water measurement, and predecessor-UEF embedding remain
 separate manual or launcher-assisted evidence after this automated run passes.
 These items are tracked as the remaining forced-policy and embedding matrix.
 
-E7 replaces the rejected Win64 fixed-page recursive-SOE mechanism with narrow
+E9 replaces the rejected Win64 fixed-page recursive-SOE mechanism with narrow
 explicit `RSP < Thread::stack_end_` checks in optimizing code and nterp. An
 equal stack pointer is allowed. Overflow tail-jumps through
 `Thread::pThrowStackOverflow`; Windows owns stack growth and mapping state, and
-ART only excludes the inaccessible low prefix when recording usable bounds.
-Linux retains its original implicit `RSP - 8192` probes. The issued structural
-report records a disassembly-backed cross-target check of both object files.
+ART raises each attached thread's stack guarantee to at least four system
+pages, preserves any larger host value, and queries the configured value back.
+Its excluded low interval is the sum of the inaccessible memory prefix, the
+page-rounded guarantee, and one moving-guard page. ART then adds its unchanged
+8192-byte managed-overflow recovery reserve. This keeps that entire reserve
+above Windows' native recovery boundary. Linux retains its original implicit
+`RSP - 8192` probes. The issued structural report records this accounting
+contract and a disassembly-backed cross-target check of both object files.
 
 If the acceptance runner fails in managed SOE or fatal UEF/minidump cases, run
 the separate diagnostic matrix before changing product code:
@@ -90,7 +96,7 @@ The runner verifies:
 - join/detach handle stress, raw `CreateThread`, and fiber rejection;
 - read-only Windows stack-layout inspection and usable-bound selection;
 - deterministic protected-page selection plus committed/reserved restoration
-  as test-only page-state diagnostics; these probes do not describe the E7
+  as test-only page-state diagnostics; these probes do not describe the E9
   product SOE mechanism;
 - exact exception-record filtering;
 - two handled page faults, one unrecognized fault forwarded through foreign
@@ -144,13 +150,19 @@ It must contain 30 PASS records and no FAIL record. Key evidence includes:
 - `logs\W010_W014_STRUCTURAL_REPORT.txt` with
   `boundary_unwind=win32_boundary_unwind OK ...`, the cross-target
   `explicit_stack_checks=... PASS (Win64 object, Linux object)` marker,
-  `stack_overflow_delivery=explicit-rsp-below-thread-stack-end`, and
+  `stack_overflow_delivery=explicit-rsp-below-guarantee-aware-thread-stack-end`,
+  `windows_stack_guarantee=minimum-four-pages-preserve-larger-query-actual`,
+  `windows_excluded_low=sum-memory-prefix-guarantee-moving-guard`,
+  `art_stack_overflow_reserve=8192`, and
   `windows_stack_mapping_ownership=os`;
 - `logs\thread_stack.log` with exact
   `requested=65536 actual=65536`,
   `requested=262144 actual=262144`, all five nonzero requested sizes, zero
   failures, and
   `runtime=native reservation_rounding=request wine_default_clamps=0`;
+- `logs\stack_page.log` with one main and one pthread guarantee record,
+  `minimum=16384`, a configured value at least that minimum, preservation of
+  any larger `before` value, and the zero-failure marker;
 - `logs\sigchain.log` with
   `action_calls=3 foreign_before=2 foreign_after=2` and
   `sequence=1,2,1,2`;
@@ -204,7 +216,4 @@ The following are still required before W-010/W-014 close:
 - exact handler/pre-unprotect stack high-water measurements in release and
   debug builds;
 - wrong-address and unsupported exception-kind native negatives; and
-- predecessor UEF invocation and runtime unload behavior in an embedding host;
-  and
-- successful review of the automated native J-2/J-1 JIT-origin and OSR-origin
-  fatal evidence included in this package.
+- predecessor UEF invocation and runtime unload behavior in an embedding host.

@@ -1,6 +1,11 @@
 # Win64 Phase 4 — RESULT
 
-**Status:** **WINE COMPLETE; FOCUSED NATIVE SUBSETS ACCEPTED; W-010/W-014 REPAIR ACTIVE** — W-002, W-003, W-004, and W-024 native matrices are accepted. Native E6 resolves the interpreter-bridge unwind gap, and the complete native host run accepts static, JIT J-2/J-1, and OSR J-2/J-1 fatal dispatch. The 30-record runner remains red only around W-014 managed SOE delivery and its handled-fault/dump aggregates; that mechanism must be redesigned.
+**Status:** **WINE COMPLETE; W-010/W-014 E9 NATIVE ACCEPTED** — W-002,
+W-003, W-004, and W-024 native matrices are accepted. W-010/W-014 E9 passes
+the complete 30-record runner on Windows Server 2025 build 26100, including
+switch/nterp/JIT managed SOE, zero handled dumps, and five fatal static/JIT/OSR
+dumps. Broader debugger, forced-policy, stack-budget, sampling/churn,
+exception-unwind XMM, pending-range, and embedding coverage remains open.
 **Date:** 2026-07-28
 **Depends on:** Phase 3 complete (real Win10 G12 goldens)
 
@@ -32,17 +37,17 @@
 | W-003 historical XMM6-XMM11 / W-010 full XMM6-XMM15 sentinel | **PASS, 6/6** | `run_w003_xmm_sentinel.sh` (`selfTestMask=63`, `fullSelfTestMask=1023`) |
 | W-002 OSR matrix | **PASS, 8/8** | `run_w002_osr_probe.sh` |
 | W-002 attached-thread matrix | **PASS, 8/8** | `run_w002_attach_probe.sh`; each raw thread now detaches, uses native stack, and reattaches |
-| W-014 thread reservation/lifetime/fixed page | **PASS** | `run_thread_stack_probe.sh` |
+| W-014 thread reservation/lifetime/guarantee-aware bounds | **PASS** | `run_thread_stack_probe.sh`; E9 raises/preserves/queries the guarantee and debits prefix + guarantee + moving guard |
 | W-010 fault record/context adapter | **PASS** | `run_fault_adapter_probe.sh` (`failures=0 cases=8`; live probe `calls=2 first=0 second=0`) |
 | W-010 JIT unwind serializer | **PASS, 6/6** | `run_jit_unwind_info_probe.sh` |
 | W-010 JIT runtime registry | **PASS** | `run_jit_unwind_registry_probe.sh` (lookup, virtual unwind, delete, re-register) |
 | W-010 JIT collection/reuse lifecycle | **PASS, J-2/J-1** | `run_jit_unwind_lifecycle.sh` (real collection, lookup disappearance, exact address reuse) |
-| W-010 active nterp/JIT managed faults | **PASS** | `run_w010_managed_fault_probe.sh` (started-runtime no-chain rejection; 64 read + 64 write NPEs; repeated main/child SOEs in nterp and threshold-zero JIT; no handled-fault diagnostics/dump change) |
+| W-010 active nterp/JIT managed faults | **PASS on Wine and native build 26100** | `run_w010_managed_fault_probe.sh`; Win64 explicit pre-prologue stack checks, common implicit null handling, repeated main/child SOEs, and no handled-fault diagnostics/dump change |
 | W-010 threshold-zero JIT fatal dispatch | **PASS, J-2/J-1** | `run_jit_fatal_unwind.sh` (VEH, UEF, changed/new valid `MDMP`) |
 | W-010 OSR-origin fatal dispatch | **PASS, J-2/J-1** | `run_osr_fatal_unwind.sh` (real switch OSR jump, VEH, UEF, new valid `MDMP`) |
-| W-010/W-014 native package preflight | **PASS under Wine** | `package_win64_w010_w014.sh` (unchanged 30-record acceptance runner plus separate stack-growth/UEF diagnostics) |
+| W-010/W-014 native package preflight | **PASS under Wine** | `package_win64_w010_w014.sh` (E9 30-record acceptance runner plus separate historical stack-growth/UEF diagnostics) |
 | W-010/W-014 isolated failure diagnostics | **PASS on native build 19044** | runs 3-4: fixed-page SOE invalidated; UEF replacement ruled out; JNI hardware/raised AVs miss UEF while the JNI-created native worker reaches UEF/dump, isolating traversal through managed/GenericJNI frames. |
-| W-010/W-014 complete E6 native host matrix | **PARTIAL, 25/30 on build 26100** | all five static/JIT/OSR fatal origins pass with valid dumps; switch/nterp/JIT managed SOE plus handled-log/dump aggregates fail |
+| W-010/W-014 complete E9 native host matrix | **PASS, 30/30 on build 26100** | guarantee-aware excluded-low accounting; switch/nterp/JIT managed SOE; zero handled dumps; five valid static/JIT/OSR fatal dumps |
 | Full suite | **PASS** | `run_all_wine_gates.sh` |
 
 Evidence: `evidence/all_wine_gates.txt`, `evidence/crashnative.txt`
@@ -106,7 +111,7 @@ The accepted Windows 10 build 19044 return has 19/19 PASS records over 14
 children, clean fatal/dump scans, 8/8 attributed frame runs, and 6/6 XMM
 sentinel runs. See `evidence/w003_host/ACCEPTANCE.md`.
 
-Focused W-010/W-014 native Stage E candidate:
+Focused W-010/W-014 native Stage E gate:
 
 ```bash
 JOBS=32 WINEDEBUG=-all \
@@ -117,9 +122,9 @@ JOBS=32 WINEDEBUG=-all \
 
 The Linux-side preflight passes package integrity, the complete Wine matrix,
 all fatal origins, the safe isolated diagnostics, per-case preservation of
-valid minidumps, and the final clean-package checker. A Wine package smoke is
-not native acceptance; the returned build-19044 acceptance and diagnostic
-results below remain authoritative for native behavior.
+valid minidumps, and the final clean-package checker. Wine remains development
+evidence. E9's returned Windows build-26100 run below is the current native
+acceptance; the E2-E8 narratives are retained as historical diagnosis.
 
 The second returned Windows 10 build-19044 package has 20 PASS and 12 FAIL
 records. It closes ordinary CET classification, exact requested reservations,
@@ -248,6 +253,45 @@ The raw returned bundle SHA-256 is
 `d6bb85c1529496cb384bebcc1495378ade0e253041e01a9605f3f6c90b8538e5`;
 see `evidence/w010_w014_e6_full/DIAGNOSIS.md`.
 
+## Accepted native E9 host result
+
+E7 replaced the rejected fixed-page recursive-SOE path with narrow Win64-only
+explicit pre-prologue checks in optimizing code and nterp. The check allows
+`RSP == Thread::stack_end_`, branches only when RSP is below the boundary, and
+tail-jumps through `Thread::pThrowStackOverflow`. Linux retains its unchanged
+implicit `RSP - 8192` probe and fault translation.
+
+E9 completes the Windows boundary contract. Each attaching thread queries its
+current `SetThreadStackGuarantee` value, raises it to at least four system pages
+while preserving a larger host value, queries the configured value back, and
+rejects attachment if the operation cannot be verified. Stack accounting
+excludes the sum of the `VirtualQuery`-measured inaccessible low prefix, the
+page-rounded configured guarantee, and one moving `PAGE_GUARD` page. Common ART
+code then adds its unchanged 8192-byte managed-overflow recovery reserve.
+
+This sum, rather than E8's rejected `max(prefix, guarantee)`, follows the
+native measurements: on build 26100, terminal recursion moved from
+`low + 0x3000` with a zero/default request to `low + request + 0x1000` once the
+request exceeded the default. The guarantee is therefore above a separate
+terminal prefix, and the moving guard is an additional page.
+
+The immutable issued archive is
+`dist/win64_w010_w014_e9_native.zip`, SHA-256
+`2b84c911dfbe23dd5dd13917a0fb4a63bdbf90901172f74dfe642ed1fd20f16f`.
+On Windows Server 2025 build 26100 the returned full payload matches the issued
+identity, the runner records exactly 30 PASS rows with no failure, and the
+independent reviewer reports:
+
+```text
+PASS (build=26100, pass_records=30, dumps=5, return=full-package)
+```
+
+All switch/nterp/JIT handled SOE paths pass, handled logs are free of fatal
+markers, `HANDLED_DMP_SCAN.txt` says `NO_HANDLED_DMP_FILES`, and the five
+intentional static/JIT/OSR fatal origins produce five valid dumps. The main and
+pthread page probes both report `before=0 configured=16384 minimum=16384`.
+See `evidence/w010_w014_e9/ACCEPTANCE.md`.
+
 ## Non-goals
 
 - Windows NIO.2
@@ -256,20 +300,22 @@ see `evidence/w010_w014_e6_full/DIAGNOSIS.md`.
 
 ## Next
 
-- Design a replacement Windows SOE delivery mechanism that
-  does not rely on retaining a fixed no-access page inside the system stack.
-  Then repeat the repaired managed-SOE and full 30-record runner, keeping the
-  now-native-accepted fatal matrix as a regression gate. Complete debugger/
-  stack-budget work, forced named-incompatible CET
-  policies, exception-unwind XMM coverage, and dynamic-table churn/sampling on
-  Windows 10/current Windows.
+- Keep E9's explicit Win64 stack checks and guarantee-aware bound accounting as
+  the accepted product path; retain fixed-page operations only as direct
+  diagnostics. Repeat the 30-record gate on another supported Windows 10 host
+  when available.
+- Complete debugger/stack-budget work, forced named-incompatible CET policies,
+  exception-unwind XMM coverage, dynamic-table churn/sampling, pending-range,
+  and embedding/predecessor-UEF coverage.
 - Complete W-025 broader JIT-mapping native acceptance and hardening
 
 ## W-010 Stage D activation re-run (2026-07-27)
 
-Win64 now enables common implicit null and stack-overflow checks, keeps x86_64
-implicit suspend checks off, registers stack before null, and registers
-nterp's immutable code range before startup can publish nterp entrypoints.
+Historical Stage D enabled common implicit null and stack-overflow checks.
+E7 retains implicit null, sets Win64 common implicit stack checks off, and
+uses explicit pre-prologue checks instead. Implicit suspend checks remain off,
+and nterp's immutable code range is registered before startup publishes its
+entrypoints.
 Normal started runtimes reject `-Xno-sig-chain`; active product and host
 runners no longer pass it.
 
@@ -389,4 +435,5 @@ and [`evidence/w003_host/ACCEPTANCE.md`](evidence/w003_host/ACCEPTANCE.md).
 The accepted native evidence above remains the historical XMM6-XMM11
 checkpoint. W-010 has since expanded only the Windows boundary adapter to
 XMM6-XMM15; focused Wine passes 6/6 with the retained `selfTestMask=63` and
-authoritative `fullSelfTestMask=1023`. Native repetition remains W-010 Stage E.
+authoritative `fullSelfTestMask=1023`. E9 repeats all six strengthened cases on
+Windows Server 2025 build 26100 and accepts them natively.

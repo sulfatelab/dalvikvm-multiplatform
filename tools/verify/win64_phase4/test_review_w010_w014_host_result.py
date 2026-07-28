@@ -165,5 +165,27 @@ class XmmLogTest(unittest.TestCase):
             REVIEWER.review_xmm_log(self.logs, "xmm_full_nterp_run01", "nterp")
 
 
+class StackGuaranteeLogTest(unittest.TestCase):
+    def test_accepts_minimum_and_preserved_larger_values(self) -> None:
+        REVIEWER.review_stack_guarantees(
+            "stack_guarantee label=main before=0 configured=16384 minimum=16384\n"
+            "stack_guarantee label=pthread before=32768 configured=32768 minimum=16384\n"
+        )
+
+    def test_rejects_configured_value_below_minimum(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "below the minimum"):
+            REVIEWER.review_stack_guarantees(
+                "stack_guarantee label=main before=0 configured=8192 minimum=16384\n"
+                "stack_guarantee label=pthread before=0 configured=16384 minimum=16384\n"
+            )
+
+    def test_rejects_reducing_existing_larger_value(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "did not preserve"):
+            REVIEWER.review_stack_guarantees(
+                "stack_guarantee label=main before=32768 configured=16384 minimum=16384\n"
+                "stack_guarantee label=pthread before=0 configured=16384 minimum=16384\n"
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

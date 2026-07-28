@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <iterator>
+#include <limits>
 
 #include "stack_windows.h"
 
@@ -79,6 +80,7 @@ bool InspectFake(const Win32MemoryRegion* regions,
                  uintptr_t low,
                  uintptr_t high,
                  size_t page_size,
+                 size_t stack_guarantee_size,
                  size_t minimum_usable_size,
                  Win32StackLayout* layout) {
   FakeLayout fake_layout{regions, count};
@@ -86,6 +88,7 @@ bool InspectFake(const Win32MemoryRegion* regions,
   return art::InspectWin32StackLayout(low,
                                       high,
                                       page_size,
+                                      stack_guarantee_size,
                                       minimum_usable_size,
                                       FakeQuery,
                                       &fake_layout,
@@ -235,11 +238,14 @@ void CheckReadOnlyLayoutInspection() {
                    low,
                    high,
                    page,
+                   4u * page,
                    minimum_usable,
                    &layout) ||
-      layout.allocation_base != low || layout.usable_begin != low + page ||
-      layout.excluded_low_size != page) {
-    Fail("layout-reserved", "did not exclude exactly the terminal bottom page");
+      layout.allocation_base != low || layout.usable_begin != low + 6u * page ||
+      layout.memory_excluded_low_size != page ||
+      layout.stack_guarantee_size != 4u * page ||
+      layout.excluded_low_size != 6u * page) {
+    Fail("layout-reserved", "did not debit prefix, guarantee, and moving guard");
   }
 
   const Win32MemoryRegion guarded[] = {
@@ -253,22 +259,34 @@ void CheckReadOnlyLayoutInspection() {
                    low,
                    high,
                    page,
+                   page,
                    minimum_usable,
                    &layout) ||
-      layout.usable_begin != low + 2u * page || layout.excluded_low_size != 2u * page) {
-    Fail("layout-guarded", "did not exclude the complete bottom guard prefix");
+      layout.usable_begin != low + 4u * page ||
+      layout.memory_excluded_low_size != 2u * page ||
+      layout.stack_guarantee_size != page || layout.excluded_low_size != 4u * page) {
+    Fail("layout-guarded", "did not debit guarded prefix, guarantee, and moving guard");
   }
 
-  if (InspectFake(reserved,
-                  std::size(reserved),
-                  low,
-                  low + 3u * page,
-                  page,
-                  minimum_usable,
-                  &layout)) {
-    Fail("layout-small", "accepted a layout without the requested usable stack");
+  if (!InspectFake(reserved, std::size(reserved), low, high, page, page + 1u,
+                   minimum_usable, &layout) ||
+      layout.stack_guarantee_size != 2u * page ||
+      layout.excluded_low_size != 4u * page) {
+    Fail("layout-round-guarantee",
+         "did not page-round the configured guarantee");
   }
-  std::puts("layout_cases count=3");
+
+  if (InspectFake(reserved, std::size(reserved), low, low + 3u * page, page,
+                  2u * page, minimum_usable, &layout)) {
+    Fail("layout-small",
+         "accepted a layout without the requested usable stack");
+  }
+  if (InspectFake(reserved, std::size(reserved), low, high, page,
+                  std::numeric_limits<size_t>::max(), minimum_usable,
+                  &layout)) {
+    Fail("layout-overflow", "accepted an overflowing stack guarantee");
+  }
+  std::puts("layout_cases count=5");
 }
 
 LONG WINAPI PageFaultHandler(EXCEPTION_POINTERS* exception) {
@@ -301,6 +319,39 @@ bool AccessFaults(volatile uint8_t* page) {
 }
 
 bool CheckActualPage(const char* label, int iterations) {
+  SYSTEM_INFO system_info;
+  GetSystemInfo(&system_info);
+  const size_t page_size = static_cast<size_t>(system_info.dwPageSize);
+  if (page_size > std::numeric_limits<ULONG>::max() /
+                      art::kWin32MinimumStackGuaranteePages) {
+    Fail(label, "system page size overflows the minimum stack guarantee");
+    return false;
+  }
+  const ULONG minimum_stack_guarantee =
+      static_cast<ULONG>(page_size * art::kWin32MinimumStackGuaranteePages);
+  ULONG stack_guarantee_before = 0u;
+  if (!SetThreadStackGuarantee(&stack_guarantee_before)) {
+    Fail(label, "could not query the initial thread stack guarantee");
+    return false;
+  }
+  if (stack_guarantee_before < minimum_stack_guarantee) {
+    ULONG requested_stack_guarantee = minimum_stack_guarantee;
+    if (!SetThreadStackGuarantee(&requested_stack_guarantee)) {
+      Fail(label, "could not set the minimum thread stack guarantee");
+      return false;
+    }
+  }
+  ULONG stack_guarantee_size = 0u;
+  if (!SetThreadStackGuarantee(&stack_guarantee_size) ||
+      stack_guarantee_size < minimum_stack_guarantee) {
+    Fail(label, "could not verify the configured thread stack guarantee");
+    return false;
+  }
+  std::printf(
+      "stack_guarantee label=%s before=%lu configured=%lu minimum=%lu\n", label,
+      static_cast<unsigned long>(stack_guarantee_before),
+      static_cast<unsigned long>(stack_guarantee_size),
+      static_cast<unsigned long>(minimum_stack_guarantee));
   pthread_attr_t attr;
   pthread_t self = pthread_self();
   if (self == nullptr || pthread_getattr_np(self, &attr) != 0) {
@@ -315,9 +366,6 @@ bool CheckActualPage(const char* label, int iterations) {
   }
   pthread_attr_destroy(&attr);
 
-  SYSTEM_INFO system_info;
-  GetSystemInfo(&system_info);
-  const size_t page_size = static_cast<size_t>(system_info.dwPageSize);
   const uintptr_t low = reinterpret_cast<uintptr_t>(stack_base);
   const uintptr_t high = low + stack_size;
   const size_t minimum_above = 3u * page_size;

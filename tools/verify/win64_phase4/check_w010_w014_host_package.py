@@ -48,9 +48,12 @@ def parse_report(path: Path) -> dict[str, str]:
         "fatal_unwind_trace": "bounded-32-live-veh",
         "fatal_minidumps_required": "5",
         "host_llvm_tools_required": "no",
-        "stack_overflow_delivery": "explicit-rsp-below-thread-stack-end",
+        "stack_overflow_delivery": "explicit-rsp-below-guarantee-aware-thread-stack-end",
         "win32_implicit_so_checks": "false",
         "windows_stack_mapping_ownership": "os",
+        "windows_stack_guarantee": "minimum-four-pages-preserve-larger-query-actual",
+        "windows_excluded_low": "sum-memory-prefix-guarantee-moving-guard",
+        "art_stack_overflow_reserve": "8192",
         "linux_stack_probe_contract": "implicit-rsp-minus-8192",
     }
     for key, expected in required.items():
@@ -166,8 +169,8 @@ def check_package(root: Path) -> None:
             fail(f"required package file is missing: {relative}")
 
     build_info = (root / "BUILD_INFO.txt").read_text(encoding="utf-8").splitlines()
-    if "stage=E7-explicit-stack-checks" not in build_info:
-        fail("BUILD_INFO.txt does not identify the E7 explicit-stack-check stage")
+    if "stage=E9-configured-guarantee-explicit-stack-checks" not in build_info:
+        fail("BUILD_INFO.txt does not identify the E9 configured-guarantee explicit-stack-check stage")
 
     if list(root.rglob("*.dmp")):
         fail("clean issued package unexpectedly contains a crash dump")
@@ -201,15 +204,21 @@ def check_package(root: Path) -> None:
         "interpreter_bridge_frame=200 interpreter_bridge_pending_frame=88 "
         "variable_rsp_delta=256",
         "explicit_stack_checks=Win64 explicit stack-check contract: PASS",
-        "stack_overflow_delivery=explicit-rsp-below-thread-stack-end",
+        "stack_overflow_delivery=explicit-rsp-below-guarantee-aware-thread-stack-end",
         "win32_implicit_so_checks=false",
         "windows_stack_mapping_ownership=os",
+        "windows_stack_guarantee=minimum-four-pages-preserve-larger-query-actual",
+        "windows_excluded_low=sum-memory-prefix-guarantee-moving-guard",
+        "art_stack_overflow_reserve=8192",
         "linux_stack_probe_contract=implicit-rsp-minus-8192",
         "actual=disabled",
         "known_incompatible=0x00000000",
         "requested=65536 actual=65536",
         "runtime=native reservation_rounding=request wine_default_clamps=0",
         "requested=9437184",
+        "stack_guarantee label=main before=",
+        "stack_guarantee label=pthread before=",
+        "minimum=16384",
         "action_calls=3 foreign_before=2 foreign_after=2",
         "frame_with_action=1 frame_after_remove=1 sequence=1,2,1,2",
         "A started runtime should have sig chain enabled",

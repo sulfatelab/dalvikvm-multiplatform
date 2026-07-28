@@ -1,11 +1,11 @@
 # W-003 Microsoft XMM nonvolatile sentinel
 
-**Status:** W-003 six-register checkpoint accepted on native Windows; W-010
-full-width XMM6-XMM15 follow-up passes focused Wine and awaits native repetition
+**Status:** W-003 six-register checkpoint and W-010 full-width XMM6-XMM15
+follow-up accepted on native Windows
 
 **Date:** 2026-07-26
 
-**Updated:** 2026-07-27
+**Updated:** 2026-07-28
 
 **Host:** agent01
 
@@ -99,5 +99,11 @@ native host; see [RESULT-w003-frame-probe.md](RESULT-w003-frame-probe.md).
 Fatal-marker and recursive dump scans are clean. The complete accepted return
 is documented in
 [evidence/w003_host/ACCEPTANCE.md](evidence/w003_host/ACCEPTANCE.md), and W-003
-is closed. W-010 Stage E must repeat the strengthened ten-register sentinel on
-native Windows; the historical accepted logs are intentionally not rewritten.
+is closed. The historical accepted logs are intentionally not rewritten.
+
+E9 subsequently performs the strengthened ten-register repetition on Windows
+Server 2025 build 26100. Nterp, switch, and threshold-zero JIT each pass two
+runs with `mask=0`, the retained `selfTestMask=63`, and authoritative
+`fullSelfTestMask=1023`. These six cases are part of the accepted 30/30
+W-010/W-014 package described in
+[evidence/w010_w014_e9/ACCEPTANCE.md](evidence/w010_w014_e9/ACCEPTANCE.md).

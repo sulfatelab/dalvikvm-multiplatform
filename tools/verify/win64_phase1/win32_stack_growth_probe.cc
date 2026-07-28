@@ -4,7 +4,9 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <limits>
 
 #include "stack_windows.h"
 
@@ -31,6 +33,14 @@ struct RegionSnapshot {
 
 struct ProbeObservation {
   ProbeMode mode = ProbeMode::kBaseline;
+  size_t requested_guarantee = 0u;
+  ULONG guarantee_before = 0u;
+  ULONG guarantee_previous = 0u;
+  ULONG guarantee_after = 0u;
+  DWORD guarantee_error = 0u;
+  bool guarantee_query_before_ok = false;
+  bool guarantee_set_ok = false;
+  bool guarantee_query_after_ok = false;
   DWORD thread_id = 0u;
   uintptr_t stack_low = 0u;
   uintptr_t stack_high = 0u;
@@ -250,6 +260,34 @@ __declspec(noinline) void RunFaultingOperation(ProbeObservation *observation) {
 unsigned __stdcall ProbeWorker(void *opaque) {
   ProbeObservation *observation = static_cast<ProbeObservation *>(opaque);
   observation->thread_id = GetCurrentThreadId();
+  ULONG guarantee_before = 0u;
+  observation->guarantee_query_before_ok =
+      SetThreadStackGuarantee(&guarantee_before) != 0;
+  observation->guarantee_before = guarantee_before;
+  if (!observation->guarantee_query_before_ok) {
+    observation->guarantee_error = GetLastError();
+    return 4u;
+  }
+  if (observation->requested_guarantee != 0u) {
+    ULONG requested = static_cast<ULONG>(observation->requested_guarantee);
+    observation->guarantee_set_ok = SetThreadStackGuarantee(&requested) != 0;
+    observation->guarantee_previous = requested;
+    if (!observation->guarantee_set_ok) {
+      observation->guarantee_error = GetLastError();
+      return 5u;
+    }
+  } else {
+    observation->guarantee_set_ok = true;
+    observation->guarantee_previous = observation->guarantee_before;
+  }
+  ULONG guarantee_after = 0u;
+  observation->guarantee_query_after_ok =
+      SetThreadStackGuarantee(&guarantee_after) != 0;
+  observation->guarantee_after = guarantee_after;
+  if (!observation->guarantee_query_after_ok) {
+    observation->guarantee_error = GetLastError();
+    return 6u;
+  }
   ULONG_PTR low = 0u;
   ULONG_PTR high = 0u;
   GetCurrentThreadStackLimits(&low, &high);
@@ -316,6 +354,16 @@ unsigned __stdcall ProbeWorker(void *opaque) {
 
 void PrintObservation(const ProbeObservation &observation) {
   const char *mode = ModeName(observation.mode);
+  std::printf("stack_guarantee requested=%zu before=%lu previous=%lu after=%lu "
+              "query_before_ok=%d set_ok=%d query_after_ok=%d error=%lu\n",
+              observation.requested_guarantee,
+              static_cast<unsigned long>(observation.guarantee_before),
+              static_cast<unsigned long>(observation.guarantee_previous),
+              static_cast<unsigned long>(observation.guarantee_after),
+              observation.guarantee_query_before_ok ? 1 : 0,
+              observation.guarantee_set_ok ? 1 : 0,
+              observation.guarantee_query_after_ok ? 1 : 0,
+              static_cast<unsigned long>(observation.guarantee_error));
   std::printf(
       "stack_growth mode=%s stack_low=%p stack_high=%p stack_size=%zu fixed=%p "
       "guard_before=%p guard_before_protect=0x%lx guard_after=%p "
@@ -386,15 +434,26 @@ void PrintObservation(const ProbeObservation &observation) {
 } // namespace
 
 int main(int argc, char **argv) {
-  if (argc != 2) {
+  if (argc < 2 || argc > 3) {
     std::fprintf(stderr, "usage: win32_stack_growth_probe.exe "
-                         "<baseline|protected|writable|direct>\n");
+                         "<baseline|protected|writable|direct> "
+                         "[stack-guarantee-bytes]\n");
     return 2;
   }
   ProbeObservation observation;
   if (!ParseMode(argv[1], &observation.mode)) {
     std::fprintf(stderr, "unknown stack-growth mode: %s\n", argv[1]);
     return 2;
+  }
+  if (argc == 3) {
+    char *end = nullptr;
+    const unsigned long long parsed = std::strtoull(argv[2], &end, 0);
+    if (end == argv[2] || *end != '\0' ||
+        parsed > std::numeric_limits<ULONG>::max()) {
+      std::fprintf(stderr, "invalid stack guarantee: %s\n", argv[2]);
+      return 2;
+    }
+    observation.requested_guarantee = static_cast<size_t>(parsed);
   }
 
   PVOID handler = AddVectoredExceptionHandler(1u, ObserveException);

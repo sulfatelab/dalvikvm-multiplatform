@@ -1,14 +1,13 @@
 # Win64 managed faults and ART stack design
 
-**Status:** W-010 Stages 0/C/D and W-014 Stages A-B are implemented. Native
-Windows 10 build 19044 and Windows Server 2025 build 26100 invalidate the
-fixed-page recursive SOE mechanism: Windows consumes its protection as stack
-backing and ultimately raises `STATUS_STACK_OVERFLOW`. E5/E6 repair the live
-switch-wrapper and interpreter-bridge unwind gaps. Native E6 diagnostics cross
-the complete JNI chain, and the subsequent full host run accepts static, JIT
-J-2/J-1, and OSR J-2/J-1 fatal UEF/dump dispatch. The 30-record runner remains
-red only for switch/nterp/JIT managed SOE and the resulting handled-fault/dump
-aggregates. Managed SOE delivery must be redesigned independently.
+**Status:** W-010/W-014 E9 is native-accepted 30/30 on Windows Server 2025
+build 26100. Win64 uses explicit pre-prologue stack checks and guarantee-aware
+bounds; switch/nterp/JIT managed SOE passes with zero handled dumps. Linux
+retains its implicit `RSP - 8192` probes. E5/E6 unwind repairs remain accepted,
+and five static/JIT/OSR fatal origins produce valid dumps. The work remains
+open only for broader debugger, stack-budget, forced CET-policy,
+dynamic-table sampling/churn, exception-unwind XMM, pending-range, and
+embedding coverage.
 **Created:** 2026-07-26
 **Updated:** 2026-07-28
 **Target:** x86_64 Windows 10 build 17134+
@@ -32,12 +31,10 @@ boundaries.
 
 The stable decisions and currently implemented candidate are:
 
-1. Keep ART's existing implicit null-check model. Keep Linux-like implicit
-   stack probes as the preferred low-divergence result, but do not use the
-   current fixed-page implementation for recursive SOE delivery: native
-   Windows stack growth overwrites its protection and reaches native stack
-   overflow first. The generated probes may remain if a narrow Windows
-   delivery adapter can preserve their common semantics.
+1. Keep ART's existing implicit null-check model and Linux's existing implicit
+   stack probe unchanged. On Win64 only, emit a narrow pre-prologue
+   `RSP < Thread::stack_end_` check in optimizing code and nterp, allow
+   equality, and tail-jump through the same ART overflow throw entrypoint.
 2. Implement a process-wide ART managed-fault VEH with
    `AddVectoredExceptionHandler(1, ...)`. It handles only recognized,
    continuable `EXCEPTION_ACCESS_VIOLATION` records and returns
@@ -51,28 +48,23 @@ The stable decisions and currently implemented candidate are:
    small `siginfo_t` view needed by common `FaultManager`. Do not copy the
    Windows register set into a fabricated Linux `ucontext_t` and back.
 5. Reuse the common `FaultManager`, generated-code range registry, handler
-   ordering, null classifier, and quick exception entrypoints. The current
-   stack classifier requires a read AV inside the recorded ART page, but that
-   classifier cannot run when native Windows delivers
-   `STATUS_STACK_OVERFLOW`; its final input contract is reopened.
+   ordering, null classifier, and quick exception entrypoints. Win64 managed
+   stack overflow bypasses fault classification and enters the common throw
+   path from its explicit generated check.
 6. Treat Windows `EXCEPTION_STACK_OVERFLOW`, `PAGE_GUARD`, and the moving OS
-   stack guard as native Windows mechanisms. The implemented separate fixed
-   `PAGE_NOACCESS` page works for direct access and under Wine, but recursive
-   growth on Windows build 19044 commits/reprotects it as `PAGE_READWRITE` and
-   reaches native stack overflow first. The fixed page cannot be retained
-   unchanged inside a Windows-owned thread-stack reservation.
+   stack guard as native Windows mechanisms. Do not translate them as the
+   managed event and do not install a product fixed page. Retain fixed-page
+   selection/protection only for direct diagnostic tests.
 7. Discover the current system stack with
    `GetCurrentThreadStackLimits()`, reject `IsThreadAFiber()`, validate the
    complete allocation with `VirtualQuery()`, and reject attachment if the
    current SP is outside that allocation. Do not clamp, guess, or use
    undocumented TEB fields.
-8. Preserve the lowest allocation page and every pre-existing bottom
-   `PAGE_NOACCESS`/`PAGE_GUARD` page. Select the first suitable reserved or
-   ordinary committed page above that excluded-low prefix as ART's fixed
-   `PAGE_NOACCESS` page, followed by ART's existing 8 KiB x86_64 overflow
-   reserve. This selection/restoration machinery remains useful for direct
-   page-state tests and any future bounded stack adapter, but it is not a
-   viable recursive SOE mechanism on a Windows-owned system stack.
+8. Query each thread's stack guarantee, raise it to at least four system pages
+   while preserving a larger host value, and query the configured value back.
+   Exclude the sum of the inaccessible low memory prefix, the page-rounded
+   configured guarantee, and one moving guard page. Common ART then places its
+   unchanged 8 KiB x86_64 recovery reserve above that native boundary.
 9. Create CRT-using ART threads with `_beginthreadex`, not raw `CreateThread`.
    For a non-zero requested stack size, pass
    `STACK_SIZE_PARAM_IS_A_RESERVATION`. Replace the current thread-ID/reopen
@@ -80,11 +72,10 @@ The stable decisions and currently implemented candidate are:
    handle for joinable threads.
 10. Disable caller-supplied `pthread_attr_setstack()` stacks for Windows ART
     thread pools. Pass the requested reservation size to the OS instead.
-11. Activate implicit null and stack-overflow checks only as one product
-    capability: VEH installed, common handlers registered, every attached
-    thread has validated bounds, and every such thread has its protected page.
-    A per-thread installation failure rejects that attachment or thread birth.
-    This is the current implementation, not a native-accepted final contract.
+11. Activate implicit null handling only with the managed VEH and common
+    handlers. Activate Win64 explicit stack checks only with validated,
+    guarantee-aware thread bounds. A per-thread query, configuration, or
+    layout failure rejects attachment or thread birth.
 12. Keep fatal crash diagnostics separate from managed fault translation.
     Expected faults do not log or dump. The unhandled-exception filter writes a
     best-effort dump, then chains to the previously installed filter.
@@ -114,7 +105,7 @@ The stable decisions and currently implemented candidate are:
 - Adaptation of recognized access violations to common ART fault handling.
 - In-place Win64 PC/SP context access in the x86_64 fault handler.
 - Implicit null-pointer translation.
-- ART protected-page stack-overflow translation.
+- Explicit Win64 stack-check code generation and common throw-entry transfer.
 - The activation gate for generated code that depends on implicit faults.
 - Separation of managed translation from fatal VEH/UEF diagnostics.
 
@@ -126,8 +117,9 @@ The stable decisions and currently implemented candidate are:
   threads.
 - The Windows thread-pool stack policy.
 - ART stack accounting (`stack_begin_`, `stack_end_`, `stack_size_`).
-- Placement, commit, protection, temporary unprotection, and restoration of
-  the fixed ART page.
+- Stack-guarantee configuration/verification and Windows recovery-region
+  accounting.
+- Fixed-page selection/protection/restoration only for direct diagnostics.
 - Rejection policy for fibers, manual stacks, and impossible bounds.
 
 ### 2.3 Explicit non-goals
@@ -177,9 +169,11 @@ describes the caller frame. `ThrowStackOverflowError()` temporarily expands
 ART's usable lower stack boundary, unprotects the fixed page, constructs the
 exception, restores the normal boundary, and protects the page again.
 
-Windows should preserve that sequence. The OS-specific differences are how
-the fault is delivered, how PC/SP are represented, and how the fixed page is
-created.
+Windows preserves the pre-prologue timing, caller-frame invariant, common
+throw entrypoint, 8192-byte ART recovery reserve, and Java-visible exception.
+The unavoidable OS-specific difference is detection: Win64 compares RSP with
+`Thread::stack_end_` explicitly because Windows stack growth cannot preserve a
+fixed protected page, while Linux retains the implicit fault sequence.
 
 ## 4. Current Windows state and remaining defects
 
@@ -202,14 +196,13 @@ no-op-protection workarounds:
 - Runtime teardown removes ART's diagnostic VEH while `art.dll` is still
   loaded and restores the process UEF without overwriting a filter installed
   after ART.
-- Every attached non-AOT Windows thread now measures the excluded-low prefix,
-  selects a suitable page, records its original state, installs and verifies
-  a fixed `PAGE_NOACCESS` page, and accounts for that page in ART's published
-  stack bounds. Reserved originals are committed only for the ART lifetime;
-  committed-private read/write originals retain their contents.
-- `ProtectStack()` and `UnprotectStack()` now implement verified state
-  transitions. `Thread` teardown directly restores and verifies the original
-  reserved or committed state before an external native thread can continue.
+- Every attached Windows thread queries its current stack guarantee, raises it
+  to at least four pages while preserving a larger value, and queries the
+  actual configured value back. Its published bounds exclude the measured
+  inaccessible prefix, rounded configured guarantee, and one moving guard
+  page before common ART adds the 8192-byte recovery reserve.
+- Fixed-page install/protect/unprotect/restore remains compiled for isolated
+  direct page-state probes. Product attachment and teardown do not use it.
 
 The current tree now has the active W-010 product capability:
 
@@ -220,9 +213,9 @@ The current tree now has the active W-010 product capability:
 - `runtime_windows.cc` still owns a separate diagnostic VEH. It may log fatal
   first-chance events, but it never translates managed faults. The fatal UEF
   writes a best-effort dump and chains to its predecessor, or returns search.
-- Runtime initialization enables implicit null and stack-overflow checks on
-  Win64 x86_64 and keeps implicit suspend checks disabled, matching ART's
-  x86_64 policy. Common handlers retain Linux order: stack before null.
+- Runtime initialization enables implicit null handling and explicit Win64
+  stack-overflow checks while keeping implicit suspend checks disabled.
+  Linux handler order and implicit probes remain unchanged.
 - Win64 registers nterp's immutable generated-code range during fault-manager
   initialization from `IsNterpSupported()`, before `Runtime::Start()` can
   publish nterp entrypoints. JIT ranges continue through common
@@ -279,19 +272,13 @@ The current tree now has the active W-010 product capability:
   It does not prove debugger-quality minidump stack reconstruction or
   concurrent sampling under large-table churn.
 
-The implementation is locally complete under Wine for the static boundaries,
-dynamic JIT registration/lifecycle, fatal paths, full-width XMM boundary
-state, and managed-fault/stack matrix. The second native run validates a large
-subset but disproves the fixed-page recursive SOE assumption and exposes an
-independent fatal-UEF dispatch failure. The third native diagnostic run proves
-the fixed page is overwritten by normal Windows stack growth and proves ART
-still owns the UEF slot immediately before the crash. Managed SOE therefore
-needs a new delivery design; fatal dispatch work is narrowed to native
-exception traversal across the common GenericJNI/managed boundary. The new
-local gate now proves the repaired record restores caller RIP/RSP and every
-nonvolatile GPR; three packaged native exception shapes must determine whether
-that repair restores UEF dispatch. Debugger, stack-budget, forced-policy, and
-dynamic-table stress remain additional native acceptance work.
+The implementation is complete under Wine and native-accepted in E9 on
+Windows Server 2025 build 26100 for the 30-record managed-fault/fatal matrix.
+Historical E2-E6 results below document why fixed-page SOE and missing PE
+unwind records were rejected or repaired. E9 passes switch/nterp/JIT managed
+SOE, zero handled dumps, and all five fatal origins. Debugger, stack-budget,
+forced-policy, dynamic-table stress/sampling, exception-unwind XMM,
+pending-range, and embedding coverage remain additional acceptance work.
 
 ### 4.1 Second native Stage E result and current diagnosis
 
@@ -520,6 +507,44 @@ writes an unwanted sixth dump. This closes native fatal-origin repetition but
 strengthens, rather than changes, the requirement to replace fixed-page SOE
 delivery.
 
+### 4.4 E7-E9 managed-SOE replacement and acceptance
+
+E7 replaces Win64's rejected fixed-page probe with explicit pre-prologue
+checks in optimizing code and nterp. The generated comparison allows
+`RSP == Thread::stack_end_`, branches only when RSP is below the boundary, and
+tail-jumps through `Thread::pThrowStackOverflow`. Linux object inspection
+proves its existing implicit `RSP - 8192` probe is unchanged.
+
+E8 configured a native stack guarantee but treated it as overlapping the
+inaccessible low prefix. Native switch/nterp/JIT SOE still failed. Controlled
+build-26100 runs then measured terminal fault locations at `low + 0x3000`,
+`+0x3000`, `+0x4000`, `+0x5000`, `+0x9000`, and `+0x11000` for guarantee
+requests 0, 8192, 12288, 16384, 32768, and 65536. This establishes that the
+guarantee lies above a separate terminal prefix and below one moving guard.
+
+E9 therefore:
+
+```text
+minimum guarantee = 4 * system page size
+configured guarantee = max(existing guarantee, minimum)
+excluded low = inaccessible memory prefix
+             + page-rounded configured guarantee
+             + one moving PAGE_GUARD page
+stack_end = low + excluded low + ART's unchanged 8192-byte reserve
+```
+
+`SetThreadStackGuarantee(0)` queries the current value. A nonzero call returns
+the previous value through its argument, so ART queries, conditionally raises,
+queries again, and validates the actual configured value. Larger host values
+are preserved.
+
+The immutable E9 archive SHA-256 is
+`2b84c911dfbe23dd5dd13917a0fb4a63bdbf90901172f74dfe642ed1fd20f16f`.
+Windows Server 2025 build 26100 returns 30/30 PASS, no handled dumps, and five
+valid fatal dumps. The independent reviewer reports
+`PASS (build=26100, pass_records=30, dumps=5, return=full-package)`. See
+`tools/verify/win64_phase4/evidence/w010_w014_e9/ACCEPTANCE.md`.
+
 ## 5. Windows contracts and conclusions
 
 ### 5.1 VEH ordering is the Windows chain
@@ -543,9 +568,10 @@ AV before ART sees it is incompatible with any VEH-based managed runtime.
 ### 5.2 The debugger always sees expected faults first
 
 Because debugger first-chance notification precedes VEH, a debugger configured
-to break on every access violation will stop on normal implicit null and stack
-checks. This is not an ART handler-order bug. Native acceptance must prove that
-continuing the debugger resumes into the managed exception path.
+to break on every access violation will stop on normal implicit null checks.
+Win64's explicit stack check does not deliberately fault. Native acceptance
+must still prove that continuing a debugger resumes an implicit null fault into
+the managed exception path.
 
 ### 5.3 `PAGE_GUARD` cannot simply be adopted as ART's page
 
@@ -558,18 +584,13 @@ invalid. However, native build 19044 also proves that a separate
 commits/reprotects that page as ordinary `PAGE_READWRITE` and reaches native
 stack overflow first.
 
-### 5.4 Native stack overflow is observed but not yet a valid ART event
+### 5.4 Native stack overflow is not ART's managed event
 
-An access to `PAGE_NOACCESS` produces `EXCEPTION_ACCESS_VIOLATION`, which is
-the event the current W-010 classifier expects. Native Windows instead reports
-`EXCEPTION_STACK_OVERFLOW` for the real recursive probes. That event has
-different recovery rules, including compiler/CRT guard restoration. It must
-not be translated blindly as ART SOE, but it can no longer be dismissed as an
-irrelevant native-only condition. The protected/writable diagnostic proves that
-pre-reset re-protection succeeds, but Windows has already consumed the fixed
-page as stack backing by then. Any replacement must be a narrow platform
-adapter that preserves the required PC, SP, frame, and repeatable recovery
-invariants; retaining the Linux fixed page unchanged is no longer an option.
+Native Windows reports `EXCEPTION_STACK_OVERFLOW` after consuming the fixed
+page as stack backing. That event has compiler/CRT recovery rules and arrives
+too late to preserve ART's pre-prologue invariant, so W-010 deliberately does
+not translate it. E9 detects the boundary explicitly before prologue setup and
+uses the common ART throw path while the Windows guarantee remains available.
 
 ### 5.5 The system stack interval is a documented API
 
@@ -579,13 +600,12 @@ that user-mode code can execute outside that allocation. ART therefore must
 check that current SP is inside the returned interval; this also gives a clean
 policy for fibers and manual stacks.
 
-### 5.6 Commit and protection are separate operations
+### 5.6 Diagnostic page commit and protection are separate operations
 
+The direct diagnostic selector still tests Windows page-state mechanics.
 `VirtualAlloc(address, size, MEM_COMMIT, protection)` commits pages inside an
-existing reservation. `VirtualProtect` works only on committed pages. The
-implemented selector also accepts an already committed private
-`PAGE_READWRITE` page, whose contents and original protection must survive
-detach. The fixed-page installation sequence is therefore deterministic:
+existing reservation, while `VirtualProtect` works only on committed pages.
+The diagnostic sequence is deterministic:
 
 ```text
 reserved original:
@@ -603,13 +623,19 @@ for its Windows VM threads. Raw `CreateThread` is still part of the external
 attachment test matrix, but not the selected implementation of the pthread
 shim.
 
-### 5.8 `SetThreadStackGuarantee` is secondary, not the managed design
+### 5.8 `SetThreadStackGuarantee` defines the native recovery boundary
 
-`SetThreadStackGuarantee` reserves stack space for handling native
-`EXCEPTION_STACK_OVERFLOW`. It does not create ART's fixed page, classify an
-ART probe, or restore ART's stack accounting. The initial implementation
-should not depend on it. It may later be evaluated for fatal native-overflow
-diagnostics, separately from managed overflow correctness.
+`SetThreadStackGuarantee` does not itself detect or translate managed overflow.
+E9 uses it to guarantee native dispatch/recovery space below ART's separate
+managed reserve and to make that boundary explicit in stack accounting. ART
+queries the current value with a zero call, raises it to at least four system
+pages if necessary, queries it again because the setter returns the previous
+value, and validates the result. A larger existing guarantee is preserved.
+
+The configured guarantee is page-rounded and added to, not maximized with,
+the inaccessible memory prefix. One moving guard page is added separately.
+This contract is based on controlled native measurements and is validated on
+both main and pthread-created threads in the E9 page probe.
 
 ### 5.9 CET user shadow stacks conflict with ART's non-local transfers
 
@@ -712,12 +738,12 @@ return value.
 
 Advantages:
 
-- generated code is unchanged;
+- implicit-null generated code is unchanged;
 - common handler order and code-range checks are unchanged;
 - Java exception entrypoints are unchanged;
 - Linux behavior is unchanged;
-- the Windows delta is limited to one dispatcher, one x86 context view, and
-  stack VM primitives.
+- the Windows delta is limited to one dispatcher/context view for AV faults
+  plus a small explicit stack check and platform stack-bound accounting.
 
 ### 6.2 Rejected for now: platform-neutral `FaultContext` refactor
 
@@ -730,17 +756,14 @@ single Windows ISA.
 This remains a possible upstream-oriented cleanup after Win64 behavior is
 proven.
 
-### 6.3 Fallback only: explicit Windows stack and null checks
+### 6.3 Selected for stack only: explicit Win64 stack checks
 
-Windows-specific generated code could compare RSP with `Thread::stack_end_`
-and branch to the existing throw entrypoint, and nterp could add explicit null
-branches. This removes deliberate AVs and fixed-page recovery complexity.
-
-It is not selected because ART's optimizing backends currently assume
-implicit stack checks, nterp contains unconditional implicit probes, and the
-result would fork hot generated-code paths from Linux. Use this only if native
-Windows proves that a safe VEH path cannot fit the required stack budget or
-cannot coexist with product security/debugger requirements.
+Native Windows disproved the lower-divergence fixed-page candidate. Optimizing
+code and nterp therefore compare RSP with `Thread::stack_end_` before the
+method prologue, allow equality, and tail-jump to the existing throw entrypoint
+when below it. This is intentionally stack-only: implicit null checks remain
+shared and VEH-based. Object-level audits verify that Linux keeps its original
+implicit probe and that the Win64 branch contains the exact comparison.
 
 ### 6.4 Rejected: frame-based SEH around every ART transition
 
@@ -749,12 +772,13 @@ JIT/nterp execution and would duplicate fault classification in a second
 control-flow model. VEH is specifically designed for process-wide observation
 before frame unwinding.
 
-### 6.5 Rejected: native Windows guard/overflow only
+### 6.5 Rejected: native Windows guard/overflow as the managed event
 
-Relying on moving `PAGE_GUARD`, `EXCEPTION_STACK_OVERFLOW`,
-`SetThreadStackGuarantee`, or `_resetstkoflw` would change when overflow is
-detected and would not preserve ART's pre-prologue frame invariant or repeated
-caught-overflow behavior.
+Relying on moving `PAGE_GUARD`, `EXCEPTION_STACK_OVERFLOW`, or `_resetstkoflw`
+would change when overflow is detected and would not preserve ART's
+pre-prologue frame invariant or repeated caught-overflow behavior. E9 uses
+`SetThreadStackGuarantee` only to reserve/account native recovery space below
+the explicit managed boundary, not as the managed event.
 
 ### 6.6 Rejected: full POSIX sigchain emulation
 
@@ -913,13 +937,13 @@ interface refactor.
 
 This is preferable to fabricating a full `ucontext_t` because:
 
-- the common handlers modify only the saved PC and SP for current Win64
-  implicit faults;
+- the common null handler modifies only the saved PC and SP for current Win64
+  AV-based implicit faults;
 - all untouched integer and vector registers remain in the real OS context;
 - rSELF in R15 is restored by Windows automatically;
 - no copy-back list can accidentally omit a register;
-- the stack handler can validate the documented AV access kind without
-  abusing unused `siginfo_t` fields or process-global state;
+- an AV handler can validate the documented access kind without abusing
+  unused `siginfo_t` fields or process-global state;
 - the null trampoline observes the original interrupted register set when the
   OS resumes it.
 
@@ -948,21 +972,17 @@ the existing atomic list plus ordering code-range registration before managed
 entrypoint publication. Future PE AOT loading must prove an equivalent
 publication edge before it is added to this contract.
 
-### 7.6 Stack-overflow classification
+### 7.6 Stack-overflow detection
 
-Stack overflow remains the first generated-code handler. It succeeds only if:
+E9 does not route Win64 stack overflow through `FaultManager`. Optimizing code
+and nterp compare the live RSP with `Thread::stack_end_` before establishing a
+frame. `RSP == stack_end_` is allowed; `RSP < stack_end_` tail-jumps through
+`Thread::pThrowStackOverflow`. The bound already includes the native recovery
+interval plus ART's 8192-byte reserve.
 
-```text
-operation is read
-fault_address == CONTEXT.Rsp - GetStackOverflowReservedBytes(kX86_64)
-fault_address is within [thread.art_protected_begin,
-                         thread.art_protected_end)
-thread.art_protected_state == Protected
-```
-
-The protected-range check is the Windows strengthening over the existing
-x86_64 equality test. No `VirtualQuery()` is needed because W-014 records the
-page in `Thread` during attachment.
+The former read-AV, `RSP - 8192`, and fixed-page-containment classifier remains
+historical/diagnostic code only. Linux retains the equivalent implicit
+classification unchanged.
 
 On success, only `CONTEXT.Rip` changes:
 
@@ -1554,9 +1574,9 @@ low-stack-safe diagnostic. This makes these unsupported in the first product:
 This is safer than pretending a manual stack belongs to Windows thread-stack
 growth machinery.
 
-### 8.3 Windows lower-stack layout and invalidated fixed-page candidate
+### 8.3 Accepted Windows lower-stack layout
 
-The implemented fixed-page candidate uses this conceptual layout:
+E9 uses this conceptual layout:
 
 ```text
 high / GetCurrentThreadStackLimits.HighLimit
@@ -1564,26 +1584,20 @@ high / GetCurrentThreadStackLimits.HighLimit
   ... Windows committed/reserved regions; moving PAGE_GUARD may be here ...
 stack_end
   ART overflow reserve: 8 KiB on x86_64
-stack_begin
-  ART fixed page: committed PAGE_NOACCESS
-  excluded-low prefix, left in original state:
-    lowest allocation page
-    any adjacent PAGE_NOACCESS/PAGE_GUARD pages
+  one Windows moving PAGE_GUARD page, excluded from ART accounting
+  configured SetThreadStackGuarantee region, at least four pages
+  inaccessible low memory prefix measured with VirtualQuery
 low / GetCurrentThreadStackLimits.LowLimit
 ```
 
-The excluded-low prefix is not a guessed pthread guard size. It is a measured
-set of bottom pages that ART refuses to repurpose. At minimum it contains the
-lowest allocation page. If the following page is already `PAGE_NOACCESS` or
-`PAGE_GUARD`, ART skips that complete region as well. This handles both the
-usual native reserved-bottom layout and the fully committed Wine layout that
-has already shown `PAGE_NOACCESS` followed by `PAGE_GUARD`.
+The excluded-low value is not a guessed pthread guard size. The helper finds
+the complete inaccessible prefix, page-rounds the verified configured
+guarantee, and adds one system page for the moving guard. Each addition and the
+remaining minimum usable stack are overflow-checked. No mapping or protection
+is changed.
 
-This remains the exact selection/restoration layout in the current tree, but
-it is no longer the selected product SOE mechanism. Native recursive growth
-commits/reprotects the candidate page as ordinary stack backing. A replacement
-may reuse the measured bounds and page-state infrastructure, but must not rely
-on that page remaining `PAGE_NOACCESS` while Windows grows the stack.
+The previous fixed-page selector remains in the current tree only for direct
+diagnostic tests. Its algorithm is:
 
 The page-selection algorithm is:
 
@@ -1614,15 +1628,15 @@ convenient page. The first implementation supports the normal one-page
 protected size. Memory-tool configurations with scaled protected sizes need
 separate Windows validation before being enabled.
 
-The common `InitStack()` interface may describe this measured prefix as
-`read_guard_size = excluded_low_bytes`, but the Windows implementation must
-document that it is an excluded-low accounting value, not the size or current
-location of Windows' moving guard.
+The diagnostic selection is bounded by the validated allocation. Its
+`excluded_low_bytes` is not used as the E9 product layout. Common `InitStack()`
+receives the complete E9 excluded-low sum described above.
 
-### 8.4 Protected-page installation
+### 8.4 Diagnostic-only protected-page installation
 
-Installation occurs during `Thread::InitStack()` after bounds validation and
-before the thread publishes itself for managed execution.
+Product `Thread::InitStack()` does not install a fixed page. The following
+state machine is retained only for `win32_stack_page_probe` and related direct
+diagnostics:
 
 For the exact target range:
 
@@ -1638,21 +1652,18 @@ For the exact target range:
 4. Change it to `PAGE_NOACCESS` with `VirtualProtect()`.
 5. Query it again and require `MEM_COMMIT`, the expected allocation base, and
    `PAGE_NOACCESS` without `PAGE_GUARD`.
-6. Publish the page address and `Protected` state in the owning `Thread`.
+6. Publish the page address and `Protected` state in the diagnostic record.
 
-If protection fails after a reserved page was committed, installation restores
-and verifies the original page state before rejecting attachment. If rollback
-itself cannot be verified, the populated record is retained so thread teardown
-can retry direct restoration; the implementation never clears ownership of an
-unrestored page.
+If protection fails after a reserved page was committed, the helper restores
+and verifies the original page state before failing the diagnostic. It never
+clears ownership of an unrestored test page.
 
-The Windows path returns immediately after this platform operation. It does
-not run Linux's recursive `VM_GROWSDOWN` touching and does not `madvise()` the
-stack.
+The Windows diagnostic does not run Linux's recursive `VM_GROWSDOWN` touching
+and does not `madvise()` the stack.
 
-### 8.5 Protection state machine
+### 8.5 Diagnostic protection state machine
 
-Each attached thread records:
+Each direct diagnostic record uses:
 
 ```text
 NotInstalled
@@ -1661,28 +1672,21 @@ NotInstalled
   -> Protected
 ```
 
-`UnprotectStack()` is legal only for the current thread while ART is handling
-its overflow. It changes exactly the recorded page to `PAGE_READWRITE`.
-`ProtectStack()` changes exactly that page back to `PAGE_NOACCESS`. Both verify
-the old protection and query the exact allocation, range, private type, and
-new protection before publishing the state transition.
+The diagnostic unprotect/protect helpers change exactly the recorded page and
+verify the old/new allocation, range, type, and protection. The accepted E9
+managed-overflow path does not call them.
 
-A failed transition is not recoverable by continuing through generated code:
-
-- installation failure rejects attach/thread birth;
-- unprotect failure makes overflow construction unsafe and is fatal;
-- reprotect failure would make later overflows undetectable and is fatal.
-
-No handler path discovers the page with `VirtualQuery()`; the prevalidated
-address is used directly.
+A failed transition fails the direct diagnostic. No E9 handler path discovers
+or changes this page.
 
 ### 8.6 Detach policy
 
 ART-created Java and pool threads terminate immediately after ART unregisters
 them, so Windows releases their complete stack allocation.
 
-An externally created native thread may detach and continue. W-014 must restore
-the ART page before deleting its `Thread`:
+An externally created native thread may detach and continue. E9 has not changed
+its stack mappings, so product detach has no ART-owned page to restore. The
+diagnostic fixed-page test still restores its own test mutation exactly:
 
 - if the page was originally reserved, decommit it back to `MEM_RESERVE`;
 - if it was originally committed, restore its recorded base protection;
@@ -1698,17 +1702,11 @@ a reserved original directly, and `VirtualProtect()` can restore a committed
 original directly. The result is then verified with `VirtualQuery()` before
 the record is cleared.
 
-Native tests must cover attach, managed execution, detach, continued native
-stack use, reattach, and a second detach. If exact restoration proves unsafe
-after Windows guard movement, the supported policy must instead require an
-attached native thread to remain attached until exit; silently leaving the
-page is not acceptable.
-
 The local Wine W-002 gate now performs that lifecycle twice on each of sixteen
 raw `CreateThread` threads in every mode: attach, managed JIT callback, detach,
 about 16 KiB of recursive native stack use, reattach, a second callback, and a
-second detach. This proves the implemented restoration/reattach path under
-Wine; native Windows guard-growth acceptance remains required.
+second detach. E9 no longer couples that product lifecycle to fixed-page
+restoration; native repetition remains useful thread-lifetime coverage.
 
 ### 8.7 Thread creation and pthread attributes
 
@@ -1804,12 +1802,10 @@ reservation. Tests record:
 - Windows allocation-granularity rounding.
 
 This distinction is important because ART adds historical native headroom and
-overflow overhead before `pthread_create()`. Because the main thread attaches
-before architecture implicit-check flags are selected, the Windows bootstrap
-branch also adds one protected-page capacity so installing the
-ART-owned page does not silently debit the requested stack budget. The
-measured excluded-low prefix belongs to the Windows system-stack reservation
-layout and is not guessed or added as another ART-owned page.
+overflow overhead before `pthread_create()`. E9 does not add or install an
+ART-owned page. The verified Windows native recovery interval is debited from
+the actual reservation when bounds are published, and insufficient usable
+space rejects attachment.
 
 For thread pools:
 
@@ -1821,67 +1817,44 @@ conceptually. Windows passes `worker_stack_size` through
 `pthread_attr_setstacksize()` and does not allocate a `MemMap` stack or call
 `pthread_attr_setstack()`.
 
-### 8.9 Moving Windows guard interaction — native candidate failed
+### 8.9 Moving Windows guard and guarantee interaction
 
-The moving `PAGE_GUARD` remains under OS control. Native build 19044 shows a
-reserved page at `low + 4096`, then reports `STATUS_STACK_OVERFLOW` before the
-generated `RSP - 8192` probe becomes ART's fixed-page AV. Switch recovery also
-finds unexpected protection when re-protecting the temporarily writable page.
-The isolated native probe must now record:
+The moving `PAGE_GUARD` remains under OS control. E9 never protects, consumes,
+or tries to move it. Instead the accounting reserves one page above the
+configured stack guarantee. Controlled native measurements establish that the
+terminal inaccessible prefix, configured guarantee, and moving guard are
+additive. `win32_stack_growth_probe` retains baseline/protected/writable/direct
+modes and accepts an optional guarantee request so future Windows releases can
+repeat that observation without changing product state.
 
-- guard and fixed-page locations before recursion;
-- the first terminal code, RSP, fault address, and fixed-page protection;
-- fixed-page protection before and after `_resetstkoflw()`;
-- exact re-protection failure before reset and any retry after reset; and
-- restoration to the original reserved or committed state.
-
-Wine validates the safe direct/writable/baseline mechanics but crashes in the
-protected recursive mode, so it cannot answer this design question.
-
-## 9. Implemented stack-overflow event sequence — Wine only
-
-The following is the intended low-divergence sequence and passes under Wine.
-The second native run diverges at the first arrow by delivering
-`STATUS_STACK_OVERFLOW` before the fixed-page AV. It is retained here as the
-candidate behavior to preserve if the Windows adapter can do so safely, not as
-an accepted native sequence.
+## 9. Accepted Win64 stack-overflow event sequence
 
 ```text
-generated method/nterp entry
-  test [rsp - 8192]
+generated method/nterp entry, before prologue
+  compare RSP with Thread::stack_end_
         |
-        v
-fixed ART PAGE_NOACCESS page
-  EXCEPTION_ACCESS_VIOLATION (read)
+        +-- RSP >= stack_end_: continue normal entry
         |
-        v
-debugger first chance
-        |
-        v
-ART managed-fault VEH
-  validate record/context/r15/thread/code range
-  validate exact rsp-8192 address inside recorded ART page
-  context.Rip = art_quick_throw_stack_overflow
-  return EXCEPTION_CONTINUE_EXECUTION
-        |
-        v
-Windows restores original registers and Rsp, resumes at quick stub
+        v RSP < stack_end_
+tail-jump through Thread::pThrowStackOverflow
         |
         v
 artThrowStackOverflowFromCode(Thread*)
   SetStackEndForStackOverflow()
-  VirtualProtect(ART page, PAGE_READWRITE)
   construct and install StackOverflowError
   ResetDefaultStackEnd()
-  VirtualProtect(ART page, PAGE_NOACCESS)
         |
         v
 ART long-jumps/delivers to the managed catch site
 ```
 
-No Windows SEH unwind is used for the managed transition. This sequence is
-supported only with CET user shadow stacks disabled; its final ART long jump
-does not maintain a hardware shadow-stack pointer.
+No deliberate Windows access violation, VEH stack classifier, fixed-page
+unprotect/reprotect, native `EXCEPTION_STACK_OVERFLOW`, or SEH unwind is used
+for the managed transition. The check runs before frame establishment and
+uses the same ART throw entrypoint and recovery reserve as Linux. Linux keeps
+its implicit fixed-page event sequence. Both remain supported only with CET
+user shadow stacks disabled because ART's final long jump does not maintain a
+hardware shadow-stack pointer.
 
 ## 10. Activation and failure policy
 
@@ -1895,7 +1868,8 @@ win_managed_faults_ready =
     && special SIGSEGV action published
     && x86_64 WindowsFaultContext adapter built
     && implicit null handler registered
-    && implicit stack handler registered
+    && explicit Win64 stack checks built
+    && every attached thread has verified guarantee-aware bounds
 ```
 
 Then:
@@ -1903,8 +1877,9 @@ Then:
 - startup must query the process CET/HSP policy before creating ART threads or
   enabling JIT and reject every defined incompatible policy field;
 - `implicit_null_checks_` may be true only when the capability is ready;
-- `implicit_so_checks_` may be true only when it is ready and each attached
-  thread installs its fixed page;
+- `implicit_so_checks_` is false on Win64 so common code does not install or
+  classify a protected page; explicit stack checks are built unconditionally
+  for Win64 optimizing/nterp code and require verified guarantee-aware bounds;
 - Win64 nterp and JIT may be product-enabled only under those flags because
   their normal code contains implicit accesses;
 - startup registration failure is fatal for the normal nterp/JIT product, not
@@ -1920,26 +1895,26 @@ not as a hidden recovery path for a partially initialized VEH product.
 
 ## 11. Stack budget and handler discipline
 
-Windows has no POSIX `sigaltstack` contract for VEH. The design assumes the
-exception machinery and handler consume the faulting thread's stack and must
-therefore prove that the existing 8 KiB ART reserve is sufficient.
+Windows has no POSIX `sigaltstack` contract for VEH. Implicit null handling
+still consumes the faulting thread's stack. Explicit stack overflow bypasses
+VEH but must prove that the configured native guarantee plus ART's separate
+8 KiB reserve is sufficient for the throw path.
 
-The recognized stack path must:
+The recognized overflow path must:
 
 - avoid heap allocation;
 - avoid logging and symbolization;
-- avoid `VirtualQuery()` and minidump APIs;
+- avoid `VirtualQuery()`, page-protection changes, and minidump APIs;
 - avoid ART mutex acquisition;
 - avoid large locals and compiler-generated stack probes;
 - avoid recursion except the explicit nested-fault fatal escape;
-- change only the saved PC on successful stack classification.
+- enter the common throw entrypoint without establishing the rejected frame.
 
 A native probe records, in preallocated storage:
 
-- interrupted RSP from `CONTEXT`;
-- VEH entry/current SP high-water use;
-- lowest SP reached before `UnprotectStack()`;
-- fixed page and reserve boundaries.
+- RSP at the explicit check;
+- lowest SP reached before the stack end is temporarily expanded;
+- configured guarantee, excluded-low components, and ART reserve boundaries.
 
 Keep the shared 8 KiB value if native debug and release builds retain a clear
 margin. Increase only the Windows x86_64 reserve if measurement proves it is
@@ -2048,8 +2023,8 @@ Stage A because the build and early-runtime enforcement are now present.
   and equality compares immutable thread IDs across module boundaries.
 - **Adjacent lifecycle repair:** runtime teardown removes the diagnostic VEH
   before `art.dll` unload and restores, rather than clobbers, a later host UEF.
-- Stage D now enables product implicit null/SO checks after the Stage A-B page
-  and Stage C adapter prerequisites are installed.
+- Stage D enabled the managed-fault product path after Stage A/C prerequisites;
+  E7 subsequently disables Win64 implicit SO and selects explicit checks.
 
 Local and returned-native evidence (2026-07-27):
 
@@ -2072,7 +2047,7 @@ join/detach handle-count point. Remaining Stage A work is representative ART
 pool observation, Java post-`FixStackSize()` correlation, fiber rejection on
 the real host, and detach/reattach timing under deep native guard movement.
 
-### Stage B — dormant fixed page — implemented locally
+### Stage B — fixed-page experiment — retained as diagnostic infrastructure
 
 - `stack_windows.{h,cc}` separates allocation-free selection policy from
   Win32 memory operations. It preserves the lowest page and complete adjacent
@@ -2080,11 +2055,9 @@ the real host, and detach/reattach timing under deep native guard movement.
   committed-private `PAGE_READWRITE` page, rejects malformed geometry and
   insufficient remaining stack, and supports the normal one-system-page ART
   protected size.
-- `Thread` records the selection and state below the native-code-visible TLS
-  layout. Non-AOT Windows attachment installs the page before publication,
-  common stack accounting uses the measured excluded-low bytes plus the fixed
-  page, and the Win64 bootstrap `FixStackSize()` compensation preserves the
-  requested stack budget.
+- The original candidate recorded selection/state below native-code-visible
+  TLS and installed the page during attachment. E7 removes that product
+  installation; only direct probes use the state record now.
 - Protect, unprotect, install rollback, and detach restoration verify the
   resulting `VirtualQuery()` state. Reserved originals return to
   `MEM_RESERVE`; committed originals return to their exact type/protection.
@@ -2100,10 +2073,8 @@ the real host, and detach/reattach timing under deep native guard movement.
   remain green with the Windows-only state below native-visible TLS offsets.
 
 Selection, direct protection, and restoration criteria are met. Native build
-19044 confirms a reserved bottom layout and exact small/default/large
-reservations, but recursive guard growth defeats the current fixed-page SOE
-contract. Stage B is therefore complete only as page-state infrastructure,
-not as the final managed-overflow mechanism.
+19044 proves recursive guard growth defeats the fixed-page SOE contract.
+Stage B is complete only as page-state diagnostic infrastructure.
 
 ### Stage C — initially dormant W-010 adapter — implemented locally (2026-07-27)
 
@@ -2133,18 +2104,20 @@ not as the final managed-overflow mechanism.
 - The complete Phase-4 Wine aggregate passes with the new W-010 gate, and the
   shared Linux `art`/`dalvikvm` rebuild plus `dalvikvm -showversion` pass.
 
-### Stage D — atomic product activation — implemented locally (2026-07-27)
+### Stage D — managed-fault activation — implemented (2026-07-27)
 
-- Win64 x86_64 enables common implicit null and stack-overflow flags while
-  leaving implicit suspend checks off.
-- `FaultManager` registers stack before null, preserving Linux handler order.
+- Win64 x86_64 enables common implicit null handling while leaving implicit
+  suspend checks off. E7 sets common implicit SO false and selects explicit
+  generated checks for Win64 only.
+- `FaultManager` retains common handler ordering; E9 stack overflow no longer
+  depends on the stack fault classifier.
 - Nterp's immutable code range is registered before startup publishes nterp
   entrypoints even though Win64 deliberately keeps `CanRuntimeUseNterp()`
   false during early initialization. JIT code-cache ranges retain the common
   registration path.
-- The main thread's W-014 page is installed before the capability is
-  published; later non-AOT attachments install it under the enabled implicit
-  stack-check flag. Installation failure rejects attachment/startup.
+- E9 requires the main and every later attached thread to have a verified
+  minimum four-page stack guarantee and guarantee-aware bounds before managed
+  execution. Product attachment installs no fixed page.
 - The Windows exception to the normal started-runtime sigchain invariant is
   removed. Active runners no longer pass `-Xno-sig-chain`; one focused
   negative case proves started-runtime rejection.
@@ -2242,16 +2215,27 @@ not as the final managed-overflow mechanism.
   reach VEH/UEF and create valid dumps on build 26100. The runner records
   25/30 PASS rows; only switch/nterp/JIT managed SOE and the two resulting
   handled-fault/dump aggregates fail.
-- **Still open:** redesign managed SOE delivery, add full-width XMM6-XMM15
-  exception-unwind coverage, and pass native debugger,
-  large-table churn/sampling, rollback-injection, and debugger-quality
-  dump-stack gates. Native normal-return XMM, OSR live unwind, and foreign
-  VEH/frame-SEH already pass in the second run.
+- **E7 explicit-check implementation:** optimizing Win64 and nterp perform a
+  pre-prologue `RSP < Thread::stack_end_` check and tail-jump through the common
+  throw entrypoint. Equality is valid. Linux retains its implicit probe and is
+  checked at object level.
+- **E8 rejection:** treating the inaccessible prefix and configured guarantee
+  as overlapping still fails all three native SOE modes.
+- **E9 guarantee-aware acceptance:** each thread preserves or raises the
+  guarantee to at least four pages, queries it back, and debits prefix plus
+  rounded guarantee plus one moving guard. Windows Server 2025 build 26100
+  returns 30/30 PASS, zero handled dumps, and five fatal dumps; the independent
+  reviewer accepts the full returned package.
+- **Still open:** full-width XMM6-XMM15 exception-unwind coverage, native
+  debugger, handler/throw stack budget, forced CET-policy families,
+  large-table churn/sampling, rollback injection, pending-range, embedding,
+  and debugger-quality dump-stack gates. Native normal-return XMM, OSR live
+  unwind, foreign VEH/frame-SEH, managed SOE, and five fatal origins pass.
 - Run the complete matrix below on Windows 10 build 17134+ and a current
   Windows release.
 - Keep Wine as a development oracle and Linux as the behavior oracle.
-- Remove obsolete diagnostic branches and update W-010/W-014 state only after
-  accepted native evidence.
+- Retain obsolete fixed-page branches only where direct diagnostics exercise
+  them; do not reconnect them to product attachment or managed SOE.
 
 ## 13. Required verification matrix
 
@@ -2295,7 +2279,7 @@ not as the final managed-overflow mechanism.
 
 ### 13.3 Implicit null
 
-- Nterp implicit invoke-null path that currently fails.
+- Nterp implicit invoke-null path.
 - JIT baseline and optimized implicit reads and writes.
 - Repeated caught NPE with GC and JNI between iterations.
 - Fault address inside and just outside the implicit-null range.
@@ -2310,8 +2294,10 @@ not as the final managed-overflow mechanism.
 - Repeated caught overflow, second overflow, mutual recursion, and
   `018-stack-overflow` output parity.
 - GC, JNI, stack walking, and exception stack-trace creation after overflow.
-- Exact read-operation, `fault == rsp - 8192`, and protected-page containment
-  records.
+- Win64 object-level `RSP < Thread::stack_end_` pre-prologue check with equality
+  accepted, plus Linux object-level `RSP - 8192` implicit-probe preservation.
+- Main and pthread guarantees queried, raised/preserved, queried back, and
+  excluded-low accounting for prefix + guarantee + moving guard.
 - Deliberate generated-code AV with the wrong address remains unhandled.
 - Handler and pre-unprotect stack high-water measurements.
 
@@ -2376,19 +2362,20 @@ and debugger evidence.
 | `runtime/multiplatform/windows/runtime_windows.cc` | Implemented earliest CET/HSP policy rejection, separate diagnostic VEH/UEF teardown, and predecessor-preserving fatal UEF chaining |
 | `runtime/multiplatform/windows/fault_handler_windows.cc` | Not required; the Stage C dispatcher remains narrow enough to live in `sigchain_windows.cc` |
 | `runtime/multiplatform/windows/fault_handler_windows.h` | Windows-only non-owning context view and documented AV-kind constants; no common-header Win32 leakage |
-| `runtime/arch/x86/fault_handler_x86.cc` | Win64 non-owning context view, real `CONTEXT` PC/SP/RAX access, read-only stack-fault and protected-page checks |
+| `runtime/arch/x86/fault_handler_x86.cc` | Win64 non-owning context view and real `CONTEXT` PC/SP/RAX access for AV-based managed faults; fixed-page stack classification is not the E9 product path |
 | `runtime/arch/x86_64/quick_entrypoints_x86_64.S` | Implemented PE unwind records for the two native invoke stubs, generic JNI trampoline, and split OSR entry/return ranges; GenericJNI now records RDI at completed-frame offset `0x1400` from its R12 anchor and passes realistic native-return virtual unwind; OSR uses R12 for the static copy anchor and sets RBP to copied RSP before the JIT handoff; preserves full-width XMM6-XMM15 in Windows-only boundary adapters with completed-frame unwind offsets; native normal-return sentinel and OSR live unwind pass, while repaired fatal dispatch still needs exception-unwind repetition |
 | `compiler/utils/x86_64/win64_unwind_info.h`, `assembler_x86_64.*`, and `compiler/optimizing/code_generator_x86_64.{h,cc}` | Implemented SDK-independent version-1 PE serializer plus Windows-JIT-only forced `RBP` anchor; Linux and non-JIT code paths unchanged |
 | `compiler/jni/quick/jni_compiler.*`, calling-convention files, and `compiler/utils/x86_64/jni_macro_assembler_x86_64.*` | Implemented RBP-anchored normal/FastNative JIT stubs, fixed-RSP CriticalNative descriptors, reserved-frame scratch selection, and opaque metadata carry independent of DWARF CFI |
 | `runtime/multiplatform/windows/jit_unwind_windows.{h,cc}` and `runtime/jit/jit_code_cache.*` | Implemented stable one-entry dynamic-function registry, publish-after-register rule, exact deletion, unregister-before-free/reuse, and clear-before-teardown ownership |
 | `runtime/jit/jit_memory_region.*` | Implemented overflow-checked aligned xdata tail in each existing data allocation, written through the RW alias and referenced through the primary low-4-GiB view |
-| `runtime/thread.cc` | Implemented exact current-stack acceptance and attach failure; later common accounting plus a small `_WIN32` fixed-page installation branch |
-| `runtime/multiplatform/windows/stack_windows.{h,cc}` | Implemented Stage B selection, commit/protect state machine, verified rollback, and exact original-state restoration |
-| `runtime/multiplatform/windows/thread_windows.cc` | Implemented bounded `Thread` integration for Stage B; no alternate signal stack |
+| `runtime/thread.cc` | Implemented exact current-stack acceptance and attach failure; Win64 performs no fixed-page installation and adjusts common bounds by the platform-reported excluded-low sum |
+| `runtime/multiplatform/windows/stack_windows.{h,cc}` | Read-only E9 layout inspection accounts for inaccessible prefix + configured guarantee + moving guard; Stage-B select/protect/restore helpers remain diagnostic-only |
+| `runtime/multiplatform/windows/thread_windows.cc` | Queries, raises/preserves, re-queries, and validates the four-page minimum guarantee, then supplies guarantee-aware layout accounting; no alternate signal stack |
+| `compiler/optimizing/code_generator_x86_64.cc` and nterp x86_64 assembly | E7 Win64-only explicit pre-prologue stack-end checks; Linux implicit probes remain unchanged and both objects are structurally audited |
 | `runtime/thread_pool.cc` | Implemented no-caller-allocated-stack Windows policy; requested reservation passes through pthread attributes |
 | `compat/include/pthread.h` | Implemented opaque Windows `pthread_t`, numeric-ID helper, and strict attribute contract |
 | `compat/src/win64_posix_stubs.c` | Implemented `_beginthreadex`, handle/result lifetime, join/detach, tagged external identity, exact current-stack bounds, and stack attributes |
-| `runtime/runtime.cc` | Implemented diagnostic handler shutdown, common implicit null/SO activation, Linux-like started-runtime sigchain invariant, and early nterp range registration |
+| `runtime/runtime.cc` | Implemented diagnostic handler shutdown, managed null/SO capability activation, Linux-like started-runtime sigchain invariant, early nterp range registration, and Win64 explicit-SO selection |
 | `tools/verify/win64_phase1/check_win32_cet_contract.py` and `win32_cet_policy_probe.cc` | Implemented link/PE audit plus deterministic and actual-policy probe |
 | `tools/verify/win64_phase1/check_win32_boundary_unwind.py`, `win32_osr_unwind_probe.cc`, `tools/verify/win64_phase4/run_osr_unwind_probe.sh`, `run_jit_fatal_unwind.sh`, `run_osr_fatal_unwind.sh`, and `run_crashnative.sh` | Implemented exact emitted boundary-record audit, live split-OSR lookup/virtual-unwind/epilogue gate, static JNI fatal gate, and J-2/J-1 JIT-origin plus OSR-origin fatal gates requiring new valid minidumps |
 | `tools/verify/win64_phase1/win32_thread_stack_probe.c`, `win32_stack_page_probe.cc`, `win32_stack_growth_probe.cc`, `win32_uef_probe.cc`, `win32_stack_page_fault_probe.S`, `win32_fault_record_probe.cc`, `win32_sigchain_probe.cc`, `win32_jit_unwind_info_probe.cc`, `win32_jit_unwind_registry_probe.cc`, and Phase 4 probe scripts | Implemented Stage A reservation/identity/lifetime gate, Stage B synthetic selection/restore/direct-fault gate, native recursive-growth and standalone-UEF diagnostics, Stage C deterministic record/live VEH gate, Stage D nterp/JIT managed-fault stress, and Stage E static OSR, serialization, runtime registry, collection/reuse lifecycle, and threshold-zero fatal-dispatch coverage |
@@ -2402,19 +2389,18 @@ one VEH owner and one managed dispatch path.
 These are validation questions, not permission to improvise new product
 fallbacks:
 
-1. After replacing fixed-page delivery, repeat managed SOE on build 19044 and
-   current Windows. Build 26100 already repeats the native-overflow failure in
-   the full host runner; it does not rehabilitate the fixed-page design.
-2. How much stack do Windows exception dispatch, the ART VEH, the quick throw
-   stub, and the code before `UnprotectStack()` consume in release and debug
-   builds?
-3. Can any Linux-like fixed-page placement coexist with Windows moving-guard
-   growth across small, default, and large reservations, or must Win64 use a
-   narrow platform adapter for managed SOE delivery?
-4. Native Windows must confirm the locally passing external detach, continued
-   native stack use, reattach, and second-detach path remains safe after real
-   guard movement and deep managed recursion. If it does not, the supported
-   contract must require attachment until thread exit.
+1. Repeat E9's accepted managed SOE and full runner on another supported
+   Windows 10 host. Do not treat this as permission to retry fixed-page
+   delivery.
+2. How much stack do the explicit quick throw, stack-end expansion, exception
+   construction, and long-jump path consume in release and debug builds, and
+   what margin remains above the configured native guarantee?
+3. Do future supported Windows builds preserve the measured additive layout
+   of inaccessible prefix + configured guarantee + one moving guard page?
+   Repeat the parameterized growth probe when adding a host baseline.
+4. Native Windows should repeat external detach, continued native stack use,
+   reattach, and second detach under deep guard movement. E9 changes no page
+   protection during this lifecycle.
 5. Does a security product or debugger used in acceptance install a first VEH
    that consumes expected AVs? If so, this is an embedding compatibility issue,
    not a reason to weaken ART's classifier.
@@ -2424,9 +2410,8 @@ fallbacks:
    cost with large method counts; move to the documented lock-free callback
    alternative only if this gate fails. Neither static nor dynamic unwind data
    implies CET user-shadow-stack compatibility.
-7. Does the locally implemented full-width XMM6-XMM15 adapter survive native
-   Windows normal managed return and exception unwind through several
-   optimizing and JNI frames?
+7. Normal-return XMM6-XMM15 passes natively. Does the adapter also preserve
+   full width during exception unwind through several optimizing/JNI frames?
 8. Native E6 resolves `art_quick_to_interpreter_bridge + 0x82`, and the full
    host matrix accepts static, JIT J-2/J-1, and OSR J-2/J-1 fatal origins. Add
    a native pending-range exception probe only if it can exercise that brief
@@ -2479,20 +2464,9 @@ Comparative implementation:
 
 ## 17. Final design principle
 
-The Windows port should keep generated ART code unchanged where Windows can
-present the same narrow facts safely. Native build 19044 has now proved that
-the exact fixed-page delivery does not do so unchanged, but that alone does
-not justify a broad compiler fork. The next design must isolate the smallest
-Windows boundary that can provide:
-
-```text
-validated current Thread
-+ validated generated PC
-+ exact fault address
-+ mutable saved PC/SP
-+ repeatable, recoverable managed-overflow event
-= existing ART managed exception path
-```
-
-That boundary keeps the platform difference explicit without forking the
-managed runtime.
+Keep generated ART code unchanged where Windows can present the same facts
+safely. Where native stack growth fundamentally differs, isolate the smallest
+audited platform delta: a pre-prologue RSP comparison and guarantee-aware
+thread bound. Everything after detection remains ART's existing throw,
+recovery-reserve, and managed-exception path, and Linux's implicit mechanism
+remains unchanged.

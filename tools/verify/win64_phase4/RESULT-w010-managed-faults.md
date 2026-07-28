@@ -1,23 +1,24 @@
 # W-010 Stage D managed-fault activation
 
-**Status:** focused Wine and Linux managed-fault verification PASS; static and
-dynamic JIT fatal-unwind dispatch PASS locally; dynamic-JIT frame anchoring,
-PE serialization, xdata placement, runtime registration, collection/reuse
-lifecycle, J-2/J-1 fatal dispatch, and split static OSR lookup/virtual-unwind
-PASS; native Windows Stage E remains
-**Date:** 2026-07-27
+**Status:** focused Wine/Linux verification PASS; W-010/W-014 E9 native Stage E
+accepted 30/30 on Windows Server 2025 build 26100
+**Date:** 2026-07-28
 
 ## Product behavior
 
-Win64 x86_64 now uses ART's common implicit-null and implicit-stack-overflow
-model:
+Win64 x86_64 keeps ART's common implicit-null model and uses a narrow explicit
+stack-overflow boundary check where Windows stack growth cannot preserve the
+Linux fixed-page event:
 
-- runtime initialization enables null and stack-overflow checks and keeps
-  x86_64 implicit suspend checks disabled;
-- `FaultManager` registers stack before null, matching Linux handler order;
-- the main thread's W-014 fixed page exists before the managed VEH and handlers
-  are published, and later non-AOT attachments install their page under the
-  enabled flag;
+- runtime initialization enables implicit null checks, disables Win64 common
+  implicit stack checks, and keeps x86_64 implicit suspend checks disabled;
+- Linux retains common stack-before-null `FaultManager` order; Win64 stack
+  overflow is detected by explicit generated code before fault dispatch;
+- every attaching thread has a verified stack guarantee of at least four
+  system pages; any larger existing host guarantee is preserved;
+- stack bounds debit the measured inaccessible low prefix, page-rounded
+  configured guarantee, and one moving-guard page before common ART adds its
+  unchanged 8192-byte recovery reserve;
 - nterp's immutable code range is registered before `Runtime::Start()` can
   publish nterp entrypoints, despite Win64 deliberately keeping
   `CanRuntimeUseNterp()` false during early startup;
@@ -26,9 +27,11 @@ model:
 - a normal started runtime rejects `-Xno-sig-chain` exactly as Linux does.
   Genuine non-started compiler/tool runtimes retain the option.
 
-No Windows-only explicit null/stack check was added to nterp or optimizing
-code. Successful faults still redirect through ART's common quick exception
-entrypoints.
+No Windows-only explicit null check was added. Linux retains its implicit
+`RSP - 8192` stack probe. Win64 nterp and optimizing code instead emit the
+small pre-prologue `RSP < Thread::stack_end_` check, allow equality, and
+tail-jump through the same `Thread::pThrowStackOverflow` entrypoint. The
+fixed-page machinery is no longer part of product SOE delivery.
 
 ## Focused Wine gate
 
@@ -119,15 +122,23 @@ requires no change.
 - Linux `dalvikvm -showversion`: PASS.
 - Linux shared-boot imageless Hello: PASS.
 
-## Native Stage E still required
+## Native Stage E acceptance and remaining matrix
 
-Wine is development evidence, not native acceptance. Native Windows 10/current
-Windows must still cover repeated nterp/JIT NPE/SOE, debugger first-chance
-continue, foreign VEH before/after/promotion, frame-based SEH for unrecognized
-AV, exact wrong-address negatives, handler stack high-water, fatal predecessor
-UEF/minidump behavior, and the HSP-disabled plus forced named-incompatible
-policy matrix. `CetDynamicApisOutOfProcOnly` and reserved policy fields must
-remain accepted by the startup classifier.
+E9 is accepted on Windows Server 2025 build 26100. The immutable archive
+`dist/win64_w010_w014_e9_native.zip` has SHA-256
+`2b84c911dfbe23dd5dd13917a0fb4a63bdbf90901172f74dfe642ed1fd20f16f`.
+The returned full package matches the issued identity, has 30/30 PASS records,
+zero handled dumps, and five valid fatal static/JIT/OSR dumps. The reviewer
+reports `PASS (build=26100, pass_records=30, dumps=5,
+return=full-package)`. See `evidence/w010_w014_e9/ACCEPTANCE.md`.
+
+Native Stage E therefore no longer blocks managed NPE/SOE or the five-origin
+fatal matrix. Remaining coverage is narrower: debugger first-chance continue,
+handler stack high-water and stack-budget measurements, forced named-
+incompatible CET policy families, dynamic-table sampling/churn, exception-
+unwind XMM state, the interpreter pending range, and broader embedding/
+predecessor-UEF behavior. `CetDynamicApisOutOfProcOnly` and reserved policy
+fields must remain accepted by the startup classifier.
 
 The selected dynamic implementation is now present. Optimizing Win64 JIT
 methods force-spill and reserve RBP and establish it after their fixed
@@ -148,10 +159,9 @@ JIT data view, one immutable `RtlAddFunctionTable()` entry per code allocation,
 publication only after registration, and deletion before mspace reuse or
 mapping teardown.
 
-The threshold-zero JIT-origin and switch-OSR-origin gates prove Windows fatal
-dispatch reaches UEF and produces a new valid dump across both exercised
-dynamic chains. They do not prove debugger-quality minidump stack
-reconstruction or concurrent native sampling under large dynamic-table churn.
-Stage E must cover those on native Windows, repeat full-width XMM6-XMM15
-normal-return and exception-unwind sentinels, and repeat both fatal paths and
-their static runtime-function lookups.
+The threshold-zero JIT-origin and switch-OSR-origin gates now prove native
+Windows fatal dispatch reaches UEF and produces a valid dump across both
+exercised dynamic chains. They do not prove debugger-quality minidump stack
+reconstruction, concurrent native sampling under large dynamic-table churn,
+or exception-unwind preservation of full-width XMM6-XMM15; those remain
+separate acceptance items.

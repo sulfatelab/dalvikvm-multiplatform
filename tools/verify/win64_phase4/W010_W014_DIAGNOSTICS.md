@@ -1,8 +1,10 @@
 # W-010/W-014 native Windows diagnostics
 
-These probes distinguish the two failure classes first observed in the
-Windows 10 build-19044 Stage E run. They are evidence tools, not acceptance
-tests, and do not change the 30-record `RUN_W010_W014_HOST.ps1` contract.
+**Current state:** E9 is accepted 30/30 on Windows Server 2025 build 26100.
+These probes preserve the historical diagnosis that led from the rejected
+fixed-page design through the accepted explicit-check and configured-guarantee
+design. They are evidence tools, not product mechanisms, and do not change the
+30-record `RUN_W010_W014_HOST.ps1` contract.
 
 The returned run-3 and run-4 diagnostics establish three facts:
 
@@ -17,7 +19,8 @@ The returned run-3 and run-4 diagnostics establish three facts:
 
 The current package retains those probes for repetition and includes the
 repaired, realistic GenericJNI virtual-unwind gate plus three exception-shape
-cases.
+cases. Their fixed-page modes test direct page state only; E9 product SOE does
+not install or depend on a fixed page.
 
 Run from the unpacked package root in PowerShell 5.1 or later:
 
@@ -32,9 +35,12 @@ files. The script does not delete existing acceptance dumps.
 ## Stack-growth probe
 
 `win32_stack_growth_probe.exe` creates a separate 2 MiB `_beginthreadex`
-reservation for each mode. A first VEH records the terminal exception, RSP,
-fault address, fixed-page state, and guard observations without formatting or
-heap allocation. Frame SEH catches the terminal AV or
+reservation for each mode. An optional second argument sets the requested
+stack-guarantee bytes. The probe queries the value before the call, records the
+previous value returned by a nonzero `SetThreadStackGuarantee` call, and
+queries the configured value afterward. A first VEH records the terminal
+exception, RSP, fault address, fixed-page state, and guard observations without
+formatting or heap allocation. Frame SEH catches the terminal AV or
 `STATUS_STACK_OVERFLOW`; `_resetstkoflw()` runs only after leaving that
 handler. The writable mode tests `ProtectWin32StackPage()` before reset and,
 if that fails, retries after reset.
@@ -64,6 +70,13 @@ Interpret the records as follows:
 - The fixed-page selector and restoration remain useful infrastructure, but a
   page inside a Windows-owned stack reservation cannot remain ART's recursive
   SOE tripwire unchanged.
+
+Controlled build-26100 runs with guarantee requests 0, 8192, 12288, 16384,
+32768, and 65536 place the terminal fault at `low + 0x3000`, `low + 0x3000`,
+`low + 0x4000`, `low + 0x5000`, `low + 0x9000`, and `low + 0x11000`
+respectively. This disproves E8's `max(prefix, guarantee)` accounting: the
+guarantee is above a separate inaccessible terminal prefix, and one moving
+guard page lies above the guarantee.
 
 Wine 10.0 can run `baseline`, `writable`, and `direct`, but its host process
 segfaults in `protected`. The protected recursion result therefore must come
@@ -356,3 +369,30 @@ and correctly rejects `RESULT_W010_W014.txt` because it ends in `OVERALL FAIL`.
 The raw returned archive SHA-256 is
 `d6bb85c1529496cb384bebcc1495378ade0e253041e01a9605f3f6c90b8538e5`.
 See `evidence/w010_w014_e6_full/DIAGNOSIS.md`.
+
+## Native E8 rejection and E9 acceptance
+
+E7 made the deliberate product change from implicit Win64 probes to explicit
+pre-prologue `RSP < Thread::stack_end_` checks while leaving Linux's implicit
+`RSP - 8192` path unchanged. E8 then accounted for the native stack guarantee
+as `max(inaccessible prefix, guarantee)`. All three native managed-SOE modes
+still failed, proving those values are not overlapping descriptions of the
+same bytes. The E8 result bundle SHA-256 is
+`3c5fb26da6882e4fb3643a4575fef03b5cf4569ebe45a51e16086658aefd587b`.
+
+E9 queries each thread's existing guarantee, raises it to at least four system
+pages while preserving a larger value, queries it again, and debits:
+
+```text
+inaccessible memory prefix
++ page-rounded configured guarantee
++ one moving PAGE_GUARD page
+```
+
+Common ART then retains its separate 8192-byte recovery reserve. The immutable
+E9 archive SHA-256 is
+`2b84c911dfbe23dd5dd13917a0fb4a63bdbf90901172f74dfe642ed1fd20f16f`.
+On Windows Server 2025 build 26100, the native runner records 30/30 PASS,
+`NO_HANDLED_DMP_FILES`, and exactly five valid fatal dumps. The independent
+reviewer accepts the returned full package. See
+`evidence/w010_w014_e9/ACCEPTANCE.md`.

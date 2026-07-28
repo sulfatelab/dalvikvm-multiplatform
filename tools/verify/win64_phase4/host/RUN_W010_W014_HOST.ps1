@@ -73,9 +73,12 @@ function Test-StructuralReport {
         '^boundary_unwind=win32_boundary_unwind OK '
         '^osr_unwind=win32_osr_unwind_probe failures=0 prologue=[0-9]+ entry_frame_register=R12 compiled_frame_register=RBP entry_frame_offset=0 return_prologue=0 fixed_frame=248 xmm_count=10 invoke_records=2 generic_jni_records=1 generic_jni_native_return=0xc5 switch_impl_records=1 switch_impl_call_return=0xd interpreter_bridge_records=2 interpreter_bridge_call_return=0x82 interpreter_bridge_pending=0x140 interpreter_bridge_frame=200 interpreter_bridge_pending_frame=88 variable_rsp_delta=256$'
         '^explicit_stack_checks=Win64 explicit stack-check contract: PASS \(Win64 object, Linux object\)$'
-        '^stack_overflow_delivery=explicit-rsp-below-thread-stack-end$'
+        '^stack_overflow_delivery=explicit-rsp-below-guarantee-aware-thread-stack-end$'
         '^win32_implicit_so_checks=false$'
         '^windows_stack_mapping_ownership=os$'
+        '^windows_stack_guarantee=minimum-four-pages-preserve-larger-query-actual$'
+        '^windows_excluded_low=sum-memory-prefix-guarantee-moving-guard$'
+        '^art_stack_overflow_reserve=8192$'
         '^linux_stack_probe_contract=implicit-rsp-minus-8192$'
         '^windows_minimum_build=17134$'
         '^requested_stack_sizes=0,65536,262144,1048576,2097152,9437184$'
@@ -255,6 +258,33 @@ function Invoke-CheckedProcess {
             Add-Content -LiteralPath $combined -Value "forbidden_marker=$marker"
         }
     }
+    if ($Name -eq 'stack_page') {
+        $guarantees = @{}
+        foreach ($line in Get-Content -LiteralPath $combined) {
+            if ($line -match '^stack_guarantee label=(main|pthread) before=([0-9]+) configured=([0-9]+) minimum=([0-9]+)$') {
+                $label = $Matches[1]
+                if ($guarantees.ContainsKey($label)) {
+                    $ok = $false
+                    Add-Content -LiteralPath $combined -Value "invalid_stack_guarantee=duplicate label=$label"
+                    continue
+                }
+                $guarantees[$label] = @([uint64]$Matches[2], [uint64]$Matches[3], [uint64]$Matches[4])
+            }
+        }
+        foreach ($label in @('main', 'pthread')) {
+            if (-not $guarantees.ContainsKey($label)) {
+                $ok = $false
+                Add-Content -LiteralPath $combined -Value "invalid_stack_guarantee=missing label=$label"
+                continue
+            }
+            $values = $guarantees[$label]
+            if ($values[2] -eq 0 -or $values[1] -lt $values[2] -or $values[1] -lt $values[0]) {
+                $ok = $false
+                Add-Content -LiteralPath $combined -Value (
+                    "invalid_stack_guarantee=range label=$label before=$($values[0]) configured=$($values[1]) minimum=$($values[2])")
+            }
+        }
+    }
     if ($ok) {
         Add-Result "PASS $Name exit=$exitCode elapsed_ms=$elapsedMs"
     } else {
@@ -266,7 +296,7 @@ function Invoke-CheckedProcess {
 $Common = '-Xbootclasspath:run\boot.jar -Xbootclasspath-locations:run\boot.jar -Ximage:/nonexistent-no-boot-image -XjdwpProvider:none -Xms64m -Xmx512m'
 $HandledForbidden = @('ART Win64 VEH', 'ART Win64 UEF', 'minidump written', 'unexpected_continue')
 
-Add-Result "W-010/W-014 native Stage E7 acceptance $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+Add-Result "W-010/W-014 native Stage E9 acceptance $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 try {
     $os = Get-CimInstance -ClassName Win32_OperatingSystem
     $script:WindowsBuild = [int]$os.BuildNumber
@@ -383,6 +413,9 @@ Invoke-CheckedProcess -Name 'thread_stack' -Executable 'win32_thread_stack_probe
 )
 Invoke-CheckedProcess -Name 'stack_page' -Executable 'win32_stack_page_probe.exe' -Markers @(
     'selection_cases count=8'
+    'stack_guarantee label=main before='
+    'stack_guarantee label=pthread before='
+    'minimum=16384'
     'reserved_case size=1048576 iterations=64'
     'win32_stack_page_probe failures=0 committed_restore_iterations=64 reserved_restore_iterations=64 faults=258'
     'win32_stack_page_probe OK'
