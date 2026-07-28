@@ -584,6 +584,17 @@ invalid. However, native build 19044 also proves that a separate
 commits/reprotects that page as ordinary `PAGE_READWRITE` and reaches native
 stack overflow first.
 
+A later standalone follow-up, `win32_stack_pregrow_probe`, shows one narrower
+exception to that rule. If the thread first forces Windows' moving
+guard/guarantee region down to the E9 low neighborhood with a leaf page walk,
+then installs `PAGE_NOACCESS` on the first RW page above that region, the exact
+Linux `testq %rax, -8192(%rsp)` read fault is stable on Windows 10.0.26100
+(30/30 at `selected_offset=0x6000`). The tradeoffs remain severe: nearly full
+stack commit per thread, irreversible high-water state after detach, and fatal
+native recursion into the ART page. E9 explicit checks stay the product default.
+Details and commit-scale numbers are in
+`tools/verify/windows_x64_phase4/W010_W014_DIAGNOSTICS.md`.
+
 ### 5.4 Native stack overflow is not ART's managed event
 
 Native Windows reports `EXCEPTION_STACK_OVERFLOW` after consuming the fixed

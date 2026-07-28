@@ -497,3 +497,73 @@ On Windows Server 2025 build 26100, the native runner records 30/30 PASS,
 `NO_HANDLED_DMP_FILES`, and exactly five valid fatal dumps. The independent
 reviewer accepts the returned full package. See
 `evidence/w010_w014_e9/ACCEPTANCE.md`.
+
+### Pregrown PAGE_NOACCESS implicit probe at the E9 low boundary
+
+`win32_stack_pregrow_probe` extends the earlier conservative pre-growth experiment
+to the product E9 low neighborhood and measures commit cost, attach/detach
+irreversibility, and multi-thread scale.
+
+Installation sequence on a fresh 2 MiB Windows thread stack:
+
+1. Raise `SetThreadStackGuarantee` to four system pages and re-query it.
+2. Measure the terminal inaccessible prefix with `VirtualQuery`.
+3. Compute
+   `pregrow_target = low + memory_prefix + rounded_guarantee + page_size`.
+   On the acceptance host this is `low + 0x6000`.
+4. Touch every page down to that target with a leaf `_chkstk`-style walk while
+   leaving `RSP` high (`Win32PregrowStack`).
+5. Change the first committed private RW page immediately above the moved
+   Windows guard/guarantee region to `PAGE_NOACCESS`.
+6. Execute the exact ART Linux probe shape `testq %rax, -8192(%rsp)`.
+
+Artifact SHA-256 used for the E9 matrix:
+
+```text
+bdfec88fa7dc5cbcdd9e6e556ecbd7738a2b8822662bbafc15027ca3f320f7c5
+```
+
+Host: Windows `10.0.26100`.
+
+Results:
+
+- Implicit E9 mode: **30/30** fresh processes succeeded.
+  - `selected_offset` was always `0x6000`.
+  - Guard moved from near the high end (`low + 0x1F8000`, size 20 KiB) to
+    `low + 0x1000`, size 20 KiB.
+  - Every terminal fault was a read AV (`access_type=0`) with
+    `fault_address == RSP - 8192` inside the selected page.
+  - The selected page remained `PAGE_NOACCESS` in VEH and frame SEH.
+  - The Windows guard did not move during the implicit fault.
+  - No `STATUS_GUARD_PAGE_VIOLATION` reached user handlers.
+  - Stack commit grew from about 32 KiB to **2,093,056** bytes
+    (`2 MiB - 4 KiB` terminal prefix) and stayed there after restore.
+- Native E9 collision: child exit **`0xC0000005`**, as expected. Frame SEH does
+  not recover once ordinary recursion drives `RSP` into the ART page.
+- Attach/detach E9: **5/5**. Restoring the ART page to RW succeeds, but the
+  lowered guard and nearly-full stack commit remain. Pregrowth is irreversible
+  with supported APIs.
+- Commit-scale with workers held alive after install:
+
+  | threads | private_peak_delta | stack_commit_sum | elapsed_ms |
+  |--------:|--------------------:|-----------------:|-----------:|
+  | 1 | 2,211,840 (~2.11 MiB) | 2,093,056 | 16 |
+  | 10 | 21,164,032 (~20.2 MiB) | 20,930,560 | 31 |
+  | 100 | 211,009,536 (~201.2 MiB) | 209,305,600 | 235 |
+
+  Cost is essentially linear at about **2.0-2.1 MiB commit charge per thread**
+  for a 2 MiB stack reservation. Average install latency at 100 threads was a
+  few milliseconds of page-walk work plus thread creation.
+
+Interpretation:
+
+- A Linux-like implicit probe is technically implementable on Windows after
+  deliberate pre-growth to the E9 low boundary.
+- The mechanism is still a poor default product choice versus E9 explicit
+  checks because it forces nearly full stack commit on every attached thread,
+  permanently changes external-thread stack high water, and turns deep native
+  recursion into an unhandled AV at the ART page.
+- Logs:
+  - `tools/verify/windows_x64_phase1/logs/pregrow_e9_matrix_2026-07-29.log`
+  - `tools/verify/windows_x64_phase1/logs/pregrow_e9_commit_scale_hold_2026-07-29.log`
+

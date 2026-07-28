@@ -51,3 +51,5 @@ tools/verify/**/phase2_build_status.txt
 
 # Nested vendor/* are intentional gitlinks (do NOT blanket-ignore vendor/).
 # Local untracked scratch under vendor should be avoided; use build/ instead.
+
+.playwright-mcp/

@@ -150,6 +150,16 @@ target_include_directories(win32_stack_growth_probe PRIVATE
 add_executable(win32_stack_growth_rx_probe EXCLUDE_FROM_ALL
   "${CMAKE_CURRENT_SOURCE_DIR}/win32_stack_growth_rx_probe.c")
 
+# Standalone experiment: can a PAGE_NOACCESS page remain stable after first
+# pre-growing a Windows-owned stack through the normal moving guard?
+add_executable(win32_stack_pregrow_probe EXCLUDE_FROM_ALL
+  "${CMAKE_CURRENT_SOURCE_DIR}/win32_stack_pregrow_probe.c"
+  "${CMAKE_CURRENT_SOURCE_DIR}/win32_stack_implicit_probe.S")
+target_compile_definitions(win32_stack_pregrow_probe PRIVATE
+  _CRT_SECURE_NO_WARNINGS NOMINMAX WIN32_LEAN_AND_MEAN NOGDI
+  _WIN32_WINNT=0x0A00 NTDDI_VERSION=NTDDI_WIN10_RS4)
+target_link_libraries(win32_stack_pregrow_probe PRIVATE psapi)
+
 add_executable(win32_uef_probe EXCLUDE_FROM_ALL
   "${CMAKE_CURRENT_SOURCE_DIR}/win32_uef_probe.cc")
 
@@ -346,9 +356,10 @@ foreach(_t IN LISTS _all_targets)
   if(_ttype STREQUAL "INTERFACE_LIBRARY" OR _ttype STREQUAL "UTILITY")
     continue()
   endif()
-  # Keep the dirty-RX stack experiment independent of ART and the POSIX
-  # compatibility prelude so its behavior is attributable to Windows alone.
-  if(_t STREQUAL "win32_stack_growth_rx_probe")
+  # Keep the standalone stack experiments independent of ART and the POSIX
+  # compatibility prelude so their behavior is attributable to Windows alone.
+  if(_t STREQUAL "win32_stack_growth_rx_probe" OR
+     _t STREQUAL "win32_stack_pregrow_probe")
     continue()
   endif()
   target_include_directories(${_t} BEFORE PRIVATE "${MDVM_COMPAT_INCLUDE_DIR}")
