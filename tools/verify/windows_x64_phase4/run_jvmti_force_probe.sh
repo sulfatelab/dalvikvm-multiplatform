@@ -32,6 +32,7 @@ for dll in "$BUILD/openjdkjvmti.dll" "$AGENT_BUILD/libjvmtiforceprobe.dll"; do
   fi
 done
 cp -f "$AGENT_BUILD/libjvmtiforceprobe.dll" "$BUILD/"
+cp -f "$AGENT_BUILD/libjvmtiforceprobe.dll" "$BUILD/jvmtiforceprobe.dll"
 
 JAVA_TMP="$(mktemp -d "${TMPDIR:-/tmp}/windows_x64-jvmti-force-java.XXXXXX")"
 trap 'rm -rf "$JAVA_TMP"' EXIT

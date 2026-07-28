@@ -44,6 +44,7 @@ for symbol in JNI_OnLoad \
   fi
 done
 cp -f "$NATIVE_BUILD/libcriticalnativeprobe.dll" "$BUILD/"
+cp -f "$NATIVE_BUILD/libcriticalnativeprobe.dll" "$BUILD/criticalnativeprobe.dll"
 mkdir -p "$BUILD/empty-native-dir"
 
 JAVA_TMP="$(mktemp -d "${TMPDIR:-/tmp}/windows_x64-critical-java.XXXXXX")"
