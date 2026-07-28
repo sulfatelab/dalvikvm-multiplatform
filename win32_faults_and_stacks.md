@@ -4,12 +4,14 @@
 build 26100. Windows x64 uses explicit pre-prologue stack checks and guarantee-aware
 bounds; switch/nterp/JIT managed SOE passes with zero handled dumps. Linux
 retains its implicit `RSP - 8192` probes. E5/E6 unwind repairs remain accepted,
-and five static/JIT/OSR fatal origins produce valid dumps. The work remains
-open only for broader debugger, stack-budget, forced CET-policy,
-dynamic-table sampling/churn, exception-unwind XMM, pending-range, and
-embedding coverage.
+and five static/JIT/OSR fatal origins produce valid dumps. A later E9-bound
+pregrow experiment reproduces the Linux implicit read fault, but its nearly
+full per-thread commit, irreversible high-water state, and fatal native
+collision keep it diagnostic-only. The product work remains open only for
+broader debugger, stack-budget, forced CET-policy, dynamic-table
+sampling/churn, exception-unwind XMM, pending-range, and embedding coverage.
 **Created:** 2026-07-26
-**Updated:** 2026-07-28
+**Updated:** 2026-07-29
 **Target:** x86_64 Windows 10 build 17134+
 **Product model:** imageless ART with nterp and JIT; MSVC ABI artifacts built by
 Clang/lld with LLVM libc++
@@ -94,6 +96,10 @@ The stable decisions and currently implemented candidate are:
     the existing JIT data allocation, and one immutable
     `RtlAddFunctionTable` registration per code allocation owned by the JIT
     code cache.
+15. Keep the pregrown `PAGE_NOACCESS` implicit-stack mechanism as a standalone
+    diagnostic. Do not add an ART feature flag or product attachment path
+    unless the explicit-check decision is reopened with a new requirement that
+    justifies its memory, detach, and native-collision costs.
 
 ## 2. Scope and ownership
 
@@ -588,11 +594,25 @@ A later standalone follow-up, `win32_stack_pregrow_probe`, shows one narrower
 exception to that rule. If the thread first forces Windows' moving
 guard/guarantee region down to the E9 low neighborhood with a leaf page walk,
 then installs `PAGE_NOACCESS` on the first RW page above that region, the exact
-Linux `testq %rax, -8192(%rsp)` read fault is stable on Windows 10.0.26100
-(30/30 at `selected_offset=0x6000`). The tradeoffs remain severe: nearly full
-stack commit per thread, irreversible high-water state after detach, and fatal
-native recursion into the ART page. E9 explicit checks stay the product default.
-Details and commit-scale numbers are in
+Linux `testq %rax, -8192(%rsp)` read fault is stable on Windows build 26100
+(30/30 at `selected_offset=0x6000`). Attach/detach page restore succeeds 5/5,
+but supported APIs cannot raise the moved guard or release the stack commit.
+Native recursion into the selected page exits with `0xC0000005` rather than
+reaching a managed overflow path.
+
+The held-alive scale result for 2 MiB reservations is:
+
+| Threads | Private peak delta | Stack commit sum |
+|--------:|-------------------:|-----------------:|
+| 1 | 2,211,840 bytes | 2,093,056 bytes |
+| 10 | 21,164,032 bytes | 20,930,560 bytes |
+| 100 | 211,009,536 bytes | 209,305,600 bytes |
+
+The cost is therefore approximately 2.0-2.1 MiB per thread, not a one-page
+tripwire cost. E9 explicit checks stay the product default. The probe artifact
+SHA-256 is
+`bdfec88fa7dc5cbcdd9e6e556ecbd7738a2b8822662bbafc15027ca3f320f7c5`;
+full records and timing are in
 `tools/verify/windows_x64_phase4/W010_W014_DIAGNOSTICS.md`.
 
 ### 5.4 Native stack overflow is not ART's managed event
@@ -2087,6 +2107,14 @@ Selection, direct protection, and restoration criteria are met. Native build
 19044 proves recursive guard growth defeats the fixed-page SOE contract.
 Stage B is complete only as page-state diagnostic infrastructure.
 
+The later pregrow extension does not reopen Stage B as a product stage. On
+build 26100 it first commits almost the complete 2 MiB reservation and moves
+the Windows guard to the E9 low neighborhood; only then can a fixed
+`PAGE_NOACCESS` page preserve the Linux-shaped implicit read. Its 30/30 fault
+result is retained as mechanism evidence, while 5/5 irreversible detach state,
+linear commit cost, and fatal native collision reject it as the attachment
+contract.
+
 ### Stage C — initially dormant W-010 adapter — implemented locally (2026-07-27)
 
 - `sigchain_windows.cc` now owns the special-action facade and managed VEH
@@ -2310,7 +2338,11 @@ Stage B is complete only as page-state diagnostic infrastructure.
 - Main and pthread guarantees queried, raised/preserved, queried back, and
   excluded-low accounting for prefix + guarantee + moving guard.
 - Deliberate generated-code AV with the wrong address remains unhandled.
-- Handler and pre-unprotect stack high-water measurements.
+- Explicit-check, throw, temporary-bound expansion, and recovery stack
+  high-water measurements.
+- The standalone pregrow probe may remain a mechanism regression, but its
+  result is never counted as product managed-SOE acceptance and it installs no
+  runtime feature gate.
 
 ### 13.5 Chain and fatal diagnostics
 
@@ -2390,6 +2422,7 @@ and debugger evidence.
 | `tools/verify/windows_x64_phase1/check_win32_cet_contract.py` and `win32_cet_policy_probe.cc` | Implemented link/PE audit plus deterministic and actual-policy probe |
 | `tools/verify/windows_x64_phase1/check_win32_boundary_unwind.py`, `win32_osr_unwind_probe.cc`, `tools/verify/windows_x64_phase4/run_osr_unwind_probe.sh`, `run_jit_fatal_unwind.sh`, `run_osr_fatal_unwind.sh`, and `run_crashnative.sh` | Implemented exact emitted boundary-record audit, live split-OSR lookup/virtual-unwind/epilogue gate, static JNI fatal gate, and J-2/J-1 JIT-origin plus OSR-origin fatal gates requiring new valid minidumps |
 | `tools/verify/windows_x64_phase1/win32_thread_stack_probe.c`, `win32_stack_page_probe.cc`, `win32_stack_growth_probe.cc`, `win32_uef_probe.cc`, `win32_stack_page_fault_probe.S`, `win32_fault_record_probe.cc`, `win32_sigchain_probe.cc`, `win32_jit_unwind_info_probe.cc`, `win32_jit_unwind_registry_probe.cc`, and Phase 4 probe scripts | Implemented Stage A reservation/identity/lifetime gate, Stage B synthetic selection/restore/direct-fault gate, native recursive-growth and standalone-UEF diagnostics, Stage C deterministic record/live VEH gate, Stage D nterp/JIT managed-fault stress, and Stage E static OSR, serialization, runtime registry, collection/reuse lifecycle, and threshold-zero fatal-dispatch coverage |
+| `tools/verify/windows_x64_phase1/win32_stack_pregrow_probe.c` and `win32_stack_implicit_probe.S` | Diagnostic-only E9-bound pre-growth, exact Linux-shaped implicit read, attach/restore irreversibility, fatal native collision, and held-alive commit-scale evidence; not linked into ART |
 
 The exact split between `sigchain_windows.cc` and
 `fault_handler_windows.cc` is an implementation detail. There must still be
@@ -2427,6 +2460,25 @@ fallbacks:
    host matrix accepts static, JIT J-2/J-1, and OSR J-2/J-1 fatal origins. Add
    a native pending-range exception probe only if it can exercise that brief
    path without changing product semantics.
+
+### Next execution schedule — dependency order
+
+This schedule closes product proof points before optional mechanism research.
+It is evidence-gated rather than date-gated.
+
+| Order | Work | Exit gate |
+|------:|------|-----------|
+| FS-1 | Add allocation-free high-water instrumentation around the explicit check, quick throw, temporary stack-end expansion, exception construction, and non-local transfer; run release and debug builds | The result records the lowest RSP and margin to the configured guarantee/ART reserve for switch, nterp, and JIT without changing fault behavior |
+| FS-2 | Extend the combined native package with debugger first-chance/continue, every named forced-incompatible CET policy, foreign VEH/frame-SEH/predecessor-UEF embedding, and XMM6-XMM15 sentinels during exception unwind | Expected NPE continues into Java, explicit SOE remains fault-free, incompatible CET starts reject before Java/JIT with no dump, foreign search handlers coexist, and full-width XMM state survives unwind |
+| FS-3 | Share the JIT closure load test: compile, invalidate, collect, reuse, and re-register many optimizing/JNI allocations while another thread performs lookup and virtual unwind | No published PC lacks its table, no dead PC retains one, lookup cost is recorded, and callback tables remain unnecessary |
+| FS-4 | Run FS-1 through FS-3 on the accepted build-26100 class host, then repeat the E9 core runner, parameterized guarantee geometry, fiber/manual-stack rejection, and deep detach/continue/reattach lifecycle on a second supported Windows 10 or later host | Immutable archives pass their independent review and either confirm the additive stack layout or document a new supported-host constraint |
+| FS-5 | Attempt the brief pending bridge-range exception only if a deterministic probe can enter it without changing product control flow; otherwise record it as impractical and close it as conditional coverage | A real native exception validates the pending record, or the result document explains why the already accepted primary/fatal matrix is the closure boundary |
+
+The history follow-ups—fatal-dump instrumentation with RSP inside the pregrown
+ART page, an ART implicit-stack feature flag, and a HotSpot-style
+`STATUS_STACK_OVERFLOW` prototype—are deliberately deferred. Start that
+research track only if a new product requirement reopens the accepted explicit
+check design; none is a prerequisite for W-010/W-014 closure.
 
 ## 16. Primary references and comparative implementation
 
