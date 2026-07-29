@@ -306,11 +306,17 @@ Invoke-CheckedProcess 'cfg_runtime_mapping' 'W025PolicyLauncher.exe' `
 Clear-JitEnvironment
 $env:ART_WINDOWS_X64_JIT_DUAL = '1'
 Invoke-CheckedProcess 'dynamic_code_jit_rejected' 'W025PolicyLauncher.exe' `
-    "dynamic nonzero dalvikvm.exe $Common -cp run\hello.jar Hello" @(
+    "dynamic zero dalvikvm.exe $Common -cp run\hello.jar Hello" @(
         'W025_POLICY_CHILD policy=dynamic dynamic_prohibit=1'
-        'W025_POLICY_LAUNCHER_PASS policy=dynamic'
-        'expected=nonzero'
-    )
+        'Windows x64 JIT dual-view construction failed:'
+        'failed: 1655; falling back to single-view (J-1)'
+        'Failed to create JIT Code Cache:'
+        'VirtualProtect RemapAtEnd('
+        'failed: 1655'
+        'Hello from dalvikvm!'
+        'main end exception=0'
+        'W025_POLICY_LAUNCHER_PASS policy=dynamic child_exit=0 expected=zero'
+    ) @('JitCodeCache::Create OK')
 
 Clear-JitEnvironment
 Invoke-CheckedProcess 'dynamic_code_nojit' 'W025PolicyLauncher.exe' `

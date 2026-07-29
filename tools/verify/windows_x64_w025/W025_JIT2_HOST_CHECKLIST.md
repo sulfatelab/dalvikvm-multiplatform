@@ -30,10 +30,12 @@ empty.
 - Default and CFG-enabled JIT processes must create the low R/RX primary and
   unrestricted RW alias, compile the target method, and report no RWX or named
   file mapping.
-- A process created with `ProhibitDynamicCode` must reject JIT startup with a
-  nonzero child exit.
+- A process created with `ProhibitDynamicCode` must reject both the J-2 and
+  J-1 executable mappings with `ERROR_DYNAMIC_CODE_BLOCKED` (1655), continue
+  without a JIT cache, and run Hello successfully.
 - The same policy with `-Xusejit:false` must run Hello successfully. This
-  separates expected OS-policy rejection from a general runtime defect.
+  separates the expected OS-policy rejection path from a general runtime
+  defect and confirms that no JIT-cache creation was attempted.
 
 Do not enable CET user shadow stacks for this package. The project-wide
 `/CETCOMPAT:NO` and startup policy contract remains documented under W-010.

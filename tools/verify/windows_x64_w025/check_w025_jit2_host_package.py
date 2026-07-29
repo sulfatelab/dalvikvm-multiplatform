@@ -126,6 +126,9 @@ def check_package(root: Path) -> None:
         "cfg_section_call",
         "cfg_runtime_mapping",
         "dynamic_code_jit_rejected",
+        "dynamic zero dalvikvm.exe",
+        "Failed to create JIT Code Cache:",
+        "failed: 1655",
         "dynamic_code_nojit",
         "no_jit_temp_files",
         "RESULT_W025_JIT2.txt",
@@ -138,6 +141,8 @@ def check_package(root: Path) -> None:
             fail(f"host runner is missing contract text: {marker}")
     if "[DateTime]::UtcNow" in runner:
         fail("host runner uses wall-clock time for child deadlines")
+    if "dynamic nonzero dalvikvm.exe" in runner:
+        fail("host runner incorrectly requires policy-blocked JIT startup to abort")
 
     load_config = run("llvm-readobj", "--coff-load-config", str(root / "W025SectionPolicyProbe.exe"))
     for marker in ("CF_INSTRUMENTED", "CF_FUNCTION_TABLE_PRESENT"):

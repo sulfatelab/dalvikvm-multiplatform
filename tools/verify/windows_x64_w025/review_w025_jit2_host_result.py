@@ -204,17 +204,17 @@ def review_logs(root: Path) -> tuple[int, int]:
         texts["dynamic_code_jit_rejected"],
         "dynamic_code_jit_rejected",
         "W025_POLICY_CHILD policy=dynamic dynamic_prohibit=1",
-        "W025_POLICY_LAUNCHER_PASS policy=dynamic",
-        "expected=nonzero",
+        "Windows x64 JIT dual-view construction failed:",
+        "failed: 1655; falling back to single-view (J-1)",
+        "Failed to create JIT Code Cache:",
+        "VirtualProtect RemapAtEnd(",
+        "failed: 1655",
+        "Hello from dalvikvm!",
+        "main end exception=0",
+        "W025_POLICY_LAUNCHER_PASS policy=dynamic child_exit=0 expected=zero",
     )
-    rejected_match = re.search(
-        r"W025_POLICY_LAUNCHER_PASS policy=dynamic child_exit=(\d+) expected=nonzero",
-        texts["dynamic_code_jit_rejected"],
-    )
-    if rejected_match is None or int(rejected_match.group(1)) == 0:
-        fail("dynamic_code_jit_rejected: child did not return the expected nonzero exit")
-    if "Hello from dalvikvm!" in texts["dynamic_code_jit_rejected"]:
-        fail("dynamic_code_jit_rejected: managed Hello unexpectedly ran")
+    if "JitCodeCache::Create OK" in texts["dynamic_code_jit_rejected"]:
+        fail("dynamic_code_jit_rejected: JIT cache was unexpectedly created")
 
     require(
         texts["dynamic_code_nojit"],
