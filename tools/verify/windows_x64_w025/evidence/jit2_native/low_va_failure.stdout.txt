@@ -1,0 +1,3 @@
+W025_POLICY_OBSERVED dynamic_prohibit=0 dynamic_thread_opt_out=0 cfg_enabled=1 cfg_strict=0 cfg_export_suppression=0
+W025_LOW_VA_PASS reservations=2 rejected=1 rejection_error=8 no_high_fallback=1 recovery=1
+W025_SECTION_POLICY_PASS mode=low-va

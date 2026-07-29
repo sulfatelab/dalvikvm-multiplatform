@@ -2300,8 +2300,9 @@ contract.
   reserved fields, and reject mixtures containing any incompatible field.
 - Rejection does not produce a `.dmp` and does not depend on
   `STATUS_CONTROL_PROTECTION_VIOLATION` as the detection mechanism.
-- CFG-on tests remain a separate W-025 matrix and must not change this expected
-  CET rejection behavior.
+- The native W-025 JIT-2 CFG-on matrix passes generated-code execution and
+  actual ART JIT compilation. It remains separate from and must not change
+  this expected CET rejection behavior.
 
 ### 13.2 Stack bounds and creation
 
@@ -2479,6 +2480,24 @@ does not replace the 30-record E9 fatal/managed-fault archive. The independently
 reviewed identities and result are archived under
 `tools/verify/windows_x64_phase4/evidence/jit1_encoding_guards/`.
 
+### JIT-2 shared native cross-regression - 2026-07-29
+
+The W-025 mapping/policy package records a clean native boundary before the
+shared JIT-3/FS-3 churn gate. On Windows Server 2025 build 26100, standalone
+generated code and an actual 64 MiB ART JIT mapping execute with CFG enabled;
+the default and 1 GiB ART mappings compile the target method with registered
+R/RX primary and RW alias roles. Complete low-VA rejection/recovery and 1 GiB
+`SEC_COMMIT` pressure also pass without an access violation or dump.
+
+With `ProhibitDynamicCode`, Windows rejects both the J-2 executable mapping and
+J-1 executable-protection transition with error 1655. ART creates no JIT cache
+and continues successfully; the separate `-Xusejit:false` control also passes.
+The runner returns 14/14 aggregate checks, clean forbidden-log scanning,
+`NO_DMP_FILES`, and an empty JIT temporary directory. This does not replace
+FS-3 collection/reuse sampling or E9 fatal-origin unwind acceptance. Its
+independently reviewed identities and compact records are archived under
+`tools/verify/windows_x64_w025/evidence/jit2_native/`.
+
 ### Next execution schedule — dependency order
 
 This schedule closes product proof points before optional mechanism research.
@@ -2488,7 +2507,7 @@ It is evidence-gated rather than date-gated.
 |------:|------|-----------|
 | FS-1 | Add allocation-free high-water instrumentation around the explicit check, quick throw, temporary stack-end expansion, exception construction, and non-local transfer; run release and debug builds | The result records the lowest RSP and margin to the configured guarantee/ART reserve for switch, nterp, and JIT without changing fault behavior |
 | FS-2 | Extend the combined native package with debugger first-chance/continue, every named forced-incompatible CET policy, foreign VEH/frame-SEH/predecessor-UEF embedding, and XMM6-XMM15 sentinels during exception unwind | Expected NPE continues into Java, explicit SOE remains fault-free, incompatible CET starts reject before Java/JIT with no dump, foreign search handlers coexist, and full-width XMM state survives unwind |
-| FS-3 | With the JIT-1 encoding prerequisite complete, share the JIT closure load test: compile, invalidate, collect, reuse, and re-register many optimizing/JNI allocations while another thread performs lookup and virtual unwind | No published PC lacks its table, no dead PC retains one, lookup cost is recorded, and callback tables remain unnecessary |
+| FS-3 (next) | With JIT-1 encoding and JIT-2 mapping/policy prerequisites complete, share the JIT closure load test: compile, invalidate, collect, reuse, and re-register many optimizing/JNI allocations while another thread performs lookup and virtual unwind | No published PC lacks its table, no dead PC retains one, lookup cost is recorded, and callback tables remain unnecessary |
 | FS-4 | Run FS-1 through FS-3 on the accepted build-26100 class host, then repeat the E9 core runner, parameterized guarantee geometry, fiber/manual-stack rejection, and deep detach/continue/reattach lifecycle on a second supported Windows 10 or later host | Immutable archives pass their independent review and either confirm the additive stack layout or document a new supported-host constraint |
 | FS-5 | Attempt the brief pending bridge-range exception only if a deterministic probe can enter it without changing product control flow; otherwise record it as impractical and close it as conditional coverage | A real native exception validates the pending record, or the result document explains why the already accepted primary/fatal matrix is the closure boundary |
 
