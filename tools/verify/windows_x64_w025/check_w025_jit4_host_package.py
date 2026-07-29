@@ -39,6 +39,7 @@ def main() -> int:
         "W025_JIT4_HOST_CHECKLIST.md",
         "dalvikvm.exe",
         "art.dll",
+        "libopenjdk.dll",
         "openjdkjvmti.dll",
         "libcriticalnativeprobe.dll",
         "criticalnativeprobe.dll",
@@ -90,6 +91,7 @@ def main() -> int:
         "lifecycle_cycles": "8",
         "fatal_modes": "static,jit,osr",
         "fatal_minidumps": "3",
+        "fatal_warmup_env": "windows_x64",
         "nterp_fp_result_source": "xmm0",
     }
     for key, value in expected_report.items():
@@ -97,6 +99,12 @@ def main() -> int:
             fail(f"source report mismatch: {key}={report_values.get(key)!r}")
     if "W025_JIT4_SOURCE_CHECK_PASS" not in report:
         fail("source report lacks PASS marker")
+
+    openjdk = (root / "libopenjdk.dll").read_bytes()
+    if b"ART_WINDOWS_X64_CRASH_NATIVE_WARMUP\x00" not in openjdk:
+        fail("libopenjdk.dll lacks the Windows x64 fatal-warmup environment key")
+    if b"ART_WIN64_CRASH_NATIVE_WARMUP\x00" in openjdk:
+        fail("libopenjdk.dll contains the retired Win64 fatal-warmup key")
 
     build_info = (root / "BUILD_INFO.txt").read_text(encoding="utf-8")
     for marker in (

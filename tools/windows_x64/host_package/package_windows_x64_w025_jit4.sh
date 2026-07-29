@@ -4,6 +4,7 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/../../.." && pwd)"
 BUILD="${BUILD:-$REPO/build/windows_x64_phase1}"
+HYBRID="${MDVM_HYBRID_BUILD:-$REPO/build/windows_x64_libcore_icu}"
 OUT="${1:-$REPO/dist/windows_x64_w025_jit4_host}"
 JOBS="${JOBS:-16}"
 WINEDEBUG="${WINEDEBUG:--all}"
@@ -12,6 +13,16 @@ trap 'rm -rf "$TEMP_ROOT"' EXIT
 BASE="$TEMP_ROOT/w004-base"
 
 cmake --build "$BUILD" --target art openjdkjvmti -j"$JOBS"
+if [[ ! -f "$HYBRID/CMakeCache.txt" ]]; then
+  windows_x64_dev_env="${WINDOWS_X64_DEV_ENV:-/home/agent/Projects/windows_x64-dev-env}"
+  # shellcheck source=/dev/null
+  source "$windows_x64_dev_env/env.sh"
+  cmake -S "$REPO/tools/verify/windows_x64_libcore_icu" -B "$HYBRID" -G Ninja \
+    -DCMAKE_TOOLCHAIN_FILE="$WINDOWS_X64_CMAKE_TOOLCHAIN" \
+    -DCMAKE_BUILD_TYPE=RelWithDebInfo
+fi
+cmake --build "$HYBRID" --target openjdk -j"$JOBS"
+cp -a "$HYBRID/libopenjdk.dll" "$BUILD/libopenjdk.dll"
 bash "$REPO/tools/verify/windows_x64_phase4/build_one.sh" W002OsrProbe
 bash "$REPO/tools/verify/windows_x64_phase4/build_one.sh" CrashNativeProbe
 bash "$REPO/tools/verify/windows_x64_w025/build_w025_jit3_probe.sh"

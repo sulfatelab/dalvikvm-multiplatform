@@ -84,6 +84,7 @@ def main() -> int:
     required_build = (
         "dalvikvm.exe",
         "art.dll",
+        "libopenjdk.dll",
         "openjdkjvmti.dll",
         "libcriticalnativeprobe.dll",
         "criticalnativeprobe.dll",
@@ -98,6 +99,14 @@ def main() -> int:
         if not (build / relative).is_file():
             raise RuntimeError(f"missing JIT-4 build artifact: {build / relative}")
 
+    openjdk = (build / "libopenjdk.dll").read_bytes()
+    current_warmup_env = b"ART_WINDOWS_X64_CRASH_NATIVE_WARMUP\x00"
+    retired_warmup_env = b"ART_WIN64_CRASH_NATIVE_WARMUP\x00"
+    if current_warmup_env not in openjdk:
+        raise RuntimeError("libopenjdk.dll lacks the Windows x64 fatal-warmup environment key")
+    if retired_warmup_env in openjdk:
+        raise RuntimeError("libopenjdk.dll still contains the retired Win64 fatal-warmup key")
+
     print("status=PASS")
     print("cases=28")
     print("jit_smoke_records=12")
@@ -110,6 +119,7 @@ def main() -> int:
     print("lifecycle_cycles=8")
     print("fatal_modes=static,jit,osr")
     print("fatal_minidumps=3")
+    print("fatal_warmup_env=windows_x64")
     print("nterp_fp_result_source=xmm0")
     print("W025_JIT4_SOURCE_CHECK_PASS")
     return 0
