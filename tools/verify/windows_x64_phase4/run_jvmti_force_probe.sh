@@ -55,13 +55,11 @@ TARGET_METHODS=(
 
 run_one() {
   local mode="$1"
-  local dual="$2"
-  local iteration="$3"
+  local iteration="$2"
   local log="${TMPDIR:-/tmp}/windows_x64-jvmti-force-${mode}-${iteration}.log"
 
   if ! (
     cd "$BUILD"
-    ART_WINDOWS_X64_JIT_DUAL="$dual" \
     ART_WINDOWS_X64_JIT_FILTER=JvmtiForceProbe \
     ART_WINDOWS_X64_JIT_LOG_COMPILES=1 \
     ANDROID_ROOT=run ANDROID_ART_ROOT=run ANDROID_I18N_ROOT=run \
@@ -121,13 +119,9 @@ run_one() {
     "$mode" "$iteration" "${#TARGET_METHODS[@]}" "${#TARGET_METHODS[@]}" "$records"
 }
 
-for mode_and_dual in "dual:1" "j1:0"; do
-  mode="${mode_and_dual%%:*}"
-  dual="${mode_and_dual##*:}"
-  for iteration in $(seq 1 "$REPEATS"); do
-    run_one "$mode" "$dual" "$iteration"
-  done
+for iteration in $(seq 1 "$REPEATS"); do
+  run_one default "$iteration"
 done
 
-printf 'JVMTI forced-interpreter acceptance: dual=%s/%s j1=%s/%s\n' \
-  "$REPEATS" "$REPEATS" "$REPEATS" "$REPEATS"
+printf 'JVMTI forced-interpreter acceptance: default=%s/%s\n' \
+  "$REPEATS" "$REPEATS"

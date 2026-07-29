@@ -18,7 +18,6 @@ mkdir -p "$RUN/crash"
 
 run_one() (
   local mode="$1"
-  local dual="$2"
   local log="${TMPDIR:-/tmp}/win32-jit-fatal-unwind-${mode}.log"
   local rc
   local temp_dir
@@ -47,7 +46,6 @@ PY
   if (
     cd "$BUILD"
     export ART_WINDOWS_X64_CRASH_NATIVE_WARMUP=20000
-    export ART_WINDOWS_X64_JIT_DUAL="$dual"
     export ART_WINDOWS_X64_JIT_FILTER=CrashNativeProbe
     export ART_WINDOWS_X64_JIT_LOG_COMPILES=1
     export ANDROID_ROOT=run ANDROID_ART_ROOT=run ANDROID_I18N_ROOT=run
@@ -95,12 +93,7 @@ PY
     return 1
   fi
 
-  if [[ "$dual" == 1 ]]; then
-    grep -qF 'Windows x64 JIT dual-view (J-2) created' "$log"
-  elif grep -qF 'Windows x64 JIT dual-view (J-2) created' "$log"; then
-    printf 'Windows x64 threshold-zero JIT fatal unwind %s unexpectedly used J-2\n' "$mode" >&2
-    return 1
-  fi
+  grep -qF 'Windows x64 JIT dual-view (J-2) created' "$log"
 
   local valid_dump=0
   while IFS= read -r dump; do
@@ -128,6 +121,5 @@ PY
   printf 'Windows x64 threshold-zero JIT fatal unwind %s PASS\n' "$mode"
 )
 
-run_one j2 1
-run_one j1 0
-printf 'Windows x64 threshold-zero JIT fatal unwind acceptance: J-2 and J-1 PASS\n'
+run_one default
+printf 'Windows x64 threshold-zero JIT fatal unwind acceptance: default J-2 PASS\n'

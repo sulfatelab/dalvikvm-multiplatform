@@ -1,10 +1,9 @@
 # Windows x64 JIT memory and codepath — current design and status
 
-**Status:** pagefile-backed dual mapping is the default; Wine gates plus the
-W-013 heap/JIT, W-003 boundary, W-010 dynamic-unwind, JIT-1 encoding,
-JIT-2 mapping/policy, JIT-3 collection/reuse/unwind, and JIT-4 final-regression
-native gates pass. Only JIT-5 removal of the J-1 diagnostic opt-out and its
-post-removal Windows/Wine/Linux regressions remain for W-025.
+**Status:** W-025 is closed. The pagefile-backed dual mapping is the only
+Windows JIT memory path. JIT-5 removed the J-1 diagnostic opt-out and
+single-view fallback, then passed post-removal Wine, Linux, and native Windows
+regressions. Section construction now fails closed instead of downgrading W^X.
 **Updated:** 2026-07-29
 **Target baseline:** Windows 10 version 1803 or later (NTDDI_WIN10_RS4)
 **Related:** [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md),
@@ -32,11 +31,13 @@ The selected end state is:
 5. Check every x86_64 JIT-root disp32 and CodeInfo uint32 encoding before
    patching or committing code. Reject an unrepresentable compilation without
    changing the encoded format.
-6. Keep `ART_WINDOWS_X64_JIT_DUAL=0` temporarily as a diagnostic J-1 opt-out
-   through the now-accepted JIT-4 final default-path native gate. JIT-4 now
-   authorizes removal of the gate in JIT-5; it has not yet been removed.
-7. Keep ART's ordinary single-view RWX-toggle path temporarily as a Windows
-   diagnostic fallback; it is not the default product path.
+6. Expose no Windows runtime opt-out to the executable single-view path.
+   `ART_WINDOWS_X64_JIT_DUAL` is retired and ignored because the runtime no
+   longer reads it.
+7. If section creation or any view construction step fails, return the error
+   and leave the JIT cache disabled. Never fall back to an RX/RWX-toggle
+   mapping on Windows. The generic single-view fallback remains available to
+   non-Windows platforms whose existing contract permits it.
 8. Keep CET user shadow stacks outside W-025. Current Win32 ART does not
    support Hardware-enforced Stack Protection because its shared managed
    exception/deoptimization long jump does not maintain CET's protected return
@@ -69,11 +70,11 @@ Measured on agent01 under Wine:
 | Nterp | ON after runtime startup; rSELF=r15 and rREFS=rbp |
 | Managed and native JIT | ON by default with the corrected section dual view |
 | Default Hello | About 28–30 successful compilation records after native-JIT cleanup; PASS |
-| Default JIT smoke | 12/12, including default-silent compile diagnostics |
+| Default JIT smoke | 14/14, including default-silent diagnostics and a retired-key negative test |
 | Default probe matrix | 14/14 |
 | Relative metadata encoding | Checked signed-int32 JIT-root and uint32 CodeInfo construction; deterministic boundary/overflow tests pass |
-| Native JIT | Common ART default policy; direct CriticalNative and 7/7 mixed/high-FP normal/FastNative matrices pass through binding, method-tracing, and JVMTI forced-interpreter transitions in both memory modes; Math native surfaces and native Windows 10 acceptance pass |
-| J-1 fallback | Diagnostic opt-out with `ART_WINDOWS_X64_JIT_DUAL=0`; Hello passes |
+| Native JIT | Common ART default policy; direct CriticalNative and 7/7 mixed/high-FP normal/FastNative matrices pass through binding, method-tracing, and JVMTI forced-interpreter transitions; Math native surfaces and native Windows acceptance pass |
+| Windows J-1 fallback | Removed in ART `389158d46f`; the retired key is ignored and J-2 remains active |
 | Code cache | 64 KiB initial release capacity; 64 MiB maximum |
 
 The 64 MiB cache is split equally into data and code. The maximum supported
@@ -124,7 +125,7 @@ For the JIT, only the complete primary `[data][code]` view needs this constraint
 The writable aliases can be above 4 GiB because generated code and CodeInfo
 metadata refer to the primary addresses, not the update aliases.
 
-### 2.3 Single-view fallback
+### 2.3 Non-Windows single-view fallback
 
 When shared dual mapping is unavailable and RWX memory is permitted, ART maps
 one anonymous data+code reservation and splits it:
@@ -135,8 +136,10 @@ one anonymous data+code reservation and splits it:
        RX -> RWX -> RX during updates
 ```
 
-This remains the J-1 diagnostic/failure fallback on Windows. It is correct but
-has an RWX update window, so it is no longer the product default.
+This remains common ART behavior for non-Windows platforms when shared dual
+mapping is unavailable and their executable-memory policy permits it. JIT-5
+places this branch behind the non-Windows platform arm. Windows never enters
+it and never creates the RWX update window.
 
 ## 3. Address-layout invariants
 
@@ -246,30 +249,23 @@ logical pairs are contiguous.
 Verified under Wine:
 
 - Hello with the default environment;
-- JIT smoke 12/12;
+- post-removal JIT smoke 14/14;
 - probe matrix 14/14, including FloatProbe, ThrowProbe, and GcProbe;
 - explicit Windows `FlushInstructionCache` for generated code;
 - low-space fragmentation and non-64-KiB capacities in the permanent section
   probe.
 
-### 5.2 J-1: single-view diagnostic fallback
+### 5.2 Removed J-1 diagnostic path
 
-J-1 maps one low-address anonymous reservation with `VirtualAlloc`.
-`MemMap::RemapAtEnd` changes protection on the tail and represents it as a
-reuse view.
+Before JIT-5, `ART_WINDOWS_X64_JIT_DUAL=0` selected a low-address
+`VirtualAlloc` reservation whose code tail moved RX-to-RWX-to-RX during
+updates. That path served bring-up and comparison testing through JIT-4.
 
-Verified:
-
-- managed JIT Hello;
-- JIT smoke 12/12;
-- probe matrix 14/14;
-- code-cache collection paths used by the existing tests.
-
-The fallback differs from the default dual-view path:
-
-- code updates use an RX-to-RWX-to-RX protection transition.
-
-Select this path only for comparison with `ART_WINDOWS_X64_JIT_DUAL=0`.
+ART `389158d46f` removes the environment read and prevents Windows from
+entering the common single-view branch. The active smoke gate deliberately
+sets the retired key to zero and still requires J-2 creation plus compiled
+Hello. Historical J-1 result documents remain valid records of pre-removal
+testing, not statements of current availability.
 
 ## 6. Implemented Windows 10 pagefile-section design
 
@@ -392,6 +388,8 @@ without pretending to remap a different fd or section offset.
 - Close the section handle only after both complete views are mapped.
 - On any construction failure, unmap every complete view already created and
   close the section handle; the mappings are not yet visible to generated code.
+- Report `CreateFileMapping` and partial-view failures through `error_msg` and
+  return `false`. Do not continue into Windows single-view allocation.
 - Destroy or reset non-owning tail views before their owning prefix view.
 - Never call `UnmapViewOfFile` on an interior tail pointer.
 - Keep the owner at the actual base returned by `MapViewOfFile3`; Windows
@@ -419,7 +417,7 @@ Linux's memfd path remains unchanged. Windows `art::memfd_create` remains
 `ENOSYS`; no temporary file, pseudo-fd table, or fd-specific `RemapAtEnd`
 emulation is added.
 
-### 6.7 Implemented safeguards and residual risks
+### 6.7 Implemented safeguards and closure state
 
 - Windows `FlushCpuCaches` uses `FlushInstructionCache` for generated code.
 - Runtime `VirtualQuery` checks verify R/RX and RW/RW roles; the updater alias
@@ -428,15 +426,16 @@ emulation is added.
   a high primary view.
 - The implementation uses no temporary file, pseudo-fd table, placeholder
   split/remap transaction, or Windows-only 64 KiB JIT-capacity rule.
-- Remaining work is real-Windows repeated-start testing, dynamic-code/CFG
-  policy testing, large `SEC_COMMIT` pressure measurement, and direct range
-  checks at the JIT-root and CodeInfo encoding sites. The W-010 dynamic JIT
-  function-table implementation and native fatal-origin matrix are complete;
-  broader compilation/collection churn with concurrent
-  `RtlLookupFunctionEntry()` sampling remains a joint W-010/W-025 acceptance
-  gate. CET user shadow-stack support is not part of this residual: all named
-  incompatible HSP fields must be disabled for the ART process, and marking
-  dynamic JIT ranges CET-compatible is forbidden as a workaround. The unrelated
+- Real-Windows repeated starts, dynamic-code/CFG policy, 1 GiB `SEC_COMMIT`
+  pressure, direct JIT-root/CodeInfo encoding checks, and native
+  compilation/collection churn with concurrent `RtlLookupFunctionEntry()`
+  sampling are accepted through JIT-1 to JIT-4.
+- JIT-5 accepts the final fail-closed source/binary contract, the inert retired
+  environment key, post-removal default regressions, and three fatal origins.
+  W-025 has no residual proof point.
+- CET user shadow-stack support is outside W-025: all named incompatible HSP
+  fields must be disabled for the ART process, and marking dynamic JIT ranges
+  CET-compatible is forbidden as a workaround. The unrelated
   `CetDynamicApisOutOfProcOnly` field and reserved bits are classified under
   W-010, not as JIT-memory failures.
 - Native JIT follows the common ART policy by default after W-024 cleanup.
@@ -517,12 +516,15 @@ windows_x64: enable contiguous dual-view JIT memory by default
 - JIT-4 accepted the complete default-J-2 native regression on build 26100:
   28 cases and 34/34 aggregate records pass, including three valid fatal
   dumps, with no J-1 arm, JIT temporary file, or trace.
-- JIT-4 authorizes removal of the temporary
-  `ART_WINDOWS_X64_JIT_DUAL=0` diagnostic gate in JIT-5.
-- JIT-1 through JIT-4 have immutable host evidence linked from their result
-  docs.
+- JIT-5 removed `ART_WINDOWS_X64_JIT_DUAL` and the Windows single-view branch,
+  made section-construction errors fail closed, and accepted 29 native cases
+  with 36/36 aggregate records on build 26100. The retired-key negative test
+  still used J-2; three fatal dumps were valid; lifecycle lookup/unwind had no
+  missing, stale, or failed record.
+- JIT-1 through JIT-5 have immutable host evidence linked from their result
+  docs. W-025 is closed.
 
-Remaining planned commits:
+Completed closure commits:
 
 ```text
 windows_x64: remove the dual-view diagnostic opt-out
@@ -539,7 +541,7 @@ The dependency-ordered Stage 5 schedule is recorded in §13.
 | Pagefile section + two complete views | Same topology and JIT behavior; one mapping hook differs | Low-medium | **Selected** |
 | Pagefile section + four placeholder views | Exact independent OS views | Medium; 64 KiB split rules and more cleanup | Rejected as unnecessary |
 | Temporary-file memfd + placeholder remap | Reuses fd branch | High lifecycle and rollback complexity; creates a filesystem object | Rejected |
-| Keep J-1 as permanent default | Common fallback behavior, weaker W^X | Low | Interim only |
+| Keep J-1 as permanent default | Common fallback behavior, weaker W^X | Low | Rejected and removed in JIT-5 |
 | Far-address JIT roots + extended CodeInfo header | Low; Win-only compiler/runtime format | High | Rejected |
 | Move roots and stack maps into code arena | Low; allocator/GC divergence | High | Rejected |
 | Move stack maps only | Does not fix JIT-root displacement | Incorrect | Rejected |
@@ -811,13 +813,14 @@ No primary mapping may be RWX.
 - Small-cache collection and code-reuse stress.
 - Repeated cold starts to vary ASLR placement.
 - Custom page-aligned JIT maximum sizes that are not 64 KiB aligned.
-- J-1 regression run while the fallback remains.
+- Retired-key negative run proving `ART_WINDOWS_X64_JIT_DUAL=0` is inert and
+  still creates J-2.
 - `ART_WINDOWS_X64_JIT=0` interpreter/nterp regression.
 
 ### 12.4 Host acceptance
 
-Wine success is necessary but insufficient. Before removing the diagnostic
-gate and declaring P5 complete:
+Wine success is necessary but insufficient. JIT-2 through JIT-5 therefore
+validated the closure on Windows 10 version 1803 or later:
 
 - validate on real Windows 10 version 1803 or later;
 - repeat mapping protection inspection;
@@ -838,12 +841,13 @@ mapping protection, CFG and dynamic-code mitigation, low-VA failure/recovery,
 and 1 GiB code-cache pressure. W-025 JIT-3 accepts 52 native collection cycles,
 1,344 optimizing/JNI compilations, 1,248 exact address reuses, and concurrent
 live/dead lookup plus virtual unwind with no missing, stale, or failed record.
-W-025 JIT-4 accepts the final default-J-2 regression: 28 native cases and
-34/34 aggregate PASS records cover the exact smoke/matrix, two JIT-disabled
-controls, default native ABIs, nterp/switch OSR, eight lifecycle cycles, and
-three static/JIT/OSR fatal origins with valid dumps. The run used no J-1 arm,
-left `jit-temp` empty, and left no trace. JIT-5 removal and post-removal
-Windows/Wine/Linux regression are the only remaining W-025 host work.
+W-025 JIT-4 accepted the final pre-removal default-J-2 regression. JIT-5 then
+removed the opt-out and Windows single-view branch and accepted 29 native
+cases with 36/36 aggregate PASS records. Its 14-record smoke includes the
+inert retired-key proof; source and `art.dll` lack both retired strings; the
+eight-cycle lifecycle and three fatal origins pass with empty `jit-temp` and
+no trace. Post-removal Wine gates, the full Linux rebuild, imageless Hello, and
+Linux GC stress also pass. P5 and W-025 are complete.
 
 Native W-025 mitigation runs must record that Hardware-enforced Stack
 Protection is disabled. CFG may be enabled and tested independently. An
@@ -929,7 +933,7 @@ None of this justifies retaining the RWX J-1 path as the product default.
 | J-1 single-view memory | ART `27a1ac74a4` rebinding uses `ScopedCodeCacheWrite`; native R2 passes with 26 successful compilations, Hello, clean return, and no dump |
 | D-1 r15 compiler TLS | 37/37 GS sites audited |
 | Managed/native JIT default | Corrected pagefile-section dual view; Hello about 28–30 successful records after native-gate removal |
-| Corrected dual-view integration | JIT smoke 12/12; matrix 14/14; protections checked with `VirtualQuery` |
+| Corrected dual-view integration | Post-removal JIT smoke 14/14; matrix 14/14; protections checked with `VirtualQuery` |
 | Section-layout probe | 64 MiB and non-64-KiB capacity cases pass under Wine; low primary remains contiguous under forced low-space fragmentation |
 | dlmalloc and `MemMap` ownership | W-013 CLOSED: Stages A–E plus native R2 mapping, ownership, discard, pressure, metrics, and repeated-start acceptance pass |
 | Root-cause correction | JIT-root signed displacement plus latent CodeInfo overflow |
@@ -937,6 +941,7 @@ None of this justifies retaining the RWX J-1 path as the product default.
 | W-025 JIT-2 mapping/policy | Native build 26100 accepts 64 MiB and 1 GiB unnamed R/RX+RW mappings, complete low-VA rejection/recovery, 1 GiB `SEC_COMMIT`, CFG execution and ART compilation, graceful error-1655 dynamic-code rejection, 14/14 aggregate checks, empty JIT temp, and no dump |
 | W-025 JIT-3 lifecycle/unwind | Native build 26100 accepts four J-2/J-1 cases, 52 collections, 1,344 compilations, 1,248 exact reuses, 696,929 live lookups, 5,909,811 dead lookups, and 696,969 virtual unwinds with zero missing/stale/failed records, empty JIT temp, and no dump |
 | W-025 JIT-4 final regression | Native build 26100 accepts 28 default-J-2 cases and 34/34 aggregate records across exact smoke/matrix, two JIT-disabled controls, default native ABIs, nterp/switch OSR, eight lifecycle cycles, and three valid static/JIT/OSR fatal dumps; no J-1 arm runs, JIT temp is empty, and no trace remains |
+| W-025 JIT-5 removal | ART `389158d46f` removes the Windows opt-out and single-view fallback; source/binary absence and fail-closed policy pass; native build 26100 accepts 29 cases and 36/36 records, including the inert retired-key test, lifecycle, and three fatal dumps; Wine/Linux regressions pass |
 | nterp hard-float return | ART `43f866830e` keeps compiled quick/normal-JNI float and double results in XMM0 instead of replacing them with the Native-to-Runnable RAX state value; all eight JIT-3 JNI targets pass every lifecycle cycle |
 | PE asm definitions | Windows-target generator test enforces `RUNTIME_INSTRUMENTATION_OFFSET=0x328` |
 | W-002 managed OSR entries | W-002 CLOSED: quick and nterp OSR adapters pass structural, Wine, Linux, and native R2 controls; native R2 returns 8/8 OSR with deterministic thresholds/checksum |
@@ -953,15 +958,16 @@ None of this justifies retaining the RWX J-1 path as the product default.
 
 ### Open
 
-| Item | Blocker |
-|------|---------|
-| J-1 diagnostic opt-out | JIT-4 authorizes removal; remove `ART_WINDOWS_X64_JIT_DUAL=0` and the single-view branch in JIT-5, then rerun Windows/Wine/Linux regressions without them |
+No W-025 items remain. The Windows JIT memory closure is complete.
 
 CET user shadow stacks are intentionally absent from this open table. They are
 unsupported for current Win32 ART rather than a pending W-025 feature; see
 [win32_faults_and_stacks.md](win32_faults_and_stacks.md).
 
 ### Current test summary
+
+The J-1 column below is historical pre-removal evidence. The current runtime
+has only the corrected dual view; the JIT-5 row records the closure state.
 
 | Test | J-1 opt-out | Default corrected dual view |
 |------|------------|-----------------------------|
@@ -986,6 +992,7 @@ unsupported for current Win32 ART rather than a pending W-025 feature; see
 | W-025 JIT-2 native mapping/policy | Dynamic-policy J-1 executable fallback is rejected with error 1655 | PASS: 64 MiB/1 GiB mappings, low-VA recovery, pressure, CFG compile/execute, policy rejection, and 14/14 aggregate checks |
 | W-025 JIT-3 native lifecycle/unwind | PASS comparison: 12 cycles, 312 compilations, 288 exact reuses, zero missing/stale/failed records | PASS: 40 cycles across three runs, 1,032 compilations, 960 exact reuses, zero missing/stale/failed records; combined four-case review passes 9/9 |
 | W-025 JIT-4 final native regression | Not executed; JIT-4 intentionally has no J-1 arm | PASS: 28 cases, 34/34 aggregate records, eight lifecycle cycles, three valid fatal dumps, empty JIT temp, and no trace |
+| W-025 JIT-5 removal | Removed; the retired key is only an inert negative-test input | PASS: 29 cases, 36/36 aggregate records, source/binary removal proof, eight lifecycle cycles, three valid fatal dumps, empty JIT temp, and no trace |
 
 ### Next execution schedule — dependency order
 
@@ -999,13 +1006,13 @@ independent package.
 | JIT-2 (done) | Build one W-025 native closure package for mapping protections, no-filesystem/no-RWX assertions, CFG and dynamic-code-policy observations, low-VA failure, and large `SEC_COMMIT` pressure | Accepted 2026-07-29 on Windows Server 2025 build 26100: nine cases and 14 aggregate checks pass, J-2/J-1 dynamic-code operations reject with error 1655, no dump or JIT temp remains, and the returned archive passes independent review; see `RESULT-jit2-native.md` |
 | JIT-3 (done) | Run default J-2 allocation/compile/invalidate/collect/reuse stress with concurrent `RtlLookupFunctionEntry()` and virtual-unwind sampling; retain J-1 only as a comparison arm | Accepted 2026-07-29 on Windows Server 2025 build 26100: four cases complete 52 collections, 1,344 compilations, 1,248 exact reuses, and 696,969 virtual unwinds with no missing live record, stale dead record, unwind failure, dump, or JIT temp; see `RESULT-jit3-native.md` |
 | JIT-4 (done) | Repeat smoke, matrix, JIT-disabled, and representative managed/native/OSR/fatal gates on the accepted default build | Accepted 2026-07-29 on Windows Server 2025 build 26100: 28 default-J-2 cases and 34/34 aggregate records pass with eight lifecycle cycles, three valid fatal dumps, empty JIT temp, no trace, and no J-1 arm; see `RESULT-jit4-native.md` |
-| JIT-5 (next) | Remove `ART_WINDOWS_X64_JIT_DUAL=0` and its single-view Windows diagnostic branch | Post-removal Windows/Wine/Linux regressions pass; documentation and open-item state no longer promise J-1 availability |
+| JIT-5 (done) | Remove `ART_WINDOWS_X64_JIT_DUAL=0` and its single-view Windows diagnostic branch | Accepted 2026-07-29 on Windows Server 2025 build 26100: 29 cases and 36/36 records pass; source and `art.dll` lack the opt-out/fallback; the retired key remains inert; Wine and Linux regressions pass; see `RESULT-jit5-native.md` |
 
 The shared FS-3 dynamic-table churn requirement is complete through JIT-3.
 The remaining stack-budget, debugger, CET-policy, exception-unwind XMM,
 pending-range, and embedding work scheduled in
 [win32_faults_and_stacks.md](win32_faults_and_stacks.md) is independent of the
-completed JIT-1 through JIT-4 gates.
+completed JIT-1 through JIT-5 gates.
 
 ## 14. Decision log
 
@@ -1054,6 +1061,7 @@ completed JIT-1 through JIT-4 gates.
 | 2026-07-29 | Fix the JIT-3 preflight's nterp JNI FP regression in ART `43f866830e`: quick and normal-JNI hard-float results remain in XMM0; RAX's Native-to-Runnable state value no longer becomes the Java float/double result |
 | 2026-07-29 | Complete JIT-3/FS-3 in root `a741cfa8ab`: Windows Server 2025 build 26100 accepts four native lifecycle/unwind cases and independent returned-archive review with 52 collections, 1,344 compilations, 1,248 exact reuses, zero missing/stale/failed records, no dump, and no JIT temp; retain J-1 only through JIT-4 and remove it in JIT-5 |
 | 2026-07-29 | Complete JIT-4 in root `a095f93d68`: Windows Server 2025 build 26100 accepts 28 default-J-2 cases and independent returned-archive review with 34/34 aggregate PASS records, eight lifecycle cycles, three valid static/JIT/OSR dumps, empty JIT temp, no trace, and no J-1 arm; authorize JIT-5 removal without claiming J-1 is already removed |
+| 2026-07-29 | Complete JIT-5 with ART `389158d46f`: remove the Windows opt-out and single-view fallback, fail closed on section-construction errors, pass post-removal Wine/Linux gates, and independently accept 29 native cases plus 36/36 aggregate records on build 26100; close W-025 |
 
 ## 15. Code anchors
 
@@ -1074,6 +1082,7 @@ completed JIT-1 through JIT-4 gates.
 | W-025 JIT-2 mapping/policy acceptance | `tools/verify/windows_x64_w025/RESULT-jit2-native.md`; `tools/verify/windows_x64_w025/evidence/jit2_native/ACCEPTANCE.md` |
 | W-025 JIT-3/FS-3 lifecycle/unwind acceptance | `tools/verify/windows_x64_w025/RESULT-jit3-native.md`; `tools/verify/windows_x64_w025/evidence/jit3_native/ACCEPTANCE.md` |
 | W-025 JIT-4 final native regression | `tools/verify/windows_x64_w025/RESULT-jit4-native.md`; `tools/verify/windows_x64_w025/evidence/jit4_native/ACCEPTANCE.md` |
+| W-025 JIT-5 removal and closure | `tools/verify/windows_x64_w025/RESULT-jit5-native.md`; `tools/verify/windows_x64_w025/evidence/jit5_native/ACCEPTANCE.md` |
 | nterp hard-float result adapter | `vendor/art/runtime/interpreter/mterp/x86_64ng/main.S` |
 | JNI XMM argument moves | `vendor/art/compiler/utils/x86_64/jni_macro_assembler_x86_64.cc`; `assembler_x86_64_test.cc` |
 | Native JIT gate | `vendor/art/runtime/jit/jit.cc` |

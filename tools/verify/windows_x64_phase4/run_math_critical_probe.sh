@@ -61,13 +61,11 @@ check_log() {
 
 run_wine() {
   local label="$1"
-  local dual="$2"
-  local iteration="$3"
-  shift 3
+  local iteration="$2"
+  shift 2
   local log="${TMPDIR:-/tmp}/math-critical-${label}-${iteration}.log"
   if ! (
     cd "$BUILD"
-    ART_WINDOWS_X64_JIT_DUAL="$dual" \
     ART_WINDOWS_X64_JIT_FILTER=MathCriticalProbe \
     ANDROID_ROOT=run ANDROID_ART_ROOT=run ANDROID_I18N_ROOT=run \
     ANDROID_DATA=run/data ICU_DATA=run/icu WINEDEBUG="${WINEDEBUG:--all}" \
@@ -89,9 +87,8 @@ run_wine() {
 }
 
 for iteration in $(seq 1 "$REPEATS"); do
-  run_wine dual 1 "$iteration" -Xjitthreshold:0
-  run_wine j1 0 "$iteration" -Xjitthreshold:0
-  run_wine xint 1 "$iteration" -Xint
+  run_wine default "$iteration" -Xjitthreshold:0
+  run_wine xint "$iteration" -Xint
 done
 
 cp -f "$RUN/boot.jar" "$LINUX_RUN/boot.jar"
@@ -139,5 +136,5 @@ if ! cmp -s "$RUN/boot.jar" "$LINUX_RUN/boot.jar"; then
   exit 1
 fi
 
-printf 'Math CriticalNative acceptance: dual=%s/%s j1=%s/%s xint=%s/%s linux-xint=1/1 linux-jit=1/1\n' \
-  "$REPEATS" "$REPEATS" "$REPEATS" "$REPEATS" "$REPEATS" "$REPEATS"
+printf 'Math CriticalNative acceptance: default=%s/%s xint=%s/%s linux-xint=1/1 linux-jit=1/1\n' \
+  "$REPEATS" "$REPEATS" "$REPEATS" "$REPEATS"

@@ -12,6 +12,7 @@ set -euo pipefail
 #   T7 – -Xusejit:false path still works (no crash)
 #   T8 – JIT filter/exclude env vars work
 #   T9 – compile diagnostics are silent by default
+#   T10 – retired ART_WINDOWS_X64_JIT_DUAL=0 no longer selects a different path
 #
 # Usage: ./tools/verify/windows_x64_phase4/run_jit_smoke.sh
 #   WINEDEBUG=fixme-all ./run_jit_smoke.sh   (override wine debug)
@@ -158,6 +159,16 @@ OUT9=$(run_dalvik "$RUN/hello.jar" "Hello")
 NCOMP9=$(count_compiles "$OUT9")
 assert "Default diagnostic-off mode completes Hello cleanly" has_clean_hello "$OUT9"
 assert "Default diagnostic-off mode emits zero compile records" [ "$NCOMP9" -eq 0 ]
+
+# --------------------------------------------------------------------
+cyan "=== T10: Retired J-1 opt-out is ignored ==="
+
+OUT10=$(ART_WINDOWS_X64_JIT_DUAL=0 ART_WINDOWS_X64_JIT_LOG_COMPILES=1 \
+  run_dalvik "$RUN/hello.jar" "Hello")
+assert "Retired ART_WINDOWS_X64_JIT_DUAL=0 still uses the J-2 mapping" \
+  grep -q "Windows x64 JIT dual-view (J-2) created" <<< "$OUT10"
+assert "Retired ART_WINDOWS_X64_JIT_DUAL=0 completes compiled Hello" \
+  has_clean_native_hello "$OUT10"
 
 # --------------------------------------------------------------------
 echo ""

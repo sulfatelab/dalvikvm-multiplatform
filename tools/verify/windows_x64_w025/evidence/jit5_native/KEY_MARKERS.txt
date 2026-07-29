@@ -1,0 +1,26 @@
+smoke_retired_optout:
+Hello from dalvikvm!
+Windows x64 JIT dual-view (J-2) created: capacity=64MiB
+Windows x64 CompileMethod done success=1 method=java.lang.StringBuilder
+
+lifecycle_default:
+W025_JIT3_PASS methods=24 managed=16 jni=8 unique_allocations=24 cycles=8 collections=8 compilations=216 exact_reuse=192 live_lookups=120648 dead_lookups=1080878 transition_lookups=1102642 virtual_unwinds=120654 missing_live=0 stale_dead=0 unwind_failures=0 lookup_average_ns=0 lookup_maximum_ns=135700 callback_tables=0
+W025JitLifecycleStressProbe PASS cycles=8 managed_checksum=-1979683887 jni_values=pass
+Windows x64 JIT dual-view (J-2) created: capacity=16MiB
+
+fatal_static:
+ART Win32 VEH: exception 0xc0000005
+ART Win32 UEF: exception 0xc0000005
+new_minidump=fatal_static-art-20260729-085047.dmp bytes=745645
+
+fatal_jit_default:
+Windows x64 JIT dual-view (J-2) created: capacity=64MiB
+ART Win32 VEH: exception 0xc0000005
+ART Win32 UEF: exception 0xc0000005
+new_minidump=fatal_jit_default-art-20260729-085051.dmp bytes=745067
+
+fatal_osr_default:
+Windows x64 JIT dual-view (J-2) created: capacity=64MiB
+ART Win32 VEH: exception 0xc0000005
+ART Win32 UEF: exception 0xc0000005
+new_minidump=fatal_osr_default-art-20260729-085054.dmp bytes=750705

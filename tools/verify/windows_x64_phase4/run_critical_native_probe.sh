@@ -64,22 +64,20 @@ java -Dcom.android.tools.r8.emitRecordAnnotationsInDex=1 \
 
 run_vm() {
   local mode="$1"
-  local dual="$2"
-  local probe="$3"
-  local jar="$4"
-  local cls="$5"
-  local marker="$6"
-  local values_marker="$7"
-  local iteration="$8"
-  local load_mode="${9:-library}"
-  local instrumentation="${10:-0}"
+  local probe="$2"
+  local jar="$3"
+  local cls="$4"
+  local marker="$5"
+  local values_marker="$6"
+  local iteration="$7"
+  local load_mode="${8:-library}"
+  local instrumentation="${9:-0}"
   local log="${TMPDIR:-/tmp}/windows_x64-critical-${mode}-${probe}-${iteration}.log"
 
   local rc
   if (
     cd "$BUILD"
     rm -f critical-native-instrumentation.trace
-    ART_WINDOWS_X64_JIT_DUAL="$dual" \
     ANDROID_ROOT=run ANDROID_ART_ROOT=run ANDROID_I18N_ROOT=run \
     ANDROID_DATA=run/data ICU_DATA=run/icu WINEDEBUG="${WINEDEBUG:--all}" \
     timeout "$TIMEOUT" "$WINE" ./dalvikvm.exe \
@@ -124,61 +122,56 @@ CRITICAL_POST_TRACING_VALUES="CriticalNativeProbe postTracing values longs=190 d
 DLSYM_TRACING_VALUES="CriticalNativeDlsymProbe tracing values longs=190 doubles=91.0 mixed=159.5 mixed32=87 floatReturn=15.25 calls=63 branchSeen=true"
 DLSYM_POST_TRACING_VALUES="CriticalNativeDlsymProbe postTracing values longs=190 doubles=91.0 mixed=159.5 mixed32=87 floatReturn=15.25 calls=63 branchSeen=true"
 
-for mode_and_dual in "dual:1" "j1:0"; do
-  mode="${mode_and_dual%%:*}"
-  dual="${mode_and_dual##*:}"
-  for iteration in $(seq 1 "$REPEATS"); do
-    run_vm "$mode" "$dual" float "$RUN/FloatProbe.jar" \
-      FloatProbe "FloatProbe OK" "$FLOAT_VALUES" "$iteration"
-    if (( iteration % 2 == 0 )); then
-      load_mode="absolute"
-    else
-      load_mode="library"
-    fi
-    run_vm "$mode" "$dual" signatures "$RUN/criticalnativeprobe.jar" \
-      CriticalNativeProbe "CriticalNativeProbe OK" "$CRITICAL_VALUES" "$iteration" "$load_mode"
-    log="${TMPDIR:-/tmp}/windows_x64-critical-${mode}-signatures-${iteration}.log"
-    if ! grep -qF "CriticalNativeProbe load=$load_mode" "$log"; then
-      echo "$mode signature load-mode verification failed: $log" >&2
-      tail -100 "$log" >&2
-      exit 1
-    fi
-    if ! grep -qF "CriticalNativeDlsymProbe OK" "$log" ||
-       ! grep -qF "$DLSYM_VALUES" "$log"; then
-      echo "$mode unresolved dlsym signature verification failed: $log" >&2
-      tail -100 "$log" >&2
-      exit 1
-    fi
+mode="default"
+for iteration in $(seq 1 "$REPEATS"); do
+  run_vm "$mode" float "$RUN/FloatProbe.jar" \
+    FloatProbe "FloatProbe OK" "$FLOAT_VALUES" "$iteration"
+  if (( iteration % 2 == 0 )); then
+    load_mode="absolute"
+  else
+    load_mode="library"
+  fi
+  run_vm "$mode" signatures "$RUN/criticalnativeprobe.jar" \
+    CriticalNativeProbe "CriticalNativeProbe OK" "$CRITICAL_VALUES" "$iteration" "$load_mode"
+  log="${TMPDIR:-/tmp}/windows_x64-critical-${mode}-signatures-${iteration}.log"
+  if ! grep -qF "CriticalNativeProbe load=$load_mode" "$log"; then
+    echo "$mode signature load-mode verification failed: $log" >&2
+    tail -100 "$log" >&2
+    exit 1
+  fi
+  if ! grep -qF "CriticalNativeDlsymProbe OK" "$log" ||
+     ! grep -qF "$DLSYM_VALUES" "$log"; then
+    echo "$mode unresolved dlsym signature verification failed: $log" >&2
+    tail -100 "$log" >&2
+    exit 1
+  fi
 
-    run_vm "$mode" "$dual" instrumentation "$RUN/criticalnativeprobe.jar" \
-      CriticalNativeProbe "CriticalNativeProbe instrumentation OK" \
-      "$CRITICAL_VALUES" "$iteration" "$load_mode" 1
-    trace_log="${TMPDIR:-/tmp}/windows_x64-critical-${mode}-instrumentation-${iteration}.log"
-    for trace_marker in \
-        "$CRITICAL_TRACING_VALUES" \
-        "$CRITICAL_POST_TRACING_VALUES" \
-        "$DLSYM_TRACING_VALUES" \
-        "$DLSYM_POST_TRACING_VALUES" \
-        "CriticalNativeDlsymProbe tracing OK" \
-        "CriticalNativeDlsymProbe postTracing OK"; do
-      if ! grep -qF "$trace_marker" "$trace_log"; then
-        echo "$mode CriticalNative instrumentation verification failed: $trace_log" >&2
-        tail -100 "$trace_log" >&2
-        exit 1
-      fi
-    done
-    if ! grep -Eq \
-        "CriticalNativeProbe tracingMode before=0 during=[1-9][0-9]* after=0 traceFileDeleted=true" \
-        "$trace_log"; then
-      echo "$mode CriticalNative tracing-mode verification failed: $trace_log" >&2
+  run_vm "$mode" instrumentation "$RUN/criticalnativeprobe.jar" \
+    CriticalNativeProbe "CriticalNativeProbe instrumentation OK" \
+    "$CRITICAL_VALUES" "$iteration" "$load_mode" 1
+  trace_log="${TMPDIR:-/tmp}/windows_x64-critical-${mode}-instrumentation-${iteration}.log"
+  for trace_marker in \
+      "$CRITICAL_TRACING_VALUES" \
+      "$CRITICAL_POST_TRACING_VALUES" \
+      "$DLSYM_TRACING_VALUES" \
+      "$DLSYM_POST_TRACING_VALUES" \
+      "CriticalNativeDlsymProbe tracing OK" \
+      "CriticalNativeDlsymProbe postTracing OK"; do
+    if ! grep -qF "$trace_marker" "$trace_log"; then
+      echo "$mode CriticalNative instrumentation verification failed: $trace_log" >&2
       tail -100 "$trace_log" >&2
       exit 1
     fi
   done
+  if ! grep -Eq \
+      "CriticalNativeProbe tracingMode before=0 during=[1-9][0-9]* after=0 traceFileDeleted=true" \
+      "$trace_log"; then
+    echo "$mode CriticalNative tracing-mode verification failed: $trace_log" >&2
+    tail -100 "$trace_log" >&2
+    exit 1
+  fi
 done
 
-printf 'CriticalNative acceptance: dual=%s/%s float+signature runs + %s/%s instrumentation; j1=%s/%s float+signature runs + %s/%s instrumentation\n' \
-  "$((REPEATS * 2))" "$((REPEATS * 2))" \
-  "$REPEATS" "$REPEATS" \
+printf 'CriticalNative acceptance: default=%s/%s float+signature runs + %s/%s instrumentation\n' \
   "$((REPEATS * 2))" "$((REPEATS * 2))" \
   "$REPEATS" "$REPEATS"

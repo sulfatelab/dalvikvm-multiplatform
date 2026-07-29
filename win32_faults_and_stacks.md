@@ -10,9 +10,11 @@ full per-thread commit, irreversible high-water state, and fatal native
 collision keep it diagnostic-only. The product work remains open only for
 broader debugger, stack-budget, forced CET-policy, exception-unwind XMM,
 pending-range, and embedding coverage. The shared JIT-3/FS-3 dynamic-table
-sampling/churn gate and the JIT-4 default-J-2 fatal/unwind cross-regression are
-native-accepted on the same build. JIT-4 covers 28 cases, 34/34 aggregate
-records, and three valid static/JIT/OSR dumps without a J-1 arm.
+sampling/churn gate and the JIT-5 post-removal fatal/unwind cross-regression
+are native-accepted on the same build. JIT-5 removes the Windows J-1 path and
+covers 29 cases, 36/36 aggregate records, eight lifecycle cycles, and three
+valid static/JIT/OSR dumps. This closes W-025 without closing the independent
+W-010/W-014 proof points.
 The post-JIT-1 W-004 regression also passes 28/28 on the same Windows Server
 2025 build 26100 with clean log, trace, and recursive dump scans.
 **Created:** 2026-07-26
@@ -1489,6 +1491,17 @@ with zero missing/stale/failed records. All three fatal origins reach VEH/UEF
 and create valid `MDMP` files. No J-1 arm ran, `jit-temp` remained empty, and
 no trace remained.
 
+Native JIT-5 repeats that boundary after removing the Windows J-1 opt-out and
+single-view fallback. Its source/binary gate requires fail-closed section
+construction and proves both retired strings are absent from `art.dll`; the
+inert-key smoke sets `ART_WINDOWS_X64_JIT_DUAL=0` and still creates J-2. The
+29-case, 36/36 archive repeats eight collections, 216 compilations, 192 exact
+reuses, and 120,654 successful virtual unwinds with zero missing/stale/failed
+records. Static, threshold-zero JIT, and OSR fatal origins again reach VEH/UEF
+and produce three valid dumps. This closes W-025 while leaving the debugger,
+forced-CET-policy, stack-budget, exception-XMM, pending-range, and embedding
+work below unchanged.
+
 The remaining acceptance and stress gates are:
 
 - compiler tests containing direct CriticalNative, FP remainder, SIMD swaps,
@@ -2439,6 +2452,7 @@ and debugger evidence.
 | `runtime/jit/jit_memory_region.*` | Implemented overflow-checked aligned xdata tail in each existing data allocation, written through the RW alias and referenced through the primary low-4-GiB view |
 | `tools/verify/windows_x64_w025/W025JitLifecycleStressProbe.cc` and `RESULT-jit3-native.md` | Native-accepted JIT-3/FS-3 optimizing/JNI compile-invalidate-collect-reuse stress with concurrent lookup/virtual unwind and independent returned-archive review |
 | `tools/verify/windows_x64_w025/RESULT-jit4-native.md` | Native-accepted JIT-4 default-J-2 final regression, including eight lifecycle cycles and three valid static/JIT/OSR fatal dumps with independent returned-archive review |
+| `tools/verify/windows_x64_w025/RESULT-jit5-native.md` | Native-accepted JIT-5 removal proof: Windows J-1 absent, retired key inert, fail-closed source/binary contract, eight lifecycle cycles, and three valid fatal dumps with independent review |
 | `runtime/thread.cc` | Implemented exact current-stack acceptance and attach failure; Windows x64 performs no fixed-page installation and adjusts common bounds by the platform-reported excluded-low sum |
 | `runtime/multiplatform/windows/stack_windows.{h,cc}` | Read-only E9 layout inspection accounts for inaccessible prefix + configured guarantee + moving guard; Stage-B select/protect/restore helpers remain diagnostic-only |
 | `runtime/multiplatform/windows/thread_windows.cc` | Queries, raises/preserves, re-queries, and validates the four-page minimum guarantee, then supplies guarantee-aware layout accounting; no alternate signal stack |
@@ -2484,13 +2498,16 @@ fallbacks:
    stable-dead lookups, and 696,969 successful virtual unwinds with no missing,
    stale, or failed record. Per-run maximum lookup time is 122,800-706,100 ns,
    so the callback alternative remains unjustified. Neither static nor dynamic
-   unwind data implies CET user-shadow-stack compatibility.
+   unwind data implies CET user-shadow-stack compatibility. JIT-5's sole J-2
+   path repeats eight cycles and 120,654 unwinds after J-1 removal with the
+   same zero missing/stale/failed result.
 7. Normal-return XMM6-XMM15 passes natively. Does the adapter also preserve
    full width during exception unwind through several optimizing/JNI frames?
 8. Native E6 resolves `art_quick_to_interpreter_bridge + 0x82`, and the full
    host matrix accepts static, JIT J-2/J-1, and OSR J-2/J-1 fatal origins. Add
    a native pending-range exception probe only if it can exercise that brief
-   path without changing product semantics.
+   path without changing product semantics. JIT-5 additionally repeats the
+   three current default-J-2 fatal origins after removing J-1.
 
 ### JIT-1 shared native cross-regression — 2026-07-29
 
@@ -2588,6 +2605,42 @@ The independently accepted returned archive SHA-256 is
 `843391f11e22225516162b25de0412d790c9ea669d0383a996e739aae8480096`.
 Compact records are archived under
 `tools/verify/windows_x64_w025/evidence/jit4_native/`.
+
+### JIT-5 post-removal native fatal/unwind cross-regression - 2026-07-29
+
+ART `389158d46f1e982c7d10d63093a42c8aa41fc2a6` removes the
+`ART_WINDOWS_X64_JIT_DUAL` read and prevents Windows from reaching the common
+single-view branch. Failure to create the pagefile section or any complete
+logical view now returns the construction error. The JIT-5 source/package gate
+also scans the rebuilt `art.dll` and rejects either retired string while
+confirming that the common non-Windows single-view fallback remains.
+
+Windows Server 2025 build 26100 passes 29 native cases and 36/36 aggregate
+records. The retired-key process explicitly sets the old value to zero but
+still records J-2 creation, compilation, Hello, and exit zero. The default ABI,
+nterp/switch OSR, smoke, matrix, and JIT-disabled controls all pass.
+
+The eight-cycle lifecycle process compiles 216 optimizing/normal-JNI
+allocations, forces eight collections, reuses 192 exact code addresses, and
+records 120,648 live lookups, 1,080,878 dead lookups, 1,102,642 transition
+lookups, and 120,654 successful virtual unwinds. It reports
+`missing_live=0`, `stale_dead=0`, `unwind_failures=0`,
+`callback_tables=0`, and `jni_values=pass`.
+
+Static, threshold-zero compiled-JIT, and switch-OSR fatal cases each reach ART
+VEH and UEF and produce a valid `MDMP`; their sizes are 745,645, 745,067, and
+750,705 bytes. `jit-temp` remains empty and no trace remains. The issued
+archive SHA-256 is
+`7b35eab8001ee2ba4881985b63d8df6921a954e023f8e70289f964499f57cd32`;
+the independently accepted returned archive SHA-256 is
+`2bddf51924a7ca6b9719ffde433e859007465babf6bf2ca7a12f417eecd6289f`.
+Compact evidence is under
+`tools/verify/windows_x64_w025/evidence/jit5_native/`.
+
+This closes W-025 and cross-regresses the accepted E9 and FS-3 behavior. It
+does not replace E9's 30-record core archive or close the independent
+W-010/W-014 debugger, forced-policy, stack-budget, exception-XMM,
+pending-range, or embedding work.
 
 ### Next execution schedule — dependency order
 

@@ -32,14 +32,12 @@ java -Dcom.android.tools.r8.emitRecordAnnotationsInDex=1 \
 
 run_one() {
   local mode="$1"
-  local dual="$2"
   local log="${TMPDIR:-/tmp}/win32-jit-unwind-lifecycle-${mode}.log"
   local rc
   local collection_count
 
   if (
     cd "$BUILD"
-    export ART_WINDOWS_X64_JIT_DUAL="$dual"
     export ART_WINDOWS_X64_JIT_FILTER=JitUnwindLifecycleProbe
     export ANDROID_ROOT=run ANDROID_ART_ROOT=run ANDROID_I18N_ROOT=run
     export ANDROID_DATA=run/data ICU_DATA=run/icu WINEDEBUG="${WINEDEBUG:--all}"
@@ -74,17 +72,11 @@ run_one() {
     return 1
   fi
 
-  if [[ "$dual" == 1 ]]; then
-    grep -qF 'Windows x64 JIT dual-view (J-2) created' "$log"
-  elif grep -qF 'Windows x64 JIT dual-view (J-2) created' "$log"; then
-    printf 'Windows x64 JIT unwind lifecycle %s unexpectedly used J-2\n' "$mode" >&2
-    return 1
-  fi
+  grep -qF 'Windows x64 JIT dual-view (J-2) created' "$log"
 
   printf 'Windows x64 JIT unwind lifecycle %s PASS collections=%s\n' \
     "$mode" "$collection_count"
 }
 
-run_one j2 1
-run_one j1 0
-printf 'Windows x64 JIT unwind lifecycle acceptance: J-2 and J-1 PASS\n'
+run_one default
+printf 'Windows x64 JIT unwind lifecycle acceptance: default J-2 PASS\n'

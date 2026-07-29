@@ -12,11 +12,9 @@ bash "$REPO/tools/verify/windows_x64_phase4/build_one.sh" W002OsrProbe
 python3 "$REPO/tools/verify/windows_x64_phase1/check_w002_managed_entries.py" --build "$BUILD"
 
 run_one() {
-  local memory_mode="$1"
-  local dual="$2"
-  local interpreter_mode="$3"
-  local iteration="$4"
-  local log="${TMPDIR:-/tmp}/w002-osr-${memory_mode}-${interpreter_mode}-${iteration}.log"
+  local interpreter_mode="$1"
+  local iteration="$2"
+  local log="${TMPDIR:-/tmp}/w002-osr-default-${interpreter_mode}-${iteration}.log"
   local rc
 
   if (
@@ -26,7 +24,6 @@ run_one() {
     else
       unset ART_WINDOWS_X64_NTERP
     fi
-    export ART_WINDOWS_X64_JIT_DUAL="$dual"
     export ART_WINDOWS_X64_JIT_FILTER="W002OsrProbe.osrLoop"
     export ART_WINDOWS_X64_JIT_LOG_COMPILES=1
     export ANDROID_ROOT=run ANDROID_ART_ROOT=run ANDROID_I18N_ROOT=run
@@ -52,8 +49,8 @@ run_one() {
      ! grep -qF "kind=Osr" "$log" ||
      ! grep -qF "Jumping to long W002OsrProbe.osrLoop(int)" "$log" ||
      ! grep -qF "main end exception=0" "$log"; then
-    printf 'W-002 OSR %s/%s run=%s FAIL exit=%s log=%s\n' \
-      "$memory_mode" "$interpreter_mode" "$iteration" "$rc" "$log" >&2
+    printf 'W-002 OSR default/%s run=%s FAIL exit=%s log=%s\n' \
+      "$interpreter_mode" "$iteration" "$rc" "$log" >&2
     tail -120 "$log" >&2
     return 1
   fi
@@ -70,19 +67,15 @@ run_one() {
     return 1
   fi
 
-  printf 'W-002 OSR %s/%s run=%s PASS\n' \
-    "$memory_mode" "$interpreter_mode" "$iteration"
+  printf 'W-002 OSR default/%s run=%s PASS\n' \
+    "$interpreter_mode" "$iteration"
 }
 
-for memory_and_dual in "dual:1" "j1:0"; do
-  memory_mode="${memory_and_dual%%:*}"
-  dual="${memory_and_dual##*:}"
-  for interpreter_mode in default switch; do
-    for iteration in $(seq 1 "$REPEATS"); do
-      run_one "$memory_mode" "$dual" "$interpreter_mode" "$iteration"
-    done
+for interpreter_mode in default switch; do
+  for iteration in $(seq 1 "$REPEATS"); do
+    run_one "$interpreter_mode" "$iteration"
   done
 done
 
-printf 'W-002 OSR acceptance: dual and J-1, default nterp and switch, %s repeat(s): PASS\n' \
+printf 'W-002 OSR acceptance: default JIT memory, default nterp and switch, %s repeat(s): PASS\n' \
   "$REPEATS"
