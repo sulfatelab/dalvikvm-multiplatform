@@ -217,6 +217,21 @@ set_target_properties(jitunwindlifecycleprobe PROPERTIES
   OUTPUT_NAME "jitunwindlifecycleprobe"
   WINDOWS_EXPORT_ALL_SYMBOLS ON)
 
+add_library(w025jitlifecyclestressprobe SHARED EXCLUDE_FROM_ALL
+  "${_repo}/tools/verify/windows_x64_w025/W025JitLifecycleStressProbe.cc")
+target_compile_options(w025jitlifecyclestressprobe PRIVATE
+  -fno-rtti
+  -Wno-thread-safety
+  -Wno-unused-command-line-argument
+  -Wno-microsoft-cast
+  -Wno-invalid-offsetof)
+target_compile_definitions(w025jitlifecyclestressprobe PRIVATE ART_CONSUMING_LIBART)
+target_link_libraries(w025jitlifecyclestressprobe art)
+set_target_properties(w025jitlifecyclestressprobe PROPERTIES
+  PREFIX "lib"
+  OUTPUT_NAME "w025jitlifecyclestressprobe"
+  WINDOWS_EXPORT_ALL_SYMBOLS ON)
+
 add_library(w025jitmappingprobe SHARED EXCLUDE_FROM_ALL
   "${_repo}/tools/verify/windows_x64_w025/W025JitMappingProbe.cc")
 target_compile_options(w025jitmappingprobe PRIVATE
