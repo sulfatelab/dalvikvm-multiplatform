@@ -10,7 +10,9 @@ full per-thread commit, irreversible high-water state, and fatal native
 collision keep it diagnostic-only. The product work remains open only for
 broader debugger, stack-budget, forced CET-policy, exception-unwind XMM,
 pending-range, and embedding coverage. The shared JIT-3/FS-3 dynamic-table
-sampling/churn gate is native-accepted on the same build.
+sampling/churn gate and the JIT-4 default-J-2 fatal/unwind cross-regression are
+native-accepted on the same build. JIT-4 covers 28 cases, 34/34 aggregate
+records, and three valid static/JIT/OSR dumps without a J-1 arm.
 The post-JIT-1 W-004 regression also passes 28/28 on the same Windows Server
 2025 build 26100 with clean log, trace, and recursive dump scans.
 **Created:** 2026-07-26
@@ -1477,6 +1479,16 @@ per-run maximum lookup time is 122,800-706,100 ns, and callback tables remain
 unused. All eight JNI targets retain exact values after ART `43f866830e`
 corrected the Windows nterp hard-float return adapter to preserve XMM0.
 
+Native JIT-4 on the same build adds the final default-J-2 cross-regression. Its
+28 cases and 34/34 aggregate PASS records repeat the exact smoke/matrix,
+JIT-disabled controls, CriticalNative and normal/FastNative ABI paths, nterp
+and switch OSR, eight lifecycle cycles, and static/JIT/OSR fatal origins. The
+lifecycle repeat records eight collections, 216 compilations, 192 exact
+reuses, 85,938 live lookups, 855,876 dead lookups, and 85,944 virtual unwinds
+with zero missing/stale/failed records. All three fatal origins reach VEH/UEF
+and create valid `MDMP` files. No J-1 arm ran, `jit-temp` remained empty, and
+no trace remained.
+
 The remaining acceptance and stress gates are:
 
 - compiler tests containing direct CriticalNative, FP remainder, SIMD swaps,
@@ -2426,6 +2438,7 @@ and debugger evidence.
 | `runtime/multiplatform/windows/jit_unwind_windows.{h,cc}` and `runtime/jit/jit_code_cache.*` | Implemented stable one-entry dynamic-function registry, publish-after-register rule, exact deletion, unregister-before-free/reuse, and clear-before-teardown ownership |
 | `runtime/jit/jit_memory_region.*` | Implemented overflow-checked aligned xdata tail in each existing data allocation, written through the RW alias and referenced through the primary low-4-GiB view |
 | `tools/verify/windows_x64_w025/W025JitLifecycleStressProbe.cc` and `RESULT-jit3-native.md` | Native-accepted JIT-3/FS-3 optimizing/JNI compile-invalidate-collect-reuse stress with concurrent lookup/virtual unwind and independent returned-archive review |
+| `tools/verify/windows_x64_w025/RESULT-jit4-native.md` | Native-accepted JIT-4 default-J-2 final regression, including eight lifecycle cycles and three valid static/JIT/OSR fatal dumps with independent returned-archive review |
 | `runtime/thread.cc` | Implemented exact current-stack acceptance and attach failure; Windows x64 performs no fixed-page installation and adjusts common bounds by the platform-reported excluded-low sum |
 | `runtime/multiplatform/windows/stack_windows.{h,cc}` | Read-only E9 layout inspection accounts for inaccessible prefix + configured guarantee + moving guard; Stage-B select/protect/restore helpers remain diagnostic-only |
 | `runtime/multiplatform/windows/thread_windows.cc` | Queries, raises/preserves, re-queries, and validates the four-page minimum guarantee, then supplies guarantee-aware layout accounting; no alternate signal stack |
@@ -2543,6 +2556,38 @@ Compact records are archived under
 `tools/verify/windows_x64_w025/evidence/jit3_native/`. This closes FS-3; it
 does not replace E9 fatal-origin acceptance or the remaining debugger,
 stack-budget, forced-policy, exception-XMM, pending-range, and embedding work.
+
+### JIT-4 shared native fatal/unwind cross-regression - 2026-07-29
+
+The final default-build W-025 archive passed 28 cases and 34/34 aggregate
+records on Windows Server 2025 build 26100. It intentionally used only the
+default J-2 pagefile-section dual view; `j1_cases=0`. The nonfatal side repeats
+the exact 12-record smoke, 14-workload matrix, JIT-disabled controls, default
+CriticalNative, default normal/FastNative 7/7, and nterp/switch OSR paths.
+
+Its eight-cycle lifecycle repeat compiled 216 optimizing/normal-JNI
+allocations, forced eight collections, and reused 192 exact addresses.
+Concurrent sampling completed 85,938 stable-live lookups, 855,876 stable-dead
+lookups, 859,362 transition lookups, and 85,944 successful virtual unwinds
+with `missing_live=0`, `stale_dead=0`, `unwind_failures=0`, and
+`callback_tables=0`; JNI values remained exact.
+
+The static, threshold-zero compiled-JIT, and OSR fatal cases each reached the
+required origin, entered ART's VEH and UEF, and produced a new valid `MDMP`.
+Their sizes are 747,247, 749,981, and 745,891 bytes. `jit-temp` remained empty
+and no trace remained. This is a shared regression for the accepted E9 fatal
+and JIT-3/FS-3 dynamic-unwind designs; it does not replace the E9 30-record
+archive or close the independent debugger, forced-policy, stack-budget,
+exception-XMM, pending-range, or embedding work.
+
+The issued package records root
+`a095f93d684c39a7454919255aa7fa508497f38d` and ART
+`43f866830eee0ee666b1cf3e9d2b3abffc45180b`, with issued SHA-256
+`411671ab378dab9fa4c4732934deb575d7dfb5873b5ab75ffe605514afcc8cf1`.
+The independently accepted returned archive SHA-256 is
+`843391f11e22225516162b25de0412d790c9ea669d0383a996e739aae8480096`.
+Compact records are archived under
+`tools/verify/windows_x64_w025/evidence/jit4_native/`.
 
 ### Next execution schedule — dependency order
 

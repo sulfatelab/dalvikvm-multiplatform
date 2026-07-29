@@ -1,0 +1,36 @@
+W-025 JIT-4 final native regression 2026-07-29 08:10:45
+PASS host_os build=26100
+PASS package_integrity
+PASS smoke_default_verbose exit=0 elapsed_ms=2400
+PASS smoke_env_disabled exit=0 elapsed_ms=1813
+PASS smoke_xusejit_false exit=0 elapsed_ms=1459
+PASS smoke_filter exit=0 elapsed_ms=1463
+PASS smoke_exclude exit=0 elapsed_ms=1513
+PASS smoke_quiet exit=0 elapsed_ms=1605
+PASS matrix_cenc exit=0 elapsed_ms=1515
+PASS matrix_cenc2 exit=0 elapsed_ms=1465
+PASS matrix_celike exit=0 elapsed_ms=1546
+PASS matrix_cfloat exit=0 elapsed_ms=1527
+PASS matrix_floatprobe exit=0 elapsed_ms=1584
+PASS matrix_ifloat exit=0 elapsed_ms=1575
+PASS matrix_jlfloat exit=0 elapsed_ms=1500
+PASS matrix_rfloat exit=0 elapsed_ms=1400
+PASS matrix_sfloat exit=0 elapsed_ms=1604
+PASS matrix_math exit=0 elapsed_ms=1576
+PASS matrix_io exit=0 elapsed_ms=1553
+PASS matrix_net exit=0 elapsed_ms=1567
+PASS matrix_gc exit=0 elapsed_ms=1508
+PASS matrix_throw exit=1 elapsed_ms=1490
+PASS critical_default exit=0 elapsed_ms=1680
+PASS native_abi_default exit=0 elapsed_ms=1766
+PASS osr_nterp exit=0 elapsed_ms=2062
+PASS osr_switch exit=0 elapsed_ms=1612
+PASS lifecycle_default exit=0 elapsed_ms=2026
+PASS fatal_static exit=-1073741819 elapsed_ms=4649
+PASS fatal_jit_default exit=-1073741819 elapsed_ms=7573
+PASS fatal_osr_default exit=-1073741819 elapsed_ms=18147
+PASS no_jit_temp_files count=0
+PASS nonfatal_log_scan
+PASS fatal_dump_scan count=3
+PASS trace_cleanup count=0
+OVERALL PASS

@@ -1,0 +1,20 @@
+package: default_memory_mode=j2 j1_cases=0 cases=28 aggregate_pass=34
+smoke: jit_smoke_records=12
+smoke_default_verbose: JitCodeCache::Create OK
+smoke_default_verbose: Windows x64 JIT dual-view (J-2) created
+smoke_default_verbose: method=java.lang.String java.lang.StringFactory.newStringFromBytes
+jit_disabled_controls: ART_WINDOWS_X64_JIT=0 and -Xusejit:false both exit=0
+matrix: jit_matrix_records=14
+matrix_throw: exit=1
+matrix_throw: main end exception=1
+matrix_throw: exception type=java.lang.RuntimeException msg=phase3-throw-ok
+critical_default: CriticalNativeProbe instrumentation OK
+native_abi_default: FastNativeAbiProbe OK targets=7 exact_compile_count_each=1
+osr_nterp: W002OsrProbe OK checksum=65553463744 kind=Baseline,Osr
+osr_switch: W002OsrProbe OK checksum=65553463744 kind=Baseline,Osr return_marker=present
+lifecycle_default: W025_JIT3_PASS methods=24 managed=16 jni=8 unique_allocations=24 cycles=8 collections=8 compilations=216 exact_reuse=192 live_lookups=85938 dead_lookups=855876 transition_lookups=859362 virtual_unwinds=85944 missing_live=0 stale_dead=0 unwind_failures=0 callback_tables=0
+lifecycle_default: W025JitLifecycleStressProbe PASS cycles=8 jni_values=pass
+fatal_static: VEH=present UEF=present MDMP=valid
+fatal_jit_default: jit_ready calls=20000 compiled_caller=present compiled_native_stub=present VEH=present UEF=present MDMP=valid
+fatal_osr_default: osr_armed count=2000000 kind=Baseline,Osr jump=present unexpected_return=absent VEH=present UEF=present MDMP=valid
+cleanup: jit_temp_files=0 trace_files=0 fatal_minidumps=3
