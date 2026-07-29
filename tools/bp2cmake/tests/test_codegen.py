@@ -115,6 +115,46 @@ def test_windows_asm_defines_config():
     assert "ART_TARGET_LINUX" not in macros
 
 
+def test_asm_extra_defines_are_appended_once():
+    cfg = _cfg("unused")
+    cfg.asm_extra_defines = [
+        "ART_WIN32_STACK_HIGH_WATER=1",
+        "FS1_LAYOUT_VERSION=1",
+        "ART_WIN32_STACK_HIGH_WATER=1",
+    ]
+    macros = _asm_defines_macros_for(cfg)
+    assert macros[-2:] == ["ART_WIN32_STACK_HIGH_WATER=1", "FS1_LAYOUT_VERSION=1"]
+    assert macros.count("ART_WIN32_STACK_HIGH_WATER=1") == 1
+    assert macros.count("ART_TARGET_LINUX") == 1
+
+    cfg.asm_target_os = "windows"
+    macros = _asm_defines_macros_for(cfg)
+    assert macros[-2:] == ["ART_WIN32_STACK_HIGH_WATER=1", "FS1_LAYOUT_VERSION=1"]
+    assert macros.count("ART_WIN32_STACK_HIGH_WATER=1") == 1
+    assert "ART_TARGET_WINDOWS" in macros
+    assert "ART_TARGET_LINUX" not in macros
+
+
+def test_codegen_cli_collects_asm_defines(monkeypatch):
+    from bp2cmake import codegen_main
+
+    captured = []
+
+    def fake_gen_aconfig(cfg):
+        captured.extend(cfg.asm_extra_defines)
+        return []
+
+    monkeypatch.setattr(codegen_main, "gen_aconfig", fake_gen_aconfig)
+    assert codegen_main.main([
+        "--root", "unused",
+        "--gensrc", "unused",
+        "--only", "aconfig",
+        "--asm-define", "ART_WIN32_STACK_HIGH_WATER=1",
+        "--asm-define", "FS1_LAYOUT_VERSION=1",
+    ]) == 0
+    assert captured == ["ART_WIN32_STACK_HIGH_WATER=1", "FS1_LAYOUT_VERSION=1"]
+
+
 def test_windows_asm_defines_runtime_layout():
     windows_x64_env = os.environ.get("WINDOWS_X64_DEV_ENV")
     if not (HAVE_ART and HAVE_CLANG and windows_x64_env):

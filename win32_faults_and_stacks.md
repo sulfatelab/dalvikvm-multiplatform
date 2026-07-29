@@ -1,15 +1,18 @@
 # Windows x64 managed faults and ART stack design
 
-**Status:** W-010/W-014 E9 is native-accepted 30/30 on Windows Server 2025
-build 26100. Windows x64 uses explicit pre-prologue stack checks and guarantee-aware
-bounds; switch/nterp/JIT managed SOE passes with zero handled dumps. Linux
-retains its implicit `RSP - 8192` probes. E5/E6 unwind repairs remain accepted,
+**Status:** W-010/W-014 E9 is native-accepted 30/30 and FS-1 Release/Debug
+stack high-water acceptance passes on Windows Server 2025 build 26100.
+Windows x64 uses explicit pre-prologue stack checks and guarantee-aware bounds;
+switch/nterp/JIT managed SOE passes with zero handled dumps. Product Windows
+and Linux retain the 8192-byte ART reserve; non-`NDEBUG` Windows x86_64 uses a
+measured 40-KiB reserve and leaves more than 37 KiB of quick-path native margin.
+Linux retains its implicit `RSP - 8192` probes. E5/E6 unwind repairs remain accepted,
 and five static/JIT/OSR fatal origins produce valid dumps. A later E9-bound
 pregrow experiment reproduces the Linux implicit read fault, but its nearly
 full per-thread commit, irreversible high-water state, and fatal native
 collision keep it diagnostic-only. The product work remains open only for
-broader debugger, stack-budget, forced CET-policy, exception-unwind XMM,
-pending-range, and embedding coverage. The shared JIT-3/FS-3 dynamic-table
+broader debugger, forced CET-policy, exception-unwind XMM, pending-range,
+embedding, reservation-correlation, and second-host coverage. The shared JIT-3/FS-3 dynamic-table
 sampling/churn gate and the JIT-5 post-removal fatal/unwind cross-regression
 are native-accepted on the same build. JIT-5 removes the Windows J-1 path and
 covers 29 cases, 36/36 aggregate records, eight lifecycle cycles, and three
@@ -18,7 +21,7 @@ W-010/W-014 proof points.
 The post-JIT-1 W-004 regression also passes 28/28 on the same Windows Server
 2025 build 26100 with clean log, trace, and recursive dump scans.
 **Created:** 2026-07-26
-**Updated:** 2026-07-29
+**Updated:** 2026-07-30
 **Target:** x86_64 Windows 10 build 17134+
 **Product model:** imageless ART with nterp and JIT; MSVC ABI artifacts built by
 Clang/lld with LLVM libc++
@@ -73,7 +76,10 @@ The stable decisions and currently implemented candidate are:
    while preserving a larger host value, and query the configured value back.
    Exclude the sum of the inaccessible low memory prefix, the page-rounded
    configured guarantee, and one moving guard page. Common ART then places its
-   unchanged 8 KiB x86_64 recovery reserve above that native boundary.
+   8 KiB x86_64 product recovery reserve above that native boundary. A
+   non-`NDEBUG` Windows x86_64 build uses 40 KiB because FS-1 proved that
+   Clang-O0 Microsoft-ABI exception-allocation frames exceed the product
+   reserve; Release and non-Windows builds remain at 8 KiB.
 9. Create CRT-using ART threads with `_beginthreadex`, not raw `CreateThread`.
    For a non-zero requested stack size, pass
    `STACK_SIZE_PARAM_IS_A_RESERVATION`. Replace the current thread-ID/reopen
@@ -183,7 +189,9 @@ ART's usable lower stack boundary, unprotects the fixed page, constructs the
 exception, restores the normal boundary, and protects the page again.
 
 Windows preserves the pre-prologue timing, caller-frame invariant, common
-throw entrypoint, 8192-byte ART recovery reserve, and Java-visible exception.
+throw entrypoint, 8192-byte product ART recovery reserve, and Java-visible
+exception. Debug Windows x86_64 deliberately uses the FS-1-measured 40-KiB
+reserve; that build-only safety budget does not change product or Linux.
 The unavoidable OS-specific difference is detection: Windows x64 compares RSP with
 `Thread::stack_end_` explicitly because Windows stack growth cannot preserve a
 fixed protected page, while Linux retains the implicit fault sequence.
@@ -213,7 +221,8 @@ no-op-protection workarounds:
   to at least four pages while preserving a larger value, and queries the
   actual configured value back. Its published bounds exclude the measured
   inaccessible prefix, rounded configured guarantee, and one moving guard
-  page before common ART adds the 8192-byte recovery reserve.
+  page before common ART adds the 8192-byte product recovery reserve (40 KiB
+  only for non-`NDEBUG` Windows x86_64).
 - Fixed-page install/protect/unprotect/restore remains compiled for isolated
   direct page-state probes. Product attachment and teardown do not use it.
 
@@ -289,10 +298,12 @@ The implementation is complete under Wine and native-accepted in E9 on
 Windows Server 2025 build 26100 for the 30-record managed-fault/fatal matrix.
 Historical E2-E6 results below document why fixed-page SOE and missing PE
 unwind records were rejected or repaired. E9 passes switch/nterp/JIT managed
-SOE, zero handled dumps, and all five fatal origins. JIT-3/FS-3 additionally
-accepts native dynamic-table collection/reuse churn and concurrent lookup/
-virtual-unwind sampling. Debugger, stack-budget, forced-policy,
-exception-unwind XMM, pending-range, and embedding coverage remain additional
+SOE, zero handled dumps, and all five fatal origins. FS-1 additionally accepts
+allocation-free Release/Debug stack high-water records for switch, nterp, and
+JIT, including the 40-KiB Debug-only reserve. JIT-3/FS-3 accepts native
+dynamic-table collection/reuse churn and concurrent lookup/virtual-unwind
+sampling. Debugger, forced-policy, exception-unwind XMM, pending-range,
+embedding, reservation-correlation, and second-host coverage remain additional
 acceptance work.
 
 ### 4.1 Second native Stage E result and current diagnosis
@@ -545,7 +556,8 @@ configured guarantee = max(existing guarantee, minimum)
 excluded low = inaccessible memory prefix
              + page-rounded configured guarantee
              + one moving PAGE_GUARD page
-stack_end = low + excluded low + ART's unchanged 8192-byte reserve
+product stack_end = low + excluded low + ART's 8192-byte reserve
+Windows Debug stack_end = low + excluded low + ART's 40960-byte reserve
 ```
 
 `SetThreadStackGuarantee(0)` queries the current value. A nonzero call returns
@@ -1018,7 +1030,8 @@ E9 does not route Windows x64 stack overflow through `FaultManager`. Optimizing 
 and nterp compare the live RSP with `Thread::stack_end_` before establishing a
 frame. `RSP == stack_end_` is allowed; `RSP < stack_end_` tail-jumps through
 `Thread::pThrowStackOverflow`. The bound already includes the native recovery
-interval plus ART's 8192-byte reserve.
+interval plus ART's configured reserve: 8192 bytes in product and non-Windows
+builds, or 40960 bytes only in a non-`NDEBUG` Windows x86_64 build.
 
 The former read-AV, `RSP - 8192`, and fixed-page-containment classifier remains
 historical/diagnostic code only. Linux retains the equivalent implicit
@@ -1499,8 +1512,8 @@ inert-key smoke sets `ART_WINDOWS_X64_JIT_DUAL=0` and still creates J-2. The
 reuses, and 120,654 successful virtual unwinds with zero missing/stale/failed
 records. Static, threshold-zero JIT, and OSR fatal origins again reach VEH/UEF
 and produce three valid dumps. This closes W-025 while leaving the debugger,
-forced-CET-policy, stack-budget, exception-XMM, pending-range, and embedding
-work below unchanged.
+forced-CET-policy, exception-XMM, pending-range, embedding,
+reservation-correlation, and second-host work below unchanged.
 
 The remaining acceptance and stress gates are:
 
@@ -2303,11 +2316,16 @@ contract.
   rounded guarantee plus one moving guard. Windows Server 2025 build 26100
   returns 30/30 PASS, zero handled dumps, and five fatal dumps; the independent
   reviewer accepts the full returned package.
+- **FS-1 stack budget accepted:** allocation-free samples cover the explicit
+  check, quick entry/frame, common throw and exception-construction phases,
+  restored boundary, delivery, and long jump. Release and Debug switch/nterp/
+  JIT pass on native build 26100 with positive native margin and no dump.
 - **Still open:** full-width XMM6-XMM15 exception-unwind coverage, native
-  debugger, handler/throw stack budget, forced CET-policy families,
-  large-table churn/sampling, rollback injection, pending-range, embedding,
-  and debugger-quality dump-stack gates. Native normal-return XMM, OSR live
-  unwind, foreign VEH/frame-SEH, managed SOE, and five fatal origins pass.
+  debugger, forced CET-policy families, rollback injection, pending-range,
+  embedding, reservation correlation, second-host, and debugger-quality
+  dump-stack gates. Native normal-return XMM, OSR live unwind, foreign
+  VEH/frame-SEH, managed SOE, stack budget, dynamic-table churn, and five fatal
+  origins pass.
 - Run the complete matrix below on Windows 10 build 17134+ and a current
   Windows release.
 - Keep Wine as a development oracle and Linux as the behavior oracle.
@@ -2378,7 +2396,8 @@ contract.
   excluded-low accounting for prefix + guarantee + moving guard.
 - Deliberate generated-code AV with the wrong address remains unhandled.
 - Explicit-check, throw, temporary-bound expansion, and recovery stack
-  high-water measurements.
+  high-water measurements. FS-1 accepts four complete main/child records per
+  switch/nterp/JIT mode in both Release and Debug.
 - The standalone pregrow probe may remain a mechanism regression, but its
   result is never counted as product managed-SOE acceptance and it installs no
   runtime feature gate.
@@ -2572,7 +2591,8 @@ the independently accepted returned archive SHA-256 is
 Compact records are archived under
 `tools/verify/windows_x64_w025/evidence/jit3_native/`. This closes FS-3; it
 does not replace E9 fatal-origin acceptance or the remaining debugger,
-stack-budget, forced-policy, exception-XMM, pending-range, and embedding work.
+forced-policy, exception-XMM, pending-range, embedding, reservation-correlation,
+and second-host work.
 
 ### JIT-4 shared native fatal/unwind cross-regression - 2026-07-29
 
@@ -2594,8 +2614,8 @@ required origin, entered ART's VEH and UEF, and produced a new valid `MDMP`.
 Their sizes are 747,247, 749,981, and 745,891 bytes. `jit-temp` remained empty
 and no trace remained. This is a shared regression for the accepted E9 fatal
 and JIT-3/FS-3 dynamic-unwind designs; it does not replace the E9 30-record
-archive or close the independent debugger, forced-policy, stack-budget,
-exception-XMM, pending-range, or embedding work.
+archive or close the independent debugger, forced-policy, exception-XMM,
+pending-range, embedding, reservation-correlation, or second-host work.
 
 The issued package records root
 `a095f93d684c39a7454919255aa7fa508497f38d` and ART
@@ -2639,20 +2659,101 @@ Compact evidence is under
 
 This closes W-025 and cross-regresses the accepted E9 and FS-3 behavior. It
 does not replace E9's 30-record core archive or close the independent
-W-010/W-014 debugger, forced-policy, stack-budget, exception-XMM,
-pending-range, or embedding work.
+W-010/W-014 debugger, forced-policy, exception-XMM, pending-range, embedding,
+reservation-correlation, or second-host work.
+
+### FS-1 stack high-water acceptance - 2026-07-30
+
+FS-1 is an opt-in measurement build, not a product instrumentation path.
+`MDVM_FS1_STACK_HIGH_WATER=ON` passes
+`ART_WIN32_STACK_HIGH_WATER=1` to both target compilation and the
+layout-sensitive `asm_defines` generator. The product build uses the same
+source with that definition absent. Structural inspection requires the normal
+`art.dll` to omit the dump export and every high-water asm definition while
+requiring the instrumented DLL and objects to contain them.
+
+Each attached thread owns one fixed-size scalar record containing stack
+geometry, sequence/active fields, and ten RSP slots. The overflow path does no
+allocation, locking, symbol lookup, string construction, or formatting for
+the measurement. Generated optimizing/nterp code and quick assembly directly
+store RSP; common C++ uses inline scalar stores. The sampled phases are:
+
+1. the failing explicit pre-prologue check;
+2. quick throw entry and the completed save-all frame, when applicable;
+3. common throw entry and temporary stack-end expansion;
+4. entry to `StackOverflowError` construction and successful construction;
+5. restoration of the default stack end; and
+6. quick delivery and the long-jump frame, when applicable.
+
+After Java catches the exception, the probe-only JNI library resolves the
+opt-in export and requests formatting. The validator requires exactly four
+records in `main-1`, `main-2`, `child-1`, `child-2` order, consecutive
+per-thread sequences, every path-specific phase, exact geometry/reserve
+arithmetic, a positive margin to both guarantee and native boundaries, the
+expected switch/quick shape, required JIT compilation records, and no fatal
+VEH/UEF marker. Dump state is compared across the complete Wine run and
+recursively scanned by the native runner.
+
+The final-source Wine gates pass with these minimum native margins:
+
+| Build | switch | nterp | JIT |
+|-------|-------:|------:|----:|
+| Release | 7536 | 7520 | 7616 |
+| Debug | 69728 | 37216 | 37232 |
+
+Windows Server 2025 build 26100 passes the immutable native package with these
+minimum margins:
+
+| Build | switch | nterp | JIT |
+|-------|-------:|------:|----:|
+| Release | 6784 | 7536 | 7616 |
+| Debug | 69744 | 37168 | 37232 |
+
+The initial native Debug build failed all three engines with
+`0xC00000FD STATUS_STACK_OVERFLOW` even though Wine passed. Its captured dump
+mapped the final exception to
+`art::gc::Heap::CheckPreconditionsForAllocObject` at `runtime/gc/heap.cc:4555`
+while constructing `StackOverflowError`. This identified exhaustion of the
+recovery interval rather than a missed explicit check. A controlled
+20,480-byte trial made switch pass but left nterp and JIT approximately 8208
+and 8196 bytes below the native boundary. The selected 40-KiB non-`NDEBUG`
+Windows x86_64 reserve adds a three-page margin over that measured need. It
+leaves more than 37 KiB on both native quick paths and does not alter Release,
+product, or non-Windows builds, which remain at 8192 bytes.
+
+Wine Debug also passes `-XX:ThreadSuspendTimeout=30000` because O0 recursion
+can remain outside a safepoint beyond ART's two-second default under Wine.
+That flag is isolated to the FS-1 Debug runner. Native Debug enablement also
+exposed and repaired COFF flag-registry initialization ordering, Windows
+absolute-path recognition, source-level flag reload caller identification,
+an unsafe class-loader diagnostic, and Debug PE export-count overflow. The
+probe package supplies the standard debug `libopenjdkd.dll` alias. None of
+these changes adds a product fault handler or changes Release stack geometry.
+
+The native runner records six PASS child processes, four complete records per
+process, `NO_DMP_FILES`, and `OVERALL PASS`. The 53,459,106-byte archive
+SHA-256 is
+`22195128d460eef6fe260b79f25e792a2af5303546fadacc7ad188038c09bfbe`;
+the hash matched after transfer and its internal manifest passed before
+execution. Compact evidence is under
+`tools/verify/windows_x64_phase4/evidence/fs1_stack_high_water/`.
+
+Post-FS-1 regressions pass: the product explicit-check object gate, nterp/JIT
+W-010 managed NPE/SOE Wine gate, full Linux rebuild, Linux object's seven
+unchanged implicit probes, and shared-boot imageless Linux Hello. FS-1 closes
+the handler/throw stack-budget proof point; FS-2 is next.
 
 ### Next execution schedule — dependency order
 
 This schedule closes product proof points before optional mechanism research.
 It is evidence-gated rather than date-gated. FS-3 was split into an independent
-JIT closure package and completed before FS-1/FS-2; the remaining order resumes
-at FS-1.
+JIT closure package and completed before FS-1; FS-1 is now accepted, so the
+remaining order resumes at FS-2.
 
 | Order | Work | Exit gate |
 |------:|------|-----------|
-| FS-1 (next) | Add allocation-free high-water instrumentation around the explicit check, quick throw, temporary stack-end expansion, exception construction, and non-local transfer; run release and debug builds | The result records the lowest RSP and margin to the configured guarantee/ART reserve for switch, nterp, and JIT without changing fault behavior |
-| FS-2 | Extend the combined native package with debugger first-chance/continue, every named forced-incompatible CET policy, foreign VEH/frame-SEH/predecessor-UEF embedding, and XMM6-XMM15 sentinels during exception unwind | Expected NPE continues into Java, explicit SOE remains fault-free, incompatible CET starts reject before Java/JIT with no dump, foreign search handlers coexist, and full-width XMM state survives unwind |
+| FS-1 (done) | Add allocation-free high-water instrumentation around the explicit check, quick throw, temporary stack-end expansion, exception construction, and non-local transfer; run release and debug builds | Accepted 2026-07-30: Wine and native Release/Debug switch, nterp, and JIT have positive margins; native quick Debug retains more than 37 KiB with the 40-KiB Debug-only reserve; four records per mode and no dumps |
+| FS-2 (next) | Extend the combined native package with debugger first-chance/continue, every named forced-incompatible CET policy, foreign VEH/frame-SEH/predecessor-UEF embedding, and XMM6-XMM15 sentinels during exception unwind | Expected NPE continues into Java, explicit SOE remains fault-free, incompatible CET starts reject before Java/JIT with no dump, foreign search handlers coexist, and full-width XMM state survives unwind |
 | FS-3 (done) | With JIT-1 encoding and JIT-2 mapping/policy prerequisites complete, share the JIT closure load test: compile, invalidate, collect, reuse, and re-register many optimizing/JNI allocations while another thread performs lookup and virtual unwind | Accepted 2026-07-29: 52 collections, 1,344 compilations, 1,248 exact reuses, and 696,969 virtual unwinds complete with no missing/stale/failed record; callback tables remain unnecessary |
 | FS-4 | Run FS-1 through FS-3 on the accepted build-26100 class host, then repeat the E9 core runner, parameterized guarantee geometry, fiber/manual-stack rejection, and deep detach/continue/reattach lifecycle on a second supported Windows 10 or later host | Immutable archives pass their independent review and either confirm the additive stack layout or document a new supported-host constraint |
 | FS-5 | Attempt the brief pending bridge-range exception only if a deterministic probe can enter it without changing product control flow; otherwise record it as impractical and close it as conditional coverage | A real native exception validates the pending record, or the result document explains why the already accepted primary/fatal matrix is the closure boundary |

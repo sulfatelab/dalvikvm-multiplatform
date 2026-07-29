@@ -1,8 +1,9 @@
 # W-010 Stage D managed-fault activation
 
 **Status:** focused Wine/Linux verification PASS; W-010/W-014 E9 native Stage E
-accepted 30/30 on Windows Server 2025 build 26100
-**Date:** 2026-07-28
+accepted 30/30 and FS-1 Release/Debug stack high-water accepted on Windows
+Server 2025 build 26100
+**Date:** 2026-07-30
 
 ## Product behavior
 
@@ -18,7 +19,8 @@ Linux fixed-page event:
   system pages; any larger existing host guarantee is preserved;
 - stack bounds debit the measured inaccessible low prefix, page-rounded
   configured guarantee, and one moving-guard page before common ART adds its
-  unchanged 8192-byte recovery reserve;
+  8192-byte product recovery reserve; only non-`NDEBUG` Windows x86_64 uses
+  the FS-1-measured 40-KiB reserve;
 - nterp's immutable code range is registered before `Runtime::Start()` can
   publish nterp entrypoints, despite Windows x64 deliberately keeping
   `CanRuntimeUseNterp()` false during early startup;
@@ -122,6 +124,41 @@ requires no change.
 - Linux `dalvikvm -showversion`: PASS.
 - Linux shared-boot imageless Hello: PASS.
 
+## FS-1 stack high-water acceptance
+
+FS-1 compiles fixed-size, thread-owned scalar samples only into the opt-in
+instrumentation build. Direct RSP stores cover the failing explicit check,
+quick entry/save frame, common throw entry, temporary stack-end expansion,
+exception construction and completion, restored default boundary, quick
+delivery, and long jump. Formatting and validation occur after Java catches
+the `StackOverflowError`. The structural check proves that product `art.dll`
+has neither the probe export nor its generated asm offsets.
+
+Final-source Wine and native Windows both pass Release and Debug switch,
+nterp, and threshold-zero JIT with four complete main/child records per
+process, positive boundary margins, required JIT compilation, no fatal
+VEH/UEF marker, and no new dump:
+
+| Host/build | switch | nterp | JIT |
+|------------|-------:|------:|----:|
+| Wine Release | 7536 | 7520 | 7616 |
+| Wine Debug | 69728 | 37216 | 37232 |
+| Native Release | 6784 | 7536 | 7616 |
+| Native Debug | 69744 | 37168 | 37232 |
+
+The first native Debug run failed all engines with `STATUS_STACK_OVERFLOW` in
+`art::gc::Heap::CheckPreconditionsForAllocObject` while constructing the
+`StackOverflowError`. A 20-KiB trial fixed switch but left nterp/JIT roughly
+8 KiB below the native boundary. The accepted 40-KiB reserve is therefore
+limited to non-`NDEBUG` Windows x86_64 and leaves more than 37 KiB on both
+quick paths. Release/product and non-Windows builds remain at 8192 bytes.
+
+The native package is 53,459,106 bytes with SHA-256
+`22195128d460eef6fe260b79f25e792a2af5303546fadacc7ad188038c09bfbe`.
+Its transferred hash and internal manifest pass, `DMP_SCAN.txt` contains
+`NO_DMP_FILES`, and `RESULT_FS1.txt` ends in `OVERALL PASS`. See
+`evidence/fs1_stack_high_water/ACCEPTANCE.md`.
+
 ## Native Stage E acceptance and remaining matrix
 
 E9 is accepted on Windows Server 2025 build 26100. The immutable archive
@@ -132,13 +169,13 @@ zero handled dumps, and five valid fatal static/JIT/OSR dumps. The reviewer
 reports `PASS (build=26100, pass_records=30, dumps=5,
 return=full-package)`. See `evidence/w010_w014_e9/ACCEPTANCE.md`.
 
-Native Stage E therefore no longer blocks managed NPE/SOE or the five-origin
-fatal matrix. Remaining coverage is narrower: debugger first-chance continue,
-handler stack high-water and stack-budget measurements, forced named-
-incompatible CET policy families, dynamic-table sampling/churn, exception-
-unwind XMM state, the interpreter pending range, and broader embedding/
-predecessor-UEF behavior. `CetDynamicApisOutOfProcOnly` and reserved policy
-fields must remain accepted by the startup classifier.
+Native Stage E therefore no longer blocks managed NPE/SOE, stack-budget
+measurement, dynamic-table sampling/churn, or the five-origin fatal matrix.
+Remaining coverage is narrower: debugger first-chance continue, forced named-
+incompatible CET policy families, exception-unwind XMM state, the interpreter
+pending range, broader embedding/predecessor-UEF behavior, reservation
+correlation, and second-host repetition. `CetDynamicApisOutOfProcOnly` and
+reserved policy fields must remain accepted by the startup classifier.
 
 The selected dynamic implementation is now present. Optimizing Windows x64 JIT
 methods force-spill and reserve RBP and establish it after their fixed
@@ -159,9 +196,9 @@ JIT data view, one immutable `RtlAddFunctionTable()` entry per code allocation,
 publication only after registration, and deletion before mspace reuse or
 mapping teardown.
 
-The threshold-zero JIT-origin and switch-OSR-origin gates now prove native
-Windows fatal dispatch reaches UEF and produces a valid dump across both
-exercised dynamic chains. They do not prove debugger-quality minidump stack
-reconstruction, concurrent native sampling under large dynamic-table churn,
-or exception-unwind preservation of full-width XMM6-XMM15; those remain
-separate acceptance items.
+The threshold-zero JIT-origin and switch-OSR-origin gates prove native Windows
+fatal dispatch reaches UEF and produces a valid dump across both exercised
+dynamic chains. FS-3 separately proves concurrent native sampling under
+large dynamic-table churn. The evidence does not prove debugger-quality
+minidump stack reconstruction or exception-unwind preservation of full-width
+XMM6-XMM15; those remain separate acceptance items.

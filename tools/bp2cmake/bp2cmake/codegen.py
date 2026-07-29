@@ -76,6 +76,9 @@ class CodegenConfig:
     # Windows x64 callers supply libc++, UCRT, SDK, and CRT headers from the selected
     # toolchain so clang can use the Windows ABI while running on Linux.
     asm_target_include_dirs: list[str] = field(default_factory=list)
+    # Probe- or configuration-specific definitions that must affect both the
+    # generated target-layout constants and the eventual target compilation.
+    asm_extra_defines: list[str] = field(default_factory=list)
     # Defines for the asm_defines compile: the art.go-injected knobs (absent
     # from any .bp) plus the runtime behavioral overlay. Mirrors runtime.cmake.
     # For windows, ART_TARGET_LINUX is replaced by ART_TARGET_WINDOWS (+ _WIN32).
@@ -224,6 +227,9 @@ def _asm_defines_macros_for(cfg: CodegenConfig) -> list[str]:
         for extra in ("ART_TARGET_WINDOWS", "_WIN32", "WIN32", "WIN32_LEAN_AND_MEAN", "NOMINMAX", "NOGDI"):
             if extra not in macros and not any(m == extra or m.startswith(extra + "=") for m in macros):
                 macros.append(extra)
+    for extra in cfg.asm_extra_defines:
+        if extra not in macros:
+            macros.append(extra)
     return macros
 
 

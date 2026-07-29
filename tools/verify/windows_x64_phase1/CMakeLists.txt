@@ -39,6 +39,8 @@ set(MDVM_ART_WIN_RUNTIME "${MDVM_ART_DIR}/runtime/multiplatform/windows" CACHE P
 set(MDVM_ART_WIN_STUBS "${MDVM_ART_DIR}/multiplatform/windows" CACHE PATH "")
 set(MDVM_ART_WIN_OPENJDKJVM "${MDVM_ART_DIR}/openjdkjvm" CACHE PATH "")
 option(MDVM_W003_FRAME_PROBE "Enable probe-only quick SETUP frame counters" OFF)
+option(MDVM_FS1_STACK_HIGH_WATER
+  "Enable probe-only allocation-free stack-overflow high-water records" OFF)
 
 file(MAKE_DIRECTORY "${MDVM_GENSRC_DIR}")
 
@@ -59,6 +61,7 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
   "${MDVM_ART_DIR}/runtime/interpreter/mterp/common/gen_setup.py"
   "${MDVM_ART_DIR}/tools/cpp-define-generator/asm_defines.cc"
   "${MDVM_ART_DIR}/tools/cpp-define-generator/make_header.py"
+  "${MDVM_ART_DIR}/runtime/thread.h"
   "${_repo}/tools/bp2cmake/bp2cmake/codegen.py"
   "${_repo}/tools/bp2cmake/bp2cmake/codegen_main.py")
 find_program(MDVM_HOST_CLANGXX NAMES clang++ REQUIRED)
@@ -67,6 +70,10 @@ execute_process(
   OUTPUT_VARIABLE MDVM_HOST_CLANG_RESOURCE_DIR
   OUTPUT_STRIP_TRAILING_WHITESPACE
   COMMAND_ERROR_IS_FATAL ANY)
+set(_mdvm_asm_extra_defines)
+if(MDVM_FS1_STACK_HIGH_WATER)
+  list(APPEND _mdvm_asm_extra_defines --asm-define ART_WIN32_STACK_HIGH_WATER=1)
+endif()
 foreach(_kind aconfig mterp asm_defines)
   execute_process(
     COMMAND ${CMAKE_COMMAND} -E env "PYTHONPATH=${_repo}/tools/bp2cmake"
@@ -81,6 +88,7 @@ foreach(_kind aconfig mterp asm_defines)
             --target-include ${MDVM_WINDOWS_X64_ENV}/xwin/sdk/include/shared
             --target-include ${MDVM_WINDOWS_X64_ENV}/xwin/sdk/include/um
             --target-include ${MDVM_WINDOWS_X64_ENV}/xwin/crt/include
+            ${_mdvm_asm_extra_defines}
             --only ${_kind}
     RESULT_VARIABLE _rc)
   if(NOT _rc EQUAL 0)
@@ -489,4 +497,19 @@ if(TARGET art)
   target_sources(art PRIVATE
     "${MDVM_NATIVE_SRC_ROOT_DIR}/external/cpu_features/src/impl_x86_windows.c")
   target_compile_definitions(art PRIVATE CPU_FEATURES_OS_WINDOWS=1)
+  if(MDVM_FS1_STACK_HIGH_WATER)
+    target_compile_definitions(art PRIVATE ART_WIN32_STACK_HIGH_WATER=1)
+    # Debug's O0 object set exposes more than PE/COFF's 65,535-symbol export
+    # limit when the directory-wide auto-export setting is inherited. Keep the
+    # DLL export surface intentional, including the three entry points that
+    # libnativehelper resolves dynamically (ART's EXPORT macro is empty in a
+    # non-NDEBUG build). The FS-1 dump function has its own dllexport marker.
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+      set_target_properties(art PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS OFF)
+      target_link_options(art PRIVATE
+        "LINKER:/EXPORT:JNI_CreateJavaVM"
+        "LINKER:/EXPORT:JNI_GetCreatedJavaVMs"
+        "LINKER:/EXPORT:JNI_GetDefaultJavaVMInitArgs")
+    endif()
+  endif()
 endif()

@@ -1,12 +1,14 @@
 # Windows x64 Phase 4 — RESULT
 
-**Status:** **WINE COMPLETE; W-010/W-014 E9 NATIVE ACCEPTED** — W-002,
-W-003, W-004, and W-024 native matrices are accepted. W-010/W-014 E9 passes
-the complete 30-record runner on Windows Server 2025 build 26100, including
-switch/nterp/JIT managed SOE, zero handled dumps, and five fatal static/JIT/OSR
-dumps. Broader debugger, forced-policy, stack-budget, sampling/churn,
-exception-unwind XMM, pending-range, and embedding coverage remains open.
-**Date:** 2026-07-28
+**Status:** **WINE COMPLETE; W-010/W-014 E9 AND FS-1 NATIVE ACCEPTED** — W-002,
+W-003, W-004, W-024, and W-025 native matrices are accepted. W-010/W-014 E9
+passes the complete 30-record runner and FS-1 passes Release/Debug switch,
+nterp, and JIT stack high-water on Windows Server 2025 build 26100. Product
+managed SOE has zero handled dumps; FS-1 has four complete records per mode,
+positive margins, and no dump. Broader debugger, forced-policy,
+exception-unwind XMM, pending-range, embedding, reservation-correlation, and
+second-host coverage remains open.
+**Date:** 2026-07-30
 **Depends on:** Phase 3 complete (real Win10 G12 goldens)
 
 ## Scope (from win32_art_port §Phase 4)
@@ -48,6 +50,7 @@ exception-unwind XMM, pending-range, and embedding coverage remains open.
 | W-010/W-014 native package preflight | **PASS under Wine** | `package_windows_x64_w010_w014.sh` (E9 30-record acceptance runner plus separate historical stack-growth/UEF diagnostics) |
 | W-010/W-014 isolated failure diagnostics | **PASS on native build 19044** | runs 3-4: fixed-page SOE invalidated; UEF replacement ruled out; JNI hardware/raised AVs miss UEF while the JNI-created native worker reaches UEF/dump, isolating traversal through managed/GenericJNI frames. |
 | W-010/W-014 complete E9 native host matrix | **PASS, 30/30 on build 26100** | guarantee-aware excluded-low accounting; switch/nterp/JIT managed SOE; zero handled dumps; five valid static/JIT/OSR fatal dumps |
+| FS-1 Release/Debug stack high-water | **PASS on Wine and native build 26100** | `run_fs1_stack_high_water.sh`; switch/nterp/JIT, four complete records each; native Release minimum margin 6784 bytes, Debug quick minimum 37168 bytes; no dumps |
 | Full suite | **PASS** | `run_all_wine_gates.sh` |
 
 Evidence: `evidence/all_wine_gates.txt`, `evidence/crashnative.txt`
@@ -80,6 +83,7 @@ PASS native_crash_aborts
 | W-010 dynamic-JIT PE unwind | `runtime/multiplatform/windows/jit_unwind_windows.*`; `runtime/jit/{jit_code_cache,jit_memory_region}.*`; `run_jit_unwind_{info,registry,lifecycle}.sh`; `run_jit_fatal_unwind.sh` |
 | W-010 static OSR PE unwind | `quick_entrypoints_x86_64.S`; `../windows_x64_phase1/win32_osr_unwind_probe.cc`; `run_osr_unwind_probe.sh`; `check_win32_boundary_unwind.py` |
 | W-010/W-014 native Stage E package and diagnostics | `package_windows_x64_w010_w014.sh`; `host/RUN_W010_W014_HOST.ps1`; `host/RUN_W010_W014_DIAGNOSTICS.ps1`; `check_w010_w014_host_package.py`; `review_w010_w014_host_result.py`; `W010_W014_HOST_CHECKLIST.md`; `W010_W014_DIAGNOSTICS.md` |
+| FS-1 stack high-water probe/package/evidence | `run_fs1_stack_high_water.sh`; `check_fs1_stack_high_water*.py`; `host/RUN_FS1_STACK_HIGH_WATER_HOST.ps1`; `package_windows_x64_fs1.sh`; `evidence/fs1_stack_high_water/ACCEPTANCE.md` |
 
 ## Host
 
@@ -118,6 +122,13 @@ JOBS=32 WINEDEBUG=-all \
   bash tools/windows_x64/host_package/package_windows_x64_w010_w014.sh
 # Native PowerShell: .\scripts\RUN_W010_W014_HOST.ps1
 # Failure diagnosis: .\scripts\RUN_W010_W014_DIAGNOSTICS.ps1
+```
+
+Focused FS-1 Release/Debug stack high-water gate:
+
+```bash
+bash tools/windows_x64/host_package/package_windows_x64_fs1.sh
+# Native PowerShell: .\scripts\RUN_FS1_STACK_HIGH_WATER_HOST.ps1
 ```
 
 The Linux-side preflight passes package integrity, the complete Wine matrix,
@@ -292,6 +303,26 @@ intentional static/JIT/OSR fatal origins produce five valid dumps. The main and
 pthread page probes both report `before=0 configured=16384 minimum=16384`.
 See `evidence/w010_w014_e9/ACCEPTANCE.md`.
 
+## FS-1 native stack high-water acceptance
+
+The 53,459,106-byte archive with SHA-256
+`22195128d460eef6fe260b79f25e792a2af5303546fadacc7ad188038c09bfbe`
+passes internal package integrity and six native child processes. Release
+minimum native margins are 6784, 7536, and 7616 bytes for switch, nterp, and
+JIT. Debug margins are 69744, 37168, and 37232 bytes. Every process emits four
+complete main/child records; `DMP_SCAN.txt` says `NO_DMP_FILES` and the result
+ends in `OVERALL PASS`.
+
+Native Debug originally exhausted the 8192-byte reserve in
+`Heap::CheckPreconditionsForAllocObject` while constructing the managed
+exception. A 20-KiB trial remained about 8 KiB short on nterp/JIT. The final
+40-KiB reserve is therefore limited to non-`NDEBUG` Windows x86_64 and leaves
+more than 37 KiB on both quick paths; Release/product and non-Windows remain
+at 8192 bytes. Product isolation, final-source Wine Release/Debug, W-010
+managed faults, the combined Windows/Linux object gate, the full Linux
+rebuild, and imageless Hello pass. See
+`evidence/fs1_stack_high_water/ACCEPTANCE.md`.
+
 ## Non-goals
 
 - Windows NIO.2
@@ -304,10 +335,11 @@ See `evidence/w010_w014_e9/ACCEPTANCE.md`.
   the accepted product path; retain fixed-page operations only as direct
   diagnostics. Repeat the 30-record gate on another supported Windows 10 host
   when available.
-- Complete debugger/stack-budget work, forced named-incompatible CET policies,
-  exception-unwind XMM coverage, dynamic-table churn/sampling, pending-range,
-  and embedding/predecessor-UEF coverage.
-- Complete W-025 broader JIT-mapping native acceptance and hardening
+- Start FS-2: complete debugger continue, forced named-incompatible CET
+  policies, exception-unwind XMM, and embedding/predecessor-UEF coverage.
+- Correlate Java/ART-pool reservations, repeat E9/FS-1 on a second supported
+  host, and attempt the pending range only if a deterministic probe is
+  practical.
 
 ## W-010 Stage D activation re-run (2026-07-27)
 

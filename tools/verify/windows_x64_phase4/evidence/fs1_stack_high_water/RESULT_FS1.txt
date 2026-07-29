@@ -1,0 +1,11 @@
+FS-1 native stack high-water acceptance 2026-07-29 10:53:45
+PASS host_os build=26100
+PASS package_integrity
+PASS Release switch elapsed_ms=2758 FS-1 switch high-water log: PASS (records=4 minimum_native_margin=6784)
+PASS Release nterp elapsed_ms=2254 FS-1 nterp high-water log: PASS (records=4 minimum_native_margin=7536)
+PASS Release jit elapsed_ms=2611 FS-1 jit high-water log: PASS (records=4 minimum_native_margin=7616)
+PASS Debug switch elapsed_ms=4579 FS-1 switch high-water log: PASS (records=4 minimum_native_margin=69744)
+PASS Debug nterp elapsed_ms=6339 FS-1 nterp high-water log: PASS (records=4 minimum_native_margin=37168)
+PASS Debug jit elapsed_ms=45290 FS-1 jit high-water log: PASS (records=4 minimum_native_margin=37232)
+PASS dump_scan NO_DMP_FILES
+OVERALL PASS

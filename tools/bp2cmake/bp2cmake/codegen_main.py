@@ -26,6 +26,8 @@ def main(argv: list[str] | None = None) -> int:
                          "windows selects ART_TARGET_WINDOWS for asm_defines.")
     ap.add_argument("--target-include", action="append", default=[],
                     help="System include directory for cross-target asm_defines; repeatable.")
+    ap.add_argument("--asm-define", action="append", default=[],
+                    help="Additional definition for layout-sensitive asm_defines; repeatable.")
     ap.add_argument("--only", choices=["operator_out", "mterp", "asm_defines", "aconfig"],
                     help="run only one generation kind")
     args = ap.parse_args(argv)
@@ -34,7 +36,8 @@ def main(argv: list[str] | None = None) -> int:
                         arch=args.arch, clang=args.clang, art_root=args.art_root,
                         libcore_root=args.libcore_root,
                         asm_target_os=args.os,
-                        asm_target_include_dirs=args.target_include)
+                        asm_target_include_dirs=args.target_include,
+                        asm_extra_defines=args.asm_define)
     try:
         if args.only == "mterp":
             print("mterp:", gen_mterp(cfg))

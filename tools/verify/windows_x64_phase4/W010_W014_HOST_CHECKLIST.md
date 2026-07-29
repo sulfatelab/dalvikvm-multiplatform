@@ -3,7 +3,8 @@
 **Target:** Windows 10 version 1803 (RS4, build 17134) or later, x64
 
 **State:** E9 configured-guarantee explicit-stack-check native acceptance
-accepted on Windows Server 2025 build 26100
+accepted on Windows Server 2025 build 26100; FS-1 stack high-water companion
+accepted on the same host
 
 ## Purpose
 
@@ -14,10 +15,11 @@ dispatcher, moving stack guard, static boundaries, dynamic JIT tables, and
 minidump path preserve the same contracts.
 
 The package intentionally does not claim to close every Stage E item. Debugger
-first-chance behavior, forced Hardware-enforced Stack Protection policies,
-handler stack high-water measurement, and predecessor-UEF embedding remain
-separate manual or launcher-assisted evidence after this automated run passes.
-These items are tracked as the remaining forced-policy and embedding matrix.
+first-chance behavior, forced Hardware-enforced Stack Protection policies, and
+predecessor-UEF embedding remain separate manual or launcher-assisted evidence
+after this automated run passes. FS-1 now supplies the formerly separate
+Release/Debug stack high-water evidence. The other items are tracked as the
+remaining forced-policy and embedding matrix.
 
 E9 replaces the rejected Windows x64 fixed-page recursive-SOE mechanism with narrow
 explicit `RSP < Thread::stack_end_` checks in optimizing code and nterp. An
@@ -205,6 +207,14 @@ python3 tools/verify/windows_x64_phase4/review_w010_w014_host_result.py \
 
 ## Remaining Stage E evidence after an automated PASS
 
+FS-1 is accepted separately on Windows Server 2025 build 26100. Its Release
+and Debug switch/nterp/JIT runner records four complete allocation-free
+high-water records per mode, positive native margins, no fatal marker, and
+`NO_DMP_FILES`. Native minimum margins are 6784/7536/7616 bytes in Release and
+69744/37168/37232 bytes in Debug. The 40-KiB Debug-only reserve leaves more
+than 37 KiB on both quick paths; product and non-Windows remain at 8192 bytes.
+See `evidence/fs1_stack_high_water/ACCEPTANCE.md`.
+
 The following are still required before W-010/W-014 close:
 
 - repeat the package on Windows 10 build 17134+ and a current Windows release;
@@ -213,7 +223,5 @@ The following are still required before W-010/W-014 close:
   incompatible policy rejection before Java/JIT, with no control-protection
   dump; `CetDynamicApisOutOfProcOnly` must remain accepted and reserved fields
   must not be assigned policy meaning;
-- exact handler/pre-unprotect stack high-water measurements in release and
-  debug builds;
 - wrong-address and unsupported exception-kind native negatives; and
 - predecessor UEF invocation and runtime unload behavior in an embedding host.
