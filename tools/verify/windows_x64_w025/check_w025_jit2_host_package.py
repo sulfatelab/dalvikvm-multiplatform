@@ -105,6 +105,7 @@ def check_package(root: Path) -> None:
         "alias_view=unrestricted_RW_RW",
         "source_filesystem_calls=0",
         "probe_cfg_instrumented=1",
+        "low_va_full_span_reservations=1",
         "W025_JIT2_SOURCE_CHECK_PASS",
     ):
         if marker not in report:
@@ -130,9 +131,13 @@ def check_package(root: Path) -> None:
         "RESULT_W025_JIT2.txt",
         "NO_DMP_FILES",
         "OVERALL PASS",
+        "[System.Diagnostics.Stopwatch]::StartNew()",
+        "$timer.ElapsedMilliseconds",
     ):
         if marker not in runner:
             fail(f"host runner is missing contract text: {marker}")
+    if "[DateTime]::UtcNow" in runner:
+        fail("host runner uses wall-clock time for child deadlines")
 
     load_config = run("llvm-readobj", "--coff-load-config", str(root / "W025SectionPolicyProbe.exe"))
     for marker in ("CF_INSTRUMENTED", "CF_FUNCTION_TABLE_PRESENT"):

@@ -38,6 +38,9 @@ def main() -> int:
 
     mem_map = (repo / "vendor/art/libartbase/base/mem_map_windows.cc").read_text()
     jit_region = (repo / "vendor/art/runtime/jit/jit_memory_region.cc").read_text()
+    section_probe_source = (
+        repo / "tools/verify/windows_x64_w025/W025SectionPolicyProbe.cc"
+    ).read_text()
     create_match = re.search(
         r"void\* MemMap::CreatePageFileSection\(.*?\n\}", mem_map, re.DOTALL
     )
@@ -69,6 +72,14 @@ def main() -> int:
         "CheckJitSectionView(writable, writable.Begin(), PAGE_READWRITE)",
         "CheckJitSectionView(non_exec, writable.Begin(), PAGE_READWRITE)",
     )
+    require(
+        section_probe_source,
+        "W025SectionPolicyProbe",
+        "free_end - reserve_begin",
+        "ReserveExact(reserve_begin, reserve_size, reservations)",
+    )
+    if "kReserveChunk" in section_probe_source:
+        fail("W025SectionPolicyProbe fragments free spans into slow scan chunks")
 
     section_probe = build / "W025SectionPolicyProbe.exe"
     mapping_probe = build / "libw025jitmappingprobe.dll"
@@ -99,6 +110,7 @@ def main() -> int:
     print("probe_cfg_function_table=1")
     print("native_policy_launcher=present")
     print("runtime_mapping_probe=present")
+    print("low_va_full_span_reservations=1")
     print("W025_JIT2_SOURCE_CHECK_PASS")
     return 0
 

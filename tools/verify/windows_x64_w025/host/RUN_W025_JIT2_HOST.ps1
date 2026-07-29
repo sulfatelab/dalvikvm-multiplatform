@@ -90,7 +90,7 @@ function Invoke-CheckedProcess {
     $stdout = Join-Path $Logs ($Name + '.stdout.log')
     $stderr = Join-Path $Logs ($Name + '.stderr.log')
     $combined = Join-Path $Logs ($Name + '.log')
-    $started = Get-Date
+    $timer = [System.Diagnostics.Stopwatch]::StartNew()
     $process = $null
     $launchError = $null
     $timedOut = $false
@@ -113,7 +113,7 @@ function Invoke-CheckedProcess {
     try {
         $process = Start-Process @parameters
         $null = $process.Handle
-        $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+        $timeoutMilliseconds = [long]$TimeoutSeconds * 1000L
         while ($true) {
             try {
                 $process.Refresh()
@@ -127,7 +127,7 @@ function Invoke-CheckedProcess {
             if ($process.WaitForExit(50)) {
                 break
             }
-            if ([DateTime]::UtcNow -ge $deadline) {
+            if ($timer.ElapsedMilliseconds -ge $timeoutMilliseconds) {
                 $timedOut = $true
                 $process.Kill()
                 break
@@ -142,7 +142,8 @@ function Invoke-CheckedProcess {
             $process.Dispose()
         }
     }
-    $elapsedMs = [long]((Get-Date) - $started).TotalMilliseconds
+    $timer.Stop()
+    $elapsedMs = [long]$timer.ElapsedMilliseconds
 
     @(
         "name=$Name"

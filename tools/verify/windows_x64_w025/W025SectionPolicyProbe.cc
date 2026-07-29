@@ -192,11 +192,6 @@ bool FragmentCompleteLowRange(std::vector<void *> *reservations) {
   const uintptr_t minimum = AlignUp(
       reinterpret_cast<uintptr_t>(system_info.lpMinimumApplicationAddress),
       granularity);
-  // MEM_RESERVE does not consume commit. Use a coarse chunk so complete-low-VA
-  // fragmentation stays fast on native Windows while still leaving only one
-  // allocation-granularity hole between reservations.
-  constexpr size_t kReserveChunk = 64u * 1024u * 1024u;
-
   uintptr_t cursor = minimum;
   while (cursor < k4GiB) {
     MEMORY_BASIC_INFORMATION info = {};
@@ -222,9 +217,8 @@ bool FragmentCompleteLowRange(std::vector<void *> *reservations) {
     }
 
     const uintptr_t reserve_begin = free_begin + granularity;
-    size_t reserve_size = static_cast<size_t>(free_end - reserve_begin);
-    reserve_size = std::min(reserve_size, kReserveChunk);
-    reserve_size = static_cast<size_t>(AlignDown(reserve_size, granularity));
+    const size_t reserve_size =
+        static_cast<size_t>(free_end - reserve_begin);
     if (reserve_size == 0u ||
         !ReserveExact(reserve_begin, reserve_size, reservations)) {
       return false;
