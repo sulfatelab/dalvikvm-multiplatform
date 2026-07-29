@@ -167,6 +167,9 @@ def main() -> int:
         "fatal_static",
         "fatal_jit_default",
         "fatal_osr_default",
+        "[int[]]$ExpectedExitCodes = @(0)",
+        "-ExpectedExitCodes @(1)",
+        "method=java.lang.String java.lang.StringFactory.newStringFromBytes",
         "PASS fatal_dump_scan count=3",
         "OVERALL PASS",
     ):

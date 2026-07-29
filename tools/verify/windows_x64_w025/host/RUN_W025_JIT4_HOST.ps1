@@ -87,6 +87,7 @@ function Invoke-CheckedProcess {
         [string]$Arguments = '',
         [string[]]$Markers = @(),
         [string[]]$ForbiddenMarkers = @(),
+        [int[]]$ExpectedExitCodes = @(0),
         [switch]$RequireNonZero,
         [switch]$RequireNewMinidump,
         [int]$TimeoutSeconds = 300
@@ -129,6 +130,7 @@ function Invoke-CheckedProcess {
     @(
         "name=$Name"
         "exit=$exitCode"
+        "expected_exit_codes=$($ExpectedExitCodes -join ',')"
         "require_nonzero=$RequireNonZero"
         "timeout_seconds=$TimeoutSeconds"
         "timed_out=$timedOut"
@@ -174,7 +176,11 @@ function Invoke-CheckedProcess {
         }
     }
 
-    $exitOk = if ($RequireNonZero) { $exitCode -ne 0 } else { $exitCode -eq 0 }
+    $exitOk = if ($RequireNonZero) {
+        $exitCode -ne 0
+    } else {
+        $ExpectedExitCodes -contains $exitCode
+    }
     $ok = ($null -eq $launchError) -and (-not $timedOut) -and $exitOk -and $dumpOk
     foreach ($marker in $Markers) {
         if (-not (Select-String -LiteralPath $combined -SimpleMatch $marker -Quiet)) {
@@ -201,15 +207,21 @@ function Invoke-MatrixCase {
         [Parameter(Mandatory = $true)][string]$Name,
         [Parameter(Mandatory = $true)][string]$Jar,
         [Parameter(Mandatory = $true)][string]$Class,
-        [Parameter(Mandatory = $true)][string]$Marker
+        [Parameter(Mandatory = $true)][string]$Marker,
+        [int[]]$ExpectedExitCodes = @(0)
     )
     Clear-ArtEnvironment
     $env:ART_WINDOWS_X64_JIT_LOG_COMPILES = '1'
-    Invoke-CheckedProcess $Name "$script:Common -cp run\$Jar $Class" @(
+    $markers = @(
         $Marker
-        'main end exception=0'
         'Windows x64 JIT dual-view (J-2) created'
-    ) @('missing_marker=', 'forbidden_marker=')
+    )
+    if ($ExpectedExitCodes -contains 0) {
+        $markers += 'main end exception=0'
+    }
+    Invoke-CheckedProcess $Name "$script:Common -cp run\$Jar $Class" `
+        $markers @('missing_marker=', 'forbidden_marker=') `
+        -ExpectedExitCodes $ExpectedExitCodes
 }
 
 $script:Common = '-Xbootclasspath:run\boot.jar -Xbootclasspath-locations:run\boot.jar -Ximage:/nonexistent-no-boot-image -XjdwpProvider:none -Xms64m -Xmx512m'
@@ -255,7 +267,7 @@ Invoke-CheckedProcess 'smoke_default_verbose' "$script:Common -cp run\hello.jar 
     'JitCodeCache::Create OK'
     'Windows x64 JIT dual-view (J-2) created'
     'Windows x64 CompileMethod done success=1 method=java.lang.StringBuilder'
-    'Windows x64 CompileMethod done success=1 method=java.lang.StringFactory.newStringFromBytes'
+    'Windows x64 CompileMethod done success=1 method=java.lang.String java.lang.StringFactory.newStringFromBytes'
 )
 
 Clear-ArtEnvironment
@@ -302,7 +314,8 @@ Invoke-MatrixCase 'matrix_math' 'MathProbe.jar' 'MathProbe' 'MathProbe.done=ok'
 Invoke-MatrixCase 'matrix_io' 'ioprobe.jar' 'IoProbe' 'IoProbe.done=ok'
 Invoke-MatrixCase 'matrix_net' 'netprobe.jar' 'NetProbe' 'NetProbe.done=ok'
 Invoke-MatrixCase 'matrix_gc' 'gcprobe.jar' 'GcProbe' 'GcProbe.done=ok'
-Invoke-MatrixCase 'matrix_throw' 'throwprobe.jar' 'ThrowProbe' 'phase3-throw-ok'
+Invoke-MatrixCase 'matrix_throw' 'throwprobe.jar' 'ThrowProbe' 'phase3-throw-ok' `
+    -ExpectedExitCodes @(1)
 
 Clear-ArtEnvironment
 Invoke-CheckedProcess 'critical_default' "$script:Common -Xjitthreshold:0 -Dcritical.load=library -Dcritical.instrumentation=1 -Djava.library.path=empty-native-dir;. -cp run\criticalnativeprobe.jar CriticalNativeProbe" @(

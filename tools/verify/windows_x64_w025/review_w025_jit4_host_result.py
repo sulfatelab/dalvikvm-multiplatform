@@ -45,6 +45,7 @@ EXPECTED_CASES = {
     "lifecycle_default",
     *FATAL_CASES,
 }
+EXPECTED_EXIT_CODES = {"matrix_throw": 1}
 BAD_NONFATAL = (
     "Check failed:",
     "Fatal signal",
@@ -157,8 +158,11 @@ def process_logs(root: Path) -> dict[str, str]:
             require(text, name, "require_nonzero=True", "new_minidump=")
             if exit_code == 0:
                 fail(f"{name}: fatal child unexpectedly returned zero")
-        elif exit_code != 0:
-            fail(f"{name}: nonfatal child returned {exit_code}")
+        elif exit_code != EXPECTED_EXIT_CODES.get(name, 0):
+            fail(
+                f"{name}: child returned {exit_code}, "
+                f"expected {EXPECTED_EXIT_CODES.get(name, 0)}"
+            )
         for suffix, heading in (("stdout", "--- stdout ---"), ("stderr", "--- stderr ---")):
             child = logs / f"{name}.{suffix}.log"
             if not child.is_file() or heading not in text:
@@ -180,7 +184,7 @@ def review_nonfatal(texts: dict[str, str]) -> None:
         "JitCodeCache::Create OK",
         "Windows x64 JIT dual-view (J-2) created",
         "Windows x64 CompileMethod done success=1 method=java.lang.StringBuilder",
-        "Windows x64 CompileMethod done success=1 method=java.lang.StringFactory.newStringFromBytes",
+        "Windows x64 CompileMethod done success=1 method=java.lang.String java.lang.StringFactory.newStringFromBytes",
     )
     for case in (
         "smoke_env_disabled",
@@ -208,13 +212,21 @@ def review_nonfatal(texts: dict[str, str]) -> None:
     forbid(texts["smoke_quiet"], "smoke_quiet", "Windows x64 CompileMethod done success=1")
 
     for case, marker in MATRIX_CASES.items():
+        markers = [marker, "Windows x64 JIT dual-view (J-2) created"]
+        if case != "matrix_throw":
+            markers.append("main end exception=0")
         require(
             texts[case],
             case,
-            marker,
-            "main end exception=0",
-            "Windows x64 JIT dual-view (J-2) created",
+            *markers,
         )
+    require(
+        texts["matrix_throw"],
+        "matrix_throw",
+        "main end exception=1",
+        "Windows x64 InvokeMain: exception type=java.lang.RuntimeException msg=phase3-throw-ok",
+    )
+    forbid(texts["matrix_throw"], "matrix_throw", "main end exception=0")
 
     require(
         texts["critical_default"],

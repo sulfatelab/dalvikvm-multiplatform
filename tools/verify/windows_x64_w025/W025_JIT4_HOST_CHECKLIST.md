@@ -15,4 +15,7 @@ The runner covers the exact 12-record JIT smoke and 14-workload JIT matrix,
 both JIT-disabled controls, default J-2 CriticalNative and 7/7 normal/
 FastNative ABI paths, nterp and switch OSR, an eight-cycle lifecycle/reuse
 cross-regression, and static/JIT/OSR fatal unwind with exactly three valid
-minidumps. It intentionally contains no J-1 execution arm.
+minidumps. The matrix requires `ThrowProbe`'s intentional uncaught
+`RuntimeException("phase3-throw-ok")` and process exit `1`; all other nonfatal
+children require exit `0`. The runner intentionally contains no J-1 execution
+arm.

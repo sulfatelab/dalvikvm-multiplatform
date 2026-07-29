@@ -66,6 +66,9 @@ def main() -> int:
         "callback_tables=0",
         "RequireNewMinidump",
         "PASS fatal_dump_scan count=3",
+        "[int[]]$ExpectedExitCodes = @(0)",
+        "-ExpectedExitCodes @(1)",
+        "method=java.lang.String java.lang.StringFactory.newStringFromBytes",
         "OVERALL PASS",
     )
     if "ART_WINDOWS_X64_JIT_DUAL = '0'" in runner:
