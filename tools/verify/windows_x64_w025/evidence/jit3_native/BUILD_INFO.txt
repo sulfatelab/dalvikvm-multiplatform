@@ -1,0 +1,14 @@
+created=2026-07-29 22:10:25 +0800
+host=agent01
+root_branch=main
+root_commit=a741cfa8ab8e6388fcb78cae9b3c4c0ec63e898a
+art_branch=artmp_android-16.0.0_r4
+art_commit=43f866830eee0ee666b1cf3e9d2b3abffc45180b
+windows_x64_build=/home/agent/Projects/dalvikvm-multiplatform/build/windows_x64_phase1
+windows_minimum_build=17134
+jit3_methods=24
+jit3_managed_methods=16
+jit3_jni_methods=8
+jit3_default_stress_cycles=24
+jit3_comparison_cycles=12
+jit3_repeat_cycles=8

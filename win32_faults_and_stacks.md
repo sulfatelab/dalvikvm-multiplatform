@@ -8,8 +8,9 @@ and five static/JIT/OSR fatal origins produce valid dumps. A later E9-bound
 pregrow experiment reproduces the Linux implicit read fault, but its nearly
 full per-thread commit, irreversible high-water state, and fatal native
 collision keep it diagnostic-only. The product work remains open only for
-broader debugger, stack-budget, forced CET-policy, dynamic-table
-sampling/churn, exception-unwind XMM, pending-range, and embedding coverage.
+broader debugger, stack-budget, forced CET-policy, exception-unwind XMM,
+pending-range, and embedding coverage. The shared JIT-3/FS-3 dynamic-table
+sampling/churn gate is native-accepted on the same build.
 The post-JIT-1 W-004 regression also passes 28/28 on the same Windows Server
 2025 build 26100 with clean log, trace, and recursive dump scans.
 **Created:** 2026-07-26
@@ -284,9 +285,11 @@ The implementation is complete under Wine and native-accepted in E9 on
 Windows Server 2025 build 26100 for the 30-record managed-fault/fatal matrix.
 Historical E2-E6 results below document why fixed-page SOE and missing PE
 unwind records were rejected or repaired. E9 passes switch/nterp/JIT managed
-SOE, zero handled dumps, and all five fatal origins. Debugger, stack-budget,
-forced-policy, dynamic-table stress/sampling, exception-unwind XMM,
-pending-range, and embedding coverage remain additional acceptance work.
+SOE, zero handled dumps, and all five fatal origins. JIT-3/FS-3 additionally
+accepts native dynamic-table collection/reuse churn and concurrent lookup/
+virtual-unwind sampling. Debugger, stack-budget, forced-policy,
+exception-unwind XMM, pending-range, and embedding coverage remain additional
+acceptance work.
 
 ### 4.1 Second native Stage E result and current diagnosis
 
@@ -1465,6 +1468,15 @@ The following local J-2 and J-1 checks pass:
 - normal/FastNative and CriticalNative ABI regressions plus Linux compiler and
   runtime rebuilds.
 
+Native JIT-3/FS-3 on Windows Server 2025 build 26100 now extends the focused
+lifecycle result across 52 collection cycles, 1,344 optimizing/normal-JNI
+compilations, 1,248 exact address reuses, 696,929 stable-live lookups,
+5,909,811 stable-dead lookups, and 696,969 successful virtual unwinds. It
+reports zero missing live records, stale dead records, and unwind failures;
+per-run maximum lookup time is 122,800-706,100 ns, and callback tables remain
+unused. All eight JNI targets retain exact values after ART `43f866830e`
+corrected the Windows nterp hard-float return adapter to preserve XMM0.
+
 The remaining acceptance and stress gates are:
 
 - compiler tests containing direct CriticalNative, FP remainder, SIMD swaps,
@@ -1472,7 +1484,6 @@ The remaining acceptance and stress gates are:
   fixed RBP anchor;
 - a production-no-debug-info run proving PE unwind bytes do not depend on
   DWARF CFI generation;
-- broader `RtlLookupFunctionEntry()` sampling across many published methods;
 - recursive `RtlVirtualUnwind2()` tracing through the complete fatal native AV
   chain, including the static invoke boundary and outer native frame;
 - native Windows lookup/unwind and fatal-dispatch acceptance for both static
@@ -1481,9 +1492,9 @@ The remaining acceptance and stress gates are:
   the existing UEF/minidump gate;
 - rollback fault injection before registration, after registration, and at
   CHA rejection, proving no stale table or leaked published entrypoint;
-- collection/redefinition/OSR/JNI churn that verifies lookup disappears before
-  address reuse and the replacement record describes the new allocation;
-- concurrent native stack sampling while JIT compilation and collection run;
+- method-redefinition and OSR-specific extensions to the accepted optimizing/
+  JNI collection churn, verifying the same deletion/reuse invariants on those
+  less common retirement paths;
 - native Windows repetition of the locally passing full XMM6-XMM15 boundary
   sentinels across normal return and exception unwind; and
 - Linux optimized/JNI CFI tests and full ART rebuilds, proving no non-Windows
@@ -2414,6 +2425,7 @@ and debugger evidence.
 | `compiler/jni/quick/jni_compiler.*`, calling-convention files, and `compiler/utils/x86_64/jni_macro_assembler_x86_64.*` | Implemented RBP-anchored normal/FastNative JIT stubs, fixed-RSP CriticalNative descriptors, reserved-frame scratch selection, and opaque metadata carry independent of DWARF CFI |
 | `runtime/multiplatform/windows/jit_unwind_windows.{h,cc}` and `runtime/jit/jit_code_cache.*` | Implemented stable one-entry dynamic-function registry, publish-after-register rule, exact deletion, unregister-before-free/reuse, and clear-before-teardown ownership |
 | `runtime/jit/jit_memory_region.*` | Implemented overflow-checked aligned xdata tail in each existing data allocation, written through the RW alias and referenced through the primary low-4-GiB view |
+| `tools/verify/windows_x64_w025/W025JitLifecycleStressProbe.cc` and `RESULT-jit3-native.md` | Native-accepted JIT-3/FS-3 optimizing/JNI compile-invalidate-collect-reuse stress with concurrent lookup/virtual unwind and independent returned-archive review |
 | `runtime/thread.cc` | Implemented exact current-stack acceptance and attach failure; Windows x64 performs no fixed-page installation and adjusts common bounds by the platform-reported excluded-low sum |
 | `runtime/multiplatform/windows/stack_windows.{h,cc}` | Read-only E9 layout inspection accounts for inaccessible prefix + configured guarantee + moving guard; Stage-B select/protect/restore helpers remain diagnostic-only |
 | `runtime/multiplatform/windows/thread_windows.cc` | Queries, raises/preserves, re-queries, and validates the four-page minimum guarantee, then supplies guarantee-aware layout accounting; no alternate signal stack |
@@ -2451,12 +2463,15 @@ fallbacks:
 5. Does a security product or debugger used in acceptance install a first VEH
    that consumes expected AVs? If so, this is an embedding compatibility issue,
    not a reason to weaken ART's classifier.
-6. Does the section 7.9 one-entry dynamic-table design remain reliable and
-   acceptably fast under native Windows compilation/collection churn and
-   concurrent stack sampling? Measure `RtlLookupFunctionEntry()` and unwind
-   cost with large method counts; move to the documented lock-free callback
-   alternative only if this gate fails. Neither static nor dynamic unwind data
-   implies CET user-shadow-stack compatibility.
+6. **Resolved for the FS-3 acceptance boundary:** the section 7.9 one-entry
+   dynamic-table design remains correct under native Windows compilation/
+   collection churn and concurrent sampling. Four J-2/J-1 cases cover 24
+   simultaneously published methods, 52 collections, 1,344 registrations,
+   1,248 exact address reuses, 696,929 stable-live lookups, 5,909,811
+   stable-dead lookups, and 696,969 successful virtual unwinds with no missing,
+   stale, or failed record. Per-run maximum lookup time is 122,800-706,100 ns,
+   so the callback alternative remains unjustified. Neither static nor dynamic
+   unwind data implies CET user-shadow-stack compatibility.
 7. Normal-return XMM6-XMM15 passes natively. Does the adapter also preserve
    full width during exception unwind through several optimizing/JNI frames?
 8. Native E6 resolves `art_quick_to_interpreter_bridge + 0x82`, and the full
@@ -2493,21 +2508,54 @@ With `ProhibitDynamicCode`, Windows rejects both the J-2 executable mapping and
 J-1 executable-protection transition with error 1655. ART creates no JIT cache
 and continues successfully; the separate `-Xusejit:false` control also passes.
 The runner returns 14/14 aggregate checks, clean forbidden-log scanning,
-`NO_DMP_FILES`, and an empty JIT temporary directory. This does not replace
-FS-3 collection/reuse sampling or E9 fatal-origin unwind acceptance. Its
+`NO_DMP_FILES`, and an empty JIT temporary directory. This was the prerequisite
+mapping/policy boundary; the separate FS-3 result below adds collection/reuse
+sampling. Neither replaces E9 fatal-origin unwind acceptance. JIT-2's
 independently reviewed identities and compact records are archived under
 `tools/verify/windows_x64_w025/evidence/jit2_native/`.
+
+### JIT-3 / FS-3 shared native acceptance - 2026-07-29
+
+The lifecycle load gate passed four processes on Windows Server 2025 build
+26100: a 24-cycle default J-2 stress, a 12-cycle J-1 comparison, and two
+independent eight-cycle J-2 repeats. Together they compiled 1,344 optimizing
+and normal-JNI allocations, forced 52 real code-cache collections, and reused
+the exact old code address 1,248 times. Registration preceded each replacement
+publication, and stable sampling observed 696,929 live lookups plus 696,969
+successful virtual unwinds without a missing table. After retirement it
+observed 5,909,811 dead lookups without a stale table; transition samples were
+classified separately.
+
+All four cases report `missing_live=0`, `stale_dead=0`,
+`unwind_failures=0`, and `callback_tables=0`. Per-case maximum
+`RtlLookupFunctionEntry()` latency ranges from 122,800 ns to 706,100 ns. The
+integer mean rounds to 0 ns because it is below one
+`QueryPerformanceCounter` tick; that is a resolution bound, not zero cost.
+The runner also returns `jni_values=pass`, nine aggregate PASS records, an
+empty JIT temporary directory, and `NO_DMP_FILES`.
+
+The issued package records root `a741cfa8ab8e6388fcb78cae9b3c4c0ec63e898a`
+and ART `43f866830eee0ee666b1cf3e9d2b3abffc45180b`. Its SHA-256 is
+`8446a41d72aba32e19ce53cba8ac4b518b182bdebcd68c8023ce6e2ac6d0759f`;
+the independently accepted returned archive SHA-256 is
+`dcd3062a95a00296ca939062cc52fb7907405cc7c4e08ae72723a318063284fd`.
+Compact records are archived under
+`tools/verify/windows_x64_w025/evidence/jit3_native/`. This closes FS-3; it
+does not replace E9 fatal-origin acceptance or the remaining debugger,
+stack-budget, forced-policy, exception-XMM, pending-range, and embedding work.
 
 ### Next execution schedule — dependency order
 
 This schedule closes product proof points before optional mechanism research.
-It is evidence-gated rather than date-gated.
+It is evidence-gated rather than date-gated. FS-3 was split into an independent
+JIT closure package and completed before FS-1/FS-2; the remaining order resumes
+at FS-1.
 
 | Order | Work | Exit gate |
 |------:|------|-----------|
-| FS-1 | Add allocation-free high-water instrumentation around the explicit check, quick throw, temporary stack-end expansion, exception construction, and non-local transfer; run release and debug builds | The result records the lowest RSP and margin to the configured guarantee/ART reserve for switch, nterp, and JIT without changing fault behavior |
+| FS-1 (next) | Add allocation-free high-water instrumentation around the explicit check, quick throw, temporary stack-end expansion, exception construction, and non-local transfer; run release and debug builds | The result records the lowest RSP and margin to the configured guarantee/ART reserve for switch, nterp, and JIT without changing fault behavior |
 | FS-2 | Extend the combined native package with debugger first-chance/continue, every named forced-incompatible CET policy, foreign VEH/frame-SEH/predecessor-UEF embedding, and XMM6-XMM15 sentinels during exception unwind | Expected NPE continues into Java, explicit SOE remains fault-free, incompatible CET starts reject before Java/JIT with no dump, foreign search handlers coexist, and full-width XMM state survives unwind |
-| FS-3 (next) | With JIT-1 encoding and JIT-2 mapping/policy prerequisites complete, share the JIT closure load test: compile, invalidate, collect, reuse, and re-register many optimizing/JNI allocations while another thread performs lookup and virtual unwind | No published PC lacks its table, no dead PC retains one, lookup cost is recorded, and callback tables remain unnecessary |
+| FS-3 (done) | With JIT-1 encoding and JIT-2 mapping/policy prerequisites complete, share the JIT closure load test: compile, invalidate, collect, reuse, and re-register many optimizing/JNI allocations while another thread performs lookup and virtual unwind | Accepted 2026-07-29: 52 collections, 1,344 compilations, 1,248 exact reuses, and 696,969 virtual unwinds complete with no missing/stale/failed record; callback tables remain unnecessary |
 | FS-4 | Run FS-1 through FS-3 on the accepted build-26100 class host, then repeat the E9 core runner, parameterized guarantee geometry, fiber/manual-stack rejection, and deep detach/continue/reattach lifecycle on a second supported Windows 10 or later host | Immutable archives pass their independent review and either confirm the additive stack layout or document a new supported-host constraint |
 | FS-5 | Attempt the brief pending bridge-range exception only if a deterministic probe can enter it without changing product control flow; otherwise record it as impractical and close it as conditional coverage | A real native exception validates the pending record, or the result document explains why the already accepted primary/fatal matrix is the closure boundary |
 
