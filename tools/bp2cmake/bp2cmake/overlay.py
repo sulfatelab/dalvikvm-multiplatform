@@ -22,6 +22,10 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .target import TargetProfile
 
 from .model import Module
 
@@ -202,6 +206,8 @@ def load_overlay(path: str) -> Overlay:
     """Load an overlay data file. The file is executed as Python and must define
     a module-level `OVERLAY` of type Overlay."""
     namespace: dict = {
+        "__file__": path,
+        "__name__": "bp2cmake_loaded_overlay",
         "Overlay": Overlay,
         "GlobalPolicy": GlobalPolicy,
         "ModulePolicy": ModulePolicy,
@@ -213,3 +219,21 @@ def load_overlay(path: str) -> Overlay:
     if not isinstance(ov, Overlay):
         raise ValueError(f"{path}: must define OVERLAY: Overlay")
     return ov
+
+
+def load_overlay_factory(path: str, target: "TargetProfile") -> Overlay:
+    """Load one target-aware overlay factory and resolve it for ``target``."""
+    namespace: dict = {
+        "__file__": path,
+        "__name__": "bp2cmake_loaded_overlay_factory",
+    }
+    with open(path, encoding="utf-8") as stream:
+        code = compile(stream.read(), path, "exec")
+    exec(code, namespace)
+    factory = namespace.get("make_overlay")
+    if not callable(factory):
+        raise ValueError(f"{path}: must define make_overlay(target)")
+    overlay = factory(target)
+    if not isinstance(overlay, Overlay):
+        raise ValueError(f"{path}: make_overlay() must return Overlay")
+    return overlay

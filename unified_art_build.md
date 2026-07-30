@@ -1,12 +1,12 @@
 # Unified ART build design
 
-Status: proposed design; analysis only
+Status: design plus an active migration slice
 
 Date: 2026-07-30
 
 This document defines the intended replacement for the repository's split
-Linux and Windows ART build paths. It does not claim that the design is already
-implemented.
+Linux and Windows ART build paths. The migration is incremental; the status
+notes below distinguish implemented plumbing from remaining product gates.
 
 ## Decision
 
@@ -49,6 +49,28 @@ Android.bp + target profile + one Python overlay
                         v
          clang/clang++ -fuse-ld=lld -> target artifacts
 ```
+
+### Implemented migration slice (2026-07-30)
+
+The target registry, relocatable graph/profile generation, ignored local TOML
+bindings, shell-free generated commands, and the Python `generate`,
+`check-generated`, `configure`, `build`, and `test` frontend commands are now
+implemented. Linux x86-64 configures through `native/CMakeLists.txt` with
+`-G Ninja`; Windows x86-64 graph generation is admitted and uses the same
+target-aware overlay. The frontend rejects symlink/reparse-point tool paths
+and records a build-host fingerprint before reusing a binary directory.
+
+Windows verification probes now have one shared registry at
+[`native/tests/CMakeLists.txt`](native/tests/CMakeLists.txt). A historical
+stage is exactly one virtual CMake target such as `art-test-stage-w002`; probe
+targets carry `stage:w002`, `platform:windows`, `arch:any` or
+`arch:x86_64`, and contract labels. The stage target is a build group, not a
+second product graph. The old phase source directories remain temporary source
+and evidence locations while their product graph ownership is removed.
+
+The Windows overlay now emits `art-compiler` as `SHARED` and links it to
+`art` and `art-disassembler`, matching the Linux topology. Export allowlisting,
+staging, and a native Windows product configure remain open gates.
 
 In particular, `art-compiler` is a shared library on both targets:
 
@@ -425,9 +447,10 @@ Windows is not generated through one reproducible product entry point:
 - [`tools/verify/windows_x64_phase1/CMakeLists.txt`](tools/verify/windows_x64_phase1/CMakeLists.txt)
   mixes the product graph, target environment, compatibility injections,
   staging, and 23 verification/probe executables in one large file.
-- The Phase-1 graph makes `artbase`, `dexfile`, `profile`, `elffile`, and the
-  compiler component static, folds compiler objects into `art.dll`, and does
-  not emit a standalone `art-compiler.dll`.
+- The historical Phase-1 snapshot made `artbase`, `dexfile`, `profile`,
+  `elffile`, and the compiler component static, folded compiler objects into
+  `art.dll`, and did not emit a standalone `art-compiler.dll`. The active
+  target-aware graph now emits `art-compiler` as a shared target.
 - [`tools/verify/windows_x64_libcore_icu/sources.cmake`](tools/verify/windows_x64_libcore_icu/sources.cmake)
   claims to be automatically extracted, but the repository contains no
   matching extractor. Its CMake file imports Phase-1 artifacts rather than
@@ -457,12 +480,11 @@ Windows target selects, but the policy is currently divided between
 [`overlay/port_policy_windows.py`](overlay/port_policy_windows.py), and the two
 handwritten CMake entry points.
 
-This causes equivalent decisions to drift. For example, the Linux overlay
-forces `libart-compiler` to a shared library for `dex2oat`, while the Windows
-overlay forces it static and relies on absorption into `libart`. The converter
-also hard-codes directory exclusions for tests, fuzzers, benchmarks, and
-samples in its CLI implementation. Those exclusions are product profile
-policy, not parser behavior.
+This caused equivalent decisions to drift. The active Windows overlay now
+forces `libart-compiler` to a shared library for `dex2oat`, like Linux, while
+`libart` still absorbs the compiler sources needed by the runtime. The converter
+still has legacy scan exclusions for tests, fuzzers, benchmarks, and samples;
+moving those into target/profile policy remains a follow-up cleanup.
 
 ### Current architecture assumptions
 
@@ -1505,9 +1527,9 @@ so a failed or partial invocation cannot contaminate another target build.
 - Run the first POSIX-environment-free, symlink-normalized Windows 10 ARM64
   configure/build gate.
 
-### Phase 4: make Windows DSO topology equal
+### Phase 4: finish Windows DSO topology parity
 
-- Change the Windows compiler policy from static to shared.
+- [x] Change the Windows compiler policy from static to shared.
 - Implement and audit compiler DLL exports.
 - Produce and stage `art-compiler.dll` and its import library.
 - Convert other current Windows static substitutions to the common topology or

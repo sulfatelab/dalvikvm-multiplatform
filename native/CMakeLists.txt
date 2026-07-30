@@ -13,10 +13,33 @@
 #     -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_BUILD_TYPE=RelWithDebInfo
 
 cmake_minimum_required(VERSION 3.16)
+
+set(ART_PROFILE_FILE "" CACHE FILEPATH "Generated ART target profile")
+if(ART_PROFILE_FILE)
+    include("${ART_PROFILE_FILE}")
+    if(NOT ART_TARGET_OS_OR_RUNTIME STREQUAL "linux")
+        message(FATAL_ERROR
+            "The current native product entry point only admits Linux targets; "
+            "got ${ART_TARGET_ID}. Windows product CMake migration is still in progress.")
+    endif()
+endif()
+if(NOT ART_TARGET_AOSP_ARCH)
+    set(ART_TARGET_AOSP_ARCH x86_64)
+endif()
+
 project(MinDalvikVM CXX C ASM)
 
+if(NOT CMAKE_GENERATOR STREQUAL "Ninja")
+    message(FATAL_ERROR "ART requires the single-config Ninja generator")
+endif()
 if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     message(FATAL_ERROR "ART must be built with clang/clang++ (got ${CMAKE_CXX_COMPILER_ID})")
+endif()
+get_filename_component(_art_c_compiler_name "${CMAKE_C_COMPILER}" NAME)
+get_filename_component(_art_cxx_compiler_name "${CMAKE_CXX_COMPILER}" NAME)
+if(_art_c_compiler_name MATCHES "^(clang-cl|clang-mingw|gcc|cc)(\\.exe)?$" OR
+   _art_cxx_compiler_name MATCHES "^(clang-cl|clang-mingw|g\\+\\+|cl)(\\.exe)?$")
+    message(FATAL_ERROR "ART requires the plain Clang GNU-style driver")
 endif()
 
 # android-16.0.0_r4 art relies on Soong's C++20 default (e.g. disassembler_x86.cc
@@ -36,6 +59,8 @@ set(MDVM_COMPAT_INCLUDE_DIR "${_repo}/compat/include"
     CACHE PATH "Project-owned compat shim headers")
 set(MDVM_BP2CMAKE "${_repo}/tools/bp2cmake" CACHE PATH "converter package dir")
 set(MDVM_GENSRC_DIR "${CMAKE_BINARY_DIR}/gensrc")
+set(ART_GRAPH_FILE "${CMAKE_CURRENT_SOURCE_DIR}/generated/dalvikvm.cmake"
+    CACHE FILEPATH "Target-resolved bp2cmake graph")
 # Extra source trees. art + libcore are bumped to android-16.0.0_r4 in the
 # project-owned vendor/ tree (resolves the libart<->libcore skew); the rest come
 # from nested vendor/ where present. MDVM_ART_ROOT_DIR is vendor/ itself because art
@@ -55,7 +80,7 @@ set(MDVM_FDLIBM_DIR "${_repo}/vendor/java-external/fdlibm" CACHE PATH "fdlibm tr
 # aconfig headers + two-stage asm_defines + mterp are run here at configure time.
 # art/* inputs come from nested vendor/art (--art-root).
 file(GLOB _mdvm_mterp_inputs
-    "${MDVM_ART_ROOT_DIR}/art/runtime/interpreter/mterp/x86_64ng/*.S")
+    "${MDVM_ART_ROOT_DIR}/art/runtime/interpreter/mterp/${ART_TARGET_AOSP_ARCH}ng/*.S")
 file(GLOB _mdvm_asm_define_inputs
     "${MDVM_ART_ROOT_DIR}/art/tools/cpp-define-generator/*.def")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
@@ -74,7 +99,7 @@ foreach(_kind aconfig mterp asm_defines)
                 --root ${MDVM_NATIVE_SRC_ROOT_DIR} --art-root ${MDVM_ART_ROOT_DIR}
                 --libcore-root ${MDVM_LIBCORE_DIR}
                 --gensrc ${MDVM_GENSRC_DIR}
-                --arch x86_64 --clang ${CMAKE_CXX_COMPILER} --only ${_kind}
+                --arch ${ART_TARGET_AOSP_ARCH} --clang ${CMAKE_CXX_COMPILER} --only ${_kind}
         RESULT_VARIABLE _rc)
     if(NOT _rc EQUAL 0)
         message(FATAL_ERROR "codegen '${_kind}' failed (${_rc})")
@@ -96,8 +121,17 @@ find_library(_expat_path NAMES expat expatw REQUIRED)
 add_library(expat INTERFACE)
 set_target_properties(expat PROPERTIES INTERFACE_LINK_LIBRARIES "${_expat_path}")
 
-# --- The generated graph (18 targets, deps-first) ---------------------------
-include(${CMAKE_CURRENT_SOURCE_DIR}/generated/dalvikvm.cmake)
+# --- The generated graph (target closure, deps-first) -----------------------
+include("${ART_GRAPH_FILE}")
+
+if(TARGET art-compiler)
+    get_target_property(_art_compiler_type art-compiler TYPE)
+    if(NOT _art_compiler_type STREQUAL "SHARED_LIBRARY")
+        message(FATAL_ERROR "ART requires art-compiler to be a SHARED target")
+    endif()
+else()
+    message(FATAL_ERROR "Generated ART graph must define the shared art-compiler target")
+endif()
 
 # --- Toolchain-drift shims (2023 sources vs clang-21; harness-level only) ----
 # These compensate for source/toolchain drift and disappear when submodules are
@@ -156,6 +190,16 @@ foreach(_t IN LISTS _all_targets)
         # archive's 2023 nativehelper headers (which lack them).
         target_include_directories(${_t} BEFORE PRIVATE "${MDVM_NATIVEHELPER_HDRS_DIR}")
     endif()
+    if(_ttype STREQUAL "EXECUTABLE" OR _ttype STREQUAL "SHARED_LIBRARY" OR
+       _ttype STREQUAL "MODULE_LIBRARY")
+        target_link_options(${_t} PRIVATE -fuse-ld=lld)
+    endif()
+    if(_ttype STREQUAL "EXECUTABLE")
+        target_compile_options(${_t} PRIVATE -fPIE)
+        if(ART_TARGET_OS_OR_RUNTIME STREQUAL "linux")
+            target_link_options(${_t} PRIVATE -pie)
+        endif()
+    endif()
 endforeach()
 foreach(_t art dalvikvm)
     if(TARGET ${_t})
@@ -170,4 +214,10 @@ endforeach()
 if(TARGET openjdk)
     target_include_directories(openjdk PRIVATE
         "${_repo}/compat/openjdk_inc/anchor1/anchor2")
+endif()
+
+option(ART_BUILD_TESTS "Define the unified target-aware ART test catalog" ON)
+if(ART_BUILD_TESTS)
+    include(CTest)
+    add_subdirectory(tests)
 endif()

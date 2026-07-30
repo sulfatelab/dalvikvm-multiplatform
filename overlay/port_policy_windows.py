@@ -171,8 +171,13 @@ OVERLAY = Overlay(
             kind="shared", force_enabled=True, add_cflags=_WIN_CFLAGS,
         ),
         "libart-compiler": ModulePolicy(
-            kind="static", force_enabled=True, add_cflags=_WIN_CFLAGS,
+            # Keep the standalone compiler topology equal to Linux. libart
+            # still absorbs compiler sources for its JIT implementation; this
+            # separately compiled DSO is consumed by dex2oat and links back to
+            # art.dll rather than introducing a reverse target dependency.
+            kind="shared", force_enabled=True, add_cflags=_WIN_CFLAGS,
             add_defines=["_CRT_SECURE_NO_WARNINGS"],
+            add_shared_libs=["libart", "libart-disassembler"],
         ),
         # Core runtime static library (host picks monitor_linux etc.; we swap OS files in harness)
         "libart-runtime": ModulePolicy(

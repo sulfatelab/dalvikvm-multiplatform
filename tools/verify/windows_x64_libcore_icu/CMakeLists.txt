@@ -34,7 +34,8 @@ set(MDVM_FDLIBM_DIR "${_repo}/vendor/java-external/fdlibm" CACHE PATH "")
 set(MDVM_COMPAT_INCLUDE_DIR "${_repo}/compat/include" CACHE PATH "")
 set(MDVM_WINDOWS_X64_ENV "$ENV{WINDOWS_X64_DEV_ENV}" CACHE PATH "")
 if(NOT MDVM_WINDOWS_X64_ENV)
-  set(MDVM_WINDOWS_X64_ENV "/home/agent/Projects/windows_x64-dev-env" CACHE PATH "" FORCE)
+  message(FATAL_ERROR
+    "MDVM_WINDOWS_X64_ENV must be supplied by the local target bundle binding")
 endif()
 
 option(MDVM_WINDOWS_X64_BUILD_JAVACORE "Build hybrid real libjavacore PE" ON)

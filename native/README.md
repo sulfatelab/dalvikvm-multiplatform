@@ -1,43 +1,39 @@
-# native — top-level build for `dalvikvm`
+# native — ART product entry point
 
-Single entry point for the minimal ART runtime native build on GNU/Linux (glibc).
-Builds the whole `dalvikvm` graph (18 targets) from nested `vendor/` `Android.bp`
-via the bp2cmake converter — no hand-written per-module CMake.
+The maintained product entry point is driven by `tools/build_art.py` for Linux
+and Windows. It generates a target-resolved graph from nested `vendor/`
+`Android.bp` files, then configures this directory with CMake's Ninja generator.
+There is no host-specific shell or Make workflow.
 
 ## Build
 
-```sh
-./generate.sh          # Android.bp -> generated/dalvikvm.cmake (run after a
-                       # submodule bump or overlay change)
-cmake -S native -B build/native -G Ninja \
-    -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_BUILD_TYPE=RelWithDebInfo
-cmake --build build/native
-LD_LIBRARY_PATH=build/native build/native/dalvikvm -showversion
+```text
+python tools/build_art.py configure --target-id linux-x86_64
+python tools/build_art.py build --target-id linux-x86_64 --cmake-target dalvikvm
+python tools/build_art.py test --target-id linux-x86_64
 # -> ART version 2.1.0 x86_64
 ```
 
-Requirements: clang (mandatory — ART uses clang-only flags). **Build type:
-RelWithDebInfo** — ART must be -O2; `Release` here is `-O3` which miscompiles ART
-(the VM misbehaves), and `Debug`'s GC is unusably slow. Also: host dev packages
-`libcap-dev` + `liblz4-dev`, and a checkout of the AOSP sources at
-`$REPO/vendor` (nested multiplatform sources; override with `-DMDVM_NATIVE_SRC_ROOT_DIR=...`) (override with `-DMDVM_NATIVE_SRC_ROOT_DIR=...`
-or `MDVM_NATIVE_SRC_ROOT` for generate.sh).
+The default build type is `RelWithDebInfo`. Required host tools are Python 3.11+,
+CMake, Ninja, and the plain Clang/Clang++ GNU-style drivers; LLD is selected by
+the generated target properties. Machine-specific SDK or sysroot roots belong
+in the ignored repository-root `.art-build.local.toml`.
 
 ## What's hand-written vs generated
 
-- `CMakeLists.txt` — the ONLY hand-written CMake: project-owned glue the
+- `CMakeLists.txt` — the only maintained product CMake: project-owned glue the
   converter can't derive (host imported libs z/cap/lz4, the Python codegen
   driver invocation, and toolchain-drift shims for the 2023 sources under
   clang-21). All clearly fenced and documented inline.
-- `generated/dalvikvm.cmake` — every target, emitted by `bp2cmake
-  --root-module dalvikvm` (transitive dependency closure, deps-first).
+- `out/<target-id>/<build-type>/generated/art_graph.cmake` — every target,
+  emitted by `bp2cmake` (transitive dependency closure, deps-first).
 
 ## How it maps to the converter's 3 layers
 
-`generate.sh` runs Layer 1 (parse/evaluate `.bp`) + Layer 2 (`//overlay`) +
-Layer 3 (emit). The dependency closure (`bp2cmake/closure.py`) walks the link
-graph from `dalvikvm` so the module list is derived, not maintained by hand —
-a submodule bump just needs `./generate.sh` + rebuild.
+The frontend runs Layer 1 (parse/evaluate `.bp`) + Layer 2 (target-aware
+overlay) + Layer 3 (emit). The dependency closure (`bp2cmake/closure.py`)
+walks the link graph from the product roots so the module list is derived, not
+maintained by hand.
 
 The per-module harnesses under `tools/verify/*` remain as focused regression
 checks / RESULT records; this is the real build.

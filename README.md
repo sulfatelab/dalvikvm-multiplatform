@@ -33,7 +33,7 @@ dalvikvm-multiplatform/
     external/{boringssl,cpu_features,dlmalloc,fmtlib,lzma,oj-libjdwp,tinyxml2}/
     java-external/{bouncycastle,conscrypt,fdlibm,okhttp}/
     r8/r8.jar                 # prebuilt D8/R8 (not a nested repo)
-    fmtlib -> external/fmtlib # layout shim for generated CMake paths
+    external/fmtlib            # canonical path; legacy alias is not required
   compat/
     include/                  # product POSIX/Win prelude headers (kept on main)
     java-stubs/ openjdk_inc/ src/

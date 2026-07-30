@@ -7,6 +7,10 @@ Default remains a glibc Linux host build. Windows is a first-class second OS
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .target import TargetProfile
 
 
 @dataclass(frozen=True)
@@ -22,6 +26,15 @@ class Config:
     # build assumed only sse4.2 (NOT avx2), so default off (audit 5.2 / art
     # CMakeLists notes).
     avx2: bool = False
+
+    @classmethod
+    def from_target(cls, target: "TargetProfile", *, avx2: bool = False) -> "Config":
+        return cls(
+            os=target.aosp_os,
+            arch=target.aosp_arch,
+            bitness=target.pointer_bits,
+            avx2=avx2,
+        )
 
     def soong_config_value(self, name: str) -> bool:
         # Soong config variables resolved to fixed values. ART gates its modules

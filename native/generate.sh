@@ -2,7 +2,7 @@
 # Regenerate the native build description from Android.bp.
 #
 # Emits generated/dalvikvm.cmake = the full transitive dependency closure of the
-# `dalvikvm` root module (18 targets), converted from nested vendor/ Android.bp
+# selected product roots, converted from nested vendor/ Android.bp
 # by bp2cmake. Run this after a submodule bump or an overlay change; the
 # top-level CMakeLists.txt include()s the result. This replaces the old
 # per-module verify harnesses and the hand-maintained --module list.
@@ -28,6 +28,7 @@ COMMON_ARGS=(
     --extra-root "$VENDOR/java-external/fdlibm:MDVM_FDLIBM_DIR"
     --root-module dalvikvm
     --root-module dex2oat
+    --root-module libart-compiler
     --root-module libjavacore
     --root-module libopenjdk
     --root-module libicu_jni

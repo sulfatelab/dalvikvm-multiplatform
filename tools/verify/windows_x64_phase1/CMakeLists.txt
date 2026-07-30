@@ -32,7 +32,8 @@ set(MDVM_COMPAT_INCLUDE_DIR "${_repo}/compat/include" CACHE PATH "")
 set(MDVM_GENSRC_DIR "${CMAKE_BINARY_DIR}/gensrc" CACHE PATH "")
 set(MDVM_WINDOWS_X64_ENV "$ENV{WINDOWS_X64_DEV_ENV}" CACHE PATH "Windows x64 dev env (clang/xwin/libc++)")
 if(NOT MDVM_WINDOWS_X64_ENV)
-  set(MDVM_WINDOWS_X64_ENV "/home/agent/Projects/windows_x64-dev-env" CACHE PATH "Windows x64 dev env (clang/xwin/libc++)" FORCE)
+  message(FATAL_ERROR
+    "MDVM_WINDOWS_X64_ENV must be supplied by the local target bundle binding")
 endif()
 # Folded from former compat/windows/art into nested ART multipath paths.
 set(MDVM_ART_WIN_RUNTIME "${MDVM_ART_DIR}/runtime/multiplatform/windows" CACHE PATH "")
@@ -133,168 +134,16 @@ target_compile_definitions(windows_x64_posix_stubs PRIVATE
   _CRT_SECURE_NO_WARNINGS NOMINMAX WIN32_LEAN_AND_MEAN NOGDI)
 set_target_properties(windows_x64_posix_stubs PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-add_executable(windows_x64_pthread_once_probe EXCLUDE_FROM_ALL
-  "${_repo}/tools/verify/windows_x64_phase4/pthread_once_probe.c")
-
-add_executable(win32_thread_stack_probe EXCLUDE_FROM_ALL
-  "${CMAKE_CURRENT_SOURCE_DIR}/win32_thread_stack_probe.c")
-
-add_executable(win32_stack_page_probe EXCLUDE_FROM_ALL
-  "${CMAKE_CURRENT_SOURCE_DIR}/win32_stack_page_probe.cc"
-  "${CMAKE_CURRENT_SOURCE_DIR}/win32_stack_page_fault_probe.S"
-  "${MDVM_ART_WIN_RUNTIME}/stack_windows.cc")
-target_include_directories(win32_stack_page_probe PRIVATE
-  "${MDVM_ART_WIN_RUNTIME}")
-
-add_executable(win32_stack_growth_probe EXCLUDE_FROM_ALL
-  "${CMAKE_CURRENT_SOURCE_DIR}/win32_stack_growth_probe.cc"
-  "${CMAKE_CURRENT_SOURCE_DIR}/win32_stack_page_fault_probe.S"
-  "${MDVM_ART_WIN_RUNTIME}/stack_windows.cc")
-target_include_directories(win32_stack_growth_probe PRIVATE
-  "${MDVM_ART_WIN_RUNTIME}")
-
-# Standalone experiment: does native stack growth replace a committed dirty
-# PAGE_EXECUTE_READ page inside the thread's own stack reservation?
-add_executable(win32_stack_growth_rx_probe EXCLUDE_FROM_ALL
-  "${CMAKE_CURRENT_SOURCE_DIR}/win32_stack_growth_rx_probe.c")
-
-# Standalone experiment: can a PAGE_NOACCESS page remain stable after first
-# pre-growing a Windows-owned stack through the normal moving guard?
-add_executable(win32_stack_pregrow_probe EXCLUDE_FROM_ALL
-  "${CMAKE_CURRENT_SOURCE_DIR}/win32_stack_pregrow_probe.c"
-  "${CMAKE_CURRENT_SOURCE_DIR}/win32_stack_implicit_probe.S")
-target_compile_definitions(win32_stack_pregrow_probe PRIVATE
-  _CRT_SECURE_NO_WARNINGS NOMINMAX WIN32_LEAN_AND_MEAN NOGDI
-  _WIN32_WINNT=0x0A00 NTDDI_VERSION=NTDDI_WIN10_RS4)
-target_link_libraries(win32_stack_pregrow_probe PRIVATE psapi)
-
-add_executable(win32_uef_probe EXCLUDE_FROM_ALL
-  "${CMAKE_CURRENT_SOURCE_DIR}/win32_uef_probe.cc")
-
-add_executable(win32_fault_record_probe EXCLUDE_FROM_ALL
-  "${CMAKE_CURRENT_SOURCE_DIR}/win32_fault_record_probe.cc")
-target_include_directories(win32_fault_record_probe PRIVATE
-  "${MDVM_ART_DIR}")
-
-add_executable(win32_sigchain_probe EXCLUDE_FROM_ALL
-  "${CMAKE_CURRENT_SOURCE_DIR}/win32_sigchain_probe.cc"
-  "${CMAKE_CURRENT_SOURCE_DIR}/win32_stack_page_fault_probe.S")
-target_include_directories(win32_sigchain_probe PRIVATE
-  "${MDVM_ART_DIR}"
-  "${MDVM_ART_ROOT_DIR}/art/sigchainlib"
-  "${MDVM_COMPAT_INCLUDE_DIR}")
-target_link_libraries(win32_sigchain_probe sigchain)
-
-add_executable(win32_cet_policy_probe EXCLUDE_FROM_ALL
-  "${CMAKE_CURRENT_SOURCE_DIR}/win32_cet_policy_probe.cc"
-  "${MDVM_ART_WIN_RUNTIME}/cet_compat.cc")
-target_include_directories(win32_cet_policy_probe PRIVATE
-  "${MDVM_ART_WIN_RUNTIME}")
-
-add_executable(win32_debugger_probe EXCLUDE_FROM_ALL
-  "${CMAKE_CURRENT_SOURCE_DIR}/win32_debugger_probe.cc")
-
-add_executable(win32_art_embedding_probe EXCLUDE_FROM_ALL
-  "${CMAKE_CURRENT_SOURCE_DIR}/win32_art_embedding_probe.cc")
-target_include_directories(win32_art_embedding_probe PRIVATE
-  "${_repo}/vendor/libnativehelper/include_jni")
-
-add_executable(win32_jit_unwind_info_probe EXCLUDE_FROM_ALL
-  "${CMAKE_CURRENT_SOURCE_DIR}/win32_jit_unwind_info_probe.cc")
-target_include_directories(win32_jit_unwind_info_probe PRIVATE
-  "${MDVM_ART_DIR}/compiler")
-
-add_executable(win32_osr_unwind_probe EXCLUDE_FROM_ALL
-  "${CMAKE_CURRENT_SOURCE_DIR}/win32_osr_unwind_probe.cc")
-
 include(${CMAKE_CURRENT_SOURCE_DIR}/phase1.cmake)
 
-add_executable(win32_jit_unwind_registry_probe EXCLUDE_FROM_ALL
-  "${CMAKE_CURRENT_SOURCE_DIR}/win32_jit_unwind_registry_probe.cc"
-  "${MDVM_ART_WIN_RUNTIME}/jit_unwind_windows.cc")
-target_include_directories(win32_jit_unwind_registry_probe PRIVATE
-  "${MDVM_ART_DIR}"
-  "${MDVM_ART_DIR}/compiler"
-  "${MDVM_ART_DIR}/libartbase")
-target_link_libraries(win32_jit_unwind_registry_probe artbase base log)
-
-add_library(jitunwindlifecycleprobe SHARED EXCLUDE_FROM_ALL
-  "${CMAKE_CURRENT_SOURCE_DIR}/win32_jit_unwind_lifecycle_probe.cc")
-target_compile_options(jitunwindlifecycleprobe PRIVATE
-  -fno-rtti
-  -Wno-thread-safety
-  -Wno-unused-command-line-argument
-  -Wno-microsoft-cast
-  -Wno-invalid-offsetof)
-target_compile_definitions(jitunwindlifecycleprobe PRIVATE ART_CONSUMING_LIBART)
-target_link_libraries(jitunwindlifecycleprobe art)
-set_target_properties(jitunwindlifecycleprobe PROPERTIES
-  PREFIX "lib"
-  OUTPUT_NAME "jitunwindlifecycleprobe"
-  WINDOWS_EXPORT_ALL_SYMBOLS ON)
-
-add_library(w025jitlifecyclestressprobe SHARED EXCLUDE_FROM_ALL
-  "${_repo}/tools/verify/windows_x64_w025/W025JitLifecycleStressProbe.cc")
-target_compile_options(w025jitlifecyclestressprobe PRIVATE
-  -fno-rtti
-  -Wno-thread-safety
-  -Wno-unused-command-line-argument
-  -Wno-microsoft-cast
-  -Wno-invalid-offsetof)
-target_compile_definitions(w025jitlifecyclestressprobe PRIVATE ART_CONSUMING_LIBART)
-target_link_libraries(w025jitlifecyclestressprobe art)
-set_target_properties(w025jitlifecyclestressprobe PROPERTIES
-  PREFIX "lib"
-  OUTPUT_NAME "w025jitlifecyclestressprobe"
-  WINDOWS_EXPORT_ALL_SYMBOLS ON)
-
-add_library(w025jitmappingprobe SHARED EXCLUDE_FROM_ALL
-  "${_repo}/tools/verify/windows_x64_w025/W025JitMappingProbe.cc")
-target_compile_options(w025jitmappingprobe PRIVATE
-  -fno-rtti
-  -Wno-thread-safety
-  -Wno-unused-command-line-argument
-  -Wno-microsoft-cast
-  -Wno-invalid-offsetof)
-target_compile_definitions(w025jitmappingprobe PRIVATE ART_CONSUMING_LIBART)
-target_include_directories(w025jitmappingprobe PRIVATE
-  "${MDVM_ART_DIR}/runtime"
-  "${MDVM_ART_DIR}/libartbase")
-target_link_libraries(w025jitmappingprobe art psapi)
-set_target_properties(w025jitmappingprobe PROPERTIES
-  PREFIX "lib"
-  OUTPUT_NAME "w025jitmappingprobe"
-  WINDOWS_EXPORT_ALL_SYMBOLS ON)
-
-add_executable(windows_x64_w025_section_policy_probe EXCLUDE_FROM_ALL
-  "${_repo}/tools/verify/windows_x64_w025/W025SectionPolicyProbe.cc")
-target_compile_options(windows_x64_w025_section_policy_probe PRIVATE
-  -Xclang -cfguard)
-target_link_options(windows_x64_w025_section_policy_probe PRIVATE
-  "LINKER:/guard:cf")
-target_link_libraries(windows_x64_w025_section_policy_probe onecore psapi)
-set_target_properties(windows_x64_w025_section_policy_probe PROPERTIES
-  OUTPUT_NAME "W025SectionPolicyProbe")
-
-add_executable(windows_x64_w025_policy_launcher EXCLUDE_FROM_ALL
-  "${_repo}/tools/verify/windows_x64_w025/W025PolicyLauncher.cc")
-set_target_properties(windows_x64_w025_policy_launcher PROPERTIES
-  OUTPUT_NAME "W025PolicyLauncher")
-
-add_executable(windows_x64_w013_mem_map_probe EXCLUDE_FROM_ALL
-  "${_repo}/tools/verify/windows_x64_w013/W013MemMapPolicyProbe.cc")
-target_include_directories(windows_x64_w013_mem_map_probe PRIVATE
-  "${MDVM_ART_DIR}/libartbase")
-target_link_libraries(windows_x64_w013_mem_map_probe artbase base log)
-
-add_executable(windows_x64_w013_mspace_owner_probe EXCLUDE_FROM_ALL
-  "${_repo}/tools/verify/windows_x64_w013/W013MspaceOwnerProbe.cc"
-  "${MDVM_ART_DIR}/runtime/gc/allocator/art-dlmalloc.cc")
-target_include_directories(windows_x64_w013_mspace_owner_probe PRIVATE
-  "${MDVM_ART_DIR}/runtime"
-  "${MDVM_ART_DIR}/libartbase"
-  "${MDVM_NATIVE_SRC_ROOT_DIR}/external/dlmalloc")
-target_link_libraries(windows_x64_w013_mspace_owner_probe artbase base log)
+# Product targets above and probes below now share one target-resolved graph.
+# The historical entry point delegates all probe definitions to the same test
+# subtree used by native/CMakeLists.txt; stages are metadata/build groups.
+set(ART_TARGET_ID windows-x86_64)
+set(ART_TARGET_OS_OR_RUNTIME windows)
+set(ART_TARGET_CPU_ARCH x86_64)
+include(CTest)
+add_subdirectory("${_repo}/native/tests" "${CMAKE_BINARY_DIR}/art-tests")
 
 # ART's JVMTI implementation is a runtime plugin rather than part of art.dll.
 # Keep the target source list aligned with libopenjdkjvmti_defaults in

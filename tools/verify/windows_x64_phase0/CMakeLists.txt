@@ -35,7 +35,8 @@ set(MDVM_COMPAT_INCLUDE_DIR "${_repo}/compat/include"
 set(MDVM_GENSRC_DIR "${CMAKE_BINARY_DIR}/gensrc" CACHE PATH "generated sources")
 set(MDVM_WINDOWS_X64_ENV "$ENV{WINDOWS_X64_DEV_ENV}" CACHE PATH "Windows x64 dev env (clang/xwin/libc++)")
 if(NOT MDVM_WINDOWS_X64_ENV)
-  set(MDVM_WINDOWS_X64_ENV "/home/agent/Projects/windows_x64-dev-env" CACHE PATH "Windows x64 dev env (clang/xwin/libc++)" FORCE)
+  message(FATAL_ERROR
+    "MDVM_WINDOWS_X64_ENV must be supplied by the local target bundle binding")
 endif()
 
 # Host-side aconfig headers (header-only stubs).
