@@ -14,7 +14,8 @@ ART should have one product build pipeline:
 
 1. one `bp2cmake` graph evaluator and emitter;
 2. one target-aware Python overlay factory;
-3. one handwritten CMake product entry point;
+3. one maintained CMake product entry point and one shared set of CMake
+   modules;
 4. one Python command-line frontend for generation, configuration, build,
    test, staging, and reproducibility checks;
 5. CMake's single-configuration `Ninja` generator on Linux and Windows build
@@ -40,7 +41,7 @@ Android.bp + target profile + one Python overlay
                     bp2cmake
                         |
                         v
-          out/<preset>/generated/art_graph.cmake
+ out/<build-host>-to-<target>/<build-type>/generated/art_graph.cmake
                         |
                         v
               CMake -G Ninja -> build.ninja
@@ -106,7 +107,9 @@ driver with GNU-style options and `-fuse-ld=lld`.
 
 - Translating every Soong feature or every module in the AOSP tree.
 - Supporting Android/bionic as a target in this pipeline.
-- Supporting 32-bit or non-x86-64 targets in the initial migration.
+- Validating 32-bit or non-x86-64 targets in the initial migration. The design
+  is multi-target from the start, but the first migration gates remain Linux
+  x86-64 and Windows x86-64.
 - Making Linux and PE/COFF command lines byte-for-byte identical.
 - Replacing libc, the platform SDK, or all platform compatibility code.
 - Completing Windows AOT/OAT generation or loading merely by producing
@@ -149,6 +152,227 @@ the only Windows CI coverage. Windows 10 ARM64 is the portability baseline:
 Python, CMake, Ninja, Clang/LLVM, and the JDK run as native Windows ARM64 host
 programs while Clang and javac produce the requested target artifacts. The
 build never executes x86-64 target binaries during configure or generation.
+
+## One maintained CMake implementation, one configured instance per target
+
+All target families use the same maintained [`native/CMakeLists.txt`](native/CMakeLists.txt),
+the same CMake modules, the same `bp2cmake` implementation, and the same Python
+overlay factory. They do **not** share one configured CMake cache or one
+universal generated module graph.
+
+For each exact target, the frontend creates a separate:
+
+- resolved target profile;
+- target-selected `art_graph.cmake`;
+- CMake binary directory and `CMakeCache.txt`;
+- `build.ninja` graph; and
+- generated-source, artifact, and staging tree.
+
+Conceptually:
+
+```text
+one maintained CMake implementation
+              |
+              +-- linux-x86_64 profile
+              |     -> out/<host>-to-linux-x86_64/<type>/...
+              +-- linux-aarch64 profile
+              |     -> out/<host>-to-linux-aarch64/<type>/...
+              +-- windows-x86_64 profile
+              |     -> out/<host>-to-windows-x86_64/<type>/...
+              +-- future profiles
+                    -> one isolated configured instance each
+```
+
+The compiler target triple, pointer size, ABI, object format, SDK/sysroot,
+selected assembly, and many compiler checks are fixed when CMake enables a
+language. Reusing a binary directory for another target is therefore invalid,
+even when only the CPU changes. A build directory has exactly one target
+identity for its entire lifetime.
+
+### What `bp2cmake` generates
+
+`bp2cmake` plus the Python overlay should generate one **target-resolved**
+`art_graph.cmake` per exact target. It should not generate one giant file that
+contains the source lists for every target behind CMake `if()` branches.
+
+Uniformity means that all graphs are produced by one evaluator, policy schema,
+overlay composition model, and emitter, with the same logical CMake target
+names and validated topology. It does not mean that Linux ARM64 and Windows
+x86-64 graphs must be byte-for-byte identical. Their selected source files,
+defines, system imports, assembly, exports, and security mappings necessarily
+differ. Conversely, generation of the **same** target profile on different
+build hosts must yield equivalent graph manifests.
+
+The frontend should not expose a bag of independently editable `-D` switches
+such as OS, CPU, bitness, ABI, triple, and object format. Those switches can
+contradict one another. It accepts one canonical target ID, resolves and
+validates the complete profile in Python, then gives CMake only the resolved
+inputs, for example:
+
+```text
+cmake -S native -B out/windows-aarch64-to-linux-riscv64/RelWithDebInfo \
+  -G Ninja \
+  --toolchain native/cmake/toolchains/LLVM.cmake \
+  -DART_PROFILE_FILE:FILEPATH=<absolute-path>/target_profile.cmake \
+  -DART_GRAPH_FILE:FILEPATH=<absolute-path>/art_graph.cmake
+```
+
+The public frontend, rather than a user assembling that command, owns these
+arguments. The same resolved profile is serialized as JSON for `bp2cmake` and
+as a generated CMake data projection for the common LLVM toolchain and product
+entry point. The CMake projection contains portable target semantics only; it
+does not contain machine installation paths.
+
+Generated `.cmake` files must remain simple and relocatable. In particular,
+`art_graph.cmake` contains resolved target declarations, stable CMake root
+variables, logical target names, and their relationships. It does not contain:
+
+- absolute source, output, LLVM, JDK, SDK, sysroot, or dependency paths;
+- build-host conditionals;
+- target branches that Python has already resolved;
+- shell commands or platform-specific path spelling; or
+- repeated policy that belongs in a maintained CMake interface target.
+
+The generated-file surface should be deliberately narrow:
+
+- `target_profile.cmake` consists only of validated `set(ART_TARGET_... ...)`
+  data with no filesystem bindings;
+- `art_graph.cmake` uses declarative target/source/include/definition/option
+  and logical dependency commands, plus calls to a small reviewed set of
+  project codegen helpers; and
+- generated files do not call `project()`, discover a toolchain or package,
+  run `find_package()`, `execute_process()`, or `file(GLOB)`, define new
+  functions/macros, perform staging/install work, or implement control-flow
+  trees.
+
+A representative emitted fragment is:
+
+```cmake
+add_library(art-compiler SHARED
+  "${MDVM_SOURCE_ROOT}/art/compiler/driver/compiler_driver.cc"
+  "${MDVM_GENSRC_ROOT}/art/asm/mterp/mterp_x86_64.S"
+)
+target_link_libraries(art-compiler PRIVATE art art-disassembler)
+```
+
+Machine-specific absolute roots are unavoidable when tools actually open an
+SDK or source tree, but they are runtime bindings, not graph content. The
+Python frontend passes them to CMake through a small internal cache interface;
+they may appear in `CMakeCache.txt` and the build manifest, but never in an
+emitted `.cmake` file. The generated files are therefore relocatable and the
+same-target graph can be compared across build hosts.
+
+### How CMake distinguishes targets
+
+CMake has `if()`, `elseif()`, `else()`, functions, generator expressions, and
+conditional `include()` support. The unified build uses them for small,
+declared policy composition, not for target detection or duplicate module
+graphs. A simplified shape is:
+
+```cmake
+include("${ART_PROFILE_FILE}")
+
+if(ART_TARGET_OS STREQUAL "linux")
+  include(PlatformLinux)
+elseif(ART_TARGET_OS STREQUAL "windows")
+  include(PlatformWindows)
+elseif(ART_TARGET_RUNTIME STREQUAL "wasi")
+  include(PlatformWasi)
+else()
+  message(FATAL_ERROR "Unsupported ART target: ${ART_TARGET_ID}")
+endif()
+
+include("${ART_GRAPH_FILE}")
+```
+
+The generated profile defines immutable, mutually validated values such as
+`ART_TARGET_ID`, `ART_TARGET_OS`, `ART_TARGET_CPU_ARCH`, `ART_TARGET_ABI`, and
+`ART_TARGET_OBJECT_FORMAT`. `CMAKE_SYSTEM_NAME` and
+`CMAKE_SYSTEM_PROCESSOR` must agree with them, but are not sufficiently precise
+to be the registry key. `CMAKE_HOST_SYSTEM_NAME` describes the build host;
+`CMAKE_SYSTEM_NAME` describes the target. Similarly, CMake's `WIN32` condition
+describes a Windows **target**, while `CMAKE_HOST_WIN32` describes a Windows
+build host. Product source selection must never use the latter.
+
+Architecture-specific inputs should normally be selected by the Python
+overlay before graph emission. CMake conditions remain appropriate for
+platform linker-property mapping, artifact suffix behavior, imported target
+SDK libraries, and a small number of CMake-native platform semantics. This
+keeps `native/CMakeLists.txt` from becoming a nested OS-by-architecture-by-ABI
+decision tree.
+
+## Target identity and registry
+
+A target cannot be represented safely by one architecture string. The
+resolved target schema should include at least:
+
+```text
+target_id
+os_or_runtime
+cpu_arch
+abi
+object_format
+pointer_bits
+endianness
+target_triple
+cmake_system_name
+cmake_system_processor
+capabilities
+support_status
+```
+
+For example, ARM64EC is a Windows ABI/interoperability model over the ARM64
+architecture, not a new CPU architecture. Likewise, `wasm32` only describes a
+WebAssembly address width; it does not say whether the runtime contract is
+WASI, a browser, or a custom embedding. A WebAssembly target ID must include
+that runtime ABI.
+
+Use canonical target IDs internally and accept user-friendly aliases only at
+the frontend. Suggested canonical IDs are:
+
+| Canonical target ID | CPU | ABI/runtime | Object format | Initial status |
+|---|---|---|---|---|
+| `linux-x86_64` | x86-64 | GNU/Linux profile | ELF64 | `supported` |
+| `linux-aarch64` | ARM64 | GNU/Linux profile | ELF64 | `planned` |
+| `linux-x86` | x86 | GNU/Linux profile | ELF32 | `planned` |
+| `linux-armv7` | ARMv7 | GNU EABI hard-float fixed by this profile | ELF32 | `planned` |
+| `linux-riscv64` | RISC-V 64 | GNU/Linux profile | ELF64 | `planned` |
+| `windows-x86_64` | x86-64 | MSVC ABI | PE32+ | `experimental` |
+| `windows-aarch64` | ARM64 | Windows ARM64 ABI | PE32+ | `planned` |
+| `windows-arm64ec` | ARM64 | ARM64EC ABI | PE32+ | `planned` |
+| `windows-x86` | x86 | Windows x86 ABI | PE32 | `planned` placeholder |
+| `wasm32-wasi` | wasm32 | WASI | WebAssembly | `impossible_under_current_art_contract` |
+| `wasm64-wasi` | wasm64 | WASI/Memory64 | WebAssembly | `impossible_under_current_art_contract` |
+
+Windows x86-64 is the first parity target and is promoted to `supported` only
+after the unified graph, DLL topology, and runtime acceptance gates pass.
+
+Aliases such as `linux_x64`, `linux_arm64`, `windows_x64`, and
+`wasm_wasm32` may be accepted, but the manifest and output path always record
+the canonical ID. An alias cannot add an alternative target meaning. If a
+Linux ARM soft-float ABI is ever required, it receives a distinct canonical
+profile rather than changing the meaning of `linux-armv7`.
+
+Support state is machine-readable:
+
+- `supported`: CI must configure, compile, link, inspect, and run the
+  applicable product gates;
+- `experimental`: generation/configuration may work, but it is not yet a
+  product contract;
+- `planned`: the schema entry exists, but configuration fails with a clear
+  missing capability/toolchain/port reason; and
+- `impossible_under_current_art_contract`: retained for architectural
+  planning, but rejected before graph generation until ART's required runtime
+  contracts are redesigned.
+
+WASM profiles initially belong to the last category. Current ART assumes
+threads, native virtual memory and executable mappings/JIT, signal/fault
+handling, target assembly, dynamic loading, and native DSO semantics. The
+overlay must not quietly turn `SHARED` targets into static libraries or disable
+these contracts until something compiles. It should fail capability validation
+and list the unresolved runtime contracts. A future WASI port can change the
+status only after those semantics and the intended AOT/interpreter/JIT model
+are explicitly designed.
 
 ## Current-state analysis
 
@@ -223,6 +447,37 @@ overlay forces it static and relies on absorption into `libart`. The converter
 also hard-codes directory exclusions for tests, fuzzers, benchmarks, and
 samples in its CLI implementation. Those exclusions are product profile
 policy, not parser behavior.
+
+### Current architecture assumptions
+
+The vendored ART source has architecture implementations under
+`runtime/arch`, compiler quick-JNI/utilities, and related compiler trees for
+`arm`, `arm64`, `riscv64`, `x86`, and `x86_64`. Its mterp inputs use
+`armng`, `arm64ng`, `x86ng`, and `x86_64ng`, but RISC-V uses `riscv64`
+without the `ng` suffix. That source availability is evidence for the target
+registry, not proof that this repository can build all five architectures.
+
+The current conversion path remains materially x86-64-specific:
+
+- [`tools/bp2cmake/bp2cmake/config.py`](tools/bp2cmake/bp2cmake/config.py)
+  explicitly models x86-64, x86, ARM64, and ARM codegen sibling selection;
+  other architecture values only fall through generic paths and are not a
+  validated profile;
+- [`tools/bp2cmake/bp2cmake/codegen.py`](tools/bp2cmake/bp2cmake/codegen.py)
+  constructs the mterp directory as `<arch>ng`, which is wrong for RISC-V;
+- the same code generator hard-codes `x86_64-pc-windows-msvc` and
+  `mdvm_windows_x64_prelude.h` for target-layout assembly generation;
+- both current overlays inject `mterp_x86_64.S` rather than a target-selected
+  generated source;
+- Linux BoringSSL policy injects a fixed set of x86-64 assembly files; and
+- the Windows policy, compatibility prelude, verification graphs, and ABI
+  checks are Windows x86-64-specific.
+
+These are migration work items. A planned target must not be labeled
+`supported` merely because `Config(arch=...)` accepts its spelling or an ART
+source directory exists. Profile admission should check all required source,
+codegen, dependency, ABI, linker, and runtime capabilities before CMake graph
+generation.
 
 ### Code generation and Java staging
 
@@ -316,7 +571,8 @@ document them:
 6. target triple, target OS, CMake system name, sysroot/SDK, runtime libraries,
    and `bp2cmake` target profile agree.
 7. CMake never searches build-host include or library paths for a cross target.
-8. generated CMake and generated sources live under the preset's binary tree.
+8. generated CMake and generated sources live under the configured target's
+   binary tree.
 9. `RelWithDebInfo` with `-O2` is the default product configuration. Other
    product build types are rejected unless the frontend explicitly enables a
    developer configuration such as `Debug`.
@@ -324,7 +580,9 @@ document them:
     cross-compiling.
 11. the logical shared/static target topology is identical between Linux and
     Windows unless a reviewed manifest records a platform exception.
-12. `art-compiler` is always a CMake `SHARED` target.
+12. `art-compiler` is always a CMake `SHARED` target for every admitted native
+    target with DSO capability. A target without that contract is rejected,
+    not converted to a static compiler library.
 13. no project-authored build step invokes or requires Bash, `sh`, `ash`, WSL,
     MSYS2, Cygwin, Make, or a POSIX command-line utility.
 14. every project-owned Python subprocess is started with an argument vector
@@ -338,13 +596,26 @@ document them:
     project-controlled reparse point.
 16. Windows 10 ARM64 uses native ARM64 host Python, CMake, Ninja, LLVM, and JDK
     executables. Cross-target binaries are never host tools.
+17. one CMake binary directory is permanently bound to one canonical target
+    ID, target triple, ABI, object format, SDK/sysroot identity, and build type.
+18. Python emits a separate, fully target-resolved `art_graph.cmake` for each
+    exact target; a generated graph contains no unselected target branches.
+19. generated `.cmake` files contain no machine-specific absolute paths. They
+    address source/generated roots through stable CMake variables and
+    dependencies through logical CMake target names.
+20. generating the same target from different supported build hosts produces
+    equivalent graph manifests; generating different targets is allowed to
+    produce different source/options/import selections.
+21. a `planned` or `impossible_under_current_art_contract` profile fails
+    capability validation before CMake rather than degrading DSO topology,
+    disabling runtime contracts silently, or compiling host fallbacks.
 
 ## Proposed repository layout
 
 The names are illustrative, but ownership boundaries are mandatory:
 
 ```text
-CMakePresets.json
+CMakePresets.json                 optional common/CI convenience presets
 native/
   CMakeLists.txt                 one product entry point
   cmake/
@@ -353,34 +624,37 @@ native/
     Dependencies.cmake          target dependency imports
     PlatformLinux.cmake         Linux semantic mappings
     PlatformWindows.cmake       Windows semantic mappings
+    PlatformWasi.cmake          future WASI semantic mappings; gated
     Packaging.cmake             target-tree staging
     toolchains/
-      LinuxLLVM.cmake
-      WindowsLLVM.cmake
+      LLVM.cmake                one target-profile-driven toolchain
 overlay/
   art_port_policy.py            one target-aware overlay factory
 tools/
   build_art.py                  one user/CI frontend
+  target_profiles.py            canonical target registry and aliases
   path_audit.py                 symlink/reparse and Windows-name validation
   command_audit.py              shell/tool invocation validation
   bp2cmake/                     one evaluator and emitter
 out/
-  <preset>/
-    source_projection/
-    generated/
-      art_graph.cmake
-      graph_manifest.json
-      inputs.sha256
-    gensrc/
-    stage/
-    CMakeCache.txt
-    build.ninja
-    build_manifest.json
+  <build-host>-to-<target>/
+    <build-type>/
+      source_projection/
+      generated/
+        art_graph.cmake
+        target_profile.cmake
+        graph_manifest.json
+        inputs.sha256
+      gensrc/
+      stage/
+      CMakeCache.txt
+      build.ninja
+      build_manifest.json
 ```
 
-Target SDK locations belong in environment variables, command arguments, or an
-untracked `CMakeUserPresets.json`; they must not be embedded as
-`/home/...` paths in checked-in files.
+Target SDK locations belong in frontend configuration, internal CMake cache
+arguments, or an untracked `CMakeUserPresets.json`; they must not be embedded
+in checked-in files or generated `.cmake` files.
 
 ## One profile, one graph generator, one overlay
 
@@ -390,35 +664,47 @@ untracked `CMakeUserPresets.json`; they must not be embedded as
 both `bp2cmake` and CMake. At minimum it contains:
 
 ```text
-profile_id
-build_host_os
-build_host_arch
-host_python
-host_cmake
-host_ninja
-host_llvm_root
-host_jdk
-target_os
-target_arch
-target_triple
-aosp_build_kind = host
-sysroot_or_sdk
-clang_root
-cxx_runtime
-compiler_runtime
-build_type
-root_modules
-source_roots
-capabilities
-source_alias_policy = materialize_regular_files
-managed_path_policy = reject_symlinks_and_reparse_aliases
-shell_policy = no_shell
+build:
+  build_host_os
+  build_host_arch
+  host_python
+  host_cmake
+  host_ninja
+  host_llvm_root
+  host_jdk
+  sysroot_or_sdk
+  build_type
+
+target:
+  target_id
+  os_or_runtime
+  cpu_arch
+  abi
+  object_format
+  pointer_bits
+  endianness
+  target_triple
+  cmake_system_name
+  cmake_system_processor
+  aosp_build_kind = host
+  cxx_runtime
+  compiler_runtime
+  capabilities
+  support_status
+
+product:
+  root_modules
+  source_roots
+  source_alias_policy = materialize_regular_files
+  managed_path_policy = reject_symlinks_and_reparse_aliases
+  shell_policy = no_shell
 ```
 
 The build-host fields control only executable suffixes, path handling, and
-host-native tool discovery/validation. `target_os` controls Blueprint selects
-and target policy. The target graph for `windows-x86_64` must therefore be the
-same whether generation runs on Linux x86-64 or Windows 10 ARM64.
+host-native tool discovery/validation. `os_or_runtime`, `cpu_arch`, ABI, and
+capabilities control Blueprint selects and target policy. The target graph for
+`windows-x86_64` must therefore be the same whether generation runs on Linux
+x86-64 or Windows 10 ARM64.
 
 The serialized profile should have separate `build_host` and `target`
 sections. `bp2cmake` consumes only the target, AOSP-build-kind, source, and
@@ -427,9 +713,17 @@ normalized relative paths with `/` separators, while the outer build manifest
 records the complete build-host/tool environment. This keeps a target graph
 host-independent without losing provenance.
 
+The generated `target_profile.cmake` is a portable projection of the `target`
+section only. Host tool, source root, SDK, sysroot, and output locations are
+bound by the frontend through CMake cache variables and recorded in the build
+manifest; their absolute values are not emitted into either generated CMake
+file.
+
 The profile should replace independent `--os`, overlay filename, hand-entered
-root-module lists, and CMake cache fragments. Command-line overrides are
-allowed, but the resolved profile is serialized into the build manifest.
+root-module lists, and CMake cache fragments. Command-line overrides may bind
+machine paths or build type, but may not mutate individual target identity
+fields. A different ABI/triple requires a different named target profile. The
+fully resolved result is serialized into the build manifest.
 
 ### Overlay factory
 
@@ -438,18 +732,20 @@ Replace two top-level policy objects with one factory, conceptually:
 ```python
 def make_overlay(target: TargetProfile) -> Overlay:
     policy = common_art_policy(target)
-    if target.os == "linux":
-        policy.merge(linux_policy(target))
-    elif target.os == "windows":
-        policy.merge(windows_policy(target))
-    else:
-        raise UnsupportedTarget(target.os)
+    policy.merge(os_or_runtime_policy(target.os_or_runtime, target))
+    policy.merge(object_format_policy(target.object_format, target))
+    policy.merge(abi_policy(target.abi, target))
+    policy.merge(architecture_policy(target.cpu_arch, target))
+    policy.merge(capability_policy(target.capabilities, target))
     return policy.validate()
 ```
 
-This is one Python overlay module and one schema. It may contain clearly named
-Linux and Windows sections, but modules are declared once and refined by
-target. A module cannot have unrelated definitions in separate files.
+This is one Python overlay module and one schema, composed as common policy,
+OS/runtime policy, object-format/ABI policy, architecture policy, and
+capability policy. It may contain clearly named policy sections, but modules
+are declared once and refined by target. A module cannot have unrelated
+definitions in separate files, and a new architecture must not require a copy
+of the whole overlay.
 
 The common portion owns:
 
@@ -465,11 +761,13 @@ Target portions own only actual target differences:
 
 - Blueprint target branch;
 - OS source replacement;
+- architecture-specific sources and generated assembly;
 - target ABI definitions;
+- pointer-width and object-format behavior;
 - target system libraries;
 - platform compatibility sources;
 - linker security mappings; and
-- DLL export policy.
+- DSO export policy.
 
 The overlay validator should reject conflicting keys, duplicate target names,
 an unknown module exception, or a platform override that changes a common
@@ -480,8 +778,9 @@ the product profile.
 ### Deterministic output
 
 `bp2cmake` should write atomically and deterministically to
-`out/<preset>/generated/art_graph.cmake`. It should also write a machine-readable
-graph manifest containing, for each module:
+`out/<build-host>-to-<target>/<build-type>/generated/art_graph.cmake`. It
+should also write a machine-readable graph manifest containing, for each
+module:
 
 - Blueprint name and CMake target name;
 - module kind;
@@ -491,10 +790,13 @@ graph manifest containing, for each module:
 - link dependencies; and
 - each overlay rule that changed the normalized Blueprint module.
 
-Paths in the generated CMake should use project CMake variables rather than
-machine-specific absolute prefixes. The input digest should cover all loaded
+Paths in generated CMake use project CMake variables and normalized relative
+suffixes rather than machine-specific absolute prefixes. The emitter rejects
+an absolute path in every emitted source, include, library, tool, output, and
+custom-command field. The input digest should cover all loaded
 `Android.bp`/`sources.bp` files, source-root identities, generator source,
-profile, and overlay source.
+target profile, and overlay source without hashing build-host path spellings
+into the target graph identity.
 
 Generation needs two explicit modes:
 
@@ -508,9 +810,10 @@ No generated product CMake snapshot should be committed after migration. CI's
 
 `native/CMakeLists.txt` should be target-neutral. Its order should be:
 
-1. validate the generator, single-config build type, compiler frontend, target
-   triple, SDK/sysroot, and LLD selection;
-2. load the resolved profile and target dependency manifest;
+1. load and validate the portable target profile already consumed by the
+   common toolchain, plus the target dependency manifest;
+2. validate the generator, single-config build type, compiler frontend, target
+   triple, SDK/sysroot bindings, and LLD selection;
 3. define common policy interface targets;
 4. define generated-source commands/targets;
 5. include the generated module graph;
@@ -539,46 +842,47 @@ Generated targets link the appropriate interfaces privately or publicly.
 Source-specific workarounds remain source properties only when a target-level
 policy is provably too broad.
 
-## CMake presets and Ninja
+## CMake frontend, optional presets, and Ninja
 
-`CMakePresets.json` should use hidden inheritance layers for common Ninja/Clang
-policy and target policy, then expose the supported matrix. Suggested preset
-names are:
+Do not check in a manually duplicated build-host-by-target preset Cartesian
+product. With Linux x86, ARM, ARM64, RISC-V, several Windows ABIs, and possible
+WASM profiles, that list would become configuration code by repetition.
+
+`CMakePresets.json` may provide a hidden common Ninja/Clang base and a small
+number of supported CI convenience presets. The authoritative matrix comes
+from the Python target registry. `tools/build_art.py` detects the build-host ID,
+resolves the requested target ID, and deterministically assigns:
 
 ```text
-linux-x64-on-linux
-windows-x64-on-linux
-windows-x64-on-windows-arm64
-linux-x64-on-windows-arm64
+out/<build-host-id>-to-<target-id>/<build-type>/
 ```
 
-Each preset has its own `out/<preset>` binary directory. The checked-in preset
-contains no developer-specific absolute paths. A user preset supplies
-`MDVM_CLANG_ROOT`, `MDVM_TARGET_SYSROOT`, or `MDVM_WINDOWS_SDK_ROOT`.
-
-Every configure preset must set `generator` to exactly `Ninja`. Corresponding
-build and test presets inherit the same name. `tools/build_art.py` invokes
-`cmake --preset`, `cmake --build --preset --parallel`, and `ctest --preset`;
-it must not synthesize a Make, NMake, Visual Studio, or Multi-Config fallback.
+It then invokes the same maintained CMake entry point with `-G Ninja`, the
+common LLVM toolchain, the generated target profile/graph paths, and the
+machine-specific root bindings. It must not synthesize a Make, NMake, Visual
+Studio, or Multi-Config fallback. The exact configure argument vector is
+recorded in the build manifest so the dynamic frontend is no less auditable
+than a static preset.
 
 The public command shape is identical on both hosts:
 
 ```text
-python tools/build_art.py configure --preset <matrix-preset>
-python tools/build_art.py build     --preset <matrix-preset> --target art-compiler
-python tools/build_art.py test      --preset <matrix-preset>
-python tools/build_art.py stage     --preset <matrix-preset>
-python tools/build_art.py check-generated --preset <matrix-preset>
+python tools/build_art.py configure --target-id windows-x86_64
+python tools/build_art.py build --target-id windows-x86_64 --cmake-target art-compiler
+python tools/build_art.py test --target-id windows-x86_64
+python tools/build_art.py stage --target-id windows-x86_64
+python tools/build_art.py check-generated --target-id windows-x86_64
 ```
 
 Only the operating system's Python executable spelling may differ. There
 should be no `.sh` versus `.bat` product logic split.
 
 The `configure` operation has one fixed sequence: resolve and validate the
-profile, run `bp2cmake --write`, invoke the matching CMake configure preset with
-the generated-graph/profile paths, then write the build manifest. Calling CMake
-directly is an expert/debug flow and requires an already checked generated
-graph; it must not trigger a second, subtly different generator implementation.
+profile, bind and audit machine-specific roots, run `bp2cmake --write`, invoke
+CMake with the generated graph/profile paths, then write the build manifest.
+Calling CMake directly is an expert/debug flow and requires an already checked
+generated graph; it must not trigger a second, subtly different generator
+implementation.
 
 ## POSIX-environment-free Windows 10 ARM64 host contract
 
@@ -622,7 +926,7 @@ the upstream script's stdout and atomically writes the file; generated CMake
 must not emit `python ... > output.cc`.
 
 Use response files for long compiler, linker, javac, and D8 argument lists.
-The frontend should choose a short per-preset output root and validate Windows
+The frontend should choose a short per-build output root and validate Windows
 path legality, case-fold collisions, reserved device names, trailing spaces or
 dots, and configured long-path support before CMake runs. These checks apply on
 Linux too so a Linux-generated graph cannot contain names that fail only on
@@ -639,7 +943,8 @@ project command payload contains no batch logic or shell operators.
 
 ### Common contract
 
-Both toolchain files must configure:
+The one maintained LLVM toolchain module must configure from the resolved
+target profile:
 
 - a host-native Clang/LLVM installation, including Windows ARM64 executables
   on the Windows 10 ARM64 build host;
@@ -662,8 +967,9 @@ validated target runtime initially or move to libc++ as a separately tested ABI
 decision; it must not depend on whichever C++ runtime happens to be found on
 the build host.
 
-Toolchain configuration is data, not an activation script. The profile or user
-preset passes regular-file roots for host LLVM and the target SDK/sysroot.
+Toolchain configuration is data, not an activation script. The frontend or an
+optional user preset passes regular-file roots for host LLVM and the target
+SDK/sysroot.
 `env.sh`, `source`, `cygpath`, registry-dependent `cl.exe` discovery, and
 inherited Unix environment variables are not part of the contract.
 
@@ -754,7 +1060,8 @@ declared include tree. For each Git mode `120000` entry it:
    target missing from the pinned source manifest;
 3. resolves chained aliases entirely within the manifest;
 4. copies the required target file or the relevant declared include/source
-   tree into `out/<preset>/source_projection` as ordinary files/directories,
+   tree into the target binary directory's `source_projection` as ordinary
+   files/directories,
    preserving the logical relative layout; and
 5. records alias, target, file modes, and content hashes in the graph inputs.
 
@@ -960,7 +1267,8 @@ Each binary directory should contain a build manifest with at least:
 - source revision and submodule revisions;
 - resolved profile and graph/input digest;
 - build host OS/architecture;
-- target OS/architecture/triple;
+- canonical target ID, OS/runtime, CPU architecture, ABI, object format,
+  pointer width, and triple;
 - canonical Clang paths and `--version` output;
 - host executable formats/architectures for Python, CMake, Ninja, LLVM, and the
   JDK;
@@ -974,7 +1282,7 @@ Each binary directory should contain a build manifest with at least:
 - symlink/reparse-point audit policy and digest.
 
 The frontend compares the manifest before every configure/build. A mismatch
-must require a new preset directory or explicit cache recreation; it must not
+must require a new binary directory or explicit cache recreation; it must not
 quietly continue with stale values. Separate binary directories for every
 matrix cell and build type prevent the mixed Windows environment observed in
 the current cache.
@@ -993,7 +1301,8 @@ as a Ninja custom target when part of the full product.
 
 It should:
 
-- use `out/<preset>/bootjar`, never shared `/tmp/bootbuild` state;
+- use the target binary directory's `bootjar`, never shared `/tmp/bootbuild`
+  state;
 - treat javac and D8 failures as fatal;
 - launch `javac`/`java` with argument vectors and response files, never a shell
   command string;
@@ -1002,12 +1311,12 @@ It should:
 - declare the selected JDK, R8/D8, Java sources, aconfig inputs, and target
   profile in a manifest;
 - write atomically; and
-- stage into `out/<preset>/stage` without also copying to unrelated Linux and
-  Windows directories.
+- stage into the target binary directory's `stage` without also copying to
+  unrelated Linux and Windows directories.
 
 The boot jar can remain logically shared when its bytecode is deliberately
-multi-platform. Its producer and outputs still belong to one preset so a failed
-or partial invocation cannot contaminate another target build.
+multi-platform. Its producer and outputs still belong to one configured build
+so a failed or partial invocation cannot contaminate another target build.
 
 ## Migration plan
 
@@ -1038,8 +1347,8 @@ or partial invocation cannot contaminate another target build.
 
 - Extract common policy, codegen, dependency imports, platform mappings, and
   staging into focused CMake modules.
-- Configure all supported matrix cells through presets and
-  `tools/build_art.py`.
+- Configure all supported matrix cells through `tools/build_art.py`; optional
+  CI presets may call the same frontend contract.
 - Move Phase-1 probe executables to a test subtree that links the product graph.
 - Remove product target/source duplication from verification CMake files.
 - Replace shell redirection in emitted codegen rules with explicit Python
@@ -1083,7 +1392,22 @@ inputs:
 Useful probes and result documents should remain. They become tests of the
 unified product targets instead of alternative ways to build those targets.
 
-### Phase 6: optimize after parity
+### Phase 6: admit additional targets one at a time
+
+- Keep registry entries for all planned targets, but enable each only after its
+  profile capability gate is complete.
+- Replace the `<arch>ng` mterp assumption with explicit architecture metadata
+  and make generated assembly selection profile-driven.
+- Remove the x86-64 triple, prelude, mterp, BoringSSL assembly, and verification
+  assumptions identified in the current-state audit.
+- Validate Linux AArch64, x86, ARMv7, and RISC-V64 independently; source-tree
+  presence alone is not an admission gate.
+- Treat Windows AArch64, ARM64EC, and x86 as separate ABI profiles with their
+  own SDK, triple, exports, object inspection, and runtime gates.
+- Retain WASM profiles as explicit capability failures until a runtime/DSO/JIT
+  contract is designed; do not introduce a static-library compatibility mode.
+
+### Phase 7: optimize after parity
 
 - Profile graph generation, configure time, duplicate compilation, link time,
   and incremental rebuilds.
@@ -1098,15 +1422,24 @@ unified product targets instead of alternative ways to build those targets.
 
 ### Generation and configuration
 
-- `bp2cmake` unit tests pass for both target profiles.
+- `bp2cmake` unit tests pass for every registry profile, including explicit
+  expected capability rejection for planned/blocked profiles.
 - Generating twice produces no diff and identical digests.
 - Linux-host and Windows-host generation of the same target profile produces
   equivalent graph manifests.
+- every generated `.cmake` file is target-resolved, contains no unselected
+  target branches, and passes an absolute-path rejection scan;
+- each binary directory records exactly one canonical target identity and is
+  rejected if target, ABI, triple, object format, SDK/sysroot, or build type is
+  changed in place;
+- every planned or contract-blocked profile fails before CMake with a
+  capability-specific diagnostic rather than a substituted source or library
+  kind;
 - checkouts with real Git symlinks and with `core.symlinks=false` link-text
   files produce identical normalized source and graph digests for the product
   closure;
-- every preset reports exactly `Ninja`, one build type, Clang GNU frontend, the
-  intended target triple, and LLD;
+- every configured build reports exactly `Ninja`, one build type, Clang GNU
+  frontend, the intended target triple, and LLD;
 - forbidden tool/generator names do not occur in CMake caches or Ninja command
   rules;
 - cross builds contain no undeclared build-host include or library path;
@@ -1166,6 +1499,9 @@ Audit `compile_commands.json` and `ninja -t commands` for every matrix cell:
 | Risk | Effect | Control |
 |---|---|---|
 | Build host leaks into target selection | wrong sources and ABI | one serialized profile; graph equivalence across hosts |
+| One CMake cache is reused for another target | stale compiler checks, pointer size, ABI, or assembly | one immutable target identity and binary directory per target/build type |
+| Generated graph embeds machine paths | graph differs by host and cannot relocate | stable root variables plus absolute-path rejection in the emitter |
+| Giant generated graph retains inactive target branches | wrong source or policy leaks into the closure | Python emits one fully resolved graph per exact target |
 | Cross build finds host headers/libs | links successfully but is invalid | sysroot-only root modes and path audit |
 | Literal Linux flag reuse on Windows | ignored options or broken PE link | common semantic properties with platform mapping |
 | Export-all hides an incomplete DLL ABI | unstable or missing imports/data | annotations/`.def` allowlist and ABI probe |
@@ -1174,8 +1510,8 @@ Audit `compile_commands.json` and `ninja -t commands` for every matrix cell:
 | Object-library dedup uses wrong import/export context | invalid Windows objects | defer until symbol ownership is designed and tested |
 | Configure executes target helper | cross build fails or uses emulator accidentally | classify host tools; compile target layout with `-S` only |
 | Stale generated snapshot | unreviewed source/dependency drift | build-tree generation, digest, and `--check` |
-| Stale CMake cache | wrong SDK, flags, or optimization | per-preset directory and build fingerprint |
-| Shared `/tmp` boot state | cross-target contamination | preset-local atomic output |
+| Stale CMake cache | wrong SDK, flags, or optimization | per-target binary directory and build fingerprint |
+| Shared `/tmp` boot state | cross-target contamination | binary-directory-local atomic output |
 | Linux follows a symlink while Windows stores its link text | compiler sees different or invalid input | manifest-driven alias resolution and identical regular-file projection |
 | Toolchain/SDK path contains a junction or symlink | non-reproducible host-dependent toolchain | regular-file toolchain package and component-wise path validation |
 | Ninja rule contains `>` or a Unix utility | Windows 10 ARM64 build failure | explicit Python output APIs and shell-free command scanner |
