@@ -1042,8 +1042,9 @@ other threads.
 The Linux-only `membarrier()` registration in `FaultManager::Init()` must not
 emit an expected `ENOSYS` warning on Windows. Windows range safety comes from
 the existing atomic list plus ordering code-range registration before managed
-entrypoint publication. Future PE AOT loading must prove an equivalent
-publication edge before it is added to this contract.
+entrypoint publication. Future restricted ELF OAT loading must register its
+validated Windows function table and code range before publishing any managed
+entrypoint, and reverse that order before unmapping.
 
 ### 7.6 Stack-overflow detection
 
@@ -2622,6 +2623,10 @@ R/RX primary and RW alias roles. Complete low-VA rejection/recovery and 1 GiB
 With `ProhibitDynamicCode`, Windows rejects both the J-2 executable mapping and
 J-1 executable-protection transition with error 1655. ART creates no JIT cache
 and continues successfully; the separate `-Xusejit:false` control also passes.
+This is fail-closed negative evidence only. ART-created executable memory is an
+explicit product prerequisite for JIT and future restricted-ELF OAT; running
+under `ProhibitDynamicCode`/ACG is a non-goal and is not a supported product
+configuration.
 The runner returns 14/14 aggregate checks, clean forbidden-log scanning,
 `NO_DMP_FILES`, and an empty JIT temporary directory. This was the prerequisite
 mapping/policy boundary; the separate FS-3 result below adds collection/reuse

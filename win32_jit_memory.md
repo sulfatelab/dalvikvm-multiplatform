@@ -46,8 +46,13 @@ The selected end state is:
    exception/deoptimization long jump does not maintain CET's protected return
    stack. All defined incompatible HSP/context-validation fields must be
    disabled under W-010's startup contract; `CetDynamicApisOutOfProcOnly` and
-   reserved fields do not imply HSP. The accepted W-025 JIT-2 CFG and
-   dynamic-code-policy matrix remains separate from CET/HSP support.
+   reserved fields do not imply HSP. The accepted W-025 JIT-2 CFG gate and
+   negative unsupported-policy rejection remain separate from CET/HSP support.
+9. Treat executable-memory capability as an explicit ART product prerequisite.
+   `ProhibitDynamicCode`/ACG is not a supported operating mode. The accepted
+   rejection probe proves fail-closed behavior only; it does not create a
+   product obligation to run JIT or future OAT under that policy, and ART must
+   not use `AllowThreadOptOut` or another mitigation bypass.
 
 The selected design creates no filesystem file. A Windows pagefile-backed
 section can be paged by the operating system, just as anonymous Linux memory can
@@ -831,8 +836,9 @@ validated the closure on Windows 10 version 1803 or later:
 - exercise code-cache collection and exact-address reuse under load;
 - sample generated PCs concurrently with collection and require lookup/unwind
   to observe only registered live allocations; and
-- record CFG and dynamic-code policy, low-address exhaustion behavior, and
-  large-cache `SEC_COMMIT` pressure.
+- record CFG, low-address exhaustion, and large-cache `SEC_COMMIT` behavior;
+  retain one `ProhibitDynamicCode` child only as a clean unsupported-policy
+  rejection proof.
 
 The focused W-024 native-host matrix passed on Windows 10 Enterprise LTSC 2021
 build 19044: both normal/FastNative modes compile the required 7/7 targets,
@@ -1007,7 +1013,7 @@ independent package.
 | Order | Work | Exit gate |
 |------:|------|-----------|
 | JIT-1 (done) | Direct range checks at every signed-int32 JIT-root patch and uint32 CodeInfo construction site, with positive boundary and deterministic overflow tests | Accepted 2026-07-29: focused checks, Windows x64/Linux builds, Wine JIT/unwind gates, and native Windows Server 2025 W-004 regression pass without changing the encoded format; see `RESULT-jit-encoding-guards.md` |
-| JIT-2 (done) | Build one W-025 native closure package for mapping protections, no-filesystem/no-RWX assertions, CFG and dynamic-code-policy observations, low-VA failure, and large `SEC_COMMIT` pressure | Accepted 2026-07-29 on Windows Server 2025 build 26100: nine cases and 14 aggregate checks pass, J-2/J-1 dynamic-code operations reject with error 1655, no dump or JIT temp remains, and the returned archive passes independent review; see `RESULT-jit2-native.md` |
+| JIT-2 (done) | Build one W-025 native closure package for mapping protections, no-filesystem/no-RWX assertions, CFG, unsupported-policy rejection, low-VA failure, and large `SEC_COMMIT` pressure | Accepted 2026-07-29 on Windows Server 2025 build 26100: nine cases and 14 aggregate checks pass; the `ProhibitDynamicCode` child cleanly rejects J-2/J-1 operations with error 1655 as a negative boundary, no dump or JIT temp remains, and the returned archive passes independent review; see `RESULT-jit2-native.md` |
 | JIT-3 (done) | Run default J-2 allocation/compile/invalidate/collect/reuse stress with concurrent `RtlLookupFunctionEntry()` and virtual-unwind sampling; retain J-1 only as a comparison arm | Accepted 2026-07-29 on Windows Server 2025 build 26100: four cases complete 52 collections, 1,344 compilations, 1,248 exact reuses, and 696,969 virtual unwinds with no missing live record, stale dead record, unwind failure, dump, or JIT temp; see `RESULT-jit3-native.md` |
 | JIT-4 (done) | Repeat smoke, matrix, JIT-disabled, and representative managed/native/OSR/fatal gates on the accepted default build | Accepted 2026-07-29 on Windows Server 2025 build 26100: 28 default-J-2 cases and 34/34 aggregate records pass with eight lifecycle cycles, three valid fatal dumps, empty JIT temp, no trace, and no J-1 arm; see `RESULT-jit4-native.md` |
 | JIT-5 (done) | Remove `ART_WINDOWS_X64_JIT_DUAL=0` and its single-view Windows diagnostic branch | Accepted 2026-07-29 on Windows Server 2025 build 26100: 29 cases and 36/36 records pass; source and `art.dll` lack the opt-out/fallback; the retired key remains inert; Wine and Linux regressions pass; see `RESULT-jit5-native.md` |

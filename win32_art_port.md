@@ -40,6 +40,12 @@ Grounding: current Linux port (`bp2cmake_linux_scope.md`, `overlay/port_policy.p
 - Full Java SE / OpenJDK replacement semantics beyond what Android libcore already provides on Linux.
 - Cygwin/MSYS2/MinGW as toolchains or runtime personalities (no `msys-2.0.dll` / `libgcc_s` / MinGW binutils dependency).
 - MSVC **as the C/C++ compiler** (`cl`, `clang-cl`). **Using the MSVC/Windows SDK header set with Clang is required**, not forbidden.
+- PE32+ OAT. Windows AOT retains a restricted ELF64 OAT coat and uses an
+  ART-owned, OAT-only loader; PE remains the process/DLL format, not the OAT
+  container.
+- `ProhibitDynamicCode`/ACG compatibility. ART-created executable memory is an
+  explicit product prerequisite for JIT and OAT; policy rejection must be
+  clean but is not a supported operating mode.
 
 ### Word “Win32” vs Windows x64
 
@@ -95,7 +101,7 @@ unmet W-025 feature; CFG remains separate.
 
 The original plan allowed JIT/dex2oat to be a v1.1 gate. Current x86_64 quick,
 nterp, managed-JIT, and native-JIT entrypoints are correct and default-on;
-dex2oat/oat PE production remains deferred.
+dex2oat and restricted ELF64 OAT production remain deferred.
 
 ---
 
@@ -748,24 +754,27 @@ all product paths. Windows NIO.2 remains a non-goal.
 - Windows x64 quick entrypoints, nterp, managed JIT, and native JIT are default-on.
 - The JIT code cache uses the corrected unnamed pagefile-section dual view with
   a low contiguous R/RX primary and a full RW updater alias.
-- W-013 native R2 passes J-1 and default dual-view integration; broader W-025
-  CFG/dynamic-code-policy and direct-encoding hardening remains. CET user
+- W-025's final dual-view path, CFG execution, direct-encoding guards, and
+  unsupported-policy rejection are accepted. `ProhibitDynamicCode` rejection
+  is a negative boundary, not a supported runtime profile. CET user
   shadow stacks are explicitly unsupported and must be disabled for the ART
   process under W-010's activation contract.
 - dex2oat/AOT remains deferred; the imageless interpreter+JIT product does not
   require it.
-- The preferred AOT prototype is now a genuine import-free/no-entry PE32+ OAT
-  module loaded with `LoadLibraryExW`, while VDEX and ART remain independent
-  ART-owned data mappings.  This route is conditional on redesigning the
-  current boot image/OAT single-delta reservation and app per-instance
-  BSS/relro semantics.
-- If exact reservation consumption or arbitrary force-loaded instances remain
-  mandatory, retain the existing ELF coat for the first Windows manual-loader
-  implementation and add Windows unwind/mitigation handling.  Do not default
-  to a custom PE mapper: `SEC_IMAGE` is not a complete DLL load and cannot
-  replace an ART placeholder.
-- The format analysis, public/native Windows API matrix, Server 2025 focused
-  result, correctness invariants, and proof gates are in
+- Windows AOT retains a restricted ELF64 OAT coat. A dedicated OAT-only loader
+  consumes exact ART reservations, creates independent BSS instances, preserves
+  the initial `oatdex`/VDEX contract, registers Windows x64 unwind data, and
+  rejects every general DSO feature such as imports, ELF relocations, TLS, and
+  constructors.
+- The first implementation uses private copy for correctness. A later
+  versioned 64-KiB-aligned ELF layout may use placeholder-backed data views for
+  sharing after it proves exact equivalence. PE32+ OAT, `LoadLibraryExW`,
+  `SEC_IMAGE`, and a general Bionic-linker port are rejected.
+- Executable-memory capability is a platform prerequisite. CFG remains a gate;
+  `ProhibitDynamicCode`/ACG execution is a non-goal and receives only a clean
+  negative rejection test.
+- The format analysis, Bionic reuse boundary, mapping design, risk register,
+  correctness invariants, and Server 2025 proof gates are in
   [win32_aot_oat.md](win32_aot_oat.md).
 
 **Historical planning estimate:** the original estimate was 12–24 months for a
