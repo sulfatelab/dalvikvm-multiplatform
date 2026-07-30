@@ -180,27 +180,62 @@ recorded OAT/image ranges by one delta. Application images can use a separate
 actual OAT relocation range. Those semantics are a principal reason not to
 delegate placement to `LoadLibraryExW`.
 
-## Current Linux loading contract
+## Current Android OAT loading path
 
-`OatFile::Open()` requires the companion VDEX and then:
+The path-based `OatFile::Open()` in this snapshot first requires the companion
+VDEX to exist. It then calls `OatFileBase::OpenOatFile<DlOpenOatFile>()`. The
+template fixes the order of the Android transaction:
 
-1. tries `DlOpenOatFile` for executable OAT;
-2. falls back to ART's `ElfOatFile`/`ElfFile`, which reserves the complete span
-   and maps each `PT_LOAD` itself;
-3. resolves the OAT dynamic anchors;
-4. validates OAT magic/version/ISA, region ordering, offsets, BSS, DEX,
-   checksums, boot class path, and class-loader context;
-5. maps VDEX into `oatdex` where declared;
-6. relocates image-dependent state and finalizes image-relro protection; and
-7. publishes code only after the complete artifact set is valid.
+```text
+DlOpenOatFile::PreLoad()
+  -> DlOpenOatFile::Load()
+  -> OatFileBase::ComputeFields()
+  -> DlOpenOatFile::PreSetup()
+  -> OatFileBase::LoadVdex()
+  -> OatFileBase::Setup()
+```
 
-Android's `android_dlopen_ext()` adds semantics desktop loaders do not have:
+The stages have the following concrete behavior:
 
-- `ANDROID_DLEXT_RESERVED_ADDRESS` consumes ART's existing reservation; and
-- `ANDROID_DLEXT_FORCE_LOAD` creates independent instances for BSS/class
-  unloading.
+1. `PreLoad()` counts the current `dl_iterate_phdr()` entries. This is only an
+   optimization for finding the newly loaded object later.
+2. `Load()` accepts only executable, non-`low_4gb` use and canonicalizes the
+   path before calling `android_dlopen_ext()` with `RTLD_NOW`.
+3. `ANDROID_DLEXT_FORCE_LOAD` forces a new mapping rather than reusing a prior
+   handle. This is required for independent BSS/dex-cache state and class
+   unloading when the same OAT is opened more than once.
+4. If ART supplied a reservation, `ANDROID_DLEXT_RESERVED_ADDRESS` asks Bionic
+   to place the complete object inside it. ART then finds the loaded `PT_LOAD`
+   ranges with `dl_iterate_phdr()` and transfers the used prefix from the
+   reservation into `DlOpenOatFile` ownership.
+5. OAT outside the ART APEX is loaded in Bionic's exported system namespace.
+   Search paths and namespace links are not used for OAT dependencies, but the
+   permitted-path policy still applies.
+6. `ComputeFields()` uses `dlsym()` to resolve `oatdata`, `oatlastword`, the
+   optional image-relro and BSS anchors, and `oatdex`/`oatdexlastword`.
+   `ComputeElfBegin()` separately uses `dladdr()` to recover the ELF base.
+7. `PreSetup()` finds the loaded object by the segment containing `oatdata` and
+   creates ART `MemMap` placeholders for its `PT_LOAD` ranges. Bionic still
+   owns the actual mappings; the placeholders make the ranges visible to
+   ART's memory-map accounting.
+8. `LoadVdex()` calls `VdexFile::OpenAtAddress()` with the dynamic `oatdex`
+   range and `mmap_reuse=true`. On Android this replaces the ELF `SHT_NOBITS`
+   dex range with the companion VDEX mapping at the exact address.
+9. `Setup()` validates OAT magic/version/ISA, region ordering, offsets, BSS,
+   DEX, checksums, boot class path, and class-loader context. Later image and
+   OAT management code performs relocation and publishes usable entrypoints.
+10. Destruction calls `dlclose()` before discarding ART's reservation/map
+    wrappers.
 
-The dedicated Windows loader replaces only this narrow OAT mapping role.
+If `DlOpenOatFile` fails, the path-based API falls back to
+`ElfOatFile`/`ElfFile`, ART's own generic ELF reader and segment mapper. The
+fd-based `OatFile::Open()` does not try `DlOpenOatFile` at all; it selects
+`ElfOatFile` directly. `OpenFromSdm()` tries the same dlopen path for the OAT
+ZIP entry and then falls back to `ElfOatFile`.
+
+The dedicated Windows loader replaces only the narrow Bionic mapping role. It
+does not replace `OatFileBase::ComputeFields()`, `LoadVdex()`, `Setup()`, image
+relocation, or higher-level publication.
 
 ## Selected Windows architecture
 
@@ -289,7 +324,8 @@ Acceptable reuse is limited to:
 | Segment zero-fill and PHDR containment rules | Reuse semantics, not POSIX calls |
 | POSIX `mmap(MAP_FIXED)` backend | Do not copy |
 | `soinfo`, dependencies, relocations, namespaces, TLS, constructors | Do not copy or implement |
-| OAT anchors and logical validation | Keep existing ART `ElfFile`/`OatFile` logic and harden bounds |
+| OAT anchor lookup | Parse only the restricted dynamic table in the dedicated loader; keep `OatFileBase::ComputeFields()` unchanged |
+| Logical OAT validation | Keep existing `OatFile` setup logic; make independent upstream-quality bounds fixes separately |
 | Windows reservation/protection/unwind/CFG/lifetime | New documented Win32 implementation |
 
 Bionic's `linker_phdr.cpp` is BSD-licensed. Copied code retains its copyright,
@@ -395,9 +431,9 @@ ELF layout, exact boot placement, duplicate instances, and existing committed
 
 Load transaction:
 
-1. Open OAT/VDEX/image through stable handles and deny mutation according to
-   cache policy.
-2. Validate all raw headers, tables, ranges, versions, identities, checksums,
+1. Open OAT through one stable file-region handle and deny mutation according
+   to cache policy.
+2. Validate raw ELF headers, tables, ranges, coat identity, dynamic anchors,
    and unwind data without executable memory.
 3. Calculate span/load bias with checked arithmetic.
 4. Consume the exact caller reservation or create a correctly aligned low/
@@ -405,15 +441,16 @@ Load transaction:
 5. Commit only declared load pages; leave gaps no-access.
 6. Make destinations writable and non-executable, read validated bytes from the
    retained handle, and zero every `p_memsz - p_filesz` byte including BSS.
-7. Initially populate VDEX into the validated `oatdex` range to preserve
-   current ART semantics.
-8. Validate mapped dynamic anchors and logical OAT metadata while code remains
-   non-executable.
-9. Apply checked image-relro/BSS initialization.
-10. Apply final R, RX, RW, and no-access protections with no W+X stage.
-11. Call `FlushInstructionCache` on every finalized executable range.
-12. Register/validate unwind and CFG targets, publish the generated-code range,
-    then publish roots and method entrypoints last.
+   Keep only the validated `oatdex` aperture writable for the later handoff.
+7. Validate mapped dynamic anchors, apply final protections to all other OAT
+   ranges, flush executable ranges, and register/validate unwind and CFG.
+8. Return the unpublished loader handle to `OatFileBase`.
+9. Open VDEX through a stable handle, populate and validate it in the exact
+   `oatdex` aperture, then apply its final data protection.
+10. Run existing logical OAT/dex/BSS/class-loader setup and image validation/
+    relocation.
+11. Publish the generated-code range, roots, and method entrypoints only after
+    the complete artifact set succeeds.
 
 OAT-1 is the correctness oracle. It avoids placeholder splitting, file-view
 alignment, overlap, fragmented ownership, and replacement rollback.
@@ -507,11 +544,15 @@ debug-only data, and command lines are normalized or excluded by explicit rule.
 
 Keep responsibilities separate:
 
-1. `OatElfValidator`: bounded parser for the restricted ELF/dynamic profile.
-2. `WindowsOatElfMapping`: reservation, OAT-1 copy or OAT-2 views,
-   protections, cache flush, ownership, and rollback.
-3. Existing `ElfOatFile`/`OatFileBase`: OAT, anchor, dex, BSS, VDEX, image,
-   and class-loader semantics.
+1. `WindowsOatElfLoader`: the ART-facing handle and transaction owner. Its
+   private validator is the bounded parser for the restricted ELF/dynamic
+   profile.
+2. `WindowsOatElfMapping`: an internal detail of that loader for reservation,
+   OAT-1 copy or OAT-2 views, protections, cache flush, ownership, and
+   rollback.
+3. Existing `OatFileBase`: OAT anchor requirements, dex, BSS, VDEX, image, and
+   class-loader semantics. `ElfOatFile` remains only the generic
+   non-executable/host fallback, not a Windows executable-OAT path.
 4. `WindowsAotUnwindRegistry`: fixed function-table validation and
    `RtlAddFunctionTable`/`RtlDeleteFunctionTable` lifetime.
 5. Existing generated-code registry: fault/stack readers and publication
@@ -521,6 +562,138 @@ Do not hide the OAT mapper behind general POSIX `mmap` emulation. One explicit
 transaction owner owns either the private allocation or the complete view/
 placeholder set.
 
+## Upstream-thin code-change plan
+
+### Compatibility shape
+
+From `OatFile`'s perspective, `WindowsOatElfLoader` serves the narrow role that
+`android_dlopen_ext()` serves on Android, but it is deliberately not named or
+exported as `dlopen`. The semantic correspondence is:
+
+| Android/Bionic operation | Windows OAT-only operation |
+|---|---|
+| `android_dlopen_ext(path, RTLD_NOW, extinfo)` | `WindowsOatElfLoader::Open(source, options)` |
+| `ANDROID_DLEXT_FORCE_LOAD` | Inherent: every `Open()` creates a distinct handle and mapping |
+| `ANDROID_DLEXT_RESERVED_ADDRESS` | Exact consumption of the caller's validated ART reservation |
+| `dlsym(handle, anchor)` | `handle->FindDynamicSymbolAddress(anchor)` |
+| `dladdr(anchor)` | `handle->BaseAddress()` |
+| `dl_iterate_phdr()` map discovery | Handle-owned validated segment descriptors and `MemMap`s |
+| `dlclose(handle)` | RAII destruction with reverse-order unregister and rollback |
+| Bionic namespace selection | None: imports, dependencies, and search paths are rejected |
+
+The handle remains internal to ART. It must not accept ordinary `.so` callers,
+return a Windows `HMODULE`, enter the PEB loader lists, or emulate global ELF
+symbol lookup.
+
+### File boundary
+
+Add `runtime/oat/windows_oat_elf_loader.h` and
+`runtime/oat/windows_oat_elf_loader.cc`, built only for the Windows target. The
+header exposes one move-only/RAII handle with only these concepts:
+
+- open a stable file region obtained from a path/ZIP entry or duplicated fd;
+- exact reservation and `low_4gb` options;
+- lookup of a named OAT dynamic anchor;
+- loaded base and validated span queries; and
+- close/rollback by destruction.
+
+The `.cc` owns all restricted-ELF parsing, selected Bionic-derived
+`ElfReader`/program-header algorithms, checked load-bias calculation, OAT-1
+population, final protection, unwind/CFG integration, map ownership, and
+failure unwind. Keep the copied BSD notices and exact AOSP tag/function
+provenance in this file and in distribution notices. Do not place copied
+Bionic code in `elf_file_impl.h`, `mem_map_windows.cc`, or a fake Win32
+`dlfcn` layer.
+
+The open operation must acquire one stable file identity before parsing and
+retain or duplicate the underlying Windows handle until all bytes are
+populated. Path reopening after validation is forbidden. ZIP/SDM support uses
+ART's existing `OS::OpenFileDirectlyOrFromZip()` to produce a bounded file
+region; the OAT loader does not become a ZIP loader.
+
+### Thin changes to upstream ART files
+
+Keep `runtime/oat/oat_file.h` unchanged. In `runtime/oat/oat_file.cc`, make
+only locally guarded integration changes:
+
+1. Include the Windows loader header under `ART_TARGET_WINDOWS`.
+2. Reuse the existing `DlOpenOatFile` state machine. On Windows, its handle is
+   a `WindowsOatElfLoader` RAII object rather than a Bionic `void*` handle.
+3. Delegate `Load()`, `FindDynamicSymbolAddress()`, `ComputeElfBegin()`, and
+   destruction to that handle. `PreLoad()` and `PreSetup()` are Windows
+   no-ops because the handle already owns and describes its mappings.
+4. Permit the Windows backend to satisfy `low_4gb` and exact-reservation
+   requests. Do not weaken the existing Android/host dlopen checks.
+5. Add the Windows implementation of the fd `Load()` overload and select it
+   for executable fd-based OAT. It must duplicate the source handle and apply
+   the same identity and bounds checks as path-based loading.
+6. After a Windows executable load is rejected, return the error. Never fall
+   back to `ElfOatFile`, because that would bypass the restricted profile,
+   unwind/CFG registration, stable-file transaction, and fail-closed policy.
+   Preserve `ElfOatFile` for non-executable inspection/cross-compilation.
+7. Apply the same no-bypass rule to `OpenFromSdm()` and any later executable
+   entry point.
+
+Do not fork `OatFileBase::ComputeFields()`, `Setup()`, dex/BSS interpretation,
+class-loader checks, or public `OatFile` APIs. Keep Android, Linux-host, and
+Fuchsia control flow unchanged outside the guarded calls. The desired merge
+shape is a few obvious Windows dispatch blocks around an otherwise upstream
+`oat_file.cc`, with all policy and mechanics in the dedicated file.
+
+`runtime/oat/elf_file.cc` and `elf_file_impl.h` require no Windows executable
+loader changes for OAT-1. Generic parser hardening may still be contributed as
+separate, platform-independent correctness work, but the Windows security
+boundary must not depend on carrying a large downstream `ElfFile` fork.
+
+### VDEX handoff without widening `OatFile`
+
+There is one necessary adjacent Windows change. The ELF `.dex` section is
+`SHT_NOBITS`; Android first obtains zero pages from Bionic and then replaces
+them with VDEX using `mmap(MAP_FIXED)`. A Windows OAT-1 private allocation
+cannot be replaced in-place by `MapViewOfFileEx()`.
+
+Preserve the existing `OatFileBase::LoadVdex()` call and `oatdex` contract.
+Add a Windows-private-copy reuse path in `VdexFile::OpenAtAddress()` backed by
+a narrowly named Windows `MemMap` helper. When `mmap_reuse=true` identifies a
+validated subrange of the loader's private allocation, copy the stable VDEX
+file bytes into that writable range, validate them there, apply the final data
+protection, and return a `MemMap` sharing the allocation owner. Reject partial
+ranges, aliases, changed file identity, misalignment, size disagreement, or a
+range not owned by the current OAT transaction.
+
+This keeps `oat_file.cc` unaware of the Windows copy mechanism and preserves
+the upstream order `ComputeFields -> LoadVdex -> Setup`. OAT-2 may replace this
+helper with aligned placeholder/file views only after equivalence is proved;
+it must not change the `OatFileBase` contract.
+
+### Implementation sequence
+
+1. Add characterization tests for Android/Linux-host loader selection,
+   duplicate instances, reservation handling, dynamic anchors, path/ZIP and fd
+   inputs, fallback, and teardown before changing dispatch.
+2. Add the dedicated Windows loader and parser tests while it is unreachable
+   from `OatFile`. Start with raw validation, checked span/load bias, stable
+   file identity, OAT-1 copy/zero-fill, and complete failure rollback.
+3. Add the thin `DlOpenOatFile` Windows delegation and executable no-fallback
+   rule. Confirm all non-Windows tests and generated diffs remain unchanged.
+4. Add the VDEX private-copy reuse handoff and cross-artifact size/identity
+   tests, then exercise path, ZIP/SDM, and fd entry points.
+5. Add final R/RX/RW protection, instruction-cache flush, Windows x64 unwind,
+   CFG, generated-code range integration, and reverse-order teardown. The
+   handle may become executable before `OatFileBase::Setup()` finishes, but no
+   method entrypoint may be published; any later failure destroys the handle
+   and unregisters everything.
+6. Add malformed-ELF/VDEX fuzzing, duplicate-load and unload races, injected
+   failure at every transaction stage, and authoritative Windows Server 2025
+   gates before enabling executable OAT.
+7. Add Windows writer/coat identity and unwind emission only after the loader
+   accepts synthetic restricted artifacts. Keep writer changes independent of
+   Android's ELF output path.
+
+Review each upstream ART update against two invariants: no Windows executable
+OAT can reach `ElfOatFile`, and no copied linker policy leaks out of
+`windows_oat_elf_loader.cc`.
+
 ## Publication and unload
 
 Load state advances only in this order:
@@ -529,16 +702,20 @@ Load state advances only in this order:
 stable handles and raw validation
   -> exact non-executable population
   -> mapped ELF/anchor validation
-  -> VDEX/image validation and relocation
-  -> final protections and instruction-cache flush
+  -> final OAT protections except the VDEX aperture, then cache flush
   -> unwind registration and CFG validation
+  -> return an unpublished loader handle to OatFileBase
+  -> VDEX exact population, validation, and data protection
+  -> OAT setup plus image validation and relocation
   -> generated-code range publication
   -> roots and method entrypoints
 ```
 
-No `ArtMethod`, root, image field, fault handler, or code-range reader can see a
-partial load. Failure reverses the completed prefix and returns no executable
-`OatFile`.
+This matches the existing `android_dlopen_ext()` shape: executable mappings
+exist before `OatFileBase::Setup()`, but no `ArtMethod`, root, image field, or
+generated-code range reader can acquire them. Failure after loader return
+destroys the RAII handle, reverses the completed prefix, and returns no
+executable `OatFile`.
 
 Unload reverses publication:
 
@@ -556,9 +733,9 @@ rather than leave a stale pointer into freed memory.
 
 ## Trust-boundary hardening
 
-### Required improvements over current `ElfFile`
+### Required dedicated-loader hardening
 
-ART's `runtime/oat/elf_file.cc` is the right semantic base but needs:
+The private parser in `windows_oat_elf_loader.cc` must provide:
 
 - checked program/section-table add/multiply arithmetic;
 - exact header entry sizes;
@@ -575,7 +752,10 @@ ART's `runtime/oat/elf_file.cc` is the right semantic base but needs:
 - errors instead of fatal `CHECK` behavior for malformed files.
 
 Selected Bionic validation is useful but not sufficient. Fuzz raw parsing and
-mapped-anchor validation separately without executable pages.
+mapped-anchor validation separately without executable pages. Do not obtain
+these guarantees by expanding the downstream diff in `elf_file.cc` or
+`elf_file_impl.h`. Equivalent generic `ElfFile` fixes remain desirable only
+when they are platform-independent and independently testable.
 
 ### File identity and cache
 
@@ -728,7 +908,8 @@ not grow into another PE prototype.
 ## Open implementation items
 
 1. Define the Windows OAT-ELF coat identity and exact OAT-1 profile.
-2. Add `OatElfValidator` or equivalently harden `ElfFile`.
+2. Add the private validator in `WindowsOatElfLoader`; do not route Windows
+   executable OAT through generic `ElfFile`.
 3. Record copied Bionic functions, pinned tag, BSD headers, and binary notice.
 4. Implement OAT-1 exact-reservation/private-copy loading without POSIX
    `MAP_FIXED` emulation.
