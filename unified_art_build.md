@@ -21,6 +21,13 @@ ART should have one product build pipeline:
    hosts, for native and cross targets; and
 6. the LLVM Clang GNU-style driver plus LLD for every compile and link.
 
+The pipeline also has no project-authored shell logic or POSIX-environment
+prerequisite. Source-control aliases are normalized to regular files, and all
+compiler/tool inputs and product outputs are symlink-free on both build hosts.
+Python, CMake, Ninja, and native host LLVM/JDK executables are the complete
+host-tool contract. Linux is not allowed to hide a dependency that a stock
+Windows 10 ARM64 host cannot satisfy.
+
 The same logical CMake targets must be produced for Linux and Windows. Platform
 differences are limited to source selection, ABI definitions, system libraries,
 exports, target SDK/sysroot, and the platform-correct implementation of a
@@ -59,7 +66,12 @@ The following are deliberately unsupported:
 - MinGW, including `clang-mingw` toolchains and MinGW target triples/runtimes;
 - `cl.exe`;
 - `clang-cl.exe` and Clang's CL-style frontend;
-- Makefile, NMake, Visual Studio, and Ninja Multi-Config CMake generators; and
+- Makefile, NMake, Visual Studio, and Ninja Multi-Config CMake generators;
+- Bash, `sh`, `ash`, WSL, MSYS2, Cygwin, or a POSIX utility layer as a build
+  prerequisite;
+- project build logic in `.sh`, `.bat`, `.cmd`, or PowerShell scripts;
+- operating-system-resolved symbolic links, junctions, or other path aliases
+  as compiler/tool inputs or product outputs; and
 - invoking `ld.lld` or `lld-link` directly as a separate product link path.
 
 LLD remains the linker. On a Windows target, plain `clang`/`clang++` may select
@@ -83,6 +95,10 @@ driver with GNU-style options and `-fuse-ld=lld`.
   `art-compiler.dll`.
 - Keep target code generation ABI-correct during cross compilation.
 - Reject stale toolchain caches and accidental host-library discovery.
+- Run directly on Windows 10 ARM64 with native Windows host tools and no WSL,
+  Cygwin, POSIX shell, or Make installation.
+- Use no symlink or Windows junction/reparse-point dependency on Linux or
+  Windows.
 - Make the product graph smaller and easier to audit without deleting useful
   Windows verification probes.
 
@@ -117,16 +133,22 @@ from `Android.bp`. Only the target profile may do that.
 
 | Build host | Target | Mode | Required target environment |
 |---|---|---|---|
-| Linux | Linux x86-64 | native | explicit or validated native Linux SDK/sysroot |
-| Linux | Windows x86-64 | cross | Windows SDK/UCRT, MSVC-ABI libraries, libc++/compiler-rt as selected by the profile |
-| Windows | Windows x86-64 | native | the same target ABI contract and an explicit Windows SDK |
-| Windows | Linux x86-64 | cross | an explicit Linux sysroot; never libraries found from the Windows host |
+| Linux x86-64 | Linux x86-64 | native | explicit or validated native Linux SDK/sysroot |
+| Linux x86-64 | Windows x86-64 | OS/ABI cross | Windows SDK/UCRT, MSVC-ABI libraries, libc++/compiler-rt as selected by the profile |
+| Windows 10 ARM64 | Windows x86-64 | architecture cross | the same target ABI contract and an explicit Windows SDK |
+| Windows 10 ARM64 | Linux x86-64 | OS/architecture cross | an explicit Linux sysroot; never libraries found from the Windows host |
 
 All four cells use the same Python frontend, `bp2cmake`, overlay factory,
 CMake source tree, target names, and Ninja build flow. A cell may be enabled in
 CI only when its target SDK/sysroot is provisioned. In particular,
 Windows-to-Linux must fail at configuration if no Linux sysroot was supplied;
 falling back to host headers or libraries is forbidden.
+
+Windows x86-64 can remain a compatible build-host variant, but it must not be
+the only Windows CI coverage. Windows 10 ARM64 is the portability baseline:
+Python, CMake, Ninja, Clang/LLVM, and the JDK run as native Windows ARM64 host
+programs while Clang and javac produce the requested target artifacts. The
+build never executes x86-64 target binaries during configure or generation.
 
 ## Current-state analysis
 
@@ -222,6 +244,60 @@ ordinary, fail-fast stage owned by the same frontend and build directory.
 Likewise, the Bash-only Linux generator and boot-jar entry points cannot be the
 portable frontend for a native Windows build host.
 
+### Symlink audit
+
+The current checkout contains 303 filesystem symlinks:
+
+- 279 under `vendor/art`, including 277 test aliases;
+- 14 under `vendor/logging`;
+- four under other `vendor/external` trees;
+- one each under `vendor/libbase`, `vendor/libprocinfo`, and
+  `vendor/unwinding`;
+- the project-owned `vendor/fmtlib -> external/fmtlib` compatibility alias;
+- two project-owned `compat/openjdk_inc/.../fdlibm` directory aliases.
+
+Nine are already broken because formatting metadata points at the absent AOSP
+`build/soong` tree. None of the repository links is absolute or escapes the
+repository. The current `build/` and staging trees contain no symlinks.
+
+Most vendored links are outside the product closure, but three root-project
+links expose real portability defects. Legacy Windows generated CMake uses
+`vendor/fmtlib`; the current Linux graph correctly uses
+`vendor/external/fmtlib` directly. `native/CMakeLists.txt` still consumes the
+fdlibm compatibility link farm to satisfy libopenjdk's relative include.
+
+The current external `windows_x64-dev-env` path is also unsuitable: it contains
+11 absolute symlinks back to the older `win64-dev-env`, including its SDK,
+libraries, CRT, scripts, and CMake toolchain. The normal Linux
+`/usr/bin/clang`, `/usr/bin/clang++`, and `/usr/bin/python3` names are symlink
+aliases as well. A unified build must use real, canonical files/directories and
+cannot rely on any of these aliases after tool discovery.
+
+### POSIX-host assumptions
+
+The current product path assumes a Unix userland in several places:
+
+- graph generation is launched by `native/generate.sh` and Windows Phase 0 has
+  another Bash generator;
+- source provisioning is launched by `tools/vendor-sync.sh`;
+- boot-jar and staging flows use Bash arrays, `source`, pipelines, shell
+  redirection, `/tmp`, `rm`, `cp`, `find`, `grep`, `stat`, `strings`, and
+  `timeout`;
+- documentation uses `$(nproc)` and environment-activation scripts; and
+- generated `operator_out` CMake commands use shell `>` redirection instead of
+  passing an output path to a process: 52 commands in the current Linux graph,
+  45 in Windows Phase 1, and three in Windows Phase 0.
+
+These are hard Windows 10 ARM64 blockers without WSL. Cygwin is not a fallback;
+besides being outside the desired toolchain, an adequate Cygwin environment is
+not available for this ARM64 baseline.
+
+The reusable Python codegen layer is already mostly suitable: its `_run()`
+helper uses an argument vector with `subprocess.run`, captures stdout itself,
+and the mterp/header generators are Python. The unified emitter should route
+all generation through that layer instead of reproducing shell syntax in
+CMake.
+
 ## Required invariants
 
 The unified implementation should enforce these conditions rather than merely
@@ -249,6 +325,19 @@ document them:
 11. the logical shared/static target topology is identical between Linux and
     Windows unless a reviewed manifest records a platform exception.
 12. `art-compiler` is always a CMake `SHARED` target.
+13. no project-authored build step invokes or requires Bash, `sh`, `ash`, WSL,
+    MSYS2, Cygwin, Make, or a POSIX command-line utility.
+14. every project-owned Python subprocess is started with an argument vector
+    and shell execution disabled; no emitted CMake command payload contains
+    shell redirection, a pipe, command substitution, or command chaining.
+15. Git symlink entries may exist in a source checkout as real links or
+    `core.symlinks=false` plain files, but a manifest-driven source normalizer
+    materializes any required alias as regular files before graph emission. No
+    compiler/tool input, SDK/sysroot, binary-directory, generated, staging, or
+    packaged-artifact path depends on an OS-resolved symlink, junction, or
+    project-controlled reparse point.
+16. Windows 10 ARM64 uses native ARM64 host Python, CMake, Ninja, LLVM, and JDK
+    executables. Cross-target binaries are never host tools.
 
 ## Proposed repository layout
 
@@ -272,9 +361,12 @@ overlay/
   art_port_policy.py            one target-aware overlay factory
 tools/
   build_art.py                  one user/CI frontend
+  path_audit.py                 symlink/reparse and Windows-name validation
+  command_audit.py              shell/tool invocation validation
   bp2cmake/                     one evaluator and emitter
 out/
   <preset>/
+    source_projection/
     generated/
       art_graph.cmake
       graph_manifest.json
@@ -300,6 +392,12 @@ both `bp2cmake` and CMake. At minimum it contains:
 ```text
 profile_id
 build_host_os
+build_host_arch
+host_python
+host_cmake
+host_ninja
+host_llvm_root
+host_jdk
 target_os
 target_arch
 target_triple
@@ -312,12 +410,15 @@ build_type
 root_modules
 source_roots
 capabilities
+source_alias_policy = materialize_regular_files
+managed_path_policy = reject_symlinks_and_reparse_aliases
+shell_policy = no_shell
 ```
 
-`build_host_os` controls only executable suffixes, path handling, and host-tool
-discovery. `target_os` controls Blueprint selects and target policy. The target
-graph for `windows-x86_64` must therefore be the same whether generation runs
-on Linux or Windows.
+The build-host fields control only executable suffixes, path handling, and
+host-native tool discovery/validation. `target_os` controls Blueprint selects
+and target policy. The target graph for `windows-x86_64` must therefore be the
+same whether generation runs on Linux x86-64 or Windows 10 ARM64.
 
 The serialized profile should have separate `build_host` and `target`
 sections. `bp2cmake` consumes only the target, AOSP-build-kind, source, and
@@ -447,8 +548,8 @@ names are:
 ```text
 linux-x64-on-linux
 windows-x64-on-linux
-windows-x64-on-windows
-linux-x64-on-windows
+windows-x64-on-windows-arm64
+linux-x64-on-windows-arm64
 ```
 
 Each preset has its own `out/<preset>` binary directory. The checked-in preset
@@ -479,12 +580,69 @@ the generated-graph/profile paths, then write the build manifest. Calling CMake
 directly is an expert/debug flow and requires an already checked generated
 graph; it must not trigger a second, subtly different generator implementation.
 
+## POSIX-environment-free Windows 10 ARM64 host contract
+
+The Windows host is a normal Win32 environment, not a Unix compatibility
+environment. The required host executables are native Windows ARM64 builds of:
+
+- Python;
+- CMake;
+- Ninja;
+- Clang/LLVM, including the LLVM inspection/archive tools; and
+- a JDK when the boot jar is requested.
+
+The Clang host executable architecture and its output target are independent.
+For example, ARM64 `clang++.exe` runs on Windows 10 ARM64 with
+`--target=x86_64-pc-windows-msvc` to produce `art-compiler.dll`. The matching
+target SDK contains headers and libraries, not helper executables that the
+build tries to run. The same separation applies to Windows-to-Linux builds.
+
+All orchestration belongs in Python using `pathlib`, `shutil`, hashing/archive
+libraries, and `subprocess.run(argv, shell=False, check=True)`. Resolve and
+validate `sys.executable` once, then use the recorded final regular executable
+for child Python processes rather than a symlink spelling. Timeouts use the
+subprocess API; file copies, removals, scans, and byte searches use Python or
+CMake built-ins. No project logic may depend on command parsing by `cmd.exe` or
+PowerShell either.
+
+CMake custom commands must pass one executable and an argument list with
+`VERBATIM`. They may invoke portable `cmake -E` operations or Python helpers.
+They must not contain:
+
+- `>`, `<`, `|`, `&&`, `||`, backticks, or command substitution;
+- Unix tools such as `cp`, `rm`, `mkdir`, `find`, `grep`, `sed`, `awk`,
+  `stat`, `file`, `strings`, `readlink`, or `timeout`;
+- environment activation through `source` or an `.sh` file;
+- `/tmp`, `~`, `$HOME`, or POSIX-only path construction; or
+- executable-bit or shebang assumptions for Python scripts.
+
+`operator_out` is a concrete required fix: the emitter must call the existing
+Python codegen wrapper with an explicit output argument. The wrapper captures
+the upstream script's stdout and atomically writes the file; generated CMake
+must not emit `python ... > output.cc`.
+
+Use response files for long compiler, linker, javac, and D8 argument lists.
+The frontend should choose a short per-preset output root and validate Windows
+path legality, case-fold collisions, reserved device names, trailing spaces or
+dots, and configured long-path support before CMake runs. These checks apply on
+Linux too so a Linux-generated graph cannot contain names that fail only on
+Windows.
+
+CI must configure and build from a stock Windows process environment with
+WSL, Cygwin, MSYS2, Bash, Make, and Unix utilities absent from `PATH`. Merely
+running a Python wrapper from Git Bash does not satisfy this gate. CMake may
+use a native `cmd.exe /C` wrapper internally when implementing a Ninja custom
+command or working directory; that implementation detail is allowed, but the
+project command payload contains no batch logic or shell operators.
+
 ## LLVM toolchain contract
 
 ### Common contract
 
 Both toolchain files must configure:
 
+- a host-native Clang/LLVM installation, including Windows ARM64 executables
+  on the Windows 10 ARM64 build host;
 - `clang` for C and assembly-with-cpp;
 - `clang++` for C++ and final C++ links;
 - LLVM binutils (`llvm-ar`, `llvm-ranlib`, `llvm-nm`, `llvm-strip`, and related
@@ -503,6 +661,11 @@ the already provisioned libc++/compiler-rt combination. Linux may retain a
 validated target runtime initially or move to libc++ as a separately tested ABI
 decision; it must not depend on whichever C++ runtime happens to be found on
 the build host.
+
+Toolchain configuration is data, not an activation script. The profile or user
+preset passes regular-file roots for host LLVM and the target SDK/sysroot.
+`env.sh`, `source`, `cygpath`, registry-dependent `cl.exe` discovery, and
+inherited Unix environment variables are not part of the contract.
 
 ### Representative driver commands
 
@@ -571,6 +734,98 @@ The profile's dependency manifest, rather than build-host discovery, should
 decide whether a library is built from AOSP source or imported from the target
 SDK.
 
+## Symlink-normalized path contract
+
+Git symlink entries are allowed to exist in the source checkout. On Linux they
+may be filesystem symlinks; with Git for Windows and `core.symlinks=false`, the
+same entry may be an ordinary file whose content is only the relative target
+name. The build must accept both representations and produce the same graph.
+It must never pass either the link or the placeholder file to a compiler.
+
+Before `bp2cmake` scans paths, the Python frontend loads a source-alias map from
+the source manifest. The evaluator resolves logical paths through that map,
+without asking the OS to follow a link. After dependency closure is known and
+before CMake is emitted, the frontend normalizes every required source and
+declared include tree. For each Git mode `120000` entry it:
+
+1. reads the link target from version-control metadata rather than relying on
+   host filesystem resolution;
+2. rejects an absolute target, repository escape, cycle, type mismatch, or
+   target missing from the pinned source manifest;
+3. resolves chained aliases entirely within the manifest;
+4. copies the required target file or the relevant declared include/source
+   tree into `out/<preset>/source_projection` as ordinary files/directories,
+   preserving the logical relative layout; and
+5. records alias, target, file modes, and content hashes in the graph inputs.
+
+The emitter references only the regular source projection or a canonical
+source path whose components and reachable declared include tree passed the
+non-link scan. Code generation, CMake, Ninja, Clang, javac, and packaging never
+call `readlink`, follow a junction, or compile the small text placeholder
+created by Git for Windows.
+
+The source checkout may therefore retain upstream symlinks that are not in the
+product closure. Broken formatting/test links outside the closure do not fail a
+product build. If a required alias cannot be normalized, the frontend fails
+during source validation with the owning module, alias, and expected target;
+the failure cannot surface later as a compiler syntax/file-not-found error.
+
+The current product should still prefer canonical source locations:
+
+- remove `vendor/fmtlib` from generated product paths and address the real
+  `vendor/external/fmtlib` submodule directly;
+- replace the fdlibm link farm with an explicit generated ordinary-file include
+  projection or a reviewed source/include rewrite; and
+- if vendored ART tests are enabled, normalize their shared Java/source aliases
+  through the same regular-file projection rather than recreating links.
+
+The product must not create, stage, or package a symlink. The same rule applies
+to Windows directory junctions and other project-controlled name-surrogate
+reparse points. Linux CI enforces the output/tool rule too; Linux's permissive
+symlink behavior must not conceal a Windows failure.
+
+The strict no-link scope includes every component of:
+
+- the normalized source projection and generated include paths;
+- Python, CMake, Ninja, Clang/LLVM, JDK, SDK, sysroot, and dependency paths;
+- binary and generated-source directories;
+- imported libraries and runtime staging inputs; and
+- staged directories and archive entries.
+
+The frontend inspects these managed path components without following them. On
+POSIX it uses `lstat` semantics. On Windows it also checks reparse
+attributes/tags so a junction is not mistaken for an ordinary directory.
+Discovery may report a canonical real tool path, but the resolved profile and
+all Ninja rules use the final regular file path. A user-supplied managed path
+that still contains an alias fails before generation.
+
+Git mode `120000` must be recorded for the root repository and every
+participating submodule because `core.symlinks=false` can turn a symlink blob
+into a regular text file containing only the target name. Filesystem inspection
+alone would then miss the semantic link and a compiler could consume the
+placeholder.
+
+Source provisioning should move to a shell-free `tools/vendor_sync.py` that
+writes a platform-neutral source manifest containing repository identities,
+paths, modes, link payloads, and hashes. The build host reads that manifest
+with Python and does not require a Git executable. The manifest is pinned and
+checked in alongside the submodule/source lock. When a developer builds from a
+live Git checkout and Git is available, an optional cross-check may
+refresh/verify the manifest, but it is not part of the Windows host contract.
+`bp2cmake` validates every source/include in the emitted closure against the
+normalized projection, source manifest, and filesystem metadata.
+
+The SDK/toolchain provisioner must unpack a real directory tree. The current
+`windows_x64-dev-env` alias tree is rejected rather than dereferenced. Host
+compiler discovery similarly records and invokes the actual LLVM executable,
+not `/usr/bin/clang`-style symlink names.
+
+Packaging performs a final non-following traversal. ZIP/JAR/TAR metadata that
+encodes a symlink is rejected even if extraction on the current host would
+materialize it. The build manifest records
+`source_alias_policy: materialize_regular_files`,
+`output_symlink_policy: reject`, and the path-audit digest.
+
 ## Host tools versus target generation
 
 Every generator must be classified explicitly:
@@ -596,6 +851,10 @@ continue replacing files only when content changes. Configuration may generate
 the CMake graph needed to create targets, but compilation-derived artifacts
 such as `asm_defines.h` should be ordinary build graph outputs, not hidden
 configure side effects.
+
+Every generator accepts explicit input and output arguments. A generator that
+only writes stdout upstream is called through the shared Python capture helper;
+the CMake emitter never implements output capture with shell redirection.
 
 If a future generator must compile and execute a helper, it needs a distinct
 native host-tool target/build. It may not execute a cross-target program through
@@ -643,9 +902,8 @@ art-compiler.dll
 ```
 
 This compiles approximately 95 compiler translation units twice, as Linux
-currently does.
-That cost is preferable to accidentally introducing a DSO cycle during the
-unification migration. In particular, do not make `art.dll` import
+currently does. That cost is preferable to accidentally introducing a DSO
+cycle during the unification migration. In particular, do not make `art.dll` import
 `art-compiler.dll` while `art-compiler.dll` imports `art.dll`.
 
 An object-library optimization is not automatically safe on Windows. The copy
@@ -704,12 +962,16 @@ Each binary directory should contain a build manifest with at least:
 - build host OS/architecture;
 - target OS/architecture/triple;
 - canonical Clang paths and `--version` output;
+- host executable formats/architectures for Python, CMake, Ninja, LLVM, and the
+  JDK;
 - CMake and Ninja versions;
 - LLD selection;
 - SDK/sysroot identity and version/digest;
 - C/C++ runtime selection;
-- build type and effective optimization/debug policy; and
-- generated module topology digest.
+- build type and effective optimization/debug policy;
+- generated module topology digest;
+- shell-free command-audit digest; and
+- symlink/reparse-point audit policy and digest.
 
 The frontend compares the manifest before every configure/build. A mismatch
 must require a new preset directory or explicit cache recreation; it must not
@@ -733,6 +995,10 @@ It should:
 
 - use `out/<preset>/bootjar`, never shared `/tmp/bootbuild` state;
 - treat javac and D8 failures as fatal;
+- launch `javac`/`java` with argument vectors and response files, never a shell
+  command string;
+- use Python timeouts, file/archive APIs, and byte inspection instead of Unix
+  utilities;
 - declare the selected JDK, R8/D8, Java sources, aconfig inputs, and target
   profile in a manifest;
 - write atomically; and
@@ -748,6 +1014,9 @@ or partial invocation cannot contaminate another target build.
 ### Phase 1: freeze and compare current graphs
 
 - Add manifest output and `--check` mode to `bp2cmake`.
+- Add Git-mode/filesystem symlink and Windows reparse-point audits.
+- Add a generated-command scanner for shells, shell operators, POSIX utilities,
+  and Make-family tools.
 - Capture current Linux and Windows normalized module graphs.
 - Classify every kind/source/dependency difference as common policy, a genuine
   target difference, a missing Windows port, or stale handwritten state.
@@ -762,6 +1031,8 @@ or partial invocation cannot contaminate another target build.
   emitter APIs.
 - Generate both target graphs into isolated build directories and compare their
   topology manifests.
+- Split build-host tool architecture from target architecture and provision a
+  regular-file Windows ARM64 host-tool bundle.
 
 ### Phase 3: introduce one product CMake entry point
 
@@ -771,6 +1042,12 @@ or partial invocation cannot contaminate another target build.
   `tools/build_art.py`.
 - Move Phase-1 probe executables to a test subtree that links the product graph.
 - Remove product target/source duplication from verification CMake files.
+- Replace shell redirection in emitted codegen rules with explicit Python
+  output arguments.
+- Replace fdlibm and fmtlib compatibility aliases with canonical paths and
+  regular-file generation.
+- Run the first POSIX-environment-free, symlink-normalized Windows 10 ARM64
+  configure/build gate.
 
 ### Phase 4: make Windows DSO topology equal
 
@@ -795,8 +1072,13 @@ inputs:
 - `overlay/port_policy.py` and `overlay/port_policy_windows.py` after their
   policies are merged;
 - build instructions or scripts that select Make, NMake, Visual Studio, or
-  Ninja Multi-Config; and
-- shell-only boot-jar staging with ignored failures and shared `/tmp` output.
+  Ninja Multi-Config;
+- shell-only boot-jar staging with ignored failures and shared `/tmp` output;
+- all project-owned Git mode `120000` entries after canonical fmtlib/fdlibm
+  paths are in service;
+- environment-activation scripts and `.sh` product entry points; and
+- the symlink-based `windows_x64-dev-env` alias tree from supported toolchain
+  instructions.
 
 Useful probes and result documents should remain. They become tests of the
 unified product targets instead of alternative ways to build those targets.
@@ -820,11 +1102,18 @@ unified product targets instead of alternative ways to build those targets.
 - Generating twice produces no diff and identical digests.
 - Linux-host and Windows-host generation of the same target profile produces
   equivalent graph manifests.
+- checkouts with real Git symlinks and with `core.symlinks=false` link-text
+  files produce identical normalized source and graph digests for the product
+  closure;
 - every preset reports exactly `Ninja`, one build type, Clang GNU frontend, the
   intended target triple, and LLD;
 - forbidden tool/generator names do not occur in CMake caches or Ninja command
-  rules; and
-- cross builds contain no undeclared build-host include or library path.
+  rules;
+- cross builds contain no undeclared build-host include or library path;
+- Windows 10 ARM64 configures using native ARM64 host tools from a stock Windows
+  environment with no POSIX layer; and
+- Git-mode and filesystem audits report no unnormalized symlink/reparse-point
+  path in the emitted closure, toolchain, binary tree, or stage tree.
 
 ### Command-line audit
 
@@ -834,9 +1123,12 @@ Audit `compile_commands.json` and `ninja -t commands` for every matrix cell:
 - C++ and final C++ links use `clang++`;
 - shared-library links contain driver-level `-shared` and `-fuse-ld=lld`;
 - Linux executable compile/link rules show the expected `-fPIE`/`-pie` result;
-- Windows image rules show the required PE ASLR flags through the driver; and
+- Windows image rules show the required PE ASLR flags through the driver;
 - no rule invokes GCC, G++, MinGW, Clang-CL, CL, Make, NMake, a Visual Studio
-  tool, `ld.lld`, or `lld-link` directly.
+  tool, `ld.lld`, or `lld-link` directly;
+- no rule invokes a POSIX shell or Unix utility; and
+- no project-authored command payload contains redirection, pipes, chaining,
+  or command substitution.
 
 ### Artifact and topology validation
 
@@ -848,20 +1140,26 @@ Audit `compile_commands.json` and `ninja -t commands` for every matrix cell:
 - LLVM object inspection confirms the target file format, architecture,
   imports/exports, and PIE/ASLR properties;
 - staged executables resolve only staged target DSOs plus approved platform
-  libraries; and
-- the Windows product has no static compiler fallback or cyclic DLL imports.
+  libraries;
+- the Windows product has no static compiler fallback or cyclic DLL imports;
+- non-following scans find no symlink, junction/name-surrogate reparse point,
+  or archive symlink entry in build and staged artifacts.
 
 ### Build and runtime validation
 
 - clean `RelWithDebInfo` builds pass for each provisioned matrix cell;
-- native Linux and native Windows smoke tests pass;
-- cross-built artifacts pass the same smoke tests under an explicit target
-  runner where available; no runner is used during configure;
+- native Linux smoke tests pass;
+- Windows x86-64 and other cross-built artifacts pass smoke tests only under an
+  explicit target runner or emulation environment where provisioned; the
+  Windows 10 ARM64 build gate does not depend on x86-64 emulation and no runner
+  is used during configure;
 - incremental no-op builds execute no compile/link/generation commands;
 - changing an `Android.bp`, overlay rule, codegen input, or target ABI setting
-  rebuilds exactly the affected graph/output; and
+  rebuilds exactly the affected graph/output;
 - boot-jar failure stops the product build and cannot leave a successful-looking
-  staged artifact.
+  staged artifact;
+- a Linux build with shell/POSIX tools deliberately removed from the frontend's
+  `PATH` still generates and builds, proving both hosts use the same contract.
 
 ## Risks and controls
 
@@ -878,6 +1176,11 @@ Audit `compile_commands.json` and `ninja -t commands` for every matrix cell:
 | Stale generated snapshot | unreviewed source/dependency drift | build-tree generation, digest, and `--check` |
 | Stale CMake cache | wrong SDK, flags, or optimization | per-preset directory and build fingerprint |
 | Shared `/tmp` boot state | cross-target contamination | preset-local atomic output |
+| Linux follows a symlink while Windows stores its link text | compiler sees different or invalid input | manifest-driven alias resolution and identical regular-file projection |
+| Toolchain/SDK path contains a junction or symlink | non-reproducible host-dependent toolchain | regular-file toolchain package and component-wise path validation |
+| Ninja rule contains `>` or a Unix utility | Windows 10 ARM64 build failure | explicit Python output APIs and shell-free command scanner |
+| x86-64 helper is run on Windows ARM64 | emulation dependency or configure failure | host-tool architecture validation; never execute target outputs |
+| Case/path-length difference appears only on Windows | generation or compile failure | Windows legality/case-fold checks on every host and response files |
 
 ## Relationship to Windows AOT/OAT
 
@@ -906,4 +1209,7 @@ Windows DSO parity, then optimize duplicate compiler work. The success measure
 is not one giant platform-conditional CMake file. It is one deterministic
 target graph, one reviewed target-aware overlay, one target-neutral CMake entry
 point, and one Clang/Ninja command contract whose small platform mappings are
-explicit and mechanically validated.
+explicit and mechanically validated. That command contract uses only native
+Python/CMake/Ninja/LLVM/JDK host executables, consumes only regular canonical
+paths, and works unchanged on Linux and a stock Windows 10 ARM64 host without
+WSL, Cygwin, a POSIX shell, Make, or reliance on symlink resolution.
