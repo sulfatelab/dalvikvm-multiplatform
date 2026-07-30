@@ -13,6 +13,8 @@ WINEDEBUG="${WINEDEBUG:--all}"
 cmake --build "$BUILD" --target \
   art \
   win32_cet_policy_probe \
+  win32_debugger_probe \
+  win32_art_embedding_probe \
   win32_thread_stack_probe \
   win32_stack_page_probe \
   win32_stack_growth_probe \
@@ -60,6 +62,8 @@ required_build_files=(
   "$BUILD/dalvikvm.exe"
   "$BUILD/art.dll"
   "$BUILD/win32_cet_policy_probe.exe"
+  "$BUILD/win32_debugger_probe.exe"
+  "$BUILD/win32_art_embedding_probe.exe"
   "$BUILD/win32_thread_stack_probe.exe"
   "$BUILD/win32_stack_page_probe.exe"
   "$BUILD/win32_stack_growth_probe.exe"
@@ -90,6 +94,8 @@ printf '%s\n' "$boundary_unwind_output"
 
 for executable in \
   win32_cet_policy_probe.exe \
+  win32_debugger_probe.exe \
+  win32_art_embedding_probe.exe \
   win32_thread_stack_probe.exe \
   win32_stack_page_probe.exe \
   win32_stack_growth_probe.exe \
@@ -138,6 +144,8 @@ managed_so_child_rounds=2
 managed_recovery=stack-trace,nanoTime,identityHashCode,System.gc
 xmm_boundary_registers=10
 xmm_self_test_mask=1023
+xmm_exception_iterations=32
+xmm_exception_self_test_mask=1023
 fatal_dispatch_modes=static,jit-j2,jit-j1,osr-j2,osr-j1
 diagnostic_fatal_modes=jni-av,jni-raise,native-worker
 fatal_unwind_trace=bounded-32-live-veh

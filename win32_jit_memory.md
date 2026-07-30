@@ -4,7 +4,7 @@
 Windows JIT memory path. JIT-5 removed the J-1 diagnostic opt-out and
 single-view fallback, then passed post-removal Wine, Linux, and native Windows
 regressions. Section construction now fails closed instead of downgrading W^X.
-**Updated:** 2026-07-29
+**Updated:** 2026-07-30
 **Target baseline:** Windows 10 version 1803 or later (NTDDI_WIN10_RS4)
 **Related:** [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md),
 [win32_heap_memory.md](win32_heap_memory.md),
@@ -948,6 +948,7 @@ None of this justifies retaining the RWX J-1 path as the product default.
 | W-002 native attach entries | Regular and daemon native threads call a pre-JITed Java callback, allocate, validate daemon state and exact values, detach, and verify `JNI_EDETACHED` in both memory and interpreter modes |
 | W-003 quick-frame/XMM boundary | CLOSED: opt-in counters compile out of product artifacts; nterp and threshold-zero JIT each reach all four frame families; native Windows build 19044 passes 8/8 frame runs and 6/6 XMM runs with 19/19 records, J-2 creation, and clean fatal/dump scans |
 | Dynamic JIT PE unwind | W-010 E9 accepts static, J-2/J-1 JIT, and J-2/J-1 OSR fatal origins on build 26100; registration precedes publication, exact deletion precedes reuse, and focused lifecycle/re-registration gates pass |
+| FS-2 native exception-unwind/JIT boundary | Windows Server 2025 build 26100 accepts threshold-zero JIT debugger continuation and full-width XMM6-XMM15 preservation through managed exception unwind; safe CET dynamic/reserved policy fields remain accepted |
 | Threshold-zero CriticalNative | Direct visitor uses Windows x64 unified ordinals/home area; dlsym caller PC preserved; repeated J-1 and dual-view probes pass |
 | Unresolved CriticalNative dlsym | ART-owned `JVM_NativeLoad` bridge; mixed/spilled/scalar exported calls pass through both load APIs |
 | CriticalNative method tracing | Registered and unresolved suites pass during/after tracing in J-1 and dual-view modes; mode restores to zero and trace output is deleted |
@@ -1009,9 +1010,11 @@ independent package.
 | JIT-5 (done) | Remove `ART_WINDOWS_X64_JIT_DUAL=0` and its single-view Windows diagnostic branch | Accepted 2026-07-29 on Windows Server 2025 build 26100: 29 cases and 36/36 records pass; source and `art.dll` lack the opt-out/fallback; the retired key remains inert; Wine and Linux regressions pass; see `RESULT-jit5-native.md` |
 
 The shared FS-3 dynamic-table churn requirement is complete through JIT-3.
-The remaining stack-budget, debugger, CET-policy, exception-unwind XMM,
-pending-range, and embedding work scheduled in
-[win32_faults_and_stacks.md](win32_faults_and_stacks.md) is independent of the
+FS-2 now closes the native debugger continuation, CET policy classification,
+exception-unwind XMM, and embedding gates that exercise the JIT/managed
+boundary. Conditional pending-range, reservation-correlation, second-host,
+negative-exception, and debugger-quality dump-stack work remains scheduled in
+[win32_faults_and_stacks.md](win32_faults_and_stacks.md), independent of the
 completed JIT-1 through JIT-5 gates.
 
 ## 14. Decision log

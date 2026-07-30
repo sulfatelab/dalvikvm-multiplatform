@@ -45,6 +45,7 @@ def run_case(
         "ART_WINDOWS_X64_QUICK_INVOKE",
         "ART_WINDOWS_X64_CRASH_NATIVE_WARMUP",
         "ART_WINDOWS_X64_FATAL_UNWIND_TRACE",
+        "ART_WINDOWS_X64_TEST_FORCE_CET_POLICY",
     ):
         env.pop(key, None)
     if env_extra:
@@ -79,6 +80,7 @@ def run_fatal_case(
     markers: tuple[str, ...],
     forbidden: tuple[str, ...] = (),
     env_extra: dict[str, str] | None = None,
+    require_nonzero: bool = True,
 ) -> str:
     crash = root / "run/crash"
     before = {
@@ -92,7 +94,7 @@ def run_fatal_case(
         markers=markers,
         forbidden=forbidden,
         env_extra=env_extra,
-        require_nonzero=True,
+        require_nonzero=require_nonzero,
     )
     valid = []
     for path in crash.glob("*.dmp"):
@@ -139,6 +141,57 @@ def main() -> int:
         [wine, "./win32_cet_policy_probe.exe"],
         markers=("WIN32_CET_POLICY_PROBE PASS",),
     )
+    for policy in (
+        "enable-user-shadow-stack",
+        "audit-user-shadow-stack",
+        "set-context-ip-validation",
+        "audit-set-context-ip-validation",
+        "strict-user-shadow-stack",
+        "block-non-cet-binaries",
+        "block-non-cet-binaries-non-ehcont",
+        "audit-block-non-cet-binaries",
+        "relaxed-context-ip-validation",
+    ):
+        run_case(
+            root,
+            f"cet_forced_{policy}",
+            [wine, "./dalvikvm.exe", "-Xusejit:false", "-cp", "run/boot.jar"],
+            markers=(
+                "ART Win32 startup rejected: incompatible CET user-shadow-stack",
+                "decision=incompatible",
+                "test_policy_forced=1",
+                "test_policy_input_valid=1",
+            ),
+            forbidden=("W010ManagedFaultProbe", "Windows x64 CompileMethod done success=1"),
+            env_extra={"ART_WINDOWS_X64_TEST_FORCE_CET_POLICY": policy},
+            require_nonzero=True,
+        )
+    for policy in ("dynamic-apis-out-of-proc-only", "reserved-all"):
+        run_case(
+            root,
+            f"cet_forced_safe_{policy}",
+            [
+                wine,
+                "./dalvikvm.exe",
+                "-Xbootclasspath:run/boot.jar",
+                "-Xbootclasspath-locations:run/boot.jar",
+                "-Ximage:/nonexistent-no-boot-image",
+                "-XjdwpProvider:none",
+                "-Xms64m",
+                "-Xmx512m",
+                "-Xusejit:false",
+                "-cp",
+                "run/w010managedfaultprobe.jar",
+                "W010ManagedFaultProbe",
+                "npe",
+            ],
+            markers=(
+                "W010ManagedFaultProbe NPE OK read=64 write=64 recovery=128 gc=16",
+                "W010ManagedFaultProbe OK mode=npe",
+            ),
+            forbidden=handled_forbidden,
+            env_extra={"ART_WINDOWS_X64_TEST_FORCE_CET_POLICY": policy},
+        )
     run_case(
         root,
         "osr_unwind",
@@ -281,7 +334,7 @@ def main() -> int:
             env_extra.update(
                 ART_WINDOWS_X64_JIT="1",
                 ART_WINDOWS_X64_NTERP="1",
-                ART_WINDOWS_X64_JIT_FILTER="W003XmmSentinelProbe.managedCallback",
+                ART_WINDOWS_X64_JIT_FILTER="W003XmmSentinelProbe",
                 ART_WINDOWS_X64_JIT_LOG_COMPILES="1",
             )
             vm_args.extend(
@@ -291,12 +344,14 @@ def main() -> int:
             f"W003XmmSentinelProbe mode={mode}",
             "mask=0 selfTestMask=63 iterations=128",
             "fullSelfTestMask=1023",
+            "exceptionMask=0 exceptionCaught=32 exceptionIterations=32 exceptionSelfTestMask=1023",
             "W003XmmSentinelProbe OK",
             "main end exception=0",
         ]
         forbidden = list(handled_forbidden)
         if mode == "jit":
             markers.append("success=1 method=int W003XmmSentinelProbe.managedCallback(")
+            markers.append("success=1 method=int W003XmmSentinelProbe.managedExceptionCallback(")
         else:
             forbidden.append("Windows x64 CompileMethod done success=1 method=")
         run_case(
@@ -413,6 +468,24 @@ def main() -> int:
 
     run_fatal_case(
         root,
+        "art_embedding",
+        [wine, "./win32_art_embedding_probe.exe"],
+        markers=(
+            "WIN32_ART_EMBED runtime_create result=0",
+            "WIN32_ART_EMBED predecessor_uef resumed calls=1",
+            "WIN32_ART_EMBED frame_seh caught phase=runtime-active",
+            "WIN32_ART_EMBED late_uef installed predecessor_is_art=1",
+            "WIN32_ART_EMBED teardown late_uef_preserved=1",
+            "WIN32_ART_EMBED frame_seh caught phase=runtime-unloaded",
+            "WIN32_ART_EMBED result foreign_veh_calls=3 predecessor_uef_calls=1 late_uef_calls=0 frame_seh_calls=2",
+            "WIN32_ART_EMBED PASS",
+        ),
+        forbidden=("WIN32_ART_EMBED late_uef unexpected_call=1",),
+        require_nonzero=False,
+    )
+
+    run_fatal_case(
+        root,
         "crashnative",
         [
             *common,
@@ -503,10 +576,7 @@ def main() -> int:
             "ART Win32 UEF: exception 0xc0000005",
             "minidump written",
         )
-        if mode == "j2":
-            markers += ("Windows x64 JIT dual-view (J-2) created",)
-        else:
-            forbidden += ("Windows x64 JIT dual-view (J-2) created",)
+        markers += ("Windows x64 JIT dual-view (J-2) created",)
         run_fatal_case(
             root,
             f"jit_fatal_{mode}",
@@ -547,10 +617,7 @@ def main() -> int:
             "ART Win32 UEF: exception 0xc0000005",
             "minidump written",
         )
-        if mode == "j2":
-            markers += ("Windows x64 JIT dual-view (J-2) created",)
-        else:
-            forbidden += ("Windows x64 JIT dual-view (J-2) created",)
+        markers += ("Windows x64 JIT dual-view (J-2) created",)
         run_fatal_case(
             root,
             f"osr_fatal_{mode}",

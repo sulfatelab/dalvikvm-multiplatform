@@ -1,0 +1,11 @@
+name=cet_policy
+exit=0
+expected_exit=0
+require_nonzero=False
+timeout_seconds=180
+timed_out=False
+elapsed_ms=81
+--- stdout ---
+WIN32_CET_POLICY_PROBE actual=disabled build=26100 flags=0x00000100 known_incompatible=0x00000000 error=0
+WIN32_CET_POLICY_PROBE PASS
+--- stderr ---

@@ -1,0 +1,4 @@
+host=administrator@10.127.137.62
+windows_build=26100
+package=dist/windows_x64_w010_w014_host_fs2.zip
+package_root=C:\Users\Administrator\fs2_w010_w014_host_final\windows_x64_w010_w014_host_fs2

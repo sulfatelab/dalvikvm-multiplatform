@@ -751,10 +751,13 @@ _No open design notes. Closed D- items live under §Closed._
 3. ~~**L-001**~~ — **CLOSED** real PE libcore/openjdk/ICU hybrid; residual Linux TU/bridge growth optional.  
 4. ~~**W-025 JIT-5**~~ **CLOSED** — J-1 and the retired key are removed;
    post-removal Windows/Wine/Linux and native fatal/unwind closure pass.
-5. **W-010/W-014 FS-2 (next)** — keep the native-accepted E9 and FS-1
-   matrices green while adding debugger continue, forced-policy, pending-tail,
-   exception-unwind XMM, and embedding/predecessor-UEF acceptance; FS-1 stack
-   budget and FS-3 dynamic-table churn/sampling are complete.
+5. ~~**W-010/W-014 FS-2**~~ **CLOSED 2026-07-30** — native build-26100
+   evidence accepts debugger continue, all named forced-incompatible CET
+   policies plus safe dynamic/reserved fields, exception-unwind XMM6-XMM15,
+   and embedding predecessor-UEF/frame-SEH teardown. FS-1 stack budget and
+   FS-3 dynamic-table churn/sampling are complete. Remaining W-010/W-014
+   follow-ups are conditional second-host, pending-tail/reservation
+   correlation, negative-exception, and debugger-quality dump-stack probes.
 6. **H-001** — host Phase-4 with multiplatform package.
 7. ~~**L-005** — Linux Hello gate~~ **CLOSED**.
 
@@ -769,4 +772,4 @@ _No open design notes. Closed D- items live under §Closed._
 - [ ] CLOSED items: move full item into §Closed (sorted by ID); keep State CLOSED history  
 
 
-*Last snapshot: 2026-07-30 - W-001/W-002/W-003/W-004/W-011/W-012/W-013/W-024/W-025 are closed. Nterp and the corrected pagefile-section JIT dual view are product defaults; JIT-5 removes J-1 and passes post-removal Wine/Linux plus 29 native cases and 36/36 aggregate records with source/binary absence proof, eight lifecycle cycles, three valid dumps, empty JIT temp, and no trace. W-010/W-014 E9 remains native-accepted 30/30 on Windows Server 2025 build 26100: explicit Windows x64 stack checks, guarantee-aware bounds, switch/nterp/JIT SOE, zero handled dumps, and five fatal static/JIT/OSR dumps all pass. FS-1 adds accepted Release/Debug switch/nterp/JIT stack high-water margins and no dumps; the 40-KiB Debug-only reserve leaves more than 37 KiB on quick paths while product and Linux remain at 8192 bytes. Linux's object probes and imageless Hello pass. Fixed-page recursion remains rejected and its machinery is diagnostic-only. FS-2 is next; W-010/W-014 remain open only for broader debugger, forced-policy, exception-unwind XMM, pending-range, embedding, reservation-correlation, and second-host coverage.*
+*Last snapshot: 2026-07-30 - W-001/W-002/W-003/W-004/W-011/W-012/W-013/W-024/W-025 and W-010/W-014 FS-2 are closed. Nterp and the corrected pagefile-section JIT dual view are product defaults; JIT-5 removes J-1 and passes post-removal Wine/Linux plus 29 native cases and 36/36 aggregate records with source/binary absence proof, eight lifecycle cycles, three valid dumps, empty JIT temp, and no trace. W-010/W-014 E9 remains native-accepted 30/30 on Windows Server 2025 build 26100: explicit Windows x64 stack checks, guarantee-aware bounds, switch/nterp/JIT SOE, zero handled dumps, and five fatal static/JIT/OSR dumps all pass. FS-1 adds accepted Release/Debug switch/nterp/JIT stack high-water margins and no dumps; the 40-KiB Debug-only reserve leaves more than 37 KiB on quick paths while product and Linux remain at 8192 bytes. FS-2 adds native first-chance debugger continuation, named CET rejection/safe-policy acceptance, exception-XMM, and embedding/UEF teardown. Linux's object probes and imageless Hello pass. Fixed-page recursion remains rejected and its machinery is diagnostic-only. Remaining W-010/W-014 work is conditional second-host, pending-tail/reservation correlation, negative-exception, and debugger-quality dump-stack coverage.*

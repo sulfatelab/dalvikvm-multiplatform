@@ -66,11 +66,13 @@ managed-SOE paths. Its returned bundle is retained outside the repository at
 Controlled native measurements then proved that the guarantee is above a
 separate terminal prefix and that one moving guard page must also be debited.
 
-## Remaining scope
+## Remaining scope at E9 handoff
 
-This acceptance does not claim CET user-shadow-stack support, debugger-quality
-dump reconstruction, forced incompatible CET-policy coverage, handler
-high-water/stack-budget coverage, dynamic-function-table sampling or churn,
-exception-unwind XMM coverage, the brief interpreter pending range, or broad
-embedding/predecessor-UEF coverage. Those remain W-010/W-014 or W-025 host
-matrix items; they do not reopen the accepted E9 managed-SOE mechanism.
+This E9 acceptance snapshot predates FS-2 and therefore does not itself claim
+CET user-shadow-stack support, debugger-quality dump reconstruction, forced
+incompatible CET-policy coverage, exception-unwind XMM coverage, or broad
+embedding/predecessor-UEF coverage. FS-2 subsequently closes those four native
+proof points on the same build-26100 class host; its compact result is recorded
+in `../fs2_w010_w014_native/ACCEPTANCE.md`. Conditional pending-range,
+reservation-correlation, second-host, and debugger-quality dump-stack work do
+not reopen the accepted E9 managed-SOE mechanism.

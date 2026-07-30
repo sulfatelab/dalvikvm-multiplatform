@@ -1,8 +1,7 @@
 # W-010 Stage D managed-fault activation
 
-**Status:** focused Wine/Linux verification PASS; W-010/W-014 E9 native Stage E
-accepted 30/30 and FS-1 Release/Debug stack high-water accepted on Windows
-Server 2025 build 26100
+**Status:** focused Wine/Linux verification PASS; W-010/W-014 E9, FS-1, and
+FS-2 native acceptance complete on Windows Server 2025 build 26100
 **Date:** 2026-07-30
 
 ## Product behavior
@@ -170,12 +169,19 @@ reports `PASS (build=26100, pass_records=30, dumps=5,
 return=full-package)`. See `evidence/w010_w014_e9/ACCEPTANCE.md`.
 
 Native Stage E therefore no longer blocks managed NPE/SOE, stack-budget
-measurement, dynamic-table sampling/churn, or the five-origin fatal matrix.
-Remaining coverage is narrower: debugger first-chance continue, forced named-
-incompatible CET policy families, exception-unwind XMM state, the interpreter
-pending range, broader embedding/predecessor-UEF behavior, reservation
-correlation, and second-host repetition. `CetDynamicApisOutOfProcOnly` and
-reserved policy fields must remain accepted by the startup classifier.
+measurement, dynamic-table sampling/churn, the five-origin fatal matrix, or
+the FS-2 debugger/CET/embedding/exception-XMM proof points. The native FS-2
+run on build 26100 records first-chance JIT NPE continuation, fault-free
+explicit SOE debugging, all nine incompatible policy rejections, accepted
+dynamic/reserved policy bits, predecessor-UEF/frame-SEH teardown, and two
+repeats of the exception sentinel in nterp/switch/JIT. See
+`evidence/fs2_w010_w014_native/ACCEPTANCE.md`.
+
+Remaining coverage is narrower: second-host repetition, conditional pending
+bridge-range and reservation-correlation probes, wrong-address/unsupported
+exception negatives, and debugger-quality dump-stack reconstruction.
+`CetDynamicApisOutOfProcOnly` and reserved policy fields remain accepted by the
+startup classifier.
 
 The selected dynamic implementation is now present. Optimizing Windows x64 JIT
 methods force-spill and reserve RBP and establish it after their fixed
@@ -199,6 +205,6 @@ mapping teardown.
 The threshold-zero JIT-origin and switch-OSR-origin gates prove native Windows
 fatal dispatch reaches UEF and produces a valid dump across both exercised
 dynamic chains. FS-3 separately proves concurrent native sampling under
-large dynamic-table churn. The evidence does not prove debugger-quality
-minidump stack reconstruction or exception-unwind preservation of full-width
-XMM6-XMM15; those remain separate acceptance items.
+large dynamic-table churn. FS-2 now proves debugger continuation and
+exception-unwind preservation of full-width XMM6-XMM15; debugger-quality
+minidump stack reconstruction remains a separate acceptance item.

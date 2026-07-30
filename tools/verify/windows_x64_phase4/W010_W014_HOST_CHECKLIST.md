@@ -2,9 +2,9 @@
 
 **Target:** Windows 10 version 1803 (RS4, build 17134) or later, x64
 
-**State:** E9 configured-guarantee explicit-stack-check native acceptance
-accepted on Windows Server 2025 build 26100; FS-1 stack high-water companion
-accepted on the same host
+**State:** E9 configured-guarantee explicit-stack-check, FS-1 stack high-water,
+and FS-2 debugger/CET/embedding/exception-XMM native acceptance accepted on
+Windows Server 2025 build 26100
 
 ## Purpose
 
@@ -14,12 +14,11 @@ the native run must establish that the real Windows loader, exception
 dispatcher, moving stack guard, static boundaries, dynamic JIT tables, and
 minidump path preserve the same contracts.
 
-The package intentionally does not claim to close every Stage E item. Debugger
-first-chance behavior, forced Hardware-enforced Stack Protection policies, and
-predecessor-UEF embedding remain separate manual or launcher-assisted evidence
-after this automated run passes. FS-1 now supplies the formerly separate
-Release/Debug stack high-water evidence. The other items are tracked as the
-remaining forced-policy and embedding matrix.
+The package intentionally does not claim to close every Stage E item. FS-1
+supplies the Release/Debug stack high-water evidence and FS-2 supplies the
+debugger first-chance, forced-policy, exception-XMM, and embedding/UEF teardown
+evidence. Conditional pending-range, second-host, reservation-correlation,
+negative-exception, and debugger-quality dump-stack work remains separate.
 
 E9 replaces the rejected Windows x64 fixed-page recursive-SOE mechanism with narrow
 explicit `RSP < Thread::stack_end_` checks in optimizing code and nterp. An
@@ -119,7 +118,9 @@ The runner verifies:
   including Baseline/Osr compilation, the real OSR jump, the copied-stack RBP
   handoff, and a new `MDMP` file.
 The package still does not claim debugger-quality stack reconstruction or
-large-table sampling; those remain separate Stage E evidence.
+large-table sampling; those remain separate Stage E evidence. FS-2's debugger
+assertion is limited to first-chance delivery and continuation, not dump-stack
+quality.
 The automated fatal subset explicitly covers JIT-origin and OSR-origin fatal
 dispatch in both J-2 and J-1 memory modes.
 
@@ -205,7 +206,7 @@ python3 tools/verify/windows_x64_phase4/review_w010_w014_host_result.py \
   /path/to/returned.zip --issued dist/windows_x64_w010_w014_host
 ```
 
-## Remaining Stage E evidence after an automated PASS
+## Remaining Stage E evidence after the E9/FS-1/FS-2 automated PASS
 
 FS-1 is accepted separately on Windows Server 2025 build 26100. Its Release
 and Debug switch/nterp/JIT runner records four complete allocation-free
@@ -215,13 +216,14 @@ high-water records per mode, positive native margins, no fatal marker, and
 than 37 KiB on both quick paths; product and non-Windows remain at 8192 bytes.
 See `evidence/fs1_stack_high_water/ACCEPTANCE.md`.
 
-The following are still required before W-010/W-014 close:
+The following are still optional or conditional before W-010/W-014 close:
 
 - repeat the package on Windows 10 build 17134+ and a current Windows release;
-- debugger first-chance stop followed by continue for managed NPE/SOE;
-- forced compatibility, audit, strict, context-IP-validation, and other named
-  incompatible policy rejection before Java/JIT, with no control-protection
-  dump; `CetDynamicApisOutOfProcOnly` must remain accepted and reserved fields
-  must not be assigned policy meaning;
+- reservation-correlation and pending-range probes only if deterministic;
 - wrong-address and unsupported exception-kind native negatives; and
-- predecessor UEF invocation and runtime unload behavior in an embedding host.
+- debugger-quality dump-stack reconstruction.
+
+FS-2 has closed the previously open debugger first-chance/continue,
+named-incompatible CET, safe dynamic/reserved policy, predecessor-UEF/frame-SEH
+teardown, and exception-unwind XMM requirements. Its compact native evidence is
+under `evidence/fs2_w010_w014_native/`.

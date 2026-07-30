@@ -16,12 +16,36 @@ __declspec(align(16)) const uint64_t g_w003_xmm_patterns[20] = {
 
 extern jint W003XmmSentinelAssembly(
     JNIEnv* env, jclass klass, jmethodID method, jint expected, jboolean clobber);
+extern void W003XmmExceptionSentinelAssembly(
+    JNIEnv* env, jclass klass, jmethodID method, jboolean clobber);
+
+volatile jint g_w003_exception_xmm_mask = -1;
 
 jint W003InvokeManagedCallback(JNIEnv* env, jclass klass, jmethodID method) {
   return (*env)->CallStaticIntMethod(
       env,
       klass,
       method,
+      1.25,
+      -2.5,
+      3.75,
+      -4.125,
+      5.5,
+      -6.625,
+      7.75,
+      -8.875,
+      9.0,
+      -10.25,
+      11.5,
+      -12.75);
+}
+
+jint W003InvokeManagedExceptionCallback(JNIEnv* env, jclass klass, jmethodID method) {
+  return (*env)->CallStaticIntMethod(
+      env,
+      klass,
+      method,
+      NULL,
       1.25,
       -2.5,
       3.75,
@@ -44,4 +68,26 @@ JNIEXPORT jint JNICALL Java_W003XmmSentinelProbe_runXmmSentinel(
     return 1 << 11;
   }
   return W003XmmSentinelAssembly(env, klass, method, expected, clobber);
+}
+
+JNIEXPORT void JNICALL Java_W003XmmSentinelProbe_runXmmExceptionSentinel(
+    JNIEnv* env, jclass klass, jboolean clobber) {
+  jmethodID method = (*env)->GetStaticMethodID(
+      env,
+      klass,
+      "managedExceptionCallback",
+      "(LW003XmmSentinelProbe$Cell;DDDDDDDDDDDD)I");
+  if (method == NULL) {
+    g_w003_exception_xmm_mask = 1 << 11;
+    return;
+  }
+  g_w003_exception_xmm_mask = 1 << 30;
+  W003XmmExceptionSentinelAssembly(env, klass, method, clobber);
+}
+
+JNIEXPORT jint JNICALL Java_W003XmmSentinelProbe_getXmmExceptionMask(
+    JNIEnv* env, jclass klass) {
+  (void)env;
+  (void)klass;
+  return g_w003_exception_xmm_mask;
 }

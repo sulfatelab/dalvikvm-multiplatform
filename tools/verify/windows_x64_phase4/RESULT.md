@@ -1,13 +1,14 @@
 # Windows x64 Phase 4 — RESULT
 
-**Status:** **WINE COMPLETE; W-010/W-014 E9 AND FS-1 NATIVE ACCEPTED** — W-002,
+**Status:** **WINE COMPLETE; W-010/W-014 E9, FS-1, AND FS-2 NATIVE ACCEPTED** — W-002,
 W-003, W-004, W-024, and W-025 native matrices are accepted. W-010/W-014 E9
 passes the complete 30-record runner and FS-1 passes Release/Debug switch,
 nterp, and JIT stack high-water on Windows Server 2025 build 26100. Product
 managed SOE has zero handled dumps; FS-1 has four complete records per mode,
-positive margins, and no dump. Broader debugger, forced-policy,
-exception-unwind XMM, pending-range, embedding, reservation-correlation, and
-second-host coverage remains open.
+positive margins, and no dump. FS-2 now also passes the native debugger,
+forced-policy, embedding/UEF teardown, and exception-unwind XMM gates on that
+host. Conditional pending-range, reservation-correlation, second-host, and
+debugger-quality dump-stack coverage remains open.
 **Date:** 2026-07-30
 **Depends on:** Phase 3 complete (real Win10 G12 goldens)
 
@@ -51,6 +52,7 @@ second-host coverage remains open.
 | W-010/W-014 isolated failure diagnostics | **PASS on native build 19044** | runs 3-4: fixed-page SOE invalidated; UEF replacement ruled out; JNI hardware/raised AVs miss UEF while the JNI-created native worker reaches UEF/dump, isolating traversal through managed/GenericJNI frames. |
 | W-010/W-014 complete E9 native host matrix | **PASS, 30/30 on build 26100** | guarantee-aware excluded-low accounting; switch/nterp/JIT managed SOE; zero handled dumps; five valid static/JIT/OSR fatal dumps |
 | FS-1 Release/Debug stack high-water | **PASS on Wine and native build 26100** | `run_fs1_stack_high_water.sh`; switch/nterp/JIT, four complete records each; native Release minimum margin 6784 bytes, Debug quick minimum 37168 bytes; no dumps |
+| FS-2 native debugger/CET/embedding/exception-XMM matrix | **PASS on native build 26100** | `evidence/fs2_w010_w014_native/ACCEPTANCE.md`; first-chance JIT NPE continue, explicit SOE no AV, nine incompatible CET rejections plus safe-policy acceptance, JNI UEF teardown, and 2x nterp/switch/JIT exception-XMM runs |
 | Full suite | **PASS** | `run_all_wine_gates.sh` |
 
 Evidence: `evidence/all_wine_gates.txt`, `evidence/crashnative.txt`
@@ -84,6 +86,7 @@ PASS native_crash_aborts
 | W-010 static OSR PE unwind | `quick_entrypoints_x86_64.S`; `../windows_x64_phase1/win32_osr_unwind_probe.cc`; `run_osr_unwind_probe.sh`; `check_win32_boundary_unwind.py` |
 | W-010/W-014 native Stage E package and diagnostics | `package_windows_x64_w010_w014.sh`; `host/RUN_W010_W014_HOST.ps1`; `host/RUN_W010_W014_DIAGNOSTICS.ps1`; `check_w010_w014_host_package.py`; `review_w010_w014_host_result.py`; `W010_W014_HOST_CHECKLIST.md`; `W010_W014_DIAGNOSTICS.md` |
 | FS-1 stack high-water probe/package/evidence | `run_fs1_stack_high_water.sh`; `check_fs1_stack_high_water*.py`; `host/RUN_FS1_STACK_HIGH_WATER_HOST.ps1`; `package_windows_x64_fs1.sh`; `evidence/fs1_stack_high_water/ACCEPTANCE.md` |
+| FS-2 debugger/CET/embedding/exception-XMM probes and evidence | `../windows_x64_phase1/win32_debugger_probe.cc`; `../windows_x64_phase1/win32_art_embedding_probe.cc`; `host/RUN_W010_W014_HOST.ps1`; `evidence/fs2_w010_w014_native/ACCEPTANCE.md` |
 
 ## Host
 
@@ -323,6 +326,27 @@ managed faults, the combined Windows/Linux object gate, the full Linux
 rebuild, and imageless Hello pass. See
 `evidence/fs1_stack_high_water/ACCEPTANCE.md`.
 
+## FS-2 native acceptance
+
+FS-2 is accepted on the same Windows Server 2025 build 26100. The refreshed
+package `dist/windows_x64_w010_w014_host_fs2.zip` passes the Linux package
+checker and complete Wine smoke, then the native PowerShell runner records
+`OVERALL PASS`. The result includes all nine named incompatible CET policy
+rejections before Java/JIT, accepted `CetDynamicApisOutOfProcOnly` and
+reserved-bit cases, debugger first-chance/continue behavior, embedding UEF and
+frame-SEH teardown, and two repeats of the exception-unwind XMM sentinel in
+nterp, switch, and threshold-zero JIT. The native archive SHA-256 is
+`935ab419124782bf8ac98546f38c352d4a32223466f3fe962f3c64dd3afd21bd`.
+
+The debugger NPE log records `first_chance_av stop=1` followed by
+`continue=DBG_EXCEPTION_NOT_HANDLED`, `first_av=128`, `second_chance=0`, and a
+clean child exit. The explicit SOE run reports no AV or stack-overflow debug
+event. The embedding probe reports predecessor UEF resumption, foreign VEH and
+frame-SEH calls before and after ART teardown, and no stale ART callback. The
+exception sentinel reports `exceptionMask=0`, `exceptionCaught=32`, and
+`exceptionSelfTestMask=1023`. Compact native logs and the complete result are
+retained in `evidence/fs2_w010_w014_native/`.
+
 ## Non-goals
 
 - Windows NIO.2
@@ -335,11 +359,11 @@ rebuild, and imageless Hello pass. See
   the accepted product path; retain fixed-page operations only as direct
   diagnostics. Repeat the 30-record gate on another supported Windows 10 host
   when available.
-- Start FS-2: complete debugger continue, forced named-incompatible CET
-  policies, exception-unwind XMM, and embedding/predecessor-UEF coverage.
-- Correlate Java/ART-pool reservations, repeat E9/FS-1 on a second supported
-  host, and attempt the pending range only if a deterministic probe is
-  practical.
+- Repeat the accepted E9/FS-1/FS-2 bundle on a second supported Windows host;
+  correlate Java/ART-pool reservations and attempt the pending bridge range
+  only if a deterministic probe is practical.
+- Add wrong-address/unsupported-exception negatives and debugger-quality dump
+  stack reconstruction if those remain release requirements.
 
 ## W-010 Stage D activation re-run (2026-07-27)
 

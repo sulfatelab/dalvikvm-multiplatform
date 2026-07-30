@@ -46,7 +46,8 @@ for token in \
 done
 UNWIND="$(llvm-readobj --unwind "$OBJ")"
 if ! grep -qF 'W003XmmSentinelAssembly' <<<"$UNWIND" ||
-   [[ "$(grep -c 'SAVE_XMM128 reg=XMM' <<<"$UNWIND")" -ne 10 ]] ||
+   ! grep -qF 'W003XmmExceptionSentinelAssembly' <<<"$UNWIND" ||
+   [[ "$(grep -c 'SAVE_XMM128 reg=XMM' <<<"$UNWIND")" -ne 20 ]] ||
    ! grep -qF 'SAVE_XMM128 reg=XMM15, offset=0xB0' <<<"$UNWIND"; then
   echo "W-003 sentinel assembly is missing unwind metadata" >&2
   exit 1
@@ -73,7 +74,8 @@ mkdir -p "$JAVA_TMP/classes" "$JAVA_TMP/dex"
   "$REPO/tools/verify/windows_x64_phase4/src/W003XmmSentinelProbe.java"
 java -cp "$R8JAR" com.android.tools.r8.D8 \
   --release --min-api 31 --output "$JAVA_TMP/dex" \
-  "$JAVA_TMP/classes/W003XmmSentinelProbe.class"
+  "$JAVA_TMP/classes/W003XmmSentinelProbe.class" \
+  "$JAVA_TMP/classes/W003XmmSentinelProbe\$Cell.class"
 "$JAR" --create --file "$RUN/w003xmmsentinelprobe.jar" \
   -C "$JAVA_TMP/dex" classes.dex
 
@@ -94,7 +96,7 @@ run_one() {
       ;;
     jit)
       mode_env+=(ART_WINDOWS_X64_JIT=1 ART_WINDOWS_X64_NTERP=1)
-      mode_env+=(ART_WINDOWS_X64_JIT_FILTER=W003XmmSentinelProbe.managedCallback)
+      mode_env+=(ART_WINDOWS_X64_JIT_FILTER=W003XmmSentinelProbe)
       mode_env+=(ART_WINDOWS_X64_JIT_LOG_COMPILES=1)
       vm_args+=(-verbose:jit -Xjitwarmupthreshold:0 -Xjitthreshold:0)
       require_compile=1
@@ -134,6 +136,7 @@ run_one() {
 
   if ! grep -Eq "W003XmmSentinelProbe mode=$mode expected=-?[0-9]+ warmChecksum=-?[0-9]+ mask=0 selfTestMask=63 iterations=128" "$log" ||
      ! grep -qF 'fullSelfTestMask=1023' "$log" ||
+     ! grep -qF 'exceptionMask=0 exceptionCaught=32 exceptionIterations=32 exceptionSelfTestMask=1023' "$log" ||
      ! grep -qF 'W003XmmSentinelProbe OK' "$log" ||
      ! grep -qF 'main end exception=0' "$log"; then
     echo "W-003 XMM sentinel $mode run=$iteration markers failed: $log" >&2
@@ -141,7 +144,8 @@ run_one() {
     return 1
   fi
   if [[ $require_compile -eq 1 ]] &&
-     ! grep -qF 'success=1 method=int W003XmmSentinelProbe.managedCallback(' "$log"; then
+     { ! grep -qF 'success=1 method=int W003XmmSentinelProbe.managedCallback(' "$log" ||
+       ! grep -qF 'success=1 method=int W003XmmSentinelProbe.managedExceptionCallback(' "$log"; }; then
     echo "W-003 XMM sentinel JIT compilation marker missing: $log" >&2
     tail -120 "$log" >&2
     return 1

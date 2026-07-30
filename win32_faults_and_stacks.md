@@ -10,9 +10,11 @@ Linux retains its implicit `RSP - 8192` probes. E5/E6 unwind repairs remain acce
 and five static/JIT/OSR fatal origins produce valid dumps. A later E9-bound
 pregrow experiment reproduces the Linux implicit read fault, but its nearly
 full per-thread commit, irreversible high-water state, and fatal native
-collision keep it diagnostic-only. The product work remains open only for
-broader debugger, forced CET-policy, exception-unwind XMM, pending-range,
-embedding, reservation-correlation, and second-host coverage. The shared JIT-3/FS-3 dynamic-table
+collision keep it diagnostic-only. FS-2 now closes the native debugger
+first-chance/continue, named forced-policy, embedding/UEF teardown, and
+exception-unwind XMM proof points on the same host. The product work remains
+open only for pending-range, reservation-correlation, second-host,
+negative-exception, and debugger-quality dump-stack coverage. The shared JIT-3/FS-3 dynamic-table
 sampling/churn gate and the JIT-5 post-removal fatal/unwind cross-regression
 are native-accepted on the same build. JIT-5 removes the Windows J-1 path and
 covers 29 cases, 36/36 aggregate records, eight lifecycle cycles, and three
@@ -302,9 +304,10 @@ SOE, zero handled dumps, and all five fatal origins. FS-1 additionally accepts
 allocation-free Release/Debug stack high-water records for switch, nterp, and
 JIT, including the 40-KiB Debug-only reserve. JIT-3/FS-3 accepts native
 dynamic-table collection/reuse churn and concurrent lookup/virtual-unwind
-sampling. Debugger, forced-policy, exception-unwind XMM, pending-range,
-embedding, reservation-correlation, and second-host coverage remain additional
-acceptance work.
+sampling. FS-2 is now native-accepted on that host for debugger continuation,
+forced policy classification, embedding teardown, and exception-unwind XMM;
+pending-range, reservation-correlation, second-host, negative-exception, and
+debugger-quality dump-stack coverage remain additional acceptance work.
 
 ### 4.1 Second native Stage E result and current diagnosis
 
@@ -777,6 +780,15 @@ policy class is unavailable; only the expected unsupported-policy result is
 accepted as evidence that HSP is unavailable. Unexpected query failures on
 systems that implement the policy fail closed.
 
+FS-2 adds a test-only, one-way policy override for the native acceptance
+package. `ART_WINDOWS_X64_TEST_FORCE_CET_POLICY` names one SDK policy family;
+the runtime ORs the corresponding bit into the real observation and therefore
+cannot hide an active mitigation or make a failed query succeed. Every named
+incompatible field, `CetDynamicApisOutOfProcOnly`, and low/high/all reserved
+bits are exercised through this seam. Invalid or unknown override text fails
+closed as an unexpected query failure. Rejected children are required to exit
+before Java/JIT work and to leave the crash directory unchanged.
+
 ## 6. Designs considered
 
 ### 6.1 Selected: VEH adapter over the existing `FaultManager`
@@ -1096,6 +1108,16 @@ later UEF, teardown preserves that later filter. The fatal UEF now calls the
 saved predecessor after the best-effort dump when one exists, and otherwise
 returns `EXCEPTION_CONTINUE_SEARCH`.
 
+The FS-2 embedding probe exercises this contract through JNI Invocation rather
+than through a product-only shortcut. It installs a foreign search VEH and a
+predecessor UEF before creating ART, raises a continuable unrecognized AV to
+prove ART's UEF calls the predecessor, catches a separate AV with frame-based
+SEH, installs a later embedding UEF, destroys the VM, and checks that the later
+UEF remains current. It then unloads the ART image when possible and repeats
+the frame-SEH case; the foreign VEH must still search and no stale ART callback
+may execute. The predecessor case intentionally produces one diagnostic dump;
+the handled frame-SEH cases must not.
+
 PE unwind metadata is part of exception-dispatch correctness on Windows x64, not
 only minidump quality. Recursive `RtlVirtualUnwind2` tracing of the JNI fatal
 probe showed the exact failure mode: without a runtime-function record,
@@ -1279,6 +1301,15 @@ threshold-zero JIT under Wine. Its historical `selfTestMask=63` marker is
 retained for W-003 evidence compatibility; `fullSelfTestMask=1023` is the
 authoritative XMM6-XMM15 result. Native Windows must repeat both the normal-
 return and exception-unwind cases before Stage E acceptance.
+
+FS-2 extends the sentinel with a managed callback that reads a null reference
+after doing floating-point work and lets the resulting `NullPointerException`
+escape through `CallStaticIntMethod`. The native assembly records the full
+XMM6-XMM15 mask after ART's managed non-local transfer and before returning the
+pending JNI exception. Thirty-two normal exception escapes must report
+`exceptionMask=0`; a deliberate native-register clobber must report the full
+`exceptionSelfTestMask=1023`. The normal-return and exception paths each carry
+ten `UWOP_SAVE_XMM128` records.
 
 Intermediate dynamic managed records describe the stack allocation, frame
 anchor, and pushed nonvolatile GPRs needed to recover caller control state.
@@ -1533,8 +1564,14 @@ The remaining acceptance and stress gates are:
 - method-redefinition and OSR-specific extensions to the accepted optimizing/
   JNI collection churn, verifying the same deletion/reuse invariants on those
   less common retirement paths;
-- native Windows repetition of the locally passing full XMM6-XMM15 boundary
-  sentinels across normal return and exception unwind; and
+- native Windows repetition of the full XMM6-XMM15 boundary sentinels across
+  normal return and managed exception unwind, with both ordinary and
+  deliberate-clobber masks (FS-2 accepted; see the native evidence bundle);
+- a debugger first-chance/continue run in which managed NPE handling completes
+  after the debugger continues the AV, while explicit SOE reports no AV,
+  stack-overflow, or other hardware-fault first chance event (FS-2 accepted);
+- a JNI embedding run covering predecessor UEF chaining, foreign VEH/frame-SEH
+  search, later-UEF preservation, and runtime teardown (FS-2 accepted); and
 - Linux optimized/JNI CFI tests and full ART rebuilds, proving no non-Windows
   code-generation change.
 
@@ -2320,12 +2357,19 @@ contract.
   check, quick entry/frame, common throw and exception-construction phases,
   restored boundary, delivery, and long jump. Release and Debug switch/nterp/
   JIT pass on native build 26100 with positive native margin and no dump.
-- **Still open:** full-width XMM6-XMM15 exception-unwind coverage, native
-  debugger, forced CET-policy families, rollback injection, pending-range,
-  embedding, reservation correlation, second-host, and debugger-quality
-  dump-stack gates. Native normal-return XMM, OSR live unwind, foreign
-  VEH/frame-SEH, managed SOE, stack budget, dynamic-table churn, and five fatal
-  origins pass.
+- **FS-2 native accepted:** the Win32 debug-loop probe, one-way forced CET
+  policy families, JNI embedding/UEF teardown coverage, and full-width
+  XMM6-XMM15 exception-unwind sentinels pass on Windows Server 2025 build
+  26100. The first-chance JIT NPE continues into Java with zero second-chance
+  faults; explicit SOE remains fault-free. All nine named incompatible policy
+  cases reject before Java/JIT, while dynamic/reserved fields remain accepted.
+  The embedding probe verifies predecessor UEF, foreign VEH/frame-SEH, and
+  later-UEF preservation through VM teardown. Native evidence is under
+  `tools/verify/windows_x64_phase4/evidence/fs2_w010_w014_native/`.
+- **Still open:** rollback injection, pending-range, reservation correlation,
+  second-host, negative-exception, and debugger-quality dump-stack gates.
+  Native normal-return XMM, OSR live unwind, foreign VEH/frame-SEH, managed SOE,
+  stack budget, dynamic-table churn, five fatal origins, and FS-2 pass.
 - Run the complete matrix below on Windows 10 build 17134+ and a current
   Windows release.
 - Keep Wine as a development oracle and Linux as the behavior oracle.
@@ -2352,6 +2396,9 @@ contract.
 - Forced context-IP-validation and other named incompatible fields likewise
   fail. Unit/probe coverage must accept `CetDynamicApisOutOfProcOnly` and
   reserved fields, and reject mixtures containing any incompatible field.
+- The test-only forced-policy child matrix covers all nine named incompatible
+  fields, safe dynamic/reserved combinations, early no-Java/no-JIT rejection,
+  and no new dump per child.
 - Rejection does not produce a `.dmp` and does not depend on
   `STATUS_CONTROL_PROTECTION_VIOLATION` as the detection mechanism.
 - The native W-025 JIT-2 CFG-on matrix passes generated-code execution and
@@ -2741,19 +2788,21 @@ execution. Compact evidence is under
 Post-FS-1 regressions pass: the product explicit-check object gate, nterp/JIT
 W-010 managed NPE/SOE Wine gate, full Linux rebuild, Linux object's seven
 unchanged implicit probes, and shared-boot imageless Linux Hello. FS-1 closes
-the handler/throw stack-budget proof point; FS-2 is next.
+the handler/throw stack-budget proof point. FS-2 is now accepted on the same
+build-26100 host; compact native evidence is under
+`tools/verify/windows_x64_phase4/evidence/fs2_w010_w014_native/`.
 
 ### Next execution schedule — dependency order
 
 This schedule closes product proof points before optional mechanism research.
 It is evidence-gated rather than date-gated. FS-3 was split into an independent
-JIT closure package and completed before FS-1; FS-1 is now accepted, so the
-remaining order resumes at FS-2.
+JIT closure package and completed before FS-1; FS-1 and FS-2 are now accepted,
+so the remaining order resumes at the conditional FS-4/FS-5 follow-ups.
 
 | Order | Work | Exit gate |
 |------:|------|-----------|
 | FS-1 (done) | Add allocation-free high-water instrumentation around the explicit check, quick throw, temporary stack-end expansion, exception construction, and non-local transfer; run release and debug builds | Accepted 2026-07-30: Wine and native Release/Debug switch, nterp, and JIT have positive margins; native quick Debug retains more than 37 KiB with the 40-KiB Debug-only reserve; four records per mode and no dumps |
-| FS-2 (next) | Extend the combined native package with debugger first-chance/continue, every named forced-incompatible CET policy, foreign VEH/frame-SEH/predecessor-UEF embedding, and XMM6-XMM15 sentinels during exception unwind | Expected NPE continues into Java, explicit SOE remains fault-free, incompatible CET starts reject before Java/JIT with no dump, foreign search handlers coexist, and full-width XMM state survives unwind |
+| FS-2 (done) | Extend the combined native package with debugger first-chance/continue, every named forced-incompatible CET policy, foreign VEH/frame-SEH/predecessor-UEF embedding, and XMM6-XMM15 sentinels during exception unwind | Accepted 2026-07-30 on build 26100: NPE continues into Java, explicit SOE remains fault-free, incompatible CET starts reject before Java/JIT with no dump, foreign search handlers coexist, and full-width XMM state survives unwind |
 | FS-3 (done) | With JIT-1 encoding and JIT-2 mapping/policy prerequisites complete, share the JIT closure load test: compile, invalidate, collect, reuse, and re-register many optimizing/JNI allocations while another thread performs lookup and virtual unwind | Accepted 2026-07-29: 52 collections, 1,344 compilations, 1,248 exact reuses, and 696,969 virtual unwinds complete with no missing/stale/failed record; callback tables remain unnecessary |
 | FS-4 | Run FS-1 through FS-3 on the accepted build-26100 class host, then repeat the E9 core runner, parameterized guarantee geometry, fiber/manual-stack rejection, and deep detach/continue/reattach lifecycle on a second supported Windows 10 or later host | Immutable archives pass their independent review and either confirm the additive stack layout or document a new supported-host constraint |
 | FS-5 | Attempt the brief pending bridge-range exception only if a deterministic probe can enter it without changing product control flow; otherwise record it as impractical and close it as conditional coverage | A real native exception validates the pending record, or the result document explains why the already accepted primary/fatal matrix is the closure boundary |

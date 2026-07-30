@@ -35,6 +35,9 @@ copy_runtime() {
     # ART's Debug core-native lookup follows the standard *d.dll convention.
     cp -a "$dest/libopenjdk.dll" "$dest/libopenjdkd.dll"
   fi
+  python3 "$REPO/tools/verify/windows_x64_phase1/check_win32_cet_contract.py" \
+    --build "$source" \
+    --pe-root "$dest"
 }
 
 copy_runtime Release "$RELEASE_BUILD"

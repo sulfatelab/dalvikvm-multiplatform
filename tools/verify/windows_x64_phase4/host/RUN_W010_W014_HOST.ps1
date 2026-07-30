@@ -34,6 +34,7 @@ function Clear-ArtEnvironment {
         'ART_WINDOWS_X64_NTERP'
         'ART_WINDOWS_X64_QUICK_INVOKE'
         'ART_WINDOWS_X64_CRASH_NATIVE_WARMUP'
+        'ART_WINDOWS_X64_TEST_FORCE_CET_POLICY'
     ) | ForEach-Object {
         Remove-Item -Path ('Env:' + $_) -ErrorAction SilentlyContinue
     }
@@ -134,6 +135,7 @@ function Invoke-CheckedProcess {
         [int[]]$ExpectedExitCodes = @(0),
         [switch]$RequireNonZero,
         [switch]$RequireNewMinidump,
+        [switch]$ForbidNewMinidump,
         [int]$TimeoutSeconds = 180
     )
 
@@ -146,7 +148,7 @@ function Invoke-CheckedProcess {
     $timedOut = $false
     $exitCode = -1
     $beforeDumps = @{}
-    if ($RequireNewMinidump) {
+    if ($RequireNewMinidump -or $ForbidNewMinidump) {
         Get-ChildItem -Path $Crash -File -Filter '*.dmp' -ErrorAction SilentlyContinue |
             ForEach-Object {
                 $beforeDumps[$_.FullName] = "$($_.Length):$($_.LastWriteTimeUtc.Ticks)"
@@ -240,6 +242,22 @@ function Invoke-CheckedProcess {
         }
         if ($validNewDumps.Count -eq 0) {
             'minidump_error=no valid new MDMP file' | Add-Content -LiteralPath $combined
+            $minidumpOk = $false
+        }
+    }
+    if ($ForbidNewMinidump) {
+        $newDumps = @(
+            Get-ChildItem -Path $Crash -File -Filter '*.dmp' -ErrorAction SilentlyContinue |
+                Where-Object {
+                    $signature = "$($_.Length):$($_.LastWriteTimeUtc.Ticks)"
+                    (-not $beforeDumps.ContainsKey($_.FullName)) -or
+                        $beforeDumps[$_.FullName] -ne $signature
+                }
+        )
+        if ($newDumps.Count -ne 0) {
+            $newDumps.FullName | ForEach-Object {
+                Add-Content -LiteralPath $combined -Value "forbidden_new_minidump=$_"
+            }
             $minidumpOk = $false
         }
     }
@@ -355,6 +373,71 @@ try {
     $script:Failed = $true
 }
 
+$forcedIncompatiblePolicies = @(
+    'enable-user-shadow-stack'
+    'audit-user-shadow-stack'
+    'set-context-ip-validation'
+    'audit-set-context-ip-validation'
+    'strict-user-shadow-stack'
+    'block-non-cet-binaries'
+    'block-non-cet-binaries-non-ehcont'
+    'audit-block-non-cet-binaries'
+    'relaxed-context-ip-validation'
+)
+foreach ($policy in $forcedIncompatiblePolicies) {
+    Clear-ArtEnvironment
+    $env:ART_WINDOWS_X64_TEST_FORCE_CET_POLICY = $policy
+    $env:ART_WINDOWS_X64_JIT = '1'
+    $env:ART_WINDOWS_X64_JIT_FILTER = 'W010ManagedFaultProbe'
+    $env:ART_WINDOWS_X64_JIT_LOG_COMPILES = '1'
+    Invoke-CheckedProcess -Name ("cet_forced_" + $policy) -Executable 'dalvikvm.exe' -Arguments "$Common -verbose:jit -Xjitwarmupthreshold:0 -Xjitthreshold:0 -cp run\w010managedfaultprobe.jar W010ManagedFaultProbe npe" -Markers @(
+        'ART Win32 startup rejected: incompatible CET user-shadow-stack'
+        'decision=incompatible'
+        'test_policy_forced=1'
+        'test_policy_input_valid=1'
+        'test_forced_flags=0x'
+    ) -ForbiddenMarkers @('W010ManagedFaultProbe', 'Windows x64 CompileMethod done success=1 method=') -RequireNonZero -ForbidNewMinidump
+}
+foreach ($policy in @('dynamic-apis-out-of-proc-only', 'reserved-all')) {
+    Clear-ArtEnvironment
+    $env:ART_WINDOWS_X64_TEST_FORCE_CET_POLICY = $policy
+    Invoke-CheckedProcess -Name ("cet_forced_safe_" + $policy) -Executable 'dalvikvm.exe' -Arguments "$Common -Xusejit:false -cp run\w010managedfaultprobe.jar W010ManagedFaultProbe npe" -Markers @(
+        'W010ManagedFaultProbe NPE OK read=64 write=64 recovery=128 gc=16'
+        'W010ManagedFaultProbe OK mode=npe'
+        'main end exception=0'
+    ) -ForbiddenMarkers $HandledForbidden
+}
+Clear-ArtEnvironment
+
+Clear-ArtEnvironment
+$env:ART_WINDOWS_X64_QUICK_INVOKE = '1'
+$env:ART_WINDOWS_X64_JIT = '1'
+$env:ART_WINDOWS_X64_NTERP = '1'
+$env:ART_WINDOWS_X64_JIT_FILTER = 'W010ManagedFaultProbe'
+$env:ART_WINDOWS_X64_JIT_LOG_COMPILES = '1'
+Invoke-CheckedProcess -Name 'debugger_npe' -Executable 'win32_debugger_probe.exe' -Arguments 'npe' -Markers @(
+    'WIN32_DEBUGGER_PROBE first_chance_av stop=1 continue=DBG_EXCEPTION_NOT_HANDLED'
+    'WIN32_DEBUGGER_PROBE result mode=npe child_exit=0'
+    'first_stack_overflow=0'
+    'first_hardware='
+    'WIN32_DEBUGGER_PROBE PASS mode=npe'
+    'W010ManagedFaultProbe NPE OK read=64 write=64 recovery=128 gc=16'
+) -ForbiddenMarkers $HandledForbidden -ForbidNewMinidump
+
+Clear-ArtEnvironment
+$env:ART_WINDOWS_X64_QUICK_INVOKE = '1'
+$env:ART_WINDOWS_X64_JIT = '1'
+$env:ART_WINDOWS_X64_NTERP = '1'
+$env:ART_WINDOWS_X64_JIT_FILTER = 'W010ManagedFaultProbe'
+$env:ART_WINDOWS_X64_JIT_LOG_COMPILES = '1'
+Invoke-CheckedProcess -Name 'debugger_so' -Executable 'win32_debugger_probe.exe' -Arguments 'so' -Markers @(
+    'WIN32_DEBUGGER_PROBE result mode=so child_exit=0 first_av=0'
+    'first_stack_overflow=0'
+    'first_hardware=0'
+    'WIN32_DEBUGGER_PROBE PASS mode=so'
+    'W010ManagedFaultProbe SO OK main=2 child=2 recovery=4 gc=4'
+) -ForbiddenMarkers $HandledForbidden -ForbidNewMinidump
+
 Invoke-CheckedProcess -Name 'osr_unwind' -Executable 'win32_osr_unwind_probe.exe' -Markers @(
     'win32_osr_unwind_probe failures=0'
     'entry_frame_register=R12 compiled_frame_register=RBP'
@@ -376,7 +459,7 @@ foreach ($mode in @('nterp', 'switch', 'jit')) {
         } else {
             $env:ART_WINDOWS_X64_JIT = '1'
             $env:ART_WINDOWS_X64_NTERP = '1'
-            $env:ART_WINDOWS_X64_JIT_FILTER = 'W003XmmSentinelProbe.managedCallback'
+            $env:ART_WINDOWS_X64_JIT_FILTER = 'W003XmmSentinelProbe'
             $env:ART_WINDOWS_X64_JIT_LOG_COMPILES = '1'
             $vmArgs = '-verbose:jit -Xjitwarmupthreshold:0 -Xjitthreshold:0'
         }
@@ -385,12 +468,14 @@ foreach ($mode in @('nterp', 'switch', 'jit')) {
             "W003XmmSentinelProbe mode=$mode"
             'mask=0 selfTestMask=63 iterations=128'
             'fullSelfTestMask=1023'
+            'exceptionMask=0 exceptionCaught=32 exceptionIterations=32 exceptionSelfTestMask=1023'
             'W003XmmSentinelProbe OK'
             'main end exception=0'
         )
         $forbidden = $HandledForbidden
         if ($mode -eq 'jit') {
             $markers += 'success=1 method=int W003XmmSentinelProbe.managedCallback('
+            $markers += 'success=1 method=int W003XmmSentinelProbe.managedExceptionCallback('
         } else {
             $forbidden += 'Windows x64 CompileMethod done success=1 method='
         }
@@ -451,6 +536,19 @@ Clear-ArtEnvironment
 
 $handledLogNames = @(
     'osr_unwind'
+    'debugger_npe'
+    'debugger_so'
+    'cet_forced_enable-user-shadow-stack'
+    'cet_forced_audit-user-shadow-stack'
+    'cet_forced_set-context-ip-validation'
+    'cet_forced_audit-set-context-ip-validation'
+    'cet_forced_strict-user-shadow-stack'
+    'cet_forced_block-non-cet-binaries'
+    'cet_forced_block-non-cet-binaries-non-ehcont'
+    'cet_forced_audit-block-non-cet-binaries'
+    'cet_forced_relaxed-context-ip-validation'
+    'cet_forced_safe_dynamic-apis-out-of-proc-only'
+    'cet_forced_safe_reserved-all'
     'xmm_full_nterp_run01'
     'xmm_full_nterp_run02'
     'xmm_full_switch_run01'
@@ -493,6 +591,18 @@ if ($handledDumps.Count -eq 0) {
 }
 
 Clear-ArtEnvironment
+Invoke-CheckedProcess -Name 'art_embedding' -Executable 'win32_art_embedding_probe.exe' -Markers @(
+    'WIN32_ART_EMBED runtime_create result=0'
+    'WIN32_ART_EMBED predecessor_uef resumed calls=1'
+    'WIN32_ART_EMBED frame_seh caught phase=runtime-active'
+    'WIN32_ART_EMBED late_uef installed predecessor_is_art=1'
+    'WIN32_ART_EMBED teardown late_uef_preserved=1'
+    'WIN32_ART_EMBED frame_seh caught phase=runtime-unloaded'
+    'WIN32_ART_EMBED result foreign_veh_calls=3 predecessor_uef_calls=1 late_uef_calls=0 frame_seh_calls=2'
+    'WIN32_ART_EMBED PASS'
+) -ForbiddenMarkers @('WIN32_ART_EMBED late_uef unexpected_call=1') -RequireNewMinidump -TimeoutSeconds 180
+
+Clear-ArtEnvironment
 Invoke-CheckedProcess -Name 'crashnative' -Executable 'dalvikvm.exe' -Arguments "$Common -Xint -cp run\crashnativeprobe.jar CrashNativeProbe" -Markers @('CrashNativeProbe.start', 'ART Win32 VEH: exception 0xc0000005', 'ART Win32 UEF: exception 0xc0000005', 'minidump written') -ForbiddenMarkers @('CrashNativeProbe.unexpected_continue') -RequireNonZero -RequireNewMinidump -TimeoutSeconds 120
 
 foreach ($fatalMode in @('j2', 'j1')) {
@@ -510,11 +620,7 @@ foreach ($fatalMode in @('j2', 'j1')) {
         'minidump written'
     )
     $forbidden = @('CrashNativeProbe.unexpected_continue')
-    if ($fatalMode -eq 'j2') {
-        $markers += 'Windows x64 JIT dual-view (J-2) created'
-    } else {
-        $forbidden += 'Windows x64 JIT dual-view (J-2) created'
-    }
+    $markers += 'Windows x64 JIT dual-view (J-2) created'
     Invoke-CheckedProcess -Name "jit_fatal_$fatalMode" -Executable 'dalvikvm.exe' -Arguments "$Common -verbose:jit -Xjitwarmupthreshold:0 -Xjitthreshold:0 -cp run\crashnativeprobe.jar CrashNativeProbe jit" -Markers $markers -ForbiddenMarkers $forbidden -RequireNonZero -RequireNewMinidump -TimeoutSeconds 120
 }
 
@@ -540,11 +646,7 @@ foreach ($fatalMode in @('j2', 'j1')) {
         'CrashNativeProbe.osr_unexpected_return'
         'CrashNativeProbe.unexpected_continue'
     )
-    if ($fatalMode -eq 'j2') {
-        $markers += 'Windows x64 JIT dual-view (J-2) created'
-    } else {
-        $forbidden += 'Windows x64 JIT dual-view (J-2) created'
-    }
+    $markers += 'Windows x64 JIT dual-view (J-2) created'
     Invoke-CheckedProcess -Name "osr_fatal_$fatalMode" -Executable 'dalvikvm.exe' -Arguments "$Common -verbose:jit -Xjitwarmupthreshold:100 -Xjitthreshold:100 -cp run\crashnativeprobe.jar CrashNativeProbe osr" -Markers $markers -ForbiddenMarkers $forbidden -RequireNonZero -RequireNewMinidump -TimeoutSeconds 180
 }
 Clear-ArtEnvironment

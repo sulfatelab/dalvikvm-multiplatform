@@ -1,0 +1,12 @@
+name=cet_forced_enable-user-shadow-stack
+exit=1
+expected_exit=0
+require_nonzero=True
+timeout_seconds=180
+timed_out=False
+elapsed_ms=86
+--- stdout ---
+--- stderr ---
+dalvikvm.exe I 07-29 17:55:53  3648  2416 parsed_options.cc:711] setting boot class path to run\boot.jar
+dalvikvm.exe E 07-29 17:55:53  3648  2416 runtime_windows.cc:345] ART Win32 startup rejected: incompatible CET user-shadow-stack process policy must be disabled before process creation; HSP compatibility/audit/strict modes, context-IP validation, and non-CET binary blocking are unsupported. decision=incompatible build=26100 flags=0x101 known_incompatible=0x1 error=0 test_policy_forced=1 test_policy_input_valid=1 test_forced_flags=0x1
+Failed to initialize runtime (check log for details)

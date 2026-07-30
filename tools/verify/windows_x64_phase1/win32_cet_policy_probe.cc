@@ -39,6 +39,23 @@ bool ExpectPolicy(const char* name,
                 expected);
 }
 
+template <typename Setter>
+bool ExpectTestPolicyName(const char* name, Setter setter) {
+  PROCESS_MITIGATION_USER_SHADOW_STACK_POLICY expected = {};
+  setter(&expected);
+  uint32_t actual = 0u;
+  if (art::ParseTestUserShadowStackPolicy(name, &actual) && actual == expected.Flags) {
+    return true;
+  }
+  std::fprintf(stderr,
+               "WIN32_CET_POLICY_PROBE FAIL test-policy=%s expected=0x%08x "
+               "actual=0x%08x\n",
+               name,
+               expected.Flags,
+               actual);
+  return false;
+}
+
 }  // namespace
 
 int main() {
@@ -75,6 +92,25 @@ int main() {
                      [](auto* policy) { policy->SetContextIpValidationRelaxedMode = 1; },
                      UserShadowStackPolicyDecision::kIncompatible);
 
+  ok &= ExpectTestPolicyName(
+      "enable-user-shadow-stack", [](auto* policy) { policy->EnableUserShadowStack = 1; });
+  ok &= ExpectTestPolicyName(
+      "audit-user-shadow-stack", [](auto* policy) { policy->AuditUserShadowStack = 1; });
+  ok &= ExpectTestPolicyName(
+      "set-context-ip-validation", [](auto* policy) { policy->SetContextIpValidation = 1; });
+  ok &= ExpectTestPolicyName("audit-set-context-ip-validation",
+                             [](auto* policy) { policy->AuditSetContextIpValidation = 1; });
+  ok &= ExpectTestPolicyName("strict-user-shadow-stack",
+                             [](auto* policy) { policy->EnableUserShadowStackStrictMode = 1; });
+  ok &= ExpectTestPolicyName(
+      "block-non-cet-binaries", [](auto* policy) { policy->BlockNonCetBinaries = 1; });
+  ok &= ExpectTestPolicyName("block-non-cet-binaries-non-ehcont",
+                             [](auto* policy) { policy->BlockNonCetBinariesNonEhcont = 1; });
+  ok &= ExpectTestPolicyName("audit-block-non-cet-binaries",
+                             [](auto* policy) { policy->AuditBlockNonCetBinaries = 1; });
+  ok &= ExpectTestPolicyName("relaxed-context-ip-validation",
+                             [](auto* policy) { policy->SetContextIpValidationRelaxedMode = 1; });
+
   ok &= ExpectPolicy("dynamic-api-out-of-process-only",
                      [](auto* policy) { policy->CetDynamicApisOutOfProcOnly = 1; },
                      UserShadowStackPolicyDecision::kDisabled);
@@ -97,6 +133,27 @@ int main() {
                        policy->ReservedFlags = (1u << 22) - 1u;
                      },
                      UserShadowStackPolicyDecision::kIncompatible);
+
+  ok &= ExpectTestPolicyName("dynamic-apis-out-of-proc-only",
+                             [](auto* policy) { policy->CetDynamicApisOutOfProcOnly = 1; });
+  ok &= ExpectTestPolicyName(
+      "reserved-low", [](auto* policy) { policy->ReservedFlags = 1u; });
+  ok &= ExpectTestPolicyName(
+      "reserved-high", [](auto* policy) { policy->ReservedFlags = 1u << 21; });
+  ok &= ExpectTestPolicyName(
+      "reserved-all", [](auto* policy) { policy->ReservedFlags = (1u << 22) - 1u; });
+  uint32_t invalid_test_flags = 0u;
+  if (art::ParseTestUserShadowStackPolicy("unknown-policy", &invalid_test_flags)) {
+    std::fputs("WIN32_CET_POLICY_PROBE FAIL accepted unknown test policy\n", stderr);
+    ok = false;
+  }
+  UserShadowStackPolicyObservation invalid_test_input = {
+      true, 19041u, true, 0u, ERROR_SUCCESS};
+  invalid_test_input.test_policy_forced = true;
+  invalid_test_input.test_policy_input_valid = false;
+  ok &= Expect("invalid-test-policy",
+               invalid_test_input,
+               UserShadowStackPolicyDecision::kUnexpectedQueryFailure);
 
   ok &= Expect("old-unavailable",
                {true, 18363u, false, 0u, ERROR_INVALID_PARAMETER},
