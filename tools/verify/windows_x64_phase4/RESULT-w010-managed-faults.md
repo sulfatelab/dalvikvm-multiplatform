@@ -4,6 +4,10 @@
 FS-2 native acceptance complete on Windows Server 2025 build 26100
 **Date:** 2026-07-30
 
+All future native reruns use the Windows Server 2025 build-26100 lab gate. The
+former Windows 10 host is unavailable; older Windows 10 records below are
+historical evidence only. See [HOST_GATE_POLICY.md](HOST_GATE_POLICY.md).
+
 ## Product behavior
 
 Windows x64 keeps ART's common implicit-null model and uses a narrow explicit

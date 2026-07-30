@@ -1,7 +1,9 @@
 # W-025 JIT-4 native host checklist
 
-1. Use Windows 10 build 17134 or later with CET Hardware-enforced Stack
-   Protection disabled for the process.
+1. Use the authoritative Windows Server 2025 Datacenter Evaluation x64
+   build-26100 host with CET Hardware-enforced Stack Protection disabled for
+   the process. The former Windows 10 host is unavailable; see
+   `../windows_x64_phase4/HOST_GATE_POLICY.md`.
 2. Verify the issued ZIP SHA-256 before extracting it to a fresh local path.
 3. Run `powershell.exe -ExecutionPolicy Bypass -File
    .\scripts\RUN_W025_JIT4_HOST.ps1` from the package root.

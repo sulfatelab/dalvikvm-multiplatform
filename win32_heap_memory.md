@@ -1,8 +1,11 @@
 # Windows x64 heap memory and embedded dlmalloc design — W-013
 
 **Status:** CLOSED — Stages A–E and native Windows R2 acceptance PASS
-**Updated:** 2026-07-25
-**Target baseline:** Windows 10 version 1803 or later (NTDDI_WIN10_RS4)
+**Updated:** 2026-07-30
+**Native gate:** Windows Server 2025 Datacenter Evaluation x64 build 26100;
+the former Windows 10 lab host is unavailable for future gates. See
+[HOST_GATE_POLICY.md](tools/verify/windows_x64_phase4/HOST_GATE_POLICY.md).
+**Product API baseline:** Windows 10 version 1803 or later (NTDDI_WIN10_RS4)
 **Related:** [win32_open_items.md](win32_open_items.md) W-013,
 [win32_jit_memory.md](win32_jit_memory.md), and
 [win32_art_port.md](win32_art_port.md) §9c

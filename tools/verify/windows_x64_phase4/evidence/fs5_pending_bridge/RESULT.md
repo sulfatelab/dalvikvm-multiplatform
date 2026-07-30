@@ -63,7 +63,9 @@ not evidence that a real ART pending transition is native-safe. The existing
 `RtlVirtualUnwind` synthetic body/epilogue checks already cover that metadata
 question, so no such probe is added.
 
-This disposition leaves FS-4/H-002 (second-host repetition) as the only
-host-availability blocker. If a future product requirement needs debugger
-quality for this non-returning tail, add a dedicated probe with an explicit
-synthetic/non-product label and a separately reviewed fault-injection contract.
+The lab policy makes Windows Server 2025 build 26100 the sole authoritative
+native gate; the former Windows 10 host is unavailable and a second-host
+repeat is not an acceptance requirement. If a future product requirement needs
+debugger quality for this non-returning tail, add a dedicated probe with an
+explicit synthetic/non-product label and a separately reviewed fault-injection
+contract.

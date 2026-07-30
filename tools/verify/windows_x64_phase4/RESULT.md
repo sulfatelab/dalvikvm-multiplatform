@@ -15,7 +15,12 @@ is skipped by policy. Reservation-correlation, negative-exception, and
 debugger-quality dump-stack coverage remain optional follow-ups. FS-5
 conditionally closes the pending bridge tail.
 **Date:** 2026-07-30
-**Depends on:** Phase 3 complete (real Win10 G12 goldens)
+**Depends on:** Phase 3 complete (historical real Win10 G12 goldens)
+
+**Current lab policy:** All future native Windows gates use Windows Server
+2025 Datacenter Evaluation x64 build 26100. The former Windows 10 host is no
+longer available; the Windows 10 records in this file are retained as
+historical evidence only. See [HOST_GATE_POLICY.md](HOST_GATE_POLICY.md).
 
 ## Scope (from win32_art_port §Phase 4)
 

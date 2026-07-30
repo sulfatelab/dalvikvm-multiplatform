@@ -54,10 +54,15 @@ file. The package archive and host location are recorded in `ARCHIVE_SHA256SUMS.
 and `HOST_INFO.txt`; minidump binaries remain in the returned Windows package
 rather than in the source tree.
 
-## Remaining work
+## Current lab policy and remaining work
+
+The former Windows 10 acceptance host is no longer available after the lab
+environment change. Windows Server 2025 build 26100 is the sole authoritative
+native gate for future reruns; the canonical policy is
+`tools/verify/windows_x64_phase4/HOST_GATE_POLICY.md`.
 
 FS-2 closes its four requested native proof points. Remaining W-010/W-014 work
-is limited to second-host repetition, reservation-correlation/pending-range
-conditional probes, wrong-address and unsupported-exception negatives, and
-debugger-quality dump-stack reconstruction. None reopens the accepted managed
-fault, CET classifier, UEF teardown, or exception-XMM behavior.
+is limited to reservation-correlation/pending-range conditional probes,
+wrong-address and unsupported-exception negatives, and debugger-quality
+dump-stack reconstruction. None reopens the accepted managed fault, CET
+classifier, UEF teardown, or exception-XMM behavior.

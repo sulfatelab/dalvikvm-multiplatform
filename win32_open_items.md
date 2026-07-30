@@ -18,6 +18,7 @@ Do **not** list permanent non-goals as OPEN workarounds—list them under §Non-
 | [win32_jit_memory.md](win32_jit_memory.md) | JIT memory contract, historical separated-view diagnosis, and implemented Windows 10 pagefile-section design |
 | [win32_heap_memory.md](win32_heap_memory.md) | W-013 heap / embedded-dlmalloc ownership, low-address, and MoreCore target design |
 | [win32_libcore_os_natives.md](win32_libcore_os_natives.md) | Os/`Linux` natives: Implemented / Needed / ENOSYS |
+| [HOST_GATE_POLICY.md](tools/verify/windows_x64_phase4/HOST_GATE_POLICY.md) | Current native lab host and future-gate policy |
 | `tools/verify/windows_x64_phase*/RESULT.md` | Gate evidence |
 
 ---
@@ -49,13 +50,23 @@ Then **move the full item** into §Closed (keep history; sort by ID prefix then 
 
 IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` docs/process. Numbers are stable; do not reuse.
 
+## Native lab gate policy
+
+The former Windows 10 acceptance host is no longer available after the lab
+environment change. Windows Server 2025 Datacenter Evaluation, x64 build
+26100, is the sole authoritative native gate for all future test packages,
+acceptance matrices, regression gates, and release claims. Wine/Linux remain
+development and structural checks only. Existing Windows 10 result bundles are
+historical evidence and do not provide current cross-version coverage. The
+canonical policy is [HOST_GATE_POLICY.md](tools/verify/windows_x64_phase4/HOST_GATE_POLICY.md).
+
 ---
 
 ## Snapshot (2026-07-30)
 
 | Bucket | Summary |
 |--------|---------|
-| Phases 0–3 | **Gate-complete** (P3 G12 real Win10 + wine) |
+| Phases 0–3 | **Gate-complete** (historical P3 G12 real Win10 + wine; future reruns use the Server 2025 gate) |
 | Phase 4 | **Wine complete; authoritative Windows Server 2025 build-26100 gate accepted** |
 | PE libcore/ICU/openjdk | **Product-default real PE** (icu/javacore/openjdk); NIO.2 non-goal; NetProbe OK |
 | Quick/JIT/TLS | **Managed and native JIT ON with the sole corrected dual view:** rSELF=r15; nterp N-1 default ON; D-1 complete (37/37 Thread sites); W-002/W-003 closed; post-removal JIT smoke 14/14 and matrix 14/14; JIT-1 encoding, JIT-2 mapping/policy, JIT-3/FS-3 lifecycle/unwind, JIT-4 default-path, and JIT-5 removal/native closure gates pass; JIT-5 accepts 29 cases and 36/36 records with three valid dumps; W-025 CLOSED; compile records opt-in |

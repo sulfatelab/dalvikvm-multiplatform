@@ -1,6 +1,11 @@
 # G12 — Real Windows host golden checklist
 
-Phase 3 is **not complete** until this checklist is executed on a **native Windows 10/11 x64** machine (not WSL, not wine).
+Phase 3 is historically complete from the original Windows 10 G12 result.
+Any future G12 rerun must use the authoritative **Windows Server 2025
+Datacenter Evaluation x64 build-26100** machine (not WSL, not Wine). The former
+Windows 10 host is no longer available. See
+`../../verify/windows_x64_phase4/HOST_GATE_POLICY.md` for the current lab
+policy.
 
 ## 1. Transfer
 

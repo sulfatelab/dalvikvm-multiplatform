@@ -5,7 +5,10 @@ Windows JIT memory path. JIT-5 removed the J-1 diagnostic opt-out and
 single-view fallback, then passed post-removal Wine, Linux, and native Windows
 regressions. Section construction now fails closed instead of downgrading W^X.
 **Updated:** 2026-07-30
-**Target baseline:** Windows 10 version 1803 or later (NTDDI_WIN10_RS4)
+**Native gate:** Windows Server 2025 Datacenter Evaluation x64 build 26100;
+the former Windows 10 lab host is unavailable for future gates. See
+[HOST_GATE_POLICY.md](tools/verify/windows_x64_phase4/HOST_GATE_POLICY.md).
+**Product API baseline:** Windows 10 version 1803 or later (NTDDI_WIN10_RS4)
 **Related:** [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md),
 [win32_heap_memory.md](win32_heap_memory.md),
 [win32_faults_and_stacks.md](win32_faults_and_stacks.md),
@@ -1012,7 +1015,7 @@ independent package.
 The shared FS-3 dynamic-table churn requirement is complete through JIT-3.
 FS-2 now closes the native debugger continuation, CET policy classification,
 exception-unwind XMM, and embedding gates that exercise the JIT/managed
-boundary. Conditional pending-range, reservation-correlation, second-host,
+boundary. Conditional pending-range, reservation-correlation,
 negative-exception, and debugger-quality dump-stack work remains scheduled in
 [win32_faults_and_stacks.md](win32_faults_and_stacks.md), independent of the
 completed JIT-1 through JIT-5 gates.

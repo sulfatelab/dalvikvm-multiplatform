@@ -1,8 +1,10 @@
 # W-003 native Windows acceptance checklist
 
-Use this package on a native Windows 10 or Windows 11 x64 host. The minimum
-supported Windows build is 17134 (Windows 10 version 1803). Wine results are
-development gates; only a successful run on native Windows closes W-003.
+Use this package on the authoritative Windows Server 2025 Datacenter
+Evaluation x64 build-26100 host. The former Windows 10 host is unavailable for
+future reruns. The Windows 10 build-17134 API level remains the product
+compatibility baseline, and Wine results are development gates only. See
+[HOST_GATE_POLICY.md](HOST_GATE_POLICY.md).
 
 The package contains two ART variants:
 

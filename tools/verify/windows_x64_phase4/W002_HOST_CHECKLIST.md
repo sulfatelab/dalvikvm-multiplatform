@@ -1,8 +1,11 @@
 # W-002 native Windows host acceptance
 
-**Target:** Windows 10 version 1803 (RS4, build 17134) or later, x64
+**Authoritative lab gate:** Windows Server 2025 Datacenter Evaluation, x64,
+build 26100. The accepted Windows 10 result below is historical; the former
+Windows 10 host is no longer available for future reruns. See
+[HOST_GATE_POLICY.md](HOST_GATE_POLICY.md).
 
-**State:** ACCEPTED on Windows 10 build 19044; W-002 closed
+**State:** ACCEPTED historically on Windows 10 build 19044; W-002 closed
 
 The accepted `2026-07-26 14:37:55` R2 run produced 21 PASS records, zero
 failures, `OVERALL PASS`, and `NO_DMP_FILES`. All OSR and attached-thread mode
@@ -36,7 +39,8 @@ code instead of completing before the transition.
 
 ## Run
 
-Unpack the archive on a native Windows 10/11 x64 host. Do not use WSL or Wine.
+Unpack the archive on the authoritative Windows Server 2025 x64 host. Do not
+use WSL or Wine.
 From PowerShell in the package root:
 
 ```powershell

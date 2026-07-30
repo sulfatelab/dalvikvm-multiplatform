@@ -1,8 +1,11 @@
 # W-004 native Windows host acceptance
 
-**Target:** Windows 10 version 1803 (RS4, build 17134) or later, x64
+**Authoritative lab gate:** Windows Server 2025 Datacenter Evaluation, x64,
+build 26100. The accepted Windows 10 result below is historical; the former
+Windows 10 host is no longer available for future reruns. See
+[HOST_GATE_POLICY.md](HOST_GATE_POLICY.md).
 
-**State:** ACCEPTED on Windows 10 build 19044; W-004 closed
+**State:** ACCEPTED historically on Windows 10 build 19044; W-004 closed
 
 The accepted 2026-07-25 run produced 28 PASS records, zero failures,
 `OVERALL PASS`, and `NO_DMP_FILES`. Package metadata and the structural report
@@ -33,8 +36,8 @@ The embedded `W004_STRUCTURAL_REPORT.txt` records:
 
 ## Run
 
-Unpack the generated archive on a native Windows 10/11 x64 host. Do not run it
-from WSL. From PowerShell in the package root:
+Unpack the generated archive on the authoritative Windows Server 2025 x64
+host. Do not run it from WSL. From PowerShell in the package root:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass

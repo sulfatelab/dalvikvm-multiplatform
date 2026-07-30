@@ -74,5 +74,7 @@ incompatible CET-policy coverage, exception-unwind XMM coverage, or broad
 embedding/predecessor-UEF coverage. FS-2 subsequently closes those four native
 proof points on the same build-26100 class host; its compact result is recorded
 in `../fs2_w010_w014_native/ACCEPTANCE.md`. Conditional pending-range,
-reservation-correlation, second-host, and debugger-quality dump-stack work do
-not reopen the accepted E9 managed-SOE mechanism.
+reservation-correlation, and debugger-quality dump-stack work do not reopen the
+accepted E9 managed-SOE mechanism. The former Windows 10 host is unavailable;
+future native reruns use the Server 2025 gate under
+`../HOST_GATE_POLICY.md`.

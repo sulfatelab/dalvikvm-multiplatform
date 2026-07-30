@@ -1,6 +1,8 @@
 # W-025 JIT-2 native Windows acceptance
 
-**Target:** Windows 10 version 1803 (build 17134) or later, x64
+**Authoritative lab gate:** Windows Server 2025 Datacenter Evaluation, x64,
+build 26100. The former Windows 10 host is unavailable for future reruns. See
+`../windows_x64_phase4/HOST_GATE_POLICY.md`.
 
 ## Purpose
 

@@ -24,6 +24,8 @@ out-of-scope DNS probe returned 1. That network-dependent failure does not
 invalidate this H-001 subset; its raw `run_dns.log` remains on the Windows
 workspace for diagnosis.
 
-The selected raw logs are retained beside this file. The host is Server 2025,
-not the separately requested Win10 second host; H-002/FS-4 still covers that
-repeat and remains open.
+The selected raw logs are retained beside this file. The host is Server 2025.
+The former Windows 10 host is no longer available after the lab environment
+change, and the authoritative-host policy makes a second-host repeat
+unnecessary for H-002/FS-4. See
+`tools/verify/windows_x64_phase4/HOST_GATE_POLICY.md`.

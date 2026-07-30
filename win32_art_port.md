@@ -5,11 +5,15 @@ Product tree: **dalvikvm-multiplatform** (nested vendor + artmp_*).
 > **Arch lock:** **64-bit only** (`x86_64-pc-windows-msvc`, PE32+). “Win32 API” below means the Windows platform API on x64, not a 32-bit product.
 
 Status: historical feasibility and phased-port record; Phases 0–3 gate-complete,
-Phase 4 Wine-complete with focused native W-024/W-013 acceptance, x86_64
-quick/nterp/managed/native JIT enabled by default, and W-010 Stages C-D
-focused Wine verification with product implicit null/SO translation active;
-native Stage E remains open
-Updated: 2026-07-27
+Phase 4 Wine-complete with the authoritative Windows Server 2025 build-26100
+native gate accepted, x86_64 quick/nterp/managed/native JIT enabled by default,
+and W-010/W-014 Stage E accepted on that host. The former Windows 10 lab host
+is no longer available for future gates.
+Updated: 2026-07-30
+
+Future native-gate policy: use only Windows Server 2025 Datacenter Evaluation
+x64 build 26100. See
+[HOST_GATE_POLICY.md](tools/verify/windows_x64_phase4/HOST_GATE_POLICY.md).
 
 **Living tracker (leftovers + temporary workarounds):** [win32_open_items.md](win32_open_items.md)
 Product goal (owner requirement): **full native Windows NT support** for this repo’s ART runtime — a real `dalvikvm.exe` + DLLs + `boot.jar` that runs plain Java on Win32 x64 **without** Android platform APIs and **without** WSL/VM indirection.

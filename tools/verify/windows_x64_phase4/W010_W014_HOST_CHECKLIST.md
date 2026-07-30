@@ -1,6 +1,9 @@
 # W-010/W-014 native Windows Stage E acceptance
 
-**Target:** Windows 10 version 1803 (RS4, build 17134) or later, x64
+**Authoritative lab gate:** Windows Server 2025 Datacenter Evaluation, x64,
+build 26100. The former Windows 10 host is no longer available. The Windows
+10 RS4 requirement below is only the product API compatibility baseline.
+See [HOST_GATE_POLICY.md](HOST_GATE_POLICY.md).
 
 **State:** E9 configured-guarantee explicit-stack-check, FS-1 stack high-water,
 and FS-2 debugger/CET/embedding/exception-XMM native acceptance accepted on
@@ -14,11 +17,13 @@ the native run must establish that the real Windows loader, exception
 dispatcher, moving stack guard, static boundaries, dynamic JIT tables, and
 minidump path preserve the same contracts.
 
-The package intentionally does not claim to close every Stage E item. FS-1
+The package intentionally does not claim to close every Stage E item. All
+future native reruns use the Server 2025 lab gate; no second Windows host is
+required under the current policy. FS-1
 supplies the Release/Debug stack high-water evidence and FS-2 supplies the
 debugger first-chance, forced-policy, exception-XMM, and embedding/UEF teardown
-evidence. Conditional pending-range, second-host, reservation-correlation,
-negative-exception, and debugger-quality dump-stack work remains separate.
+evidence. Conditional pending-range, reservation-correlation, negative-
+exception, and debugger-quality dump-stack work remains separate.
 
 E9 replaces the rejected Windows x64 fixed-page recursive-SOE mechanism with narrow
 explicit `RSP < Thread::stack_end_` checks in optimizing code and nterp. An
@@ -45,8 +50,10 @@ records. Interpretation is documented in `W010_W014_DIAGNOSTICS.md`.
 
 ## Host prerequisites
 
-- Use native Windows 10/11 x64, not Wine, WSL, or a compatibility VM layer.
-- Windows build must be at least 17134.
+- Use the authoritative native Windows Server 2025 x64 host, not Wine, WSL, or
+  a compatibility VM layer.
+- The acceptance host must report build 26100. Windows 10 build 17134 remains
+  the product API compatibility baseline only.
 - Hardware-enforced Stack Protection must be disabled for the ART process.
   On build 19041 or later, the runner requires the process policy probe to
   report `actual=disabled` and `known_incompatible=0x00000000`. The raw flags
@@ -218,7 +225,6 @@ See `evidence/fs1_stack_high_water/ACCEPTANCE.md`.
 
 The following are still optional or conditional before W-010/W-014 close:
 
-- repeat the package on Windows 10 build 17134+ and a current Windows release;
 - reservation-correlation and pending-range probes only if deterministic;
 - wrong-address and unsupported exception-kind native negatives; and
 - debugger-quality dump-stack reconstruction.

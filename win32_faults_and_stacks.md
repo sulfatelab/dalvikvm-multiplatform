@@ -27,7 +27,11 @@ The post-JIT-1 W-004 regression also passes 28/28 on the same Windows Server
 2025 build 26100 with clean log, trace, and recursive dump scans.
 **Created:** 2026-07-26
 **Updated:** 2026-07-30
-**Target:** x86_64 Windows 10 build 17134+
+**Native gate policy:** Future native tests and acceptance gates use only
+Windows Server 2025 Datacenter Evaluation x64 build 26100; the former Windows
+10 lab host is unavailable. See
+[HOST_GATE_POLICY.md](tools/verify/windows_x64_phase4/HOST_GATE_POLICY.md).
+**Product API baseline:** x86_64 Windows 10 build 17134+
 **Product model:** imageless ART with nterp and JIT; MSVC ABI artifacts built by
 Clang/lld with LLVM libc++
 

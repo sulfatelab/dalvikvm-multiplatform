@@ -2,8 +2,12 @@
 
 **Status:** Windows x64 quick invoke, nterp, managed JIT, and native JIT
 implemented and product-default; other Windows ISAs remain design-only
-**Updated:** 2026-07-27
+**Updated:** 2026-07-30
 **Scope:** Record the cross-ISA design and the implemented x86_64 contracts.
+**Native gate:** Future Windows acceptance runs use Windows Server 2025
+Datacenter Evaluation x64 build 26100; the former Windows 10 lab host is no
+longer available. See
+[HOST_GATE_POLICY.md](tools/verify/windows_x64_phase4/HOST_GATE_POLICY.md).
 **Related:** [win32_art_port.md](win32_art_port.md) (product phases),
 [win32_jit_memory.md](win32_jit_memory.md) (implemented code-cache design), and
 [win32_open_items.md](win32_open_items.md) (W-002/W-003 closure plus remaining
