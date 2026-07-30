@@ -9,9 +9,11 @@ positive margins, and no dump. FS-2 now also passes the native debugger,
 forced-policy, embedding/UEF teardown, and exception-unwind XMM gates on that
 host. FS-3/JIT-3 also passes native lifecycle churn and virtual-unwind
 sampling. FS-4 repeats these gates on the same host, including parameterized
-stack geometry and join/detach/fiber checks; the required second-host repeat,
-reservation-correlation, negative-exception, and debugger-quality dump-stack
-coverage remain open. FS-5 conditionally closes the pending bridge tail.
+stack geometry and join/detach/fiber checks. Windows Server 2025 build 26100
+is the authoritative native gate; the separate Windows 10/second-host repeat
+is skipped by policy. Reservation-correlation, negative-exception, and
+debugger-quality dump-stack coverage remain optional follow-ups. FS-5
+conditionally closes the pending bridge tail.
 **Date:** 2026-07-30
 **Depends on:** Phase 3 complete (real Win10 G12 goldens)
 
@@ -360,14 +362,12 @@ retained in `evidence/fs2_w010_w014_native/`.
 
 - Keep E9's explicit Windows x64 stack checks and guarantee-aware bound accounting as
   the accepted product path; retain fixed-page operations only as direct
-  diagnostics. Repeat the 30-record gate on another supported Windows 10 host
-  when available.
-- Repeat the accepted E9/FS-1/FS-2/FS-3 bundle on a second supported Windows
-  host and correlate Java/ART-pool reservations. The same-host FS-4 repeat is
-  archived under `evidence/fs4_same_host_20260730/`; FS-5 records why a real
-  pending-tail native fault would require product fault injection.
-- Add wrong-address/unsupported-exception negatives and debugger-quality dump
-  stack reconstruction if those remain release requirements.
+  diagnostics. The authoritative Windows Server 2025 build-26100 FS-4 repeat
+  is archived under `evidence/fs4_same_host_20260730/`.
+- Correlate Java/ART-pool reservations and add wrong-address/unsupported-
+  exception negatives or debugger-quality dump-stack reconstruction if those
+  remain release requirements. FS-5 records why a real pending-tail native
+  fault would require product fault injection.
 
 ## W-010 Stage D activation re-run (2026-07-27)
 

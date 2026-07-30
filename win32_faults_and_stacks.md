@@ -16,8 +16,8 @@ exception-unwind XMM proof points on the same host. FS-5 now conditionally
 closes the pending-range question: the brief 88-byte tail is structurally and
 synthetically accepted, but a real native exception cannot enter it without
 changing product control flow. Remaining product coverage is reservation-
-correlation, second-host, negative-exception, and debugger-quality dump-stack
-work. The shared JIT-3/FS-3 dynamic-table
+correlation, negative-exception, and debugger-quality dump-stack work. The
+shared JIT-3/FS-3 dynamic-table
 sampling/churn gate and the JIT-5 post-removal fatal/unwind cross-regression
 are native-accepted on the same build. JIT-5 removes the Windows J-1 path and
 covers 29 cases, 36/36 aggregate records, eight lifecycle cycles, and three
@@ -310,8 +310,9 @@ dynamic-table collection/reuse churn and concurrent lookup/virtual-unwind
 sampling. FS-2 is now native-accepted on that host for debugger continuation,
 forced policy classification, embedding teardown, and exception-unwind XMM;
 FS-5 conditionally closes the pending range, while reservation-correlation,
-second-host, negative-exception, and debugger-quality dump-stack coverage
-remain additional acceptance work.
+negative-exception, and debugger-quality dump-stack coverage remain additional
+acceptance work. FS-4 now treats Windows Server 2025 build 26100 as the
+authoritative native host and skips the separate Windows 10 repetition.
 
 ### 4.1 Second native Stage E result and current diagnosis
 
@@ -2371,7 +2372,7 @@ contract.
   The embedding probe verifies predecessor UEF, foreign VEH/frame-SEH, and
   later-UEF preservation through VM teardown. Native evidence is under
   `tools/verify/windows_x64_phase4/evidence/fs2_w010_w014_native/`.
-- **Still open:** rollback injection, reservation correlation, second-host,
+- **Still open:** rollback injection, reservation correlation,
   negative-exception, and debugger-quality dump-stack gates. FS-5 conditionally
   closes the pending-range question because a real native fault would require
   product-tail injection or fabricated direct entry.
@@ -2548,9 +2549,10 @@ one VEH owner and one managed dispatch path.
 These are validation questions, not permission to improvise new product
 fallbacks:
 
-1. Repeat E9's accepted managed SOE and full runner on another supported
-   Windows 10 host. Do not treat this as permission to retry fixed-page
-   delivery.
+1. **Resolved by FS-4 policy decision:** Windows Server 2025 build 26100 is
+   the authoritative native acceptance host. Its E9/FS-1/FS-2/FS-3 and stack/
+   lifecycle repeat passed; the separate Windows 10 repetition is explicitly
+   skipped. This does not reopen fixed-page delivery.
 2. How much stack do the explicit quick throw, stack-end expansion, exception
    construction, and long-jump path consume in release and debug builds, and
    what margin remains above the configured native guarantee?
@@ -2828,10 +2830,11 @@ and 64 reserved restorations, and 258 direct faults. Compact raw results and
 the host identity are under
 `tools/verify/windows_x64_phase4/evidence/fs4_same_host_20260730/`.
 
-This closes the repeat on the available host only. A local SSH inventory found
-no second supported Windows host; the only other listener (`10.127.137.60`)
-identifies as Ubuntu and rejects the available Windows credentials. H-002 and
-the full FS-4 second-host gate therefore remain open.
+Per the acceptance-policy decision, this closes FS-4 on the authoritative
+Windows Server 2025 build-26100 host. A local SSH inventory found no second
+supported Windows host; the only other listener (`10.127.137.60`) identifies as
+Ubuntu and rejects the available Windows credentials. The separate Windows 10
+repetition is intentionally skipped and is not an FS-4 exit criterion.
 
 ### FS-5 pending interpreter-bridge range — 2026-07-30
 
@@ -2856,16 +2859,17 @@ reproducible reasoning and output are recorded in
 
 This schedule closes product proof points before optional mechanism research.
 It is evidence-gated rather than date-gated. FS-3 was split into an independent
-JIT closure package and completed before FS-1; FS-1 and FS-2 are now accepted,
-and FS-5 is conditionally closed, so the remaining order resumes at FS-4 and
-the optional reservation/negative/debugger-quality follow-ups.
+JIT closure package and completed before FS-1; FS-1, FS-2, and the
+authoritative-host FS-4 repeat are now accepted, and FS-5 is conditionally
+closed. Remaining work is limited to the optional reservation/negative/
+debugger-quality follow-ups.
 
 | Order | Work | Exit gate |
 |------:|------|-----------|
 | FS-1 (done) | Add allocation-free high-water instrumentation around the explicit check, quick throw, temporary stack-end expansion, exception construction, and non-local transfer; run release and debug builds | Accepted 2026-07-30: Wine and native Release/Debug switch, nterp, and JIT have positive margins; native quick Debug retains more than 37 KiB with the 40-KiB Debug-only reserve; four records per mode and no dumps |
 | FS-2 (done) | Extend the combined native package with debugger first-chance/continue, every named forced-incompatible CET policy, foreign VEH/frame-SEH/predecessor-UEF embedding, and XMM6-XMM15 sentinels during exception unwind | Accepted 2026-07-30 on build 26100: NPE continues into Java, explicit SOE remains fault-free, incompatible CET starts reject before Java/JIT with no dump, foreign search handlers coexist, and full-width XMM state survives unwind |
 | FS-3 (done) | With JIT-1 encoding and JIT-2 mapping/policy prerequisites complete, share the JIT closure load test: compile, invalidate, collect, reuse, and re-register many optimizing/JNI allocations while another thread performs lookup and virtual unwind | Accepted 2026-07-29: 52 collections, 1,344 compilations, 1,248 exact reuses, and 696,969 virtual unwinds complete with no missing/stale/failed record; callback tables remain unnecessary |
-| FS-4 (same-host portion passed) | Run FS-1 through FS-3 on the accepted build-26100 class host, then repeat the E9 core runner, parameterized guarantee geometry, fiber/manual-stack rejection, and deep detach/continue/reattach lifecycle on a second supported Windows 10 or later host | Same-host repeat passed 2026-07-30; second-host repetition is still required before FS-4 can close. Evidence: `tools/verify/windows_x64_phase4/evidence/fs4_same_host_20260730/` |
+| FS-4 (closed by policy) | Run FS-1 through FS-3, E9, parameterized guarantee geometry, fiber/manual-stack rejection, and deep detach/continue/reattach lifecycle on the authoritative host | Closed 2026-07-30 by decision: Windows Server 2025 build 26100 is authoritative; the Windows 10/second-host repetition is skipped. Evidence: `tools/verify/windows_x64_phase4/evidence/fs4_same_host_20260730/` |
 | FS-5 (closed conditional) | Attempt the brief pending bridge-range exception only if a deterministic probe can enter it without changing product control flow | Closed 2026-07-30: the pending tail is entered only by ART's managed pending-exception branch; structural and synthetic unwind checks pass, while a real native fault would require product fault injection or fabricated direct entry. See `tools/verify/windows_x64_phase4/evidence/fs5_pending_bridge/RESULT.md` |
 
 The history follow-ups—fatal-dump instrumentation with RSP inside the pregrown

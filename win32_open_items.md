@@ -56,12 +56,12 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 | Bucket | Summary |
 |--------|---------|
 | Phases 0–3 | **Gate-complete** (P3 G12 real Win10 + wine) |
-| Phase 4 | **Wine complete**; host re-run still recommended |
+| Phase 4 | **Wine complete; authoritative Windows Server 2025 build-26100 gate accepted** |
 | PE libcore/ICU/openjdk | **Product-default real PE** (icu/javacore/openjdk); NIO.2 non-goal; NetProbe OK |
 | Quick/JIT/TLS | **Managed and native JIT ON with the sole corrected dual view:** rSELF=r15; nterp N-1 default ON; D-1 complete (37/37 Thread sites); W-002/W-003 closed; post-removal JIT smoke 14/14 and matrix 14/14; JIT-1 encoding, JIT-2 mapping/policy, JIT-3/FS-3 lifecycle/unwind, JIT-4 default-path, and JIT-5 removal/native closure gates pass; JIT-5 accepts 29 cases and 36/36 records with three valid dumps; W-025 CLOSED; compile records opt-in |
 | Memory | One unnamed pagefile section is mapped as a contiguous low R/RX primary view plus a full RW alias; native 64 MiB/1 GiB, low-VA, pressure, CFG, and dynamic-policy acceptance passes; ART `389158d46f` removes J-1 and fails closed on construction errors; the retired environment key is inert |
 | Heap memory | **W-013 CLOSED:** explicit MoreCore-only dlmalloc, direct mspace owners, constrained `VirtualAlloc2`, page-state operations, Linux-like metadata placement, and native R2 pressure/JIT/repeated-start acceptance PASS |
-| Threads / managed faults | **W-010/W-014 core path, FS-1, FS-2, FS-5 conditional disposition, and H-001 scoped host subset accepted:** E9 passes 30/30 and FS-1 passes Release/Debug switch, nterp, and JIT on Windows Server 2025 build 26100. FS-2 passes native debugger continue, named CET policy classification, exception-unwind XMM, and embedding/UEF teardown. H-001's gcstress, threadheavy, handleleak, crash-abort, and native AV/minidump subset also passes on build 26100. FS-5 closes the pending 88-byte bridge tail conditionally because it is entered only by ART's managed pending-exception branch; structural and synthetic unwind evidence pass, but a real native fault would require product fault injection. Remaining work is the Win10/second-host repeat, reservation correlation, negative-exception cases, and debugger-quality dump-stack reconstruction. |
+| Threads / managed faults | **W-010/W-014 core path, FS-1, FS-2, authoritative-host FS-4, FS-5 conditional disposition, and H-001 scoped host subset accepted:** E9 passes 30/30 and FS-1 passes Release/Debug switch, nterp, and JIT on authoritative Windows Server 2025 build 26100. FS-2 passes native debugger continue, named CET policy classification, exception-unwind XMM, and embedding/UEF teardown. H-001's gcstress, threadheavy, handleleak, crash-abort, and native AV/minidump subset also passes on build 26100. FS-4 repeats E9/FS-1/FS-2/FS-3, parameterized stack geometry, fiber rejection, and join/detach stress on that host; the separate Windows 10/second-host repetition is skipped by policy. FS-5 closes the pending 88-byte bridge tail conditionally because it is entered only by ART's managed pending-exception branch; structural and synthetic unwind evidence pass, but a real native fault would require product fault injection. Remaining work is reservation correlation, negative-exception cases, and debugger-quality dump-stack reconstruction. |
 | Linux multiplatform | Full native rebuild, L-005 imageless Hello, and GC stress PASS after the Windows-only JIT-5 removal using the staged shared multipath `boot.jar` |
 
 ---
@@ -79,7 +79,7 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Updated:** 2026-07-27 — all active runners use the managed-fault chain; remaining review is limited to intentional `-Xint` coverage and imageless mode
 
 ### W-010 — Windows managed-fault adapter, fatal unwind, and CET exclusion
-- **State:** OPEN for broader host coverage; core E9 managed-fault/fatal matrix is native-accepted 30/30 on build 26100
+- **State:** OPEN for conditional follow-ups; core E9 managed-fault/fatal matrix is native-accepted 30/30 on build 26100
 - **Kind:** workaround → candidate permanent design
 - **Area:** art / exceptions
 - **Current behavior:** `sigchain_windows.cc` owns one immutable special-`SIGSEGV` action and a first VEH. It translates only exact generated-code access violations such as implicit null checks; unsupported records continue through Windows. Windows x64 stack overflow is now detected before the method prologue by an explicit `RSP < Thread::stack_end_` check in optimizing code and nterp, with equality allowed and an overflow tail-jump through `Thread::pThrowStackOverflow`. Linux keeps its unchanged implicit `RSP - 8192` path. `runtime_windows.cc` separately owns best-effort fatal VEH/UEF/minidump diagnostics and predecessor chaining.
@@ -109,16 +109,16 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **Dynamic-JIT implementation:** the x86_64 assembler emits explicit version-1 unwind bytes with shortest legal allocation forms, descending instruction-end offsets, even-slot padding, and validation. Optimizing Windows x64 JIT methods reserve and force-spill RBP, then establish it after the fixed allocation. Normal/FastNative JNI stubs use the same anchor and a four-register RBX/R12-R14 scratch set; CriticalNative retains a fixed-RSP record. Generation is independent of DWARF CFI, and invalid/missing enabled metadata rejects compilation before allocation. `Reserve()` adds the DWORD-aligned xdata tail after roots/stack maps; `Commit()` writes through the RW alias and registers a stable one-entry table before publication. `FreeLocked()` deletes the exact table before debug-info removal and mspace reuse, while destruction clears all entries before mapping teardown. The J-2/J-1 lifecycle gate proves invalidation retention, real collection, lookup disappearance, exact address reuse, re-registration, and replacement execution; the registry gate proves generated-frame virtual unwind.
 - **Native JIT-3/FS-3 acceptance:** four J-2/J-1 processes on build 26100 complete 52 collections, 1,344 optimizing/JNI compilations, 1,248 exact address reuses, 696,929 stable-live lookups, 5,909,811 stable-dead lookups, and 696,969 successful virtual unwinds with `missing_live=0`, `stale_dead=0`, `unwind_failures=0`, `callback_tables=0`, empty JIT temp, and no dump. Independent returned-archive review passes 9/9. ART `43f866830e` also fixes the normal-JNI/nterp hard-float return regression found by the preflight: XMM0 remains authoritative instead of copying RAX's `0x5c000000` transition state into the Java result.
 - **Native JIT-4 fatal/unwind cross-regression:** the final default-J-2 archive passes 28 cases and 34/34 aggregate records on build 26100 without a J-1 arm. Its lifecycle repeat completes eight collections, 216 compilations, 192 exact reuses, and 85,944 virtual unwinds with zero missing/stale/failed records. Static, threshold-zero compiled-JIT, and OSR fatal origins each reach VEH/UEF and create a valid `MDMP`; `jit-temp` is empty and no trace remains. This cross-regresses E9 and FS-3 but does not close the remaining independent W-010 proof points.
-- **Remaining native acceptance:** keep the accepted E9, FS-1, FS-2, FS-5 disposition, and H-001 subset as regression gates. Dynamic-JIT rollback fault injection and method-redefinition/OSR retirement extensions, Java/ART-pool reservation correlation, a second supported host, negative-exception cases, and debugger-quality dump-stack reconstruction remain conditional. FS-5 records why a native exception inside the pending bridge range is impractical without product fault injection; debugger continuation, named CET rejection, exception-unwind XMM, and predecessor-UEF embedding are closed.
+- **Remaining native acceptance:** keep the accepted E9, FS-1, FS-2, authoritative-host FS-4, FS-5 disposition, and H-001 subset as regression gates. Dynamic-JIT rollback fault injection and method-redefinition/OSR retirement extensions, Java/ART-pool reservation correlation, negative-exception cases, and debugger-quality dump-stack reconstruction remain conditional. The Windows 10/second-host repeat is explicitly skipped by policy. FS-5 records why a native exception inside the pending bridge range is impractical without product fault injection; debugger continuation, named CET rejection, exception-unwind XMM, and predecessor-UEF embedding are closed.
 - **Code anchors:** `vendor/art/runtime/runtime.cc`; `runtime/multiplatform/windows/sigchain_windows.cc`; `runtime_windows.cc`; `runtime/fault_handler.{h,cc}`; `runtime/arch/x86/fault_handler_x86.cc`; `runtime/arch/x86_64/quick_entrypoints_x86_64.S`; `runtime/multiplatform/windows/jit_unwind_windows.*`; `compiler/optimizing/code_generator_x86_64.*`; `compiler/utils/x86_64/{assembler,jni_macro_assembler}_x86_64.*`; `runtime/jit/{jit_code_cache,jit_memory_region}.*`; `tools/verify/windows_x64_phase1/{check_win32_boundary_unwind.py,win32_osr_unwind_probe.cc,win32_jit_unwind_registry_probe.cc,win32_stack_growth_probe.cc,win32_uef_probe.cc}`; `tools/verify/windows_x64_phase4/{src/W010ManagedFaultProbe.java,src/JitUnwindLifecycleProbe.java,src/CrashNativeProbe.java,host/RUN_W010_W014_DIAGNOSTICS.ps1,W010_W014_DIAGNOSTICS.md,run_osr_unwind_probe.sh,run_w010_managed_fault_probe.sh,run_jit_unwind_lifecycle.sh,run_jit_fatal_unwind.sh,run_osr_fatal_unwind.sh,RESULT-w010-managed-faults.md}`
-- **Blocked on / design doc:** no blocker for core managed-fault delivery, FS-1 stack budget, FS-2, FS-3 dynamic-table churn, or the FS-5 conditional disposition; only second-host repetition and reservation/negative-exception/debugger-quality probes remain; [win32_faults_and_stacks.md](win32_faults_and_stacks.md)
+- **Blocked on / design doc:** no blocker for core managed-fault delivery, FS-1 stack budget, FS-2, authoritative-host FS-4, FS-3 dynamic-table churn, or the FS-5 conditional disposition; only reservation/negative-exception/debugger-quality probes remain; [win32_faults_and_stacks.md](win32_faults_and_stacks.md)
 - **Opened:** 2026-07-16
 - **Updated:** 2026-07-30 — FS-1 Release/Debug switch, nterp, and JIT stack high-water acceptance passes on build 26100; the 40-KiB Debug-only reserve leaves more than 37 KiB of native margin without changing product or Linux
 
 ### W-014 — Windows stack bounds, pthread sizes, and stack guarantees
 
-- **State:** OPEN for broader host coverage; guarantee-aware bounds and explicit managed SOE are native-accepted in E9
-- **Kind:** permanent Windows adapter with remaining host coverage
+- **State:** OPEN for conditional correlation/negative/debugger-quality follow-ups; authoritative Windows Server 2025 build-26100 coverage is accepted in E9/FS-4
+- **Kind:** permanent Windows adapter with remaining conditional follow-ups
 - **Area:** art / threads / compat pthread
 - **Current bounds behavior:** Win `GetThreadStack()` accepts only the current non-fiber system stack. The pthread facade uses `GetCurrentThreadStackLimits()`, checks current-SP containment and a committed-private `VirtualQuery(SP)` record with `AllocationBase == low`, then walks the complete contiguous `[low, high)` reservation before ART publishes the bounds. Failure rejects attachment rather than clamping or fabricating a fallback. The one-page `pthread_attr_getguardsize()` result remains only a facade compatibility value; E9 replaces it inside `InitStack()` with the complete measured prefix + configured guarantee + moving-guard sum.
 - **Current allocation behavior:** `Thread::CreateNativeThread()` passes ART's post-`FixStackSize()` request through the implemented pthread attributes. The facade creates a suspended `_beginthreadex` thread, uses `STACK_SIZE_PARAM_IS_A_RESERVATION` for non-zero sizes, completes the control state before resume, and rejects invalid or caller-supplied stack addresses. Windows ART thread-pool workers no longer allocate ignored `MemMap` stacks; they pass their requested reservation to the OS.
@@ -131,17 +131,16 @@ IDs: `W-` workaround, `L-` leftover/product gap, `H-` host/validation gap, `D-` 
 - **W-010 ownership boundary:** W-014 owns bounds, stack-guarantee configuration, `_beginthreadex` reservation and pthread lifetime, and stack accounting. W-010 owns VEH/context adaptation for AV-based managed faults, explicit Windows x64 stack-check generation, quick-entrypoint redirection, and fatal unwind/diagnostics.
 - **CET boundary:** guarantee-aware bounds and explicit stack checks do not provide or repair CET support. The process-wide CET/HSP exclusion and early startup check belong to W-010 because ART's shared exception/deoptimization long jump is incompatible even without an implicit stack fault.
 - **Wine/Linux/native evidence (2026-07-30):** Wine passes the bounds/lifetime, direct page-state, and managed-SOE matrix. Native build 19044 validates exact small reservations and rejects fixed-page recursion. Controlled build-26100 guarantee requests prove terminal fault positions of `low+0x3000`, `+0x3000`, `+0x4000`, `+0x5000`, `+0x9000`, and `+0x11000` for requests 0, 8192, 12288, 16384, 32768, and 65536. E9's sum accounting then passes switch/nterp/JIT SOE, zero handled dumps, and the complete 30/30 runner. FS-1 measures every overflow phase in Release and Debug: native minimum margins are 6784/7536/7616 and 69744/37168/37232 bytes for switch/nterp/JIT. The final-source Linux rebuild, seven-object-probe check, and imageless Hello pass with the unchanged 8192-byte reserve.
-- **Required acceptance:** FS-4's Server 2025 repeat passes E9/FS-1/FS-2/FS-3,
-  parameterized guarantee geometry, fiber/manual-stack rejection, and join/
-  detach stress. Repeat that matrix on another supported Windows 10 host;
-  correlate Java post-`FixStackSize()` and representative ART pool
-  reservations; repeat external detach/continue/reattach under deep guard
-  movement; preserve unchanged Linux `018-stack-overflow` and object-level
-  probe behavior.
+- **Required acceptance:** FS-4's authoritative Server 2025 repeat passes
+  E9/FS-1/FS-2/FS-3, parameterized guarantee geometry, fiber/manual-stack
+  rejection, and join/detach stress. The separate Windows 10 repetition is
+  explicitly skipped by policy. Correlate Java post-`FixStackSize()` and
+  representative ART pool reservations; preserve unchanged Linux
+  `018-stack-overflow` and object-level probe behavior.
 - **Rejected designs:** larger clamps or fabricated fallbacks; TEB `StackLimit` as the total low bound; mechanical `mprotect` to `VirtualProtect` replacement; ART protection with `PAGE_GUARD`; fixed `PAGE_NOACCESS` recursive tripwire; direct `EXCEPTION_STACK_OVERFLOW` translation; fibers to emulate arbitrary pthread stacks; E8 `max(prefix, guarantee)` accounting. `SetThreadStackGuarantee` is selected only to reserve native dispatch space and define accounting, never as the managed event itself.
 - **Microsoft contracts:** [`IsThreadAFiber`](https://learn.microsoft.com/windows/win32/api/fibersapi/nf-fibersapi-isthreadafiber), [`GetCurrentThreadStackLimits`](https://learn.microsoft.com/windows/win32/api/processthreadsapi/nf-processthreadsapi-getcurrentthreadstacklimits), [`SetThreadStackGuarantee`](https://learn.microsoft.com/windows/win32/api/processthreadsapi/nf-processthreadsapi-setthreadstackguarantee), [`_beginthreadex`](https://learn.microsoft.com/cpp/c-runtime-library/reference/beginthread-beginthreadex), [thread stack size](https://learn.microsoft.com/windows/win32/procthread/thread-stack-size), [`VirtualQuery`](https://learn.microsoft.com/windows/win32/api/memoryapi/nf-memoryapi-virtualquery), [`VirtualAlloc`](https://learn.microsoft.com/windows/win32/api/memoryapi/nf-memoryapi-virtualalloc), [`VirtualFree`](https://learn.microsoft.com/windows/win32/api/memoryapi/nf-memoryapi-virtualfree), [`VirtualProtect`](https://learn.microsoft.com/windows/win32/api/memoryapi/nf-memoryapi-virtualprotect), [guard-page behavior](https://learn.microsoft.com/windows/win32/memory/creating-guard-pages), and [`_resetstkoflw`](https://learn.microsoft.com/cpp/c-runtime-library/reference/resetstkoflw).
 - **Code anchors:** `vendor/art/runtime/thread.cc` (`FixStackSize`, `GetThreadStack`, `InitStack`, `InstallImplicitProtection`, `ProtectStack`, `UnprotectStack`); `vendor/art/runtime/runtime.cc` implicit-check policy; `vendor/art/runtime/thread_pool.cc`; `compat/src/windows_x64_posix_stubs.c` pthread functions; x86_64 optimizing and nterp stack probes; Windows VEH/runtime hooks; `tools/verify/windows_x64_phase1/win32_stack_growth_probe.cc`
-- **Blocked on / design doc:** no core delivery or stack-budget blocker; broader host repetition, reservation correlation, and deep lifecycle coverage remain; [win32_faults_and_stacks.md](win32_faults_and_stacks.md) is authoritative; [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md) records the managed-ABI interaction
+- **Blocked on / design doc:** no core delivery or stack-budget blocker; only reservation correlation and other optional probes remain; [win32_faults_and_stacks.md](win32_faults_and_stacks.md) is authoritative; [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md) records the managed-ABI interaction
 - **Opened:** 2026-07-16
 - **Updated:** 2026-07-30 — FS-1 natively accepts Release/Debug high-water margins; Windows Debug uses a measured 40-KiB reserve while product and Linux remain at 8192 bytes
 
@@ -164,20 +163,21 @@ _No open product leftovers. Closed L- items live under §Closed._
 - **State:** CLOSED (2026-07-30 — scoped native subset accepted on Windows Server 2025 build 26100)
 - **Kind:** host-gap
 - **Gap:** Wine Phase 4 PASS (incl. multiplatform rebuild 2026-07-17). The available native Server 2025 host had not yet rerun the scoped gcstress, threadheavy, handleleak, crash-native, and crash-abort subset.
-- **Exit criteria:** Met for the available native host; logs are under `tools/verify/windows_x64_phase4/evidence/h001_phase4_host/` and the scoped result is `OVERALL PASS`. The separate Win10/second-host repeat remains H-002/FS-4.
+- **Exit criteria:** Met for the available native host; logs are under `tools/verify/windows_x64_phase4/evidence/h001_phase4_host/` and the scoped result is `OVERALL PASS`. The authoritative-host FS-4 repeat is also accepted; the separate Win10/second-host repetition is skipped by policy.
 - **Opened:** 2026-07-16
 
 ### H-002 — Phase 3 G12 with multiplatform-built PE (not only pre-migration tree)
-- **State:** OPEN
+- **State:** CLOSED (2026-07-30 — authoritative Windows Server 2025 gate selected)
 - **Kind:** host-gap
-- **Gap:** Authoritative G12 used an earlier host package. The FS-4 same-host
-  repeat now reruns E9/FS-1/FS-2/FS-3 and the stack/lifecycle probes on Server
-  2025 build 26100, but the required second supported Windows host is still
-  unavailable.
+- **Gap:** Authoritative G12 used an earlier host package. FS-4 reran
+  E9/FS-1/FS-2/FS-3 and the stack/lifecycle probes on Server 2025 build 26100.
 - **Current evidence:** `tools/verify/windows_x64_phase4/evidence/fs4_same_host_20260730/`
-- **Exit criteria:** Repackage/smoke and the complete FS-4 matrix on a second
-  supported Windows 10 or later host; do not close from the Server 2025 repeat.
+- **Exit criteria:** Met under the explicit acceptance policy that treats
+  Windows Server 2025 build 26100 as authoritative and skips the separate
+  Windows 10/second-host repetition. This closes H-002 within that declared
+  scope; it does not claim cross-version coverage.
 - **Opened:** 2026-07-17
+- **Closed:** 2026-07-30
 
 ### H-003 — Wine is not product acceptance
 - **State:** OPEN (policy reminder, not a code fix)
@@ -768,13 +768,14 @@ _No open design notes. Closed D- items live under §Closed._
    policies plus safe dynamic/reserved fields, exception-unwind XMM6-XMM15,
    and embedding predecessor-UEF/frame-SEH teardown. FS-1 stack budget and
    FS-3 dynamic-table churn/sampling are complete. Remaining W-010/W-014
-   follow-ups are conditional second-host, reservation correlation,
-   negative-exception, and debugger-quality dump-stack probes. FS-5
+   follow-ups are conditional reservation correlation, negative-exception,
+   and debugger-quality dump-stack probes. FS-5
    conditionally closes the pending tail because no real native exception can
    enter it without product fault injection; structural and synthetic unwind
    evidence remain accepted.
-6. ~~**H-001**~~ **CLOSED 2026-07-30** — scoped native Server 2025 Phase-4 subset accepted; FS-4's same-host repeat also passes, while Win10/second-host repetition remains H-002/FS-4.
-7. ~~**L-005** — Linux Hello gate~~ **CLOSED**.
+6. ~~**H-001**~~ **CLOSED 2026-07-30** — scoped native Server 2025 Phase-4 subset accepted; FS-4's authoritative-host repeat also passes.
+7. ~~**H-002**~~ **CLOSED 2026-07-30** — Windows Server 2025 build 26100 is the authoritative native gate; the separate Win10/second-host repetition is skipped by policy.
+8. ~~**L-005** — Linux Hello gate~~ **CLOSED**.
 
 ---
 
@@ -787,4 +788,4 @@ _No open design notes. Closed D- items live under §Closed._
 - [ ] CLOSED items: move full item into §Closed (sorted by ID); keep State CLOSED history  
 
 
-*Last snapshot: 2026-07-30 - W-001/W-002/W-003/W-004/W-011/W-012/W-013/W-024/W-025, W-010/W-014 FS-2, and H-001 are closed; FS-5 is conditionally closed; FS-4's accepted-host repeat passes but its second-host gate remains open. Nterp and the corrected pagefile-section JIT dual view are product defaults; JIT-5 removes J-1 and passes post-removal Wine/Linux plus 29 native cases and 36/36 aggregate records with source/binary absence proof, eight lifecycle cycles, three valid dumps, empty JIT temp, and no trace. W-010/W-014 E9 remains native-accepted 30/30 on Windows Server 2025 build 26100: explicit Windows x64 stack checks, guarantee-aware bounds, switch/nterp/JIT SOE, zero handled dumps, and five fatal static/JIT/OSR dumps all pass. FS-1 adds accepted Release/Debug switch/nterp/JIT stack high-water margins and no dumps; the 40-KiB Debug-only reserve leaves more than 37 KiB on quick paths while product and Linux remain at 8192 bytes. FS-2 adds native first-chance debugger continuation, named CET rejection/safe-policy acceptance, exception-XMM, and embedding/UEF teardown. FS-4 repeats E9/FS-1/FS-2/FS-3, parameterized stack geometry, fiber rejection, and join/detach stress on build 26100; evidence is under `tools/verify/windows_x64_phase4/evidence/fs4_same_host_20260730/`. FS-5 records the accepted structural/synthetic pending-tail boundary and explains why native fault injection would alter product control flow. H-001 adds the native Server 2025 scoped Phase-4 subset. Linux's object probes and imageless Hello pass. Fixed-page recursion remains rejected and its machinery is diagnostic-only. Remaining W-010/W-014 work is conditional Win10/second-host, reservation-correlation, negative-exception, and debugger-quality dump-stack coverage.*
+*Last snapshot: 2026-07-30 - W-001/W-002/W-003/W-004/W-011/W-012/W-013/W-024/W-025, W-010/W-014 FS-2, H-001, H-002, and authoritative-host FS-4 are closed; FS-5 is conditionally closed. Nterp and the corrected pagefile-section JIT dual view are product defaults; JIT-5 removes J-1 and passes post-removal Wine/Linux plus 29 native cases and 36/36 aggregate records with source/binary absence proof, eight lifecycle cycles, three valid dumps, empty JIT temp, and no trace. W-010/W-014 E9 remains native-accepted 30/30 on Windows Server 2025 build 26100: explicit Windows x64 stack checks, guarantee-aware bounds, switch/nterp/JIT SOE, zero handled dumps, and five fatal static/JIT/OSR dumps all pass. FS-1 adds accepted Release/Debug switch/nterp/JIT stack high-water margins and no dumps; the 40-KiB Debug-only reserve leaves more than 37 KiB on quick paths while product and Linux remain at 8192 bytes. FS-2 adds native first-chance debugger continuation, named CET rejection/safe-policy acceptance, exception-XMM, and embedding/UEF teardown. FS-4 repeats E9/FS-1/FS-2/FS-3, parameterized stack geometry, fiber rejection, and join/detach stress on build 26100; the separate Win10/second-host repetition is skipped by policy; evidence is under `tools/verify/windows_x64_phase4/evidence/fs4_same_host_20260730/`. FS-5 records the accepted structural/synthetic pending-tail boundary and explains why native fault injection would alter product control flow. H-001 adds the native Server 2025 scoped Phase-4 subset. Linux's object probes and imageless Hello pass. Fixed-page recursion remains rejected and its machinery is diagnostic-only. Remaining W-010/W-014 work is reservation-correlation, negative-exception, and debugger-quality dump-stack coverage.*

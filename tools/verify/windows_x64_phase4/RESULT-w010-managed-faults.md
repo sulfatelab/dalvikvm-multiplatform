@@ -178,11 +178,12 @@ repeats of the exception sentinel in nterp/switch/JIT. See
 `evidence/fs2_w010_w014_native/ACCEPTANCE.md`.
 
 FS-4's same-host repeat now passes E9/FS-1/FS-2/FS-3 plus parameterized stack
-geometry and join/detach/fiber checks. Remaining coverage is narrower:
-second-host repetition, reservation-correlation probes,
-wrong-address/unsupported-exception negatives, and debugger-quality dump-stack
-reconstruction. FS-5 conditionally closes the pending bridge range because a
-real native fault there would require product fault injection.
+geometry and join/detach/fiber checks. Under the acceptance policy, Windows
+Server 2025 build 26100 is authoritative and the separate Windows 10 repeat is
+skipped. Remaining optional coverage is narrower: reservation-correlation
+probes, wrong-address/unsupported-exception negatives, and debugger-quality
+dump-stack reconstruction. FS-5 conditionally closes the pending bridge range
+because a real native fault there would require product fault injection.
 `CetDynamicApisOutOfProcOnly` and reserved policy fields remain accepted by the
 startup classifier.
 

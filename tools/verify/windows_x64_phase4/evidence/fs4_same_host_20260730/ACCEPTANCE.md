@@ -3,7 +3,7 @@
 **Date:** 2026-07-30
 **Host:** Windows Server 2025 Datacenter Evaluation, x64, build 26100
 **Host address:** `administrator@10.127.137.62`
-**Status:** Same-host repeat PASS; FS-4 remains open for the required second supported Windows host
+**Status:** **FS-4 CLOSED by acceptance-policy decision**; Windows Server 2025 build 26100 is the authoritative native gate
 
 ## Repeated gates
 
@@ -75,10 +75,12 @@ Compact raw results are retained beside this file:
 - `fs3/RESULT_W025_JIT3.txt`
 - `STACK_GROWTH_PARAMETERIZED.txt`
 
-## Second-host gate
+## Acceptance-policy disposition
 
 The local `10.127.137.32/27` network was checked for SSH listeners. The only
 other listener was `10.127.137.60`, which identifies as Ubuntu OpenSSH and
-rejects the available Windows `administrator` credentials. No second supported
-Windows 10 or later host is currently available. Therefore this evidence
-refreshes the accepted-host portion of FS-4 but does not close H-002/FS-4.
+rejects the available Windows `administrator` credentials. Per the explicit
+acceptance decision, Windows Server 2025 build 26100 is authoritative for this
+gate and the separate Windows 10/second-host repetition is skipped. The
+same-host results above therefore close FS-4 and H-002 within that declared
+scope; they do not claim cross-version coverage.
