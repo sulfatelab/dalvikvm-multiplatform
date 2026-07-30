@@ -12,9 +12,12 @@ pregrow experiment reproduces the Linux implicit read fault, but its nearly
 full per-thread commit, irreversible high-water state, and fatal native
 collision keep it diagnostic-only. FS-2 now closes the native debugger
 first-chance/continue, named forced-policy, embedding/UEF teardown, and
-exception-unwind XMM proof points on the same host. The product work remains
-open only for pending-range, reservation-correlation, second-host,
-negative-exception, and debugger-quality dump-stack coverage. The shared JIT-3/FS-3 dynamic-table
+exception-unwind XMM proof points on the same host. FS-5 now conditionally
+closes the pending-range question: the brief 88-byte tail is structurally and
+synthetically accepted, but a real native exception cannot enter it without
+changing product control flow. Remaining product coverage is reservation-
+correlation, second-host, negative-exception, and debugger-quality dump-stack
+work. The shared JIT-3/FS-3 dynamic-table
 sampling/churn gate and the JIT-5 post-removal fatal/unwind cross-regression
 are native-accepted on the same build. JIT-5 removes the Windows J-1 path and
 covers 29 cases, 36/36 aggregate records, eight lifecycle cycles, and three
@@ -306,8 +309,9 @@ JIT, including the 40-KiB Debug-only reserve. JIT-3/FS-3 accepts native
 dynamic-table collection/reuse churn and concurrent lookup/virtual-unwind
 sampling. FS-2 is now native-accepted on that host for debugger continuation,
 forced policy classification, embedding teardown, and exception-unwind XMM;
-pending-range, reservation-correlation, second-host, negative-exception, and
-debugger-quality dump-stack coverage remain additional acceptance work.
+FS-5 conditionally closes the pending range, while reservation-correlation,
+second-host, negative-exception, and debugger-quality dump-stack coverage
+remain additional acceptance work.
 
 ### 4.1 Second native Stage E result and current diagnosis
 
@@ -1543,8 +1547,9 @@ inert-key smoke sets `ART_WINDOWS_X64_JIT_DUAL=0` and still creates J-2. The
 reuses, and 120,654 successful virtual unwinds with zero missing/stale/failed
 records. Static, threshold-zero JIT, and OSR fatal origins again reach VEH/UEF
 and produce three valid dumps. This closes W-025 while leaving the debugger,
-forced-CET-policy, exception-XMM, pending-range, embedding,
-reservation-correlation, and second-host work below unchanged.
+forced-CET-policy, exception-XMM, embedding, reservation-correlation, and
+second-host work below unchanged; FS-5 later records the pending-range
+conditional disposition.
 
 The remaining acceptance and stress gates are:
 
@@ -2366,8 +2371,10 @@ contract.
   The embedding probe verifies predecessor UEF, foreign VEH/frame-SEH, and
   later-UEF preservation through VM teardown. Native evidence is under
   `tools/verify/windows_x64_phase4/evidence/fs2_w010_w014_native/`.
-- **Still open:** rollback injection, pending-range, reservation correlation,
-  second-host, negative-exception, and debugger-quality dump-stack gates.
+- **Still open:** rollback injection, reservation correlation, second-host,
+  negative-exception, and debugger-quality dump-stack gates. FS-5 conditionally
+  closes the pending-range question because a real native fault would require
+  product-tail injection or fabricated direct entry.
   Native normal-return XMM, OSR live unwind, foreign VEH/frame-SEH, managed SOE,
   stack budget, dynamic-table churn, five fatal origins, and FS-2 pass.
 - Run the complete matrix below on Windows 10 build 17134+ and a current
@@ -2569,11 +2576,17 @@ fallbacks:
    same zero missing/stale/failed result.
 7. Normal-return XMM6-XMM15 passes natively. Does the adapter also preserve
    full width during exception unwind through several optimizing/JNI frames?
-8. Native E6 resolves `art_quick_to_interpreter_bridge + 0x82`, and the full
-   host matrix accepts static, JIT J-2/J-1, and OSR J-2/J-1 fatal origins. Add
-   a native pending-range exception probe only if it can exercise that brief
-   path without changing product semantics. JIT-5 additionally repeats the
-   three current default-J-2 fatal origins after removing J-1.
+8. **Resolved by FS-5 (conditional coverage):** native E6 resolves
+   `art_quick_to_interpreter_bridge + 0x82`, and the full host matrix accepts
+   static, JIT J-2/J-1, and OSR J-2/J-1 fatal origins. The 88-byte pending
+   range begins only after `artQuickToInterpreterBridge` returns with
+   `Thread::exception` set; it is a managed state transition, not a native
+   exception entry point. The existing structural probe verifies both PE
+   records and synthetic `RtlVirtualUnwind` from the pending body and
+   epilogue. A real native fault would require a product-tail fault injection
+   or a fabricated direct jump, so FS-5 is closed as impractical conditional
+   coverage. See
+   `tools/verify/windows_x64_phase4/evidence/fs5_pending_bridge/RESULT.md`.
 
 ### JIT-1 shared native cross-regression — 2026-07-29
 
@@ -2792,12 +2805,32 @@ the handler/throw stack-budget proof point. FS-2 is now accepted on the same
 build-26100 host; compact native evidence is under
 `tools/verify/windows_x64_phase4/evidence/fs2_w010_w014_native/`.
 
+### FS-5 pending interpreter-bridge range — 2026-07-30
+
+FS-5 is conditionally closed as impractical coverage. The bridge's primary
+200-byte range and the separate 88-byte pending range both have validated PE
+runtime-function records, and `win32_osr_unwind_probe` passes the live lookup
+and synthetic body/epilogue unwind checks. Native E6/E9 fatal traces exercise
+the primary bridge at `+0x82` across static, JIT, and OSR origins, with the
+expected ART VEH/UEF and dump behavior.
+
+The pending range is reached only by the `Thread::exception != null` branch
+after `artQuickToInterpreterBridge` returns. Its tail prepares an
+all-callee-save frame and calls the non-returning pending-exception delivery
+helper; it is not entered by a Windows native exception. Injecting an invalid
+access or jumping directly into that internal tail would change product
+control flow or fabricate ART state, so it would not be acceptance evidence.
+The accepted primary/fatal matrix is therefore the closure boundary. The
+reproducible reasoning and output are recorded in
+`tools/verify/windows_x64_phase4/evidence/fs5_pending_bridge/RESULT.md`.
+
 ### Next execution schedule — dependency order
 
 This schedule closes product proof points before optional mechanism research.
 It is evidence-gated rather than date-gated. FS-3 was split into an independent
 JIT closure package and completed before FS-1; FS-1 and FS-2 are now accepted,
-so the remaining order resumes at the conditional FS-4/FS-5 follow-ups.
+and FS-5 is conditionally closed, so the remaining order resumes at FS-4 and
+the optional reservation/negative/debugger-quality follow-ups.
 
 | Order | Work | Exit gate |
 |------:|------|-----------|
@@ -2805,7 +2838,7 @@ so the remaining order resumes at the conditional FS-4/FS-5 follow-ups.
 | FS-2 (done) | Extend the combined native package with debugger first-chance/continue, every named forced-incompatible CET policy, foreign VEH/frame-SEH/predecessor-UEF embedding, and XMM6-XMM15 sentinels during exception unwind | Accepted 2026-07-30 on build 26100: NPE continues into Java, explicit SOE remains fault-free, incompatible CET starts reject before Java/JIT with no dump, foreign search handlers coexist, and full-width XMM state survives unwind |
 | FS-3 (done) | With JIT-1 encoding and JIT-2 mapping/policy prerequisites complete, share the JIT closure load test: compile, invalidate, collect, reuse, and re-register many optimizing/JNI allocations while another thread performs lookup and virtual unwind | Accepted 2026-07-29: 52 collections, 1,344 compilations, 1,248 exact reuses, and 696,969 virtual unwinds complete with no missing/stale/failed record; callback tables remain unnecessary |
 | FS-4 | Run FS-1 through FS-3 on the accepted build-26100 class host, then repeat the E9 core runner, parameterized guarantee geometry, fiber/manual-stack rejection, and deep detach/continue/reattach lifecycle on a second supported Windows 10 or later host | Immutable archives pass their independent review and either confirm the additive stack layout or document a new supported-host constraint |
-| FS-5 | Attempt the brief pending bridge-range exception only if a deterministic probe can enter it without changing product control flow; otherwise record it as impractical and close it as conditional coverage | A real native exception validates the pending record, or the result document explains why the already accepted primary/fatal matrix is the closure boundary |
+| FS-5 (closed conditional) | Attempt the brief pending bridge-range exception only if a deterministic probe can enter it without changing product control flow | Closed 2026-07-30: the pending tail is entered only by ART's managed pending-exception branch; structural and synthetic unwind checks pass, while a real native fault would require product fault injection or fabricated direct entry. See `tools/verify/windows_x64_phase4/evidence/fs5_pending_bridge/RESULT.md` |
 
 The history follow-ups—fatal-dump instrumentation with RSP inside the pregrown
 ART page, an ART implicit-stack feature flag, and a HotSpot-style
