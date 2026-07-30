@@ -74,6 +74,7 @@ canonical policy is [HOST_GATE_POLICY.md](tools/verify/windows_x64_phase4/HOST_G
 | Memory | One unnamed pagefile section is mapped as a contiguous low R/RX primary view plus a full RW alias; native 64 MiB/1 GiB, low-VA, pressure, and CFG acceptance passes; `ProhibitDynamicCode` rejection is negative fail-closed evidence, not a supported profile; ART `389158d46f` removes J-1 and fails closed on construction errors; the retired environment key is inert |
 | Heap memory | **W-013 CLOSED:** explicit MoreCore-only dlmalloc, direct mspace owners, constrained `VirtualAlloc2`, page-state operations, Linux-like metadata placement, and native R2 pressure/JIT/repeated-start acceptance PASS |
 | Threads / managed faults | **W-010/W-014 core path, FS-1, FS-2, authoritative-host FS-4, FS-5 conditional disposition, and H-001 scoped host subset accepted:** E9 passes 30/30 and FS-1 passes Release/Debug switch, nterp, and JIT on authoritative Windows Server 2025 build 26100. FS-2 passes native debugger continue, named CET policy classification, exception-unwind XMM, and embedding/UEF teardown. H-001's gcstress, threadheavy, handleleak, crash-abort, and native AV/minidump subset also passes on build 26100. FS-4 repeats E9/FS-1/FS-2/FS-3, parameterized stack geometry, fiber rejection, and join/detach stress on that host; the separate Windows 10/second-host repetition is skipped by policy. FS-5 closes the pending 88-byte bridge tail conditionally because it is entered only by ART's managed pending-exception branch; structural and synthetic unwind evidence pass, but a real native fault would require product fault injection. Remaining work is reservation correlation, negative-exception cases, and debugger-quality dump-stack reconstruction. |
+| AOT/OAT | Restricted ELF64 design selected. Implementation stage 1 adds pre-dispatch characterization for fallback, reservations, path/ZIP/fd inputs, duplicate instances, teardown isolation, VDEX placement, and dynamic anchors; it does not implement the OAT-1 Windows loader. Linux/Windows builds and the Server 2025 DLL-load smoke pass. H-004 tracks the glibc positive-dlopen skip; H-005 tracks focused behavioral execution outside the minimal product CMake graph. |
 | Linux multiplatform | Full native rebuild, L-005 imageless Hello, and GC stress PASS after the Windows-only JIT-5 removal using the staged shared multipath `boot.jar` |
 
 ---
@@ -165,6 +166,17 @@ canonical policy is [HOST_GATE_POLICY.md](tools/verify/windows_x64_phase4/HOST_G
 - **Code anchors:** `tools/verify/windows_x64_libcore_icu/CMakeLists.txt` (`_OJ_SRCS` filters); `compat/src/windows_x64_socket_posix.c`
 - **Opened:** 2026-07-17
 
+### W-026 — Windows SDM timestamp check has one-second granularity
+- **State:** OPEN
+- **Kind:** workaround / correctness
+- **Area:** art / oat / filesystem
+- **Symptom / why:** The Windows CRT `stat` surface used by the port does not expose upstream's `st_mtim`. The original port replaced the nanosecond comparison globally with `st_mtime`, weakening Linux and allowing a Windows SDM replaced within the same second to retain the same SDC identity.
+- **Current behavior:** Implementation stage 1 restores upstream `st_mtim` behavior on non-Windows. Windows alone constructs a seconds-resolution `timespec` from `st_mtime` so the code still compiles; same-second replacement remains a known gap.
+- **Proper fix:** Obtain the SDM modification time from a retained Windows file handle with a documented high-resolution API, use the same normalized value when writing and reading SDC, and add same-second replacement tests. Do not reopen by path after validation.
+- **Code anchors:** `vendor/art/runtime/oat/oat_file.cc` (`OpenOatFileFromSdm`); `vendor/art/runtime/dex2oat_environment_test.h` (`CreateSecureDexMetadataCompanion`)
+- **Blocked on / design doc:** Stable-handle/cache identity work in [win32_aot_oat.md](win32_aot_oat.md)
+- **Opened:** 2026-07-30
+
 ## Product leftovers (not single-line workarounds)
 
 _No open product leftovers. Closed L- items live under §Closed._
@@ -196,6 +208,24 @@ _No open product leftovers. Closed L- items live under §Closed._
 - **Kind:** host-gap / process
 - **Note:** Keep wine as agent01 oracle; product claims need real Windows for VEH/TEB/network.
 - **Opened:** 2026-07-16
+
+### H-004 — Linux-host positive OAT dlopen is skipped on current glibc
+- **State:** OPEN
+- **Kind:** host-gap / test
+- **Gap:** glibc 2.41 and newer reject generated OAT without `PT_GNU_STACK` (`cannot enable executable stack as shared object requires`). `OatFileTest.DlOpenLoad` therefore accepts the error, verifies fallback, and skips its positive `dladdr`/dynamic-anchor assertions on agent01's glibc 2.43.
+- **Current coverage:** The new focused cases characterize non-executable fallback, reservation consumption, fd loading, duplicate-instance isolation, SDM/ZIP fallback, VDEX placement, and teardown isolation through `ElfOatFile`. Bionic's positive `ANDROID_DLEXT_FORCE_LOAD`, reserved-address, ZIP-entry, and dynamic-anchor path still requires an Android-target run. H-005 records that this repository's minimal product graph has not executed the focused cases.
+- **Exit criteria:** Run the complete OAT stage-1 test set on a matching Android target and either emit an upstream-compatible non-executable `PT_GNU_STACK` for Linux-host OAT or explicitly retain Android as the positive native-loader gate. No skipped result may be reported as positive dlopen coverage.
+- **Code anchors:** `vendor/art/runtime/oat/oat_file_test.cc` (`DlOpenLoad`); `vendor/art/libelffile/elf/elf_builder.h`
+- **Opened:** 2026-07-30
+
+### H-005 — Minimal product CMake graph does not build ART gtests
+- **State:** OPEN
+- **Kind:** host-gap / build
+- **Gap:** `native/generated/dalvikvm.cmake` intentionally contains the product dependency closure only. It does not build `art_runtime_tests`, the ART test support libraries, GoogleTest, or the required test jars, so agent01 cannot execute the new canonical OAT characterization tests through the minimal build.
+- **Current coverage:** The complete modified test source passes a production-flag syntax compile using the available test headers and a compatibility definition for the pre-existing `GTEST_SKIP()` use absent from fmtlib's old GoogleTest copy. Linux `art` builds; Windows x64 `oat_file.cc` compiles and `art.dll` links; the rebuilt DLL passes `dalvikvm.exe -showversion` on the authoritative Server 2025 build-26100 host. None of these is behavioral execution of the focused gtests.
+- **Exit criteria:** Run the focused `OatFileTest` set with its real test data under AOSP ART host/device infrastructure, or add a maintainable opt-in CMake test closure without adding test-only dependencies to product binaries.
+- **Code anchors:** `vendor/art/runtime/oat/oat_file_test.cc`; `vendor/art/runtime/Android.bp` (`art_runtime_tests_defaults`); `native/generate.sh`
+- **Opened:** 2026-07-30
 
 ---
 

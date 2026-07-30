@@ -5,14 +5,16 @@ current ART OAT/VDEX/image contracts and the selected Windows AOT artifact and
 loader design. Windows keeps OAT in a restricted ELF64 coat and loads it
 through an ART-owned, OAT-only loader. PE32+ OAT is rejected.
 
-Windows OAT generation and loading are not implemented yet. The supported
-Windows product remains imageless nterp/JIT while this independent future
-track is open. The authoritative implementation gate is Windows Server 2025
-Datacenter Evaluation, x64 build 26100. Linux and Wine remain development and
-structural gates; the former Windows 10 lab host is unavailable.
+Windows OAT generation and executable loading are not implemented yet.
+Implementation stage 1, the pre-dispatch characterization suite, is now in the
+tree; it does not enable Windows AOT. The supported Windows product remains
+imageless nterp/JIT while this independent future track is open. The
+authoritative implementation gate is Windows Server 2025 Datacenter
+Evaluation, x64 build 26100. Linux and Wine remain development and structural
+gates; the former Windows 10 lab host is unavailable.
 
 The source snapshot is `vendor/art` at
-`android-16.0.0_r4-75-g365cd83ec3`.
+`android-16.0.0_r4-76-g4eab6e7423`.
 
 ## Executive decision
 
@@ -693,6 +695,47 @@ it must not change the `OatFileBase` contract.
 Review each upstream ART update against two invariants: no Windows executable
 OAT can reach `ElfOatFile`, and no copied linker policy leaks out of
 `windows_oat_elf_loader.cc`.
+
+### Stage 1 implementation record
+
+Stage 1 is the characterization step above, not the OAT-1 private-copy loader.
+It was implemented on 2026-07-30 in `runtime/oat/oat_file_test.cc` before any
+Windows executable-loader dispatch was added. It freezes these current
+contracts:
+
+| Characterization | Contract captured |
+|---|---|
+| `LoadOat` | A non-executable path load uses `ElfOatFile`, places VDEX at `oatdex`, and is absent from `dladdr()` module discovery |
+| `LoadAtReservation` | The fallback ELF loader consumes the exact supplied reservation and preserves VDEX placement |
+| `FileDescriptorLoadUsesElfOatFile` | The current fd overload selects `ElfOatFile` even when `executable=true` |
+| `DuplicateLoadsHaveIndependentState` | Two logical opens have different ELF/OAT, BSS, and VDEX addresses; destroying one leaves the other valid |
+| `SdmZipEntryLoad` | Android uses the ZIP-entry dlopen path; a desktop host falls back to `ElfOatFile`; both preserve VDEX placement |
+| `DlOpenLoad` extensions | A successful native-linker load exposes the exact `oatdata`, `oatexec`, end-marker, image-relro, BSS, and VDEX dynamic-anchor identities through `dladdr()` |
+
+The tests deliberately describe the upstream Android/Linux behavior that the
+Windows dispatch must preserve or explicitly replace. They do not relax the
+future Windows no-fallback rule. In particular, the current fd and SDM fallback
+results are baselines that must change when Windows executable OAT is wired to
+`WindowsOatElfLoader`.
+
+Verification is split accurately:
+
+- the complete modified test source passes a production-flag syntax compile
+  against the locally available test headers; the old fmtlib GoogleTest copy
+  lacks the pre-existing `GTEST_SKIP()` macro, so the syntax-only invocation
+  supplies that compatibility spelling;
+- Linux `art` builds;
+- Windows x64 `oat_file.cc` compiles and `art.dll` links; and
+- the rebuilt DLL loads on the authoritative Server 2025 build-26100 host and
+  `dalvikvm.exe -showversion` reports `ART version 2.1.0 x86_64`.
+
+This is source/build/smoke evidence, not behavioral execution of the focused
+gtests. The minimal product CMake graph does not contain ART's gtest support,
+test jars, or `art_runtime_tests`; H-005 in `win32_open_items.md` tracks the
+required AOSP Soong/`atest` or maintainable opt-in test-closure run. H-004
+separately tracks the glibc 2.41+ positive-dlopen skip. W-026 tracks the one
+production portability gap found while restoring the upstream SDM timestamp
+comparison for non-Windows.
 
 ## Publication and unload
 
