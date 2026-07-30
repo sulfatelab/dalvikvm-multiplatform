@@ -752,10 +752,20 @@ all product paths. Windows NIO.2 remains a non-goal.
   CFG/dynamic-code-policy and direct-encoding hardening remains. CET user
   shadow stacks are explicitly unsupported and must be disabled for the ART
   process under W-010's activation contract.
-- dex2oat/oat PE output remains deferred; the imageless interpreter+JIT product
-  does not require it.
-- The current Linux OAT/VDEX/ART image analysis and the proposed Windows
-  PE-backed OAT format and loader are documented in
+- dex2oat/AOT remains deferred; the imageless interpreter+JIT product does not
+  require it.
+- The preferred AOT prototype is now a genuine import-free/no-entry PE32+ OAT
+  module loaded with `LoadLibraryExW`, while VDEX and ART remain independent
+  ART-owned data mappings.  This route is conditional on redesigning the
+  current boot image/OAT single-delta reservation and app per-instance
+  BSS/relro semantics.
+- If exact reservation consumption or arbitrary force-loaded instances remain
+  mandatory, retain the existing ELF coat for the first Windows manual-loader
+  implementation and add Windows unwind/mitigation handling.  Do not default
+  to a custom PE mapper: `SEC_IMAGE` is not a complete DLL load and cannot
+  replace an ART placeholder.
+- The format analysis, public/native Windows API matrix, Server 2025 focused
+  result, correctness invariants, and proof gates are in
   [win32_aot_oat.md](win32_aot_oat.md).
 
 **Historical planning estimate:** the original estimate was 12–24 months for a
