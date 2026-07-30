@@ -11,6 +11,10 @@ __pycache__/
 /generated/
 /native/generated/
 
+# Machine-local build configuration
+/.art-build.local.toml
+/CMakeUserPresets.json
+
 # Compiled / binary artifacts
 *.o
 *.obj

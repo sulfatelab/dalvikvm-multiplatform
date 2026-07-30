@@ -41,7 +41,7 @@ Android.bp + target profile + one Python overlay
                     bp2cmake
                         |
                         v
- out/<build-host>-to-<target>/<build-type>/generated/art_graph.cmake
+             out/<target-id>/<build-type>/generated/art_graph.cmake
                         |
                         v
               CMake -G Ninja -> build.ninja
@@ -174,11 +174,11 @@ Conceptually:
 one maintained CMake implementation
               |
               +-- linux-x86_64 profile
-              |     -> out/<host>-to-linux-x86_64/<type>/...
+              |     -> out/linux-x86_64/<type>/...
               +-- linux-aarch64 profile
-              |     -> out/<host>-to-linux-aarch64/<type>/...
+              |     -> out/linux-aarch64/<type>/...
               +-- windows-x86_64 profile
-              |     -> out/<host>-to-windows-x86_64/<type>/...
+              |     -> out/windows-x86_64/<type>/...
               +-- future profiles
                     -> one isolated configured instance each
 ```
@@ -210,7 +210,7 @@ validates the complete profile in Python, then gives CMake only the resolved
 inputs, for example:
 
 ```text
-cmake -S native -B out/windows-aarch64-to-linux-riscv64/RelWithDebInfo \
+cmake -S native -B out/linux-riscv64/RelWithDebInfo \
   -G Ninja \
   --toolchain native/cmake/toolchains/LLVM.cmake \
   -DART_PROFILE_FILE:FILEPATH=<absolute-path>/target_profile.cmake \
@@ -310,6 +310,7 @@ resolved target schema should include at least:
 target_id
 os_or_runtime
 cpu_arch
+aosp_arch
 abi
 object_format
 pointer_bits
@@ -327,31 +328,46 @@ WebAssembly address width; it does not say whether the runtime contract is
 WASI, a browser, or a custom embedding. A WebAssembly target ID must include
 that runtime ABI.
 
-Use canonical target IDs internally and accept user-friendly aliases only at
-the frontend. Suggested canonical IDs are:
+Canonical target IDs use the grammar
+`<platform-or-runtime>-<cpu>[-<abi-variant>]`. They are lowercase ASCII;
+hyphens separate identity dimensions, while an underscore remains part of the
+standard `x86_64` CPU token. The platform/runtime comes first, so WASI follows
+the same ordering as Linux and Windows.
+
+The product frontend accepts registered canonical IDs, not informal
+architecture aliases. In particular, use `x86_64`, not `x64`; `aarch64`, not
+`arm64`; and `armv7`, not bare `arm`. This avoids one spelling acquiring
+different meanings on different operating systems. Suggested canonical IDs
+are:
 
 | Canonical target ID | CPU | ABI/runtime | Object format | Initial status |
 |---|---|---|---|---|
-| `linux-x86_64` | x86-64 | GNU/Linux profile | ELF64 | `supported` |
-| `linux-aarch64` | ARM64 | GNU/Linux profile | ELF64 | `planned` |
-| `linux-x86` | x86 | GNU/Linux profile | ELF32 | `planned` |
-| `linux-armv7` | ARMv7 | GNU EABI hard-float fixed by this profile | ELF32 | `planned` |
-| `linux-riscv64` | RISC-V 64 | GNU/Linux profile | ELF64 | `planned` |
-| `windows-x86_64` | x86-64 | MSVC ABI | PE32+ | `experimental` |
-| `windows-aarch64` | ARM64 | Windows ARM64 ABI | PE32+ | `planned` |
-| `windows-arm64ec` | ARM64 | ARM64EC ABI | PE32+ | `planned` |
-| `windows-x86` | x86 | Windows x86 ABI | PE32 | `planned` placeholder |
-| `wasm32-wasi` | wasm32 | WASI | WebAssembly | `impossible_under_current_art_contract` |
-| `wasm64-wasi` | wasm64 | WASI/Memory64 | WebAssembly | `impossible_under_current_art_contract` |
+| `linux-x86_64` | `x86_64` | GNU/Linux profile | ELF64 | `supported` |
+| `linux-aarch64` | `aarch64` | GNU/Linux profile | ELF64 | `planned` |
+| `linux-x86` | `x86` | GNU/Linux profile | ELF32 | `planned` |
+| `linux-armv7` | `armv7` | GNU EABI hard-float fixed by this profile | ELF32 | `planned` |
+| `linux-riscv64` | `riscv64` | GNU/Linux profile | ELF64 | `planned` |
+| `windows-x86_64` | `x86_64` | MSVC ABI | PE32+ | `experimental` |
+| `windows-aarch64` | `aarch64` | Windows ARM64 ABI | PE32+ | `planned` |
+| `windows-aarch64-arm64ec` | `aarch64` | ARM64EC ABI | PE32+ | `planned` |
+| `windows-x86` | `x86` | Windows x86 ABI | PE32 | `planned` placeholder |
+| `wasi-wasm32` | `wasm32` | WASI | WebAssembly | `impossible_under_current_art_contract` |
+| `wasi-wasm64` | `wasm64` | WASI/Memory64 | WebAssembly | `impossible_under_current_art_contract` |
 
 Windows x86-64 is the first parity target and is promoted to `supported` only
 after the unified graph, DLL topology, and runtime acceptance gates pass.
 
-Aliases such as `linux_x64`, `linux_arm64`, `windows_x64`, and
-`wasm_wasm32` may be accepted, but the manifest and output path always record
-the canonical ID. An alias cannot add an alternative target meaning. If a
+Inputs such as `linux-x64`, `linux-arm`, `windows-arm64ec`, `wasm64-wasi`, and
+underscore-separated whole IDs are rejected with the canonical replacement in
+the diagnostic. A temporary migration tool may rewrite old names, but aliases
+do not enter the profile registry, manifests, cache keys, or output paths. If a
 Linux ARM soft-float ABI is ever required, it receives a distinct canonical
 profile rather than changing the meaning of `linux-armv7`.
+
+`cpu_arch` uses those canonical external tokens. A separate derived
+`aosp_arch` field translates to Blueprint/Soong vocabulary: `aarch64` maps to
+`arm64`, and `armv7` maps to `arm`. The user-facing ID, output directory, cache
+key, and manifest never collapse back to the ambiguous AOSP token.
 
 Support state is machine-readable:
 
@@ -609,6 +625,18 @@ document them:
 21. a `planned` or `impossible_under_current_art_contract` profile fails
     capability validation before CMake rather than degrading DSO topology,
     disabling runtime contracts silently, or compiling host fallbacks.
+22. canonical target IDs follow `<platform-or-runtime>-<cpu>[-<abi-variant>]`;
+    informal aliases such as `x64`, `arm`, and suffix-first WASI IDs are not
+    accepted as profile identities.
+23. the default binary directory is `out/<target-id>/<build-type>`. Build-host
+    identity is a required manifest/cache fingerprint, not a path component;
+    a host mismatch rejects cache reuse.
+24. machine-local roots exist only in ignored `.art-build.local.toml`, explicit
+    frontend/CI bindings, CMake cache state, and ignored manifests. They never
+    enter Git or generated `.cmake` content.
+25. project-created source aliases such as `vendor/fmtlib` are removed after
+    canonical logical source mappings are live; the normalizer is not used to
+    preserve avoidable project-owned symlinks.
 
 ## Proposed repository layout
 
@@ -632,12 +660,13 @@ overlay/
   art_port_policy.py            one target-aware overlay factory
 tools/
   build_art.py                  one user/CI frontend
-  target_profiles.py            canonical target registry and aliases
+  target_profiles.py            canonical target registry and ID validation
+  provision_target_bundle.py    regular SDK/runtime bundle provisioner
   path_audit.py                 symlink/reparse and Windows-name validation
   command_audit.py              shell/tool invocation validation
   bp2cmake/                     one evaluator and emitter
 out/
-  <build-host>-to-<target>/
+  <target-id>/
     <build-type>/
       source_projection/
       generated/
@@ -653,8 +682,93 @@ out/
 ```
 
 Target SDK locations belong in frontend configuration, internal CMake cache
-arguments, or an untracked `CMakeUserPresets.json`; they must not be embedded
-in checked-in files or generated `.cmake` files.
+arguments, or machine-local configuration; they must not be embedded in
+checked-in files or generated `.cmake` files.
+
+## Machine-local configuration and absolute paths
+
+Use one repository-root `.art-build.local.toml` for developer-machine path
+bindings. It is ignored by Git and is never read by `bp2cmake`; only
+`tools/build_art.py` reads it. TOML is preferable to `.env` because it has no
+shell expansion/quoting contract, and preferable to `local.properties`
+because Windows backslashes, types, and nested per-target values have
+unambiguous standard parsing. The portable frontend may parse it with Python's
+standard TOML parser.
+
+The local schema may bind only machine facts such as:
+
+- CMake, Ninja, LLVM, and JDK roots;
+- an optional output root;
+- SDK/sysroot or target-bundle roots keyed by canonical target ID; and
+- optional target dependency package roots.
+
+It cannot define target identity fields, module policy, compiler/linker flags,
+source lists, or topology exceptions. Those remain reviewed repository data.
+`tools/build_art.py init-local-config` should discover candidate tools, validate
+them, and create the ignored file without overwriting an existing one. The
+checked-in documentation describes keys but never contains a real developer
+path or a filled machine-local example.
+
+Binding precedence is explicit frontend argument, then a narrowly defined CI
+process-environment variable, then local TOML. Process environment works on a
+native Windows process; there is no `.env` loader or environment activation
+script. Every resolved path is canonicalized, checked for symlink/reparse
+components, and recorded in the ignored build manifest. The frontend then
+passes required roots to CMake as cache bindings. It never copies their
+absolute values into `target_profile.cmake` or `art_graph.cmake`.
+
+`CMakeUserPresets.json` is also ignored to prevent an expert/debug CMake flow
+from committing local paths, but it is not a second supported product
+configuration source. Product builds use `.art-build.local.toml` plus the
+Python frontend.
+
+For a target environment such as the legacy environment named
+`windows_x64-dev-env`, prefer one regular-file target bundle over an activation
+environment or a collection of independent paths. The local TOML binds the
+canonical `windows-x86_64` profile to that bundle root. A bundle-local manifest
+uses only relative paths to its SDK, UCRT, import libraries, libc++, and
+compiler-rt components and records their versions and hashes. The checked-in
+target profile records the required bundle schema and component constraints,
+but no installation location.
+
+The provisioner must create a fresh ordinary directory tree and validate its
+manifest. It must not turn the current symlink-based environment into a
+supported bundle by silently following or copying its aliases. Host-native
+LLVM executables remain a separate build-host binding when they are not part
+of the bundle. This replaces environment activation with explicit structured
+data and works identically from a native Windows process.
+
+### Existing absolute-path migration
+
+The current tracked tree contains 77 occurrences of one developer's absolute
+agent-home prefix across 35 non-vendor files. Twelve are executable script or
+CMake defaults; the remainder are mostly historical documentation and captured
+evidence. This is migration debt, not an acceptable precedent for the unified
+build.
+
+Migrate it by ownership rather than blind text replacement:
+
+1. active CMake and script defaults become required named frontend bindings;
+   absence produces a configuration error instead of falling back to one
+   developer's directory;
+2. source/build/output paths become repository-relative paths or stable tokens
+   such as `<repo-root>`, `<output-root>`, and `<windows-sdk-root>` in
+   documentation;
+3. evidence capture sanitizes machine roots to stable tokens before writing a
+   tracked result, while manifests store relative artifact paths and content
+   hashes;
+4. existing tracked results are rewritten by the same deterministic sanitizer
+   and reviewed so evidentiary meaning is retained; and
+5. a presubmit path audit rejects newly staged machine-specific POSIX home,
+   Windows user/profile, drive-root toolchain, and UNC-share configuration
+   paths in build files, generated files, documentation, and evidence.
+
+The audit must distinguish machine-local configuration from intentional
+portable content. HTTPS URLs, linker options such as `/DYNAMICBASE`, and
+runtime filesystem test cases such as a synthetic Windows drive path are not
+toolchain bindings and must not be rewritten. Tests should generate temporary
+absolute locations at runtime when the exact literal is not itself the
+behavior under test.
 
 ## One profile, one graph generator, one overlay
 
@@ -679,6 +793,7 @@ target:
   target_id
   os_or_runtime
   cpu_arch
+  aosp_arch
   abi
   object_format
   pointer_bits
@@ -778,7 +893,7 @@ the product profile.
 ### Deterministic output
 
 `bp2cmake` should write atomically and deterministically to
-`out/<build-host>-to-<target>/<build-type>/generated/art_graph.cmake`. It
+`out/<target-id>/<build-type>/generated/art_graph.cmake`. It
 should also write a machine-readable graph manifest containing, for each
 module:
 
@@ -854,8 +969,16 @@ from the Python target registry. `tools/build_art.py` detects the build-host ID,
 resolves the requested target ID, and deterministically assigns:
 
 ```text
-out/<build-host-id>-to-<target-id>/<build-type>/
+out/<target-id>/<build-type>/
 ```
+
+The build host does not need to appear in this ignored path. Its OS,
+architecture, executable formats, and tool fingerprints are recorded in the
+build manifest and checked against `CMakeCache.txt` before reuse. Reopening a
+binary directory from a different build host fails with a cache-recreation
+diagnostic. Users who intentionally share one source checkout between hosts or
+need simultaneous independently provisioned builds select another untracked
+`--output-root`; the default target ID remains unchanged.
 
 It then invokes the same maintained CMake entry point with `-G Ninja`, the
 common LLVM toolchain, the generated target profile/graph paths, and the
@@ -889,7 +1012,7 @@ implementation.
 The Windows host is a normal Win32 environment, not a Unix compatibility
 environment. The required host executables are native Windows ARM64 builds of:
 
-- Python;
+- Python 3.11 or newer, including the standard TOML parser;
 - CMake;
 - Ninja;
 - Clang/LLVM, including the LLVM inspection/archive tools; and
@@ -1080,11 +1203,29 @@ the failure cannot surface later as a compiler syntax/file-not-found error.
 The current product should still prefer canonical source locations:
 
 - remove `vendor/fmtlib` from generated product paths and address the real
-  `vendor/external/fmtlib` submodule directly;
+  `vendor/external/fmtlib` submodule through its canonical logical source
+  mapping;
 - replace the fdlibm link farm with an explicit generated ordinary-file include
   projection or a reviewed source/include rewrite; and
 - if vendored ART tests are enabled, normalize their shared Java/source aliases
   through the same regular-file projection rather than recreating links.
+
+`vendor/fmtlib` is a project-created convenience alias, not an upstream source
+layout requirement, so it should be deleted rather than materialized. The
+source manifest maps AOSP logical root `external/fmtlib` to the real
+`vendor/external/fmtlib` submodule. Python then projects the required ordinary
+files under `source_projection/external/fmtlib`, and emitted graph paths use
+`${MDVM_SOURCE_ROOT}/external/fmtlib/...`. This preserves the logical AOSP path
+without a symlink, duplicate tracked checkout, CMake copy step, or host-specific
+absolute path.
+
+The migration order is important: first teach the evaluator/source manifest
+the canonical mapping; then regenerate Linux and Windows graphs and assert that
+neither graph/manifest contains `vendor/fmtlib`; then update repository layout
+documentation; finally delete the Git mode `120000` entry. A source audit
+should reject any later reintroduction of that alias. The fdlibm aliases need
+their own include-layout projection because relative include behavior, rather
+than a redundant dependency name, created those links.
 
 The product must not create, stage, or package a symlink. The same rule applies
 to Windows directory junctions and other project-controlled name-surrogate
@@ -1324,6 +1465,8 @@ so a failed or partial invocation cannot contaminate another target build.
 
 - Add manifest output and `--check` mode to `bp2cmake`.
 - Add Git-mode/filesystem symlink and Windows reparse-point audits.
+- Add a tracked machine-path audit that distinguishes local configuration from
+  URLs, linker syntax, and intentional runtime path tests.
 - Add a generated-command scanner for shells, shell operators, POSIX utilities,
   and Make-family tools.
 - Capture current Linux and Windows normalized module graphs.
@@ -1335,6 +1478,8 @@ so a failed or partial invocation cannot contaminate another target build.
 ### Phase 2: introduce the unified profile and overlay factory
 
 - Replace the two overlay entry points with `make_overlay(profile)`.
+- Add the strict canonical target registry and the ignored
+  `.art-build.local.toml` loader/generator.
 - Move root modules and scan exclusions into the profile.
 - Make build-host and target fields distinct throughout evaluator, codegen, and
   emitter APIs.
@@ -1355,6 +1500,8 @@ so a failed or partial invocation cannot contaminate another target build.
   output arguments.
 - Replace fdlibm and fmtlib compatibility aliases with canonical paths and
   regular-file generation.
+- Remove machine-specific defaults from active CMake/scripts and sanitize
+  historical documentation/evidence to stable path tokens.
 - Run the first POSIX-environment-free, symlink-normalized Windows 10 ARM64
   configure/build gate.
 
@@ -1427,6 +1574,12 @@ unified product targets instead of alternative ways to build those targets.
 - Generating twice produces no diff and identical digests.
 - Linux-host and Windows-host generation of the same target profile produces
   equivalent graph manifests.
+- canonical ID tests accept `linux-x86_64`, `linux-aarch64`, `linux-armv7`,
+  `windows-aarch64-arm64ec`, and `wasi-wasm64`, while rejecting `x64`, bare
+  `arm`, whole-ID underscore variants, and suffix-first WASI names;
+- default outputs use `out/<target-id>/<build-type>` with no build-host path
+  component, and opening that directory from a mismatched build host rejects
+  the existing cache;
 - every generated `.cmake` file is target-resolved, contains no unselected
   target branches, and passes an absolute-path rejection scan;
 - each binary directory records exactly one canonical target identity and is
@@ -1443,6 +1596,12 @@ unified product targets instead of alternative ways to build those targets.
 - forbidden tool/generator names do not occur in CMake caches or Ninja command
   rules;
 - cross builds contain no undeclared build-host include or library path;
+- `.art-build.local.toml` and `CMakeUserPresets.json` are ignored, no
+  machine-specific absolute path appears in a tracked build/configuration
+  input, and sanitized evidence contains only stable path tokens;
+- neither the Git index, source manifest, generated graph, nor normalized
+  closure contains the project-owned `vendor/fmtlib` alias after its canonical
+  mapping migration;
 - Windows 10 ARM64 configures using native ARM64 host tools from a stock Windows
   environment with no POSIX layer; and
 - Git-mode and filesystem audits report no unnormalized symlink/reparse-point
@@ -1500,8 +1659,12 @@ Audit `compile_commands.json` and `ninja -t commands` for every matrix cell:
 |---|---|---|
 | Build host leaks into target selection | wrong sources and ABI | one serialized profile; graph equivalence across hosts |
 | One CMake cache is reused for another target | stale compiler checks, pointer size, ABI, or assembly | one immutable target identity and binary directory per target/build type |
+| The same target cache is reopened on another build host | incompatible host tools/cache state despite a simple output path | build-host manifest fingerprint rejects reuse; optional separate output root |
+| Informal target aliases drift | duplicate cache keys or ambiguous ABI | one strict canonical ID grammar and diagnostic-only migration suggestions |
+| Local tool/SDK path is committed | workstation-specific build and information leak | ignored local TOML, staged-path audit, no local defaults in scripts/CMake |
 | Generated graph embeds machine paths | graph differs by host and cannot relocate | stable root variables plus absolute-path rejection in the emitter |
 | Giant generated graph retains inactive target branches | wrong source or policy leaks into the closure | Python emits one fully resolved graph per exact target |
+| Project-owned fmtlib alias survives | Git-for-Windows link text reaches legacy graph | canonical `external/fmtlib` mapping, graph assertion, then delete mode `120000` entry |
 | Cross build finds host headers/libs | links successfully but is invalid | sysroot-only root modes and path audit |
 | Literal Linux flag reuse on Windows | ignored options or broken PE link | common semantic properties with platform mapping |
 | Export-all hides an incomplete DLL ABI | unstable or missing imports/data | annotations/`.def` allowlist and ABI probe |
