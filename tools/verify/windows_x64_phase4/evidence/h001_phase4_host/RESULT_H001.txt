@@ -1,0 +1,9 @@
+H-001 scoped Phase-4 native host result 2026-07-30
+host=Windows Server 2025 Datacenter Evaluation x64 build=26100
+PASS gcstress marker=GcStressProbe.done=ok
+PASS threadheavy marker=ThreadHeavyProbe.done=ok
+PASS handleleak marker=HandleLeakProbe.done=ok
+PASS crashabort marker=phase4-abort-ok
+PASS crashnative markers=CrashNativeProbe.start,VEH,UEF,minidump-written exit=-1073741819
+NOTE run_all_host overall=FAIL only because out-of-scope run_dns exit=1
+OVERALL PASS
