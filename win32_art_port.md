@@ -754,6 +754,9 @@ all product paths. Windows NIO.2 remains a non-goal.
   process under W-010's activation contract.
 - dex2oat/oat PE output remains deferred; the imageless interpreter+JIT product
   does not require it.
+- The current Linux OAT/VDEX/ART image analysis and the proposed Windows
+  PE-backed OAT format and loader are documented in
+  [win32_aot_oat.md](win32_aot_oat.md).
 
 **Historical planning estimate:** the original estimate was 12–24 months for a
 solid interpreter product with one part-time engineer. It is retained only as
