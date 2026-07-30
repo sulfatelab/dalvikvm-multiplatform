@@ -41,6 +41,22 @@ ROOT_MODULES = (
 )
 
 
+def _host_can_run_target(target: TargetProfile) -> bool:
+    """Conservatively admit runtime probes only on an exact native host."""
+    host_os = platform.system().lower()
+    if host_os != target.os_or_runtime:
+        return False
+    host_arch = platform.machine().lower()
+    normalized_arch = {
+        "amd64": "x86_64",
+        "x64": "x86_64",
+        "arm64": "aarch64",
+        "i386": "x86",
+        "i686": "x86",
+    }.get(host_arch, host_arch)
+    return normalized_arch == target.cpu_arch
+
+
 class BuildFrontendError(RuntimeError):
     """Raised for a deterministic user-facing frontend failure."""
 
@@ -54,7 +70,7 @@ def _parser() -> argparse.ArgumentParser:
         "init-local-config", help=f"create ignored {LOCAL_CONFIG_NAME} from discovered tools"
     )
 
-    for command in ("generate", "check-generated", "configure", "build", "test"):
+    for command in ("generate", "check-generated", "configure", "build", "test", "stage"):
         sub = subparsers.add_parser(command)
         sub.add_argument("--target-id", required=True)
         sub.add_argument("--build-type", choices=BUILD_TYPES, default=DEFAULT_BUILD_TYPE)
@@ -86,6 +102,7 @@ def main(argv: list[str] | None = None) -> int:
         local = load_local_config(REPO_ROOT)
         output_root = _resolve_output_root(args.output_root, local)
         binary_dir = output_root / target.target_id / args.build_type
+        validate_managed_path(binary_dir, allow_missing=True)
 
         if args.command in ("generate", "check-generated", "configure"):
             _generate(
@@ -97,9 +114,11 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "configure":
             _configure(target, args.build_type, binary_dir, local)
         elif args.command == "build":
-            _build(binary_dir, local, args.cmake_target, args.parallel)
+            _build(target, binary_dir, local, args.cmake_target, args.parallel)
         elif args.command == "test":
             _test(binary_dir, local, args.label, args.stage)
+        elif args.command == "stage":
+            _stage(target, binary_dir, local)
         return 0
     except (BuildFrontendError, LocalConfigError, TargetError, OSError) as exc:
         print(f"build_art.py: error: {exc}", file=sys.stderr)
@@ -214,13 +233,10 @@ def _configure(
     binary_dir: Path,
     local: LocalBuildConfig,
 ) -> None:
-    if target.target_id != "linux-x86_64":
-        raise BuildFrontendError(
-            f"unified CMake configure is not admitted for {target.target_id}; "
-            "target graph generation is available, but product CMake migration remains"
-        )
-
     tools = _resolve_tools(local, need_compiler=True)
+    if target.os_or_runtime == "windows":
+        tools["llvm-rc"] = _resolve_llvm_resource_compiler(local)
+    bindings = _target_bindings(target, local)
     fingerprint = _build_fingerprint(target, build_type, tools)
     manifest_path = binary_dir / "build_manifest.json"
     generated = binary_dir / "generated"
@@ -236,10 +252,40 @@ def _configure(
         f"-DCMAKE_MAKE_PROGRAM={tools['ninja']}",
         f"-DCMAKE_C_COMPILER={tools['clang']}",
         f"-DCMAKE_CXX_COMPILER={tools['clang++']}",
+        f"-DCMAKE_C_COMPILER_TARGET={target.target_triple}",
+        f"-DCMAKE_CXX_COMPILER_TARGET={target.target_triple}",
+        f"-DCMAKE_ASM_COMPILER_TARGET={target.target_triple}",
+        f"-DCMAKE_SYSTEM_NAME={target.os_or_runtime.capitalize()}",
         f"-DPython3_EXECUTABLE={_python_executable()}",
         f"-DART_PROFILE_FILE={generated / 'target_profile.cmake'}",
         f"-DART_GRAPH_FILE={generated / 'art_graph.cmake'}",
+        "-DART_ENABLE_TARGET_RUNTIME_TESTS="
+        + ("ON" if _host_can_run_target(target) else "OFF"),
     ]
+    if target.os_or_runtime == "windows":
+        bundle = bindings.get("bundle_root")
+        if bundle is None:
+            raise BuildFrontendError(
+                f"target {target.target_id} requires targets.{target.target_id}.bundle_root "
+                "in .art-build.local.toml"
+            )
+        command.extend((
+            f"-DART_TARGET_BUNDLE_ROOT={bundle}",
+            f"-DCMAKE_RC_COMPILER={tools['llvm-rc'].as_posix()}",
+            "-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY",
+        ))
+    elif platform.system().lower() == "windows" and "sysroot" not in bindings:
+        raise BuildFrontendError(
+            "Windows-hosted Linux targets require targets."
+            f"{target.target_id}.sysroot in .art-build.local.toml"
+        )
+    for key, cmake_key in (("sdk_root", "ART_TARGET_SDK_ROOT"),
+                           ("sysroot", "ART_TARGET_SYSROOT"),
+                           ("runtime_root", "ART_TARGET_RUNTIME_ROOT")):
+        if key in bindings:
+            command.append(f"-D{cmake_key}={bindings[key]}")
+    if "sysroot" in bindings:
+        command.append(f"-DCMAKE_SYSROOT={bindings['sysroot']}")
     fingerprint["configure_command"] = command
     _guard_binary_directory(binary_dir, manifest_path, fingerprint)
     _run_checked(command)
@@ -248,6 +294,7 @@ def _configure(
 
 
 def _build(
+    target: TargetProfile,
     binary_dir: Path,
     local: LocalBuildConfig,
     cmake_target: str | None,
@@ -263,6 +310,10 @@ def _build(
             raise BuildFrontendError("--parallel must be positive")
         command.extend(("--parallel", str(parallel)))
     _run_checked(command)
+    if target.os_or_runtime == "windows" and (
+        cmake_target is None or cmake_target in ("all", "art-compiler")
+    ):
+        _validate_windows_art_compiler(binary_dir, target, local)
 
 
 def _test(
@@ -288,12 +339,171 @@ def _test(
 
     ctest_name = "ctest.exe" if os.name == "nt" else "ctest"
     ctest = validate_managed_path((cmake.parent / ctest_name).resolve())
-    command = [str(ctest), "--test-dir", str(binary_dir), "--output-on-failure"]
+    command = [
+        str(ctest),
+        "--test-dir",
+        str(binary_dir),
+        "--output-on-failure",
+        "--no-tests=error",
+    ]
     selected_labels = list(dict.fromkeys([*labels, *stage_labels]))
     if selected_labels:
         label_regex = "^(" + "|".join(re.escape(label) for label in selected_labels) + ")$"
         command.extend(("--label-regex", label_regex))
     _run_checked(command)
+
+
+def _stage(target: TargetProfile, binary_dir: Path, local: LocalBuildConfig) -> None:
+    """Copy product outputs into a regular-file staging tree and record them."""
+    _require_configured(binary_dir)
+    if target.os_or_runtime == "windows":
+        _validate_windows_art_compiler(binary_dir, target, local)
+
+    stage_dir = binary_dir / "stage"
+    validate_managed_path(stage_dir, allow_missing=True)
+    stage_dir.mkdir(parents=True, exist_ok=True)
+    product_names = (
+        "dalvikvm", "dex2oat", "art", "art-compiler", "art-disassembler",
+        "javacore", "openjdk", "icu_jni",
+    )
+    sources: list[Path] = []
+    for name in product_names:
+        source = next(
+            (candidate for candidate in _artifact_candidates(binary_dir, target, name)
+             if candidate.is_file()),
+            None,
+        )
+        if source is None:
+            continue
+        sources.append(source)
+
+        if target.os_or_runtime == "windows" and name == "art-compiler":
+            import_lib = next(
+                (candidate for candidate in _artifact_candidates(binary_dir, target, name)
+                 if candidate.suffix.lower() == ".lib" and candidate.is_file()),
+                None,
+            )
+            if import_lib is None:
+                raise BuildFrontendError(
+                    f"Windows art-compiler import library is missing in {binary_dir}"
+                )
+            sources.append(import_lib)
+
+    # The product is a DSO closure, not only its public entry points. Generated
+    # CMake DSOs are emitted in the top-level binary directory; test-only DSOs
+    # remain below tests/ and are deliberately excluded.
+    if target.os_or_runtime == "windows":
+        sources.extend(sorted(binary_dir.glob("*.dll")))
+        bundle_root = _target_bindings(target, local).get("bundle_root")
+        if bundle_root is None:
+            raise BuildFrontendError(
+                f"target {target.target_id} has no configured target bundle"
+            )
+        libcxx_runtime = bundle_root / "lib" / "libcxx" / "bin" / "c++.dll"
+        if not libcxx_runtime.is_file():
+            raise BuildFrontendError(
+                f"Windows target bundle is missing libc++ runtime: {libcxx_runtime}"
+            )
+        sources.append(libcxx_runtime)
+    else:
+        sources.extend(sorted(binary_dir.glob("*.so")))
+
+    copied: list[dict[str, object]] = []
+    destinations: dict[str, Path] = {}
+    for source in sources:
+        if source.is_symlink():
+            raise BuildFrontendError(f"refusing to stage a symlink: {source}")
+        validate_managed_path(source)
+        previous = destinations.get(source.name)
+        if previous is not None:
+            if previous != source:
+                raise BuildFrontendError(
+                    f"staged artifact name collision: {previous} and {source}"
+                )
+            continue
+        destinations[source.name] = source
+        destination = stage_dir / source.name
+        if destination.is_symlink():
+            raise BuildFrontendError(f"refusing to replace staged symlink: {destination}")
+        shutil.copy2(source, destination)
+        copied.append({"path": destination.name, "sha256": _sha256(destination)})
+
+    if not copied:
+        raise BuildFrontendError(f"no product artifacts found in {binary_dir}; build first")
+    _write_json_atomic(stage_dir / "stage_manifest.json", {
+        "schema_version": 1,
+        "target_id": target.target_id,
+        "artifacts": copied,
+    })
+    print(f"staged {len(copied)} artifacts in {stage_dir}")
+
+
+def _artifact_candidates(binary_dir: Path, target: TargetProfile, name: str) -> list[Path]:
+    if target.os_or_runtime == "windows":
+        suffixes = (".exe",) if name in ("dalvikvm", "dex2oat") else (".dll", ".lib")
+        prefixes = ("", "lib")
+    else:
+        suffixes = ("",) if name in ("dalvikvm", "dex2oat") else (".so",)
+        prefixes = ("", "lib") if name in ("dalvikvm", "dex2oat") else ("lib", "")
+    return [binary_dir / f"{prefix}{name}{suffix}" for prefix in prefixes for suffix in suffixes]
+
+
+def _sha256(path: Path) -> str:
+    import hashlib
+
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _validate_windows_art_compiler(
+    binary_dir: Path, target: TargetProfile, local: LocalBuildConfig
+) -> None:
+    dll = next((path for path in _artifact_candidates(binary_dir, target, "art-compiler")
+                if path.suffix.lower() == ".dll" and path.is_file()), None)
+    if dll is None:
+        raise BuildFrontendError(f"Windows art-compiler.dll is missing in {binary_dir}")
+    import_lib = next((path for path in _artifact_candidates(binary_dir, target, "art-compiler")
+                       if path.suffix.lower() == ".lib" and path.is_file()), None)
+    if import_lib is None:
+        raise BuildFrontendError(f"Windows art-compiler.lib is missing in {binary_dir}")
+    for artifact in (dll, import_lib):
+        if artifact.is_symlink():
+            raise BuildFrontendError(
+                f"Windows art-compiler artifact must be a regular file: {artifact}"
+            )
+        validate_managed_path(artifact)
+
+    llvm_root = local.tools.get("llvm_root")
+    readobj = (
+        llvm_root / "bin" / ("llvm-readobj.exe" if os.name == "nt" else "llvm-readobj")
+        if llvm_root is not None else None
+    )
+    if readobj is None or not readobj.exists():
+        discovered = shutil.which("llvm-readobj.exe" if os.name == "nt" else "llvm-readobj")
+        readobj = Path(discovered) if discovered else None
+    if readobj is None or not readobj.exists():
+        raise BuildFrontendError(
+            "llvm-readobj is required to validate art-compiler.dll exports/imports"
+        )
+    result = subprocess.run(
+        [str(readobj), "--coff-exports", "--coff-imports", str(dll)],
+        cwd=REPO_ROOT,
+        shell=False,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode:
+        raise BuildFrontendError(f"llvm-readobj failed with exit code {result.returncode}")
+    if "art_compiler_jit_create" not in result.stdout:
+        raise BuildFrontendError(
+            "art-compiler.dll export allowlist is missing art_compiler_jit_create"
+        )
+    if "Name: art.dll" not in result.stdout:
+        raise BuildFrontendError("art-compiler.dll must import its runtime from art.dll")
 
 
 def _stage_label(stage: str) -> str:
@@ -339,11 +549,33 @@ def _resolve_tools(local: LocalBuildConfig, *, need_compiler: bool) -> dict[str,
     return tools
 
 
+def _resolve_llvm_resource_compiler(local: LocalBuildConfig) -> Path:
+    """Resolve LLVM's native resource compiler for Windows target graphs."""
+    executable = "llvm-rc.exe" if os.name == "nt" else "llvm-rc"
+    llvm_root = local.tools.get("llvm_root")
+    path = llvm_root / "bin" / executable if llvm_root is not None else _discover(executable)
+    resolved = validate_managed_path(path.resolve())
+    if resolved.name not in ("llvm-rc", "llvm-rc.exe"):
+        raise BuildFrontendError(
+            f"LLVM resource compiler required; got {resolved.name!r}"
+        )
+    return resolved
+
+
+def _target_bindings(target: TargetProfile, local: LocalBuildConfig) -> dict[str, Path]:
+    bindings = local.target_bindings(target.target_id)
+    for path in bindings.values():
+        validate_managed_path(path)
+    return bindings
+
+
 def _configured_or_discovered(
     local: LocalBuildConfig, key: str, executable: str
 ) -> Path:
     configured = local.tools.get(key)
     path = configured if configured is not None else _discover(executable)
+    if configured is not None:
+        validate_managed_path(path)
     resolved = validate_managed_path(path.resolve())
     allowed = {
         "cmake": ("cmake", "cmake.exe"),
@@ -428,9 +660,12 @@ def _init_local_config() -> int:
     path = REPO_ROOT / LOCAL_CONFIG_NAME
     if path.exists() or path.is_symlink():
         raise BuildFrontendError(f"refusing to overwrite existing {path}")
-    cmake = validate_managed_path(_discover("cmake").resolve())
-    ninja = validate_managed_path(_discover("ninja").resolve())
-    clang = validate_managed_path(_discover("clang").resolve())
+    cmake_path = _discover("cmake")
+    ninja_path = _discover("ninja")
+    clang_path = _discover("clang")
+    cmake = validate_managed_path(cmake_path.resolve())
+    ninja = validate_managed_path(ninja_path.resolve())
+    clang = validate_managed_path(clang_path.resolve())
     content = (
         "# Machine-local paths only. This file is ignored by Git.\n"
         "[tools]\n"

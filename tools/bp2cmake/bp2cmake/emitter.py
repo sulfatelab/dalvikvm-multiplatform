@@ -19,7 +19,7 @@ import os
 import posixpath
 from copy import deepcopy
 
-from .evaluator import EvalError, Evaluator
+from .evaluator import EvalError, Evaluator, _portable_relpath
 from .model import Module
 from .overlay import Overlay, apply_module_policy
 
@@ -55,7 +55,7 @@ class Emitter:
             base = os.path.join(root, bp_dir) if bp_dir else root
             matches = sorted(_glob.glob(os.path.join(base, s), recursive=True))
             for mpath in matches:
-                rel = os.path.relpath(mpath, base)
+                rel = _portable_relpath(os.path.relpath(mpath, base))
                 out.append(rel)
         return out
 
@@ -76,6 +76,8 @@ class Emitter:
         return "shared"
 
     def _join(self, bp_dir: str, rel: str, root_var: str = "MDVM_NATIVE_SRC_ROOT_DIR") -> str:
+        bp_dir = _portable_relpath(bp_dir)
+        rel = _portable_relpath(rel)
         p = posixpath.normpath(posixpath.join(bp_dir, rel)) if bp_dir else rel
         return f"${{{root_var}}}/{p}"
 
@@ -221,8 +223,14 @@ class Emitter:
         # from header libs
         for hl in m.header_libs:
             dirs.extend(self._exported_includes(hl))
-        # from link deps (so we can see their public headers)
-        for dep in m.shared_libs + m.static_libs + m.whole_static_libs:
+        # From link deps (so we can see their public headers).  Whole-static
+        # modules come first because their sources are compiled inside this
+        # target when ``absorb_whole_static`` is enabled.  In that case their
+        # exported directory is effectively a local source include directory,
+        # and must win over unrelated transitive headers whose names differ
+        # only by case (for example ART compiler/compiler.h versus LZMA's
+        # C/Compiler.h on a case-insensitive Windows filesystem).
+        for dep in m.whole_static_libs + m.shared_libs + m.static_libs:
             dirs.extend(self._exported_includes(dep))
         # overlay-added include dirs (e.g. non-AOSP glue)
         pol = self.ov.policy_for(m.name)

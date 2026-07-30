@@ -6,7 +6,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from bp2cmake.config import Config
-from bp2cmake.evaluator import Evaluator
+from bp2cmake.evaluator import Evaluator, _portable_relpath
 
 
 def _ev(text, os_name=None, **cfg):
@@ -15,6 +15,10 @@ def _ev(text, os_name=None, **cfg):
     e = Evaluator(Config(**cfg))
     e.add_file(text, "<test>/Android.bp")
     return e
+
+
+def test_graph_relative_paths_are_host_independent():
+    assert _portable_relpath(r"logging\liblog") == "logging/liblog"
 
 
 def test_variable_and_concat():

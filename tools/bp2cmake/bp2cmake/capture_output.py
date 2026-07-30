@@ -2,6 +2,15 @@
 
 from __future__ import annotations
 
+import sys
+
+# This file is also invoked as a script by generated Ninja rules.  In that
+# mode Python puts this package directory first on sys.path; its ast.py would
+# shadow the standard-library ast module imported by argparse/dataclasses.
+_script_dir = __file__.rsplit("/", 1)[0]
+if sys.path and sys.path[0].endswith(_script_dir):
+    sys.path.pop(0)
+
 import argparse
 import os
 import subprocess

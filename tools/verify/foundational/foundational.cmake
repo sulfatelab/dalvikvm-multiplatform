@@ -12,7 +12,7 @@ add_library(log SHARED
 
 target_include_directories(log
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/libbase/include
-        PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/fmtlib/include
+        PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/external/fmtlib/include
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/logging/liblog/include
 )
 
@@ -40,7 +40,7 @@ target_include_directories(nativehelper
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/libnativehelper/include_platform
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/libnativehelper/include_platform_header_only
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/libbase/include
-        PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/fmtlib/include
+        PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/external/fmtlib/include
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/logging/liblog/include
 )
 
@@ -60,7 +60,7 @@ add_library(procinfo SHARED
 target_include_directories(procinfo
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/libprocinfo/include
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/libbase/include
-        PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/fmtlib/include
+        PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/external/fmtlib/include
 )
 
 target_compile_options(procinfo
@@ -84,7 +84,7 @@ target_include_directories(ziparchive
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/libziparchive/include
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/libziparchive/incfs_support/include
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/libbase/include
-        PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/fmtlib/include
+        PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/external/fmtlib/include
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/logging/liblog/include
 )
 
@@ -204,12 +204,12 @@ add_library(base SHARED
         ${MDVM_NATIVE_SRC_ROOT_DIR}/libbase/threads.cpp
         ${MDVM_NATIVE_SRC_ROOT_DIR}/libbase/test_utils.cpp
         ${MDVM_NATIVE_SRC_ROOT_DIR}/libbase/errors_unix.cpp
-        ${MDVM_NATIVE_SRC_ROOT_DIR}/fmtlib/src/format.cc
+        ${MDVM_NATIVE_SRC_ROOT_DIR}/external/fmtlib/src/format.cc
 )
 
 target_include_directories(base
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/libbase/include
-        PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/fmtlib/include
+        PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/external/fmtlib/include
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/logging/liblog/include
 )
 

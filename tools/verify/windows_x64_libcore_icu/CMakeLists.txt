@@ -357,7 +357,7 @@ extern "C" void register_java_io_UnixFileSystem(JNIEnv*) {}
     "${MDVM_LIBCORE_DIR}/ojluni/src/main/native"
     "${MDVM_LIBCORE_DIR}/luni/src/main/native"
     "${MDVM_FDLIBM_DIR}"
-    "${_repo}/compat/openjdk_inc/anchor1/anchor2"
+    "${_repo}/compat/openjdk_fdlibm/include_root/anchor1/anchor2"
     "${MDVM_ART_ROOT_DIR}/external/boringssl/src/include"
     "${MDVM_WINDOWS_X64_ENV}/lib/zlib/include"
   )

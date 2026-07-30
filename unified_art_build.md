@@ -54,11 +54,12 @@ Android.bp + target profile + one Python overlay
 
 The target registry, relocatable graph/profile generation, ignored local TOML
 bindings, shell-free generated commands, and the Python `generate`,
-`check-generated`, `configure`, `build`, and `test` frontend commands are now
-implemented. Linux x86-64 configures through `native/CMakeLists.txt` with
-`-G Ninja`; Windows x86-64 graph generation is admitted and uses the same
-target-aware overlay. The frontend rejects symlink/reparse-point tool paths
-and records a build-host fingerprint before reusing a binary directory.
+`check-generated`, `configure`, `build`, `test`, and `stage` frontend commands
+are now implemented. Linux x86-64 and Windows x86-64 use the same
+`native/CMakeLists.txt` entry point with `-G Ninja`; Windows requires an
+explicit regular-file target bundle and never searches host libraries. The
+frontend rejects symlink/reparse-point configured paths and records a build-host
+fingerprint before reusing a binary directory.
 
 Windows verification probes now have one shared registry at
 [`native/tests/CMakeLists.txt`](native/tests/CMakeLists.txt). A historical
@@ -69,8 +70,26 @@ second product graph. The old phase source directories remain temporary source
 and evidence locations while their product graph ownership is removed.
 
 The Windows overlay now emits `art-compiler` as `SHARED` and links it to
-`art` and `art-disassembler`, matching the Linux topology. Export allowlisting,
-staging, and a native Windows product configure remain open gates.
+`art` and `art-disassembler`, matching the Linux topology. The native entry
+point injects the Windows runtime sources, sets the stable `art-compiler.dll`
+name, passes bundle SDK/libc++ paths to Clang, and supplies a reviewed DEF
+allowlist for its narrow public entry point. ART runtime globals used by the
+compiler use the existing `LIBART_PE_DATA` producer/consumer annotations, so
+PE data imports have the required indirection while `Thread::Current()` keeps
+TLS inside `art.dll`. A Linux-hosted `windows-x86_64` cross build now links
+`art.dll`, `art-compiler.dll`, and `art-compiler.lib`. A native Windows Server
+2025 x86-64 build using LLVM 21.1.8, CMake 3.31.8, and Ninja 1.13.2 also
+configures and links the same graph without a POSIX environment. The native
+`w002` unwind test runs through the unified virtual stage, and the complete
+catalog builds 19 executable probes and 10 probe DLLs. Loading staged
+`art.dll` and `art-compiler.dll` and resolving `art_compiler_jit_create` pass
+from a directory containing only the staged closure. A frontend-owned
+`linux-x86_64` build produces `libart-compiler.so` with dynamic dependencies
+on `libart.so` and `libart-disassembler.so`. Fresh Linux and Windows builds use
+the same 33-module generated graph. `build_art.py stage` validates the Windows
+DLL/import-library pair, copies the complete top-level DSO closure (including
+the pinned Windows `c++.dll`), rejects links/reparse points, and records
+regular-file hashes.
 
 In particular, `art-compiler` is a shared library on both targets:
 
@@ -427,16 +446,16 @@ The Linux path is the closest existing model for the desired architecture:
   `art-compiler` as `SHARED`.
 - A fresh Linux conversion currently matches the checked-in generated file.
 
-There is still drift inside this path. Comments in `native/generate.sh` and
-`native/CMakeLists.txt` describe an 18-target graph even though the generated
-closure contains 33 modules. Configure-time `execute_process()` code generation
-is split from generated `add_custom_command()` generation. Host libraries such
-as zlib, lz4, cap, and expat are discovered from the machine, which is unsafe
-when this entry point is reused for a cross target.
+The legacy `native/generate.sh` and checked-in graph remain compatibility
+evidence, but are no longer the supported product entry point. The Python
+frontend owns graph generation and passes a target-specific graph/profile to
+CMake. Linux imports validated host libraries; Windows imports zlib, lz4, and
+expat only from the explicit target bundle. Configure-time code generation is
+still intentionally performed by Python before CMake emits the Ninja graph.
 
 ### Windows product and verification paths
 
-Windows is not generated through one reproducible product entry point:
+The historical Windows phase files are no longer a product entry point:
 
 - [`tools/verify/windows_x64_phase0/generate.sh`](tools/verify/windows_x64_phase0/generate.sh)
   proves that `bp2cmake --os windows` and the Windows overlay can generate a
@@ -539,25 +558,26 @@ portable frontend for a native Windows build host.
 
 ### Symlink audit
 
-The current checkout contains 303 filesystem symlinks:
+The current checkout still contains upstream filesystem symlinks:
 
 - 279 under `vendor/art`, including 277 test aliases;
 - 14 under `vendor/logging`;
 - four under other `vendor/external` trees;
 - one each under `vendor/libbase`, `vendor/libprocinfo`, and
   `vendor/unwinding`;
-- the project-owned `vendor/fmtlib -> external/fmtlib` compatibility alias;
-- two project-owned `compat/openjdk_inc/.../fdlibm` directory aliases.
+The project-owned `vendor/fmtlib` and fdlibm aliases have been removed. Their
+logical paths now use `vendor/external/fmtlib`, while one tracked regular
+forwarding header provides the required fdlibm relative-include projection.
 
-Nine are already broken because formatting metadata points at the absent AOSP
+Some are broken because formatting metadata points at the absent AOSP
 `build/soong` tree. None of the repository links is absolute or escapes the
 repository. The current `build/` and staging trees contain no symlinks.
 
-Most vendored links are outside the product closure, but three root-project
-links expose real portability defects. Legacy Windows generated CMake uses
-`vendor/fmtlib`; the current Linux graph correctly uses
-`vendor/external/fmtlib` directly. `native/CMakeLists.txt` still consumes the
-fdlibm compatibility link farm to satisfy libopenjdk's relative include.
+Most vendored links are outside the product closure. The maintained and legacy
+CMake snapshots now address the canonical `vendor/external/fmtlib` path, and
+`native/CMakeLists.txt` consumes the tracked regular-file projection under
+`compat/openjdk_fdlibm`; it does not replace a Git symlink with an untracked
+directory at the same path.
 
 The current external `windows_x64-dev-env` path is also unsuitable: it contains
 11 absolute symlinks back to the older `win64-dev-env`, including its SDK,
@@ -1222,32 +1242,10 @@ product build. If a required alias cannot be normalized, the frontend fails
 during source validation with the owning module, alias, and expected target;
 the failure cannot surface later as a compiler syntax/file-not-found error.
 
-The current product should still prefer canonical source locations:
-
-- remove `vendor/fmtlib` from generated product paths and address the real
-  `vendor/external/fmtlib` submodule through its canonical logical source
-  mapping;
-- replace the fdlibm link farm with an explicit generated ordinary-file include
-  projection or a reviewed source/include rewrite; and
-- if vendored ART tests are enabled, normalize their shared Java/source aliases
-  through the same regular-file projection rather than recreating links.
-
-`vendor/fmtlib` is a project-created convenience alias, not an upstream source
-layout requirement, so it should be deleted rather than materialized. The
-source manifest maps AOSP logical root `external/fmtlib` to the real
-`vendor/external/fmtlib` submodule. Python then projects the required ordinary
-files under `source_projection/external/fmtlib`, and emitted graph paths use
-`${MDVM_SOURCE_ROOT}/external/fmtlib/...`. This preserves the logical AOSP path
-without a symlink, duplicate tracked checkout, CMake copy step, or host-specific
-absolute path.
-
-The migration order is important: first teach the evaluator/source manifest
-the canonical mapping; then regenerate Linux and Windows graphs and assert that
-neither graph/manifest contains `vendor/fmtlib`; then update repository layout
-documentation; finally delete the Git mode `120000` entry. A source audit
-should reject any later reintroduction of that alias. The fdlibm aliases need
-their own include-layout projection because relative include behavior, rather
-than a redundant dependency name, created those links.
+The maintained product uses canonical source locations and regular include
+projections. Vendored ART test aliases outside the product closure remain
+legacy evidence inputs and must be normalized before they become product
+sources.
 
 The product must not create, stage, or package a symlink. The same rule applies
 to Windows directory junctions and other project-controlled name-surrogate
@@ -1530,8 +1528,11 @@ so a failed or partial invocation cannot contaminate another target build.
 ### Phase 4: finish Windows DSO topology parity
 
 - [x] Change the Windows compiler policy from static to shared.
-- Implement and audit compiler DLL exports.
-- Produce and stage `art-compiler.dll` and its import library.
+- [x] Implement the reviewed compiler DLL export entry point and DEF allowlist.
+- [x] Produce and stage `art-compiler.dll` and its import library through the
+  Python frontend.
+- [x] Pass the native Windows x86-64 compiler DSO load/export smoke and unified
+  `w002` runtime stage without Bash, Make, NMake, MSVC, GCC, or MinGW drivers.
 - Convert other current Windows static substitutions to the common topology or
   record a temporary, owner/date-tagged exception.
 - Prove that neither the runtime nor a tool introduces an `art`/`art-compiler`

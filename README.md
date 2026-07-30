@@ -36,7 +36,7 @@ dalvikvm-multiplatform/
     external/fmtlib            # canonical path; legacy alias is not required
   compat/
     include/                  # product POSIX/Win prelude headers (kept on main)
-    java-stubs/ openjdk_inc/ src/
+    java-stubs/ openjdk_fdlibm/ src/
   tools/                      # bp2cmake, bootjar, windows_x64, verify gates
   overlay/                    # port policies
   *.md                        # project documentation; see Documentation map
@@ -97,9 +97,11 @@ GitHub naming: `sulfatelab/dalvikvm-multiplatform_<name>` (SSH).
 Windows artifacts are built with this selected toolchain:
 
 - **Compiler driver:** LLVM `clang` / `clang++`.
-- **Linker:** LLVM `lld` / `lld-link`.
+- **Linker:** LLVM LLD selected by Clang with `-fuse-ld=lld` (the build does
+  not invoke `lld-link` as a separate driver).
 - **Platform headers and import libraries:** Windows SDK and MSVC SDK content,
-  typically provisioned through `xwin` and `windows_x64-dev-env`.
+  provisioned in a regular-file target bundle bound to the canonical target
+  ID in `.art-build.local.toml`.
 - **C++ standard library/STL:** LLVM `libc++`; LLVM `compiler-rt` supplies
   target runtime support.
 - **Target:** 64-bit PE/COFF using the Microsoft x64 ABI
@@ -136,18 +138,20 @@ Build harnesses default `MDVM_NATIVE_SRC_ROOT_DIR` to **`vendor/`** in this
 repo (nested multipath sources). Product CMake graphs are pure-vendor (L-006):
 they must not require a sibling MinDalvikVM-Archive tree.
 
-## Quick product scripts
+## Unified product frontend
 
-```bash
-# Build classes for the single shared Linux+Windows x64 multipath boot.jar
-tools/bootjar/build.sh
-
-# Recompile the shared OS-selection anchors, dex, and stage the same jar for both hosts
-tools/bootjar/build_windows_x64.sh
-
-# Windows x64 phase1 CMake (cross from Linux; needs windows_x64-dev-env)
-# tools/verify/windows_x64_phase1/CMakeLists.txt
+```text
+python tools/build_art.py init-local-config
+python tools/build_art.py configure --target-id linux-x86_64
+python tools/build_art.py build --target-id linux-x86_64 --cmake-target dalvikvm
+python tools/build_art.py test --target-id linux-x86_64
+python tools/build_art.py stage --target-id linux-x86_64
 ```
+
+Use `windows-x86_64` with the same commands after binding its target bundle in
+the ignored `.art-build.local.toml`. Historical shell scripts and phase CMake
+files remain migration evidence and focused probes; they are not product build
+entry points and are not required on a native Windows host.
 
 ## Documentation map
 

@@ -120,7 +120,7 @@ if(TARGET base)
     ${MDVM_NATIVE_SRC_ROOT_DIR}/libbase/hex.cpp
     PROPERTIES COMPILE_OPTIONS "-include;cstdint")
   set_source_files_properties(
-    ${MDVM_NATIVE_SRC_ROOT_DIR}/fmtlib/src/format.cc
+    ${MDVM_NATIVE_SRC_ROOT_DIR}/external/fmtlib/src/format.cc
     PROPERTIES COMPILE_OPTIONS "-fexceptions;-UNDEBUG")
 endif()
 

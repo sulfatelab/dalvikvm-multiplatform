@@ -12,7 +12,7 @@ add_library(log SHARED
 
 target_include_directories(log
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/libbase/include
-        PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/fmtlib/include
+        PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/external/fmtlib/include
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/logging/liblog/include
 )
 
@@ -40,7 +40,7 @@ target_include_directories(nativehelper
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/libnativehelper/include_platform
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/libnativehelper/include_platform_header_only
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/libbase/include
-        PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/fmtlib/include
+        PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/external/fmtlib/include
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/logging/liblog/include
 )
 
@@ -61,7 +61,7 @@ add_library(procinfo SHARED
 target_include_directories(procinfo
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/libprocinfo/include
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/libbase/include
-        PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/fmtlib/include
+        PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/external/fmtlib/include
 )
 
 target_compile_options(procinfo
@@ -179,12 +179,12 @@ add_library(base SHARED
         ${MDVM_NATIVE_SRC_ROOT_DIR}/libbase/threads.cpp
         ${MDVM_NATIVE_SRC_ROOT_DIR}/libbase/test_utils.cpp
         ${MDVM_NATIVE_SRC_ROOT_DIR}/libbase/errors_unix.cpp
-        ${MDVM_NATIVE_SRC_ROOT_DIR}/fmtlib/src/format.cc
+        ${MDVM_NATIVE_SRC_ROOT_DIR}/external/fmtlib/src/format.cc
 )
 
 target_include_directories(base
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/libbase/include
-        PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/fmtlib/include
+        PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/external/fmtlib/include
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/logging/liblog/include
 )
 
@@ -209,7 +209,7 @@ add_library(artpalette SHARED
 target_include_directories(artpalette
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/art/libartpalette/include
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/libbase/include
-        PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/fmtlib/include
+        PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/external/fmtlib/include
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/libnativehelper/include_jni
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/logging/liblog/include
 )
@@ -235,7 +235,7 @@ target_include_directories(ziparchive
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/libziparchive/include
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/libziparchive/incfs_support/include
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/libbase/include
-        PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/fmtlib/include
+        PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/external/fmtlib/include
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/logging/liblog/include
         PUBLIC ${MDVM_COMPAT_INCLUDE_DIR}
 )
@@ -317,7 +317,7 @@ target_include_directories(artbase
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/art/libartbase
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/libziparchive/include
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/libbase/include
-        PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/fmtlib/include
+        PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/external/fmtlib/include
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/logging/liblog/include
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/art/libartpalette/include
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/libnativehelper/include_jni
@@ -409,7 +409,7 @@ target_include_directories(dexfile
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/libnativehelper/include_jni
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/art/libdexfile/external/include
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/libbase/include
-        PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/fmtlib/include
+        PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/external/fmtlib/include
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/libziparchive/include
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/art/libartpalette/include
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/logging/liblog/include
@@ -436,7 +436,7 @@ add_library(elffile STATIC
 target_include_directories(elffile
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/art/libelffile
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/libbase/include
-        PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/fmtlib/include
+        PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/external/fmtlib/include
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/external/lzma/C
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/art/libartbase
 )
@@ -459,7 +459,7 @@ target_include_directories(profile
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/art/libprofile
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/art/libartpalette/include
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/libbase/include
-        PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/fmtlib/include
+        PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/external/fmtlib/include
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/libnativehelper/include_jni
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/libziparchive/include
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/art/libartbase
@@ -505,7 +505,7 @@ target_include_directories(nativebridge
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/art/libnativebridge/include
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/libnativehelper/include_jni
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/libbase/include
-        PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/fmtlib/include
+        PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/external/fmtlib/include
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/logging/liblog/include
 )
 
@@ -527,7 +527,7 @@ target_include_directories(nativeloader
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/libnativehelper/include_jni
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/libnativehelper/header_only_include
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/libbase/include
-        PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/fmtlib/include
+        PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/external/fmtlib/include
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/logging/liblog/include
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/art/libnativebridge/include
 )
@@ -600,7 +600,7 @@ add_library(unwindstack SHARED
 target_include_directories(unwindstack
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/unwinding/libunwindstack/include
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/libbase/include
-        PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/fmtlib/include
+        PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/external/fmtlib/include
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/logging/liblog/include
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/external/lzma/C
         PUBLIC ${MDVM_NATIVE_SRC_ROOT_DIR}/art/libdexfile

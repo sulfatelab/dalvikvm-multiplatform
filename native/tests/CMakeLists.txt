@@ -1,16 +1,16 @@
 # Unified ART target-test registry. Historical Windows phase directories remain
 # source/evidence locations during migration; they do not own product graphs.
 
+option(ART_ENABLE_TARGET_RUNTIME_TESTS
+    "Register target executables with CTest when the configured host can run them"
+    OFF)
+
 if(NOT ART_TARGET_OS_OR_RUNTIME STREQUAL "windows")
     return()
 endif()
 if(NOT ART_TARGET_CPU_ARCH)
     message(FATAL_ERROR "ART tests require ART_TARGET_CPU_ARCH from the target profile")
 endif()
-
-option(ART_ENABLE_TARGET_RUNTIME_TESTS
-    "Register target executables with CTest when the configured host can run them"
-    OFF)
 
 get_filename_component(_art_test_repo_root "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
 set(_art_test_verify_root "${_art_test_repo_root}/tools/verify")
@@ -38,7 +38,7 @@ function(art_add_windows_probe)
     set(one_value_args NAME STAGE TYPE ARCH OUTPUT_NAME PREFIX)
     set(multi_value_args
         SOURCES INCLUDE_DIRS LINK_LIBRARIES COMPILE_OPTIONS COMPILE_DEFINITIONS
-        LINK_OPTIONS CONTRACTS)
+        LINK_OPTIONS CONTRACTS DEPENDS)
     cmake_parse_arguments(PROBE "${options}" "${one_value_args}" "${multi_value_args}" ${ARGN})
 
     foreach(required NAME STAGE TYPE ARCH)
@@ -77,7 +77,7 @@ function(art_add_windows_probe)
     if(PROBE_LINK_OPTIONS)
         target_link_options("${PROBE_NAME}" PRIVATE ${PROBE_LINK_OPTIONS})
     endif()
-    target_link_options("${PROBE_NAME}" PRIVATE -fuse-ld=lld)
+    target_link_libraries("${PROBE_NAME}" PRIVATE art-test-target-policy)
     if(PROBE_PRODUCT_POLICY)
         target_link_libraries("${PROBE_NAME}" PRIVATE art-test-product-policy)
     endif()
@@ -99,11 +99,22 @@ function(art_add_windows_probe)
         list(APPEND labels "contract:${contract}")
     endforeach()
     set_property(TARGET "${PROBE_NAME}" PROPERTY ART_TEST_LABELS "${labels}")
+    if(PROBE_DEPENDS)
+        add_dependencies("${PROBE_NAME}" ${PROBE_DEPENDS})
+    endif()
     add_dependencies("art-test-stage-${PROBE_STAGE}" "${PROBE_NAME}")
 
     if(PROBE_RUNNABLE AND ART_ENABLE_TARGET_RUNTIME_TESTS)
-        add_test(NAME "art.${PROBE_STAGE}.${PROBE_NAME}" COMMAND "${PROBE_NAME}")
-        set_tests_properties("art.${PROBE_STAGE}.${PROBE_NAME}" PROPERTIES LABELS "${labels}")
+        # Keep target runtime files explicit and outside the host environment:
+        # generated ART DLLs live in CMAKE_BINARY_DIR and the pinned libc++ DLL
+        # lives in the regular-file target bundle.
+        add_test(NAME "art.${PROBE_STAGE}.${PROBE_NAME}"
+            COMMAND "${CMAKE_COMMAND}" -E env
+                "PATH=${CMAKE_BINARY_DIR};${_art_bundle_lib}/libcxx/bin;$ENV{PATH}"
+                "$<TARGET_FILE:${PROBE_NAME}>")
+        set_tests_properties("art.${PROBE_STAGE}.${PROBE_NAME}" PROPERTIES
+            LABELS "${labels}"
+            WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
     endif()
 endfunction()
 
@@ -117,6 +128,36 @@ set(_art_windows_defines
     _CRT_SECURE_NO_WARNINGS NOMINMAX WIN32_LEAN_AND_MEAN NOGDI
     _WIN32_WINNT=0x0A00 NTDDI_VERSION=NTDDI_WIN10_RS4)
 set(_art_no_cet "LINKER:/CETCOMPAT:NO")
+
+# Every probe compiles with the exact target SDK, libc++, runtime, and linker
+# policy used by the product graph. Tests are declared after the product-wide
+# target loop in the parent directory, so make this inheritance explicit
+# instead of relying on directory-global flags or host tool discovery.
+add_library(art-test-target-policy INTERFACE)
+target_include_directories(art-test-target-policy INTERFACE
+    "${_art_windows_cxx_include}"
+    ${_art_windows_system_includes})
+target_compile_options(art-test-target-policy INTERFACE
+    "$<$<COMPILE_LANGUAGE:CXX>:-nostdinc++>"
+    "$<$<COMPILE_LANGUAGE:CXX>:SHELL:-isystem ${_art_windows_cxx_include}>"
+    ${_art_windows_system_compile_options}
+    "$<$<COMPILE_LANGUAGE:CXX>:-stdlib=libc++>"
+    "$<$<COMPILE_LANGUAGE:C,CXX>:-fms-compatibility>"
+    "$<$<COMPILE_LANGUAGE:C,CXX>:-fms-extensions>"
+    "$<$<COMPILE_LANGUAGE:C,CXX>:-fno-omit-frame-pointer>")
+foreach(_art_test_bundle_lib_dir
+        "${ART_TARGET_BUNDLE_ROOT}/lib/libcxx/lib"
+        "${ART_TARGET_BUNDLE_ROOT}/xwin/sdk/lib/ucrt/${ART_TARGET_CPU_ARCH}"
+        "${ART_TARGET_BUNDLE_ROOT}/xwin/sdk/lib/um/${ART_TARGET_CPU_ARCH}"
+        "${ART_TARGET_BUNDLE_ROOT}/xwin/crt/lib/${ART_TARGET_CPU_ARCH}")
+    if(EXISTS "${_art_test_bundle_lib_dir}")
+        target_link_directories(art-test-target-policy INTERFACE
+            "${_art_test_bundle_lib_dir}")
+    endif()
+endforeach()
+target_link_options(art-test-target-policy INTERFACE -fuse-ld=lld)
+target_link_libraries(art-test-target-policy INTERFACE
+    art_windows_cxx windows_x64_posix_stubs ws2_32 synchronization)
 
 # Compatibility policy inherited by probes that historically lived in the
 # Phase-1 product directory. Standalone OS experiments deliberately omit it.
@@ -136,8 +177,6 @@ target_compile_options(art-test-product-policy INTERFACE
     "$<$<COMPILE_LANGUAGE:C,CXX>:-Wno-shorten-64-to-32>"
     "$<$<COMPILE_LANGUAGE:C,CXX>:-Wno-error=sign-conversion>"
     "$<$<COMPILE_LANGUAGE:C,CXX>:-Wno-error=shorten-64-to-32>")
-target_link_libraries(art-test-product-policy INTERFACE
-    windows_x64_posix_stubs ws2_32 synchronization)
 
 # W-002: managed-entry and attach/OSR transitions. The DLL probe is ABI-neutral;
 # the unwind inspection executable currently describes PE x86-64 unwind data.
@@ -149,8 +188,9 @@ art_add_windows_probe(
     CONTRACTS jni attach
     PREFIX lib WINDOWS_EXPORT_ALL_SYMBOLS)
 art_add_windows_probe(
-    NAME win32_osr_unwind_probe STAGE w002 TYPE EXECUTABLE ARCH x86_64
+    NAME win32_osr_unwind_probe STAGE w002 TYPE EXECUTABLE ARCH x86_64 RUNNABLE
     SOURCES "${_art_test_phase1}/win32_osr_unwind_probe.cc"
+    DEPENDS art
     CONTRACTS osr unwind PRODUCT_POLICY)
 
 # W-003: quick-frame and native ABI preservation. Only the XMM sentinel is tied

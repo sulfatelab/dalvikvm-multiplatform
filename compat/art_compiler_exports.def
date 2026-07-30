@@ -1,0 +1,3 @@
+LIBRARY art-compiler
+EXPORTS
+    art_compiler_jit_create

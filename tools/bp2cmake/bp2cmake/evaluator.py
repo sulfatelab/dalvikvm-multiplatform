@@ -48,6 +48,11 @@ _DEP_LIST_PROPS = {
 }
 
 
+def _portable_relpath(path: str) -> str:
+    """Normalize graph-internal paths independently of the build host OS."""
+    return path.replace("\\", "/")
+
+
 def _strip_dep_tag(name: str) -> str:
     """`libfoo#impl` / `libfoo#bootstrap` -> `libfoo`. Soong variant tag."""
     if isinstance(name, str) and "#" in name:
@@ -108,7 +113,9 @@ class Evaluator:
         bp_dir = ""
         if source_root:
             self._source_root = source_root
-            bp_dir = os.path.relpath(os.path.dirname(bp_path), source_root)
+            bp_dir = _portable_relpath(
+                os.path.relpath(os.path.dirname(bp_path), source_root)
+            )
             if bp_dir == ".":
                 bp_dir = ""
         scope = self._build_scope(bp)

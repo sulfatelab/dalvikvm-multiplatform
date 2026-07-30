@@ -64,7 +64,7 @@ class CodegenConfig:
     asm_includes: list[str] = field(default_factory=lambda: [
         "art/libartbase", "art/runtime", "art/libdexfile",
         "libnativehelper/include_jni", "libbase/include",
-        "logging/liblog/include", "fmtlib/include", "external/tinyxml2",
+        "logging/liblog/include", "external/fmtlib/include", "external/tinyxml2",
         "libziparchive/include", "art/tools/cpp-define-generator",
     ])
     # Target OS for asm_defines layout: linux (host) or windows (PE).
@@ -129,6 +129,11 @@ class CodegenConfig:
 
 class CodegenError(Exception):
     pass
+
+
+def _forward_slash_path(path: str) -> str:
+    """Return a Windows-safe path for generators that embed argv in Python."""
+    return path.replace("\\", "/")
 
 
 def _files_equal(first: str, second: str) -> bool:
@@ -209,7 +214,15 @@ def gen_mterp(cfg: CodegenConfig, arch: str | None = None) -> str:
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     staged_path = out_path + ".tmp"
     # gen_mterp.py writes the output file itself (arg1 = output, rest = inputs).
-    _run([sys.executable, tool, staged_path] + asm_inputs, cwd=cfg._art_base())
+    # It also embeds argv[1] verbatim in a generated Python string.  Native
+    # Windows backslashes would therefore turn e.g. ``\a`` into a control
+    # character.  Forward slashes are accepted by Windows and remain portable.
+    _run(
+        [sys.executable, _forward_slash_path(tool),
+         _forward_slash_path(staged_path)]
+        + [_forward_slash_path(path) for path in asm_inputs],
+        cwd=cfg._art_base(),
+    )
     _replace_if_changed(staged_path, out_path)
     staged_script = staged_path + ".py"
     if os.path.exists(staged_script):

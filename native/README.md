@@ -11,8 +11,28 @@ There is no host-specific shell or Make workflow.
 python tools/build_art.py configure --target-id linux-x86_64
 python tools/build_art.py build --target-id linux-x86_64 --cmake-target dalvikvm
 python tools/build_art.py test --target-id linux-x86_64
+python tools/build_art.py stage --target-id linux-x86_64
 # -> ART version 2.1.0 x86_64
 ```
+
+The same commands configure `windows-x86_64` when its target bundle is bound
+in `.art-build.local.toml` under `[targets."windows-x86_64"]`. The bundle must
+contain regular-file Windows SDK/UCRT, libc++, compiler-rt, zlib, lz4, and
+CRT components. The LZ4 bundle must include both `lz4.h` and `lz4hc.h`;
+expat is built from the pinned repository source. CMake never falls back to
+host libraries.
+
+On a native target host, exact host OS/CPU matching enables runnable probes.
+For example, this builds the virtual stage and runs its registered tests:
+
+```text
+python tools/build_art.py test --target-id windows-x86_64 --stage w002
+```
+
+Cross builds still compile every selected probe but do not attempt to execute
+target binaries. An empty CTest selection is an error, not a successful test.
+Staging copies the complete top-level DSO closure and the pinned Windows
+`c++.dll`; all staged files are regular files recorded with SHA-256 hashes.
 
 The default build type is `RelWithDebInfo`. Required host tools are Python 3.11+,
 CMake, Ninja, and the plain Clang/Clang++ GNU-style drivers; LLD is selected by

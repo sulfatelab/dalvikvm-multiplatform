@@ -3,7 +3,31 @@
 #include_next <netinet/in.h>
 #else
 #include <winsock2.h>
+#ifndef CONST
+#define MDVM_NETINET_DEFINED_CONST 1
+#define CONST const
+#endif
+#ifndef ZeroMemory
+#define MDVM_NETINET_DEFINED_ZEROMEMORY 1
+#define ZeroMemory RtlZeroMemory
+#endif
+#ifndef CopyMemory
+#define MDVM_NETINET_DEFINED_COPYMEMORY 1
+#define CopyMemory RtlCopyMemory
+#endif
 #include <ws2tcpip.h>
+#ifdef MDVM_NETINET_DEFINED_COPYMEMORY
+#undef CopyMemory
+#undef MDVM_NETINET_DEFINED_COPYMEMORY
+#endif
+#ifdef MDVM_NETINET_DEFINED_ZEROMEMORY
+#undef ZeroMemory
+#undef MDVM_NETINET_DEFINED_ZEROMEMORY
+#endif
+#ifdef MDVM_NETINET_DEFINED_CONST
+#undef CONST
+#undef MDVM_NETINET_DEFINED_CONST
+#endif
 /* Oracle openjdk uses SOCKADDR_IN6 on WIN32 */
 #ifndef SOCKADDR_IN6
 #define SOCKADDR_IN6 sockaddr_in6
