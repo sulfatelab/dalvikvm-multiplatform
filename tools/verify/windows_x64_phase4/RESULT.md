@@ -1,14 +1,17 @@
 # Windows x64 Phase 4 — RESULT
 
-**Status:** **WINE COMPLETE; W-010/W-014 E9, FS-1, AND FS-2 NATIVE ACCEPTED** — W-002,
+**Status:** **WINE COMPLETE; W-010/W-014 E9, FS-1, FS-2, AND FS-3 NATIVE ACCEPTED** — W-002,
 W-003, W-004, W-024, and W-025 native matrices are accepted. W-010/W-014 E9
 passes the complete 30-record runner and FS-1 passes Release/Debug switch,
 nterp, and JIT stack high-water on Windows Server 2025 build 26100. Product
 managed SOE has zero handled dumps; FS-1 has four complete records per mode,
 positive margins, and no dump. FS-2 now also passes the native debugger,
 forced-policy, embedding/UEF teardown, and exception-unwind XMM gates on that
-host. Conditional pending-range, reservation-correlation, second-host, and
-debugger-quality dump-stack coverage remains open.
+host. FS-3/JIT-3 also passes native lifecycle churn and virtual-unwind
+sampling. FS-4 repeats these gates on the same host, including parameterized
+stack geometry and join/detach/fiber checks; the required second-host repeat,
+reservation-correlation, negative-exception, and debugger-quality dump-stack
+coverage remain open. FS-5 conditionally closes the pending bridge tail.
 **Date:** 2026-07-30
 **Depends on:** Phase 3 complete (real Win10 G12 goldens)
 
@@ -359,9 +362,10 @@ retained in `evidence/fs2_w010_w014_native/`.
   the accepted product path; retain fixed-page operations only as direct
   diagnostics. Repeat the 30-record gate on another supported Windows 10 host
   when available.
-- Repeat the accepted E9/FS-1/FS-2 bundle on a second supported Windows host;
-  correlate Java/ART-pool reservations and attempt the pending bridge range
-  only if a deterministic probe is practical.
+- Repeat the accepted E9/FS-1/FS-2/FS-3 bundle on a second supported Windows
+  host and correlate Java/ART-pool reservations. The same-host FS-4 repeat is
+  archived under `evidence/fs4_same_host_20260730/`; FS-5 records why a real
+  pending-tail native fault would require product fault injection.
 - Add wrong-address/unsupported-exception negatives and debugger-quality dump
   stack reconstruction if those remain release requirements.
 

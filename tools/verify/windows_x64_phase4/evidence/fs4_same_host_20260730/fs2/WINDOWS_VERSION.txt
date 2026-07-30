@@ -1,0 +1,35 @@
+
+
+Caption        : Microsoft Windows Server 2025 Datacenter Evaluation
+Version        : 10.0.26100
+BuildNumber    : 26100
+OSArchitecture : 64-bit
+
+
+
+
+
+
+Name  : PSVersion
+Value : 5.1.26100.7462
+
+Name  : PSEdition
+Value : Desktop
+
+Name  : PSCompatibleVersions
+Value : {1.0, 2.0, 3.0, 4.0...}
+
+Name  : BuildVersion
+Value : 10.0.26100.7462
+
+Name  : CLRVersion
+Value : 4.0.30319.42000
+
+Name  : WSManStackVersion
+Value : 3.0
+
+Name  : PSRemotingProtocolVersion
+Value : 2.3
+
+Name  : SerializationVersion
+Value : 1.1.0.1

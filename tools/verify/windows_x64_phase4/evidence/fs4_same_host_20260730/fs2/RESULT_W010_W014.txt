@@ -1,0 +1,46 @@
+W-010/W-014 native Stage E9 acceptance 2026-07-29 19:09:30
+PASS host_os build=26100
+PASS package_integrity
+PASS structural_report
+PASS cet_policy exit=0 elapsed_ms=67
+PASS hsp_policy
+PASS cet_forced_enable-user-shadow-stack exit=1 elapsed_ms=58
+PASS cet_forced_audit-user-shadow-stack exit=1 elapsed_ms=38
+PASS cet_forced_set-context-ip-validation exit=1 elapsed_ms=40
+PASS cet_forced_audit-set-context-ip-validation exit=1 elapsed_ms=42
+PASS cet_forced_strict-user-shadow-stack exit=1 elapsed_ms=40
+PASS cet_forced_block-non-cet-binaries exit=1 elapsed_ms=42
+PASS cet_forced_block-non-cet-binaries-non-ehcont exit=1 elapsed_ms=45
+PASS cet_forced_audit-block-non-cet-binaries exit=1 elapsed_ms=43
+PASS cet_forced_relaxed-context-ip-validation exit=1 elapsed_ms=44
+PASS cet_forced_safe_dynamic-apis-out-of-proc-only exit=0 elapsed_ms=3546
+PASS cet_forced_safe_reserved-all exit=0 elapsed_ms=1214
+PASS debugger_npe exit=0 elapsed_ms=1443
+PASS debugger_so exit=0 elapsed_ms=1888
+PASS osr_unwind exit=0 elapsed_ms=31
+PASS xmm_full_nterp_run01 exit=0 elapsed_ms=1289
+PASS xmm_full_nterp_run02 exit=0 elapsed_ms=1601
+PASS xmm_full_switch_run01 exit=0 elapsed_ms=1252
+PASS xmm_full_switch_run02 exit=0 elapsed_ms=1378
+PASS xmm_full_jit_run01 exit=0 elapsed_ms=1173
+PASS xmm_full_jit_run02 exit=0 elapsed_ms=1133
+PASS thread_stack exit=0 elapsed_ms=188
+PASS stack_page exit=0 elapsed_ms=28
+PASS fault_record exit=0 elapsed_ms=19
+PASS sigchain exit=0 elapsed_ms=25
+PASS no_sig_chain_rejection exit=-1073740791 elapsed_ms=3188
+PASS switch_so exit=0 elapsed_ms=1096
+PASS nterp_npe exit=0 elapsed_ms=1157
+PASS nterp_so exit=0 elapsed_ms=1161
+PASS jit_npe exit=0 elapsed_ms=1219
+PASS jit_so exit=0 elapsed_ms=1623
+PASS handled_log_scan
+PASS handled_dump_scan NO_HANDLED_DMP_FILES
+PASS art_embedding exit=0 elapsed_ms=1225
+PASS crashnative exit=-1073741819 elapsed_ms=3656
+PASS jit_fatal_j2 exit=-1073741819 elapsed_ms=4318
+PASS jit_fatal_j1 exit=-1073741819 elapsed_ms=3819
+PASS osr_fatal_j2 exit=-1073741819 elapsed_ms=3700
+PASS osr_fatal_j1 exit=-1073741819 elapsed_ms=3490
+PASS fatal_dump_scan count=6
+OVERALL PASS

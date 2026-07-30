@@ -2805,6 +2805,34 @@ the handler/throw stack-budget proof point. FS-2 is now accepted on the same
 build-26100 host; compact native evidence is under
 `tools/verify/windows_x64_phase4/evidence/fs2_w010_w014_native/`.
 
+### FS-4 same-host repeat — 2026-07-30
+
+The accepted Windows Server 2025 build-26100 host was rebooted and the
+E9/FS-2, FS-1, and JIT-3/FS-3 packages were rerun from fresh extraction
+directories. All three native runners returned `OVERALL PASS`. The combined
+E9/FS-2 run retained six intentional fatal/embedding dumps, reported
+`NO_HANDLED_DMP_FILES`, and passed debugger, CET/HSP, managed-fault,
+embedding, XMM, and structural records. FS-1 passed Release and Debug
+switch/nterp/JIT with four records per mode; minimum margins were Release
+6528/7552/7632 and Debug 69568/37216/37232 bytes. JIT-3/FS-3 passed its J-2
+stress, J-1 comparison, and two J-2 repeats with clean JIT-temp and dump
+scans.
+
+The additional native stack checks passed all 16 parameterized combinations
+of baseline/protected/writable/direct diagnostic growth modes at guarantee
+requests 0, 8192, 16384, and 65536 bytes. The thread-stack probe accepted
+reservations from 64 KiB through 9 MiB, completed 512 joins and 128 detach
+stress cases, and rejected an active fiber. The page-state probe passed eight
+selection cases, five layout cases, 16 KiB configured guarantees, 64 committed
+and 64 reserved restorations, and 258 direct faults. Compact raw results and
+the host identity are under
+`tools/verify/windows_x64_phase4/evidence/fs4_same_host_20260730/`.
+
+This closes the repeat on the available host only. A local SSH inventory found
+no second supported Windows host; the only other listener (`10.127.137.60`)
+identifies as Ubuntu and rejects the available Windows credentials. H-002 and
+the full FS-4 second-host gate therefore remain open.
+
 ### FS-5 pending interpreter-bridge range — 2026-07-30
 
 FS-5 is conditionally closed as impractical coverage. The bridge's primary
@@ -2837,7 +2865,7 @@ the optional reservation/negative/debugger-quality follow-ups.
 | FS-1 (done) | Add allocation-free high-water instrumentation around the explicit check, quick throw, temporary stack-end expansion, exception construction, and non-local transfer; run release and debug builds | Accepted 2026-07-30: Wine and native Release/Debug switch, nterp, and JIT have positive margins; native quick Debug retains more than 37 KiB with the 40-KiB Debug-only reserve; four records per mode and no dumps |
 | FS-2 (done) | Extend the combined native package with debugger first-chance/continue, every named forced-incompatible CET policy, foreign VEH/frame-SEH/predecessor-UEF embedding, and XMM6-XMM15 sentinels during exception unwind | Accepted 2026-07-30 on build 26100: NPE continues into Java, explicit SOE remains fault-free, incompatible CET starts reject before Java/JIT with no dump, foreign search handlers coexist, and full-width XMM state survives unwind |
 | FS-3 (done) | With JIT-1 encoding and JIT-2 mapping/policy prerequisites complete, share the JIT closure load test: compile, invalidate, collect, reuse, and re-register many optimizing/JNI allocations while another thread performs lookup and virtual unwind | Accepted 2026-07-29: 52 collections, 1,344 compilations, 1,248 exact reuses, and 696,969 virtual unwinds complete with no missing/stale/failed record; callback tables remain unnecessary |
-| FS-4 | Run FS-1 through FS-3 on the accepted build-26100 class host, then repeat the E9 core runner, parameterized guarantee geometry, fiber/manual-stack rejection, and deep detach/continue/reattach lifecycle on a second supported Windows 10 or later host | Immutable archives pass their independent review and either confirm the additive stack layout or document a new supported-host constraint |
+| FS-4 (same-host portion passed) | Run FS-1 through FS-3 on the accepted build-26100 class host, then repeat the E9 core runner, parameterized guarantee geometry, fiber/manual-stack rejection, and deep detach/continue/reattach lifecycle on a second supported Windows 10 or later host | Same-host repeat passed 2026-07-30; second-host repetition is still required before FS-4 can close. Evidence: `tools/verify/windows_x64_phase4/evidence/fs4_same_host_20260730/` |
 | FS-5 (closed conditional) | Attempt the brief pending bridge-range exception only if a deterministic probe can enter it without changing product control flow | Closed 2026-07-30: the pending tail is entered only by ART's managed pending-exception branch; structural and synthetic unwind checks pass, while a real native fault would require product fault injection or fabricated direct entry. See `tools/verify/windows_x64_phase4/evidence/fs5_pending_bridge/RESULT.md` |
 
 The history follow-ups—fatal-dump instrumentation with RSP inside the pregrown
