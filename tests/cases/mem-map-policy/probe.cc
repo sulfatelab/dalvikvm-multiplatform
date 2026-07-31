@@ -60,7 +60,7 @@ bool ReserveLowFreeRanges(bool fragment,
   const size_t granularity = system_info.dwAllocationGranularity;
   const uintptr_t minimum = AlignUp(
       reinterpret_cast<uintptr_t>(system_info.lpMinimumApplicationAddress), granularity);
-  constexpr size_t kFragmentChunk = 1024u * 1024u;
+  constexpr size_t kFragmentChunk = 64u * 1024u * 1024u;
 
   uintptr_t cursor = minimum;
   while (cursor < k4GB) {
@@ -87,9 +87,10 @@ bool ReserveLowFreeRanges(bool fragment,
     }
 
     if (fragment) {
-      // Leave one allocation-granularity hole, then reserve up to 1 MiB. Repeating
-      // this across every low free range guarantees that no two-granularity
-      // request can fit while avoiding tens of thousands of reservations.
+      // Leave one allocation-granularity hole, then reserve up to 64 MiB.
+      // Repeating this across every low free range guarantees that no
+      // two-granularity request can fit while keeping the VirtualAlloc2 search
+      // bounded to dozens, rather than thousands, of reservations.
       if (free_end - free_begin <= granularity) {
         cursor = free_end;
         continue;
@@ -127,7 +128,16 @@ bool ReleaseReservations(std::vector<void*>* reservations) {
 
 }  // namespace
 
-int main() {
+int main(int argc, char** argv) {
+  bool exhaustive_low_va = false;
+  if (argc == 2 && std::string(argv[1]) == "--exhaustive-low-va") {
+    exhaustive_low_va = true;
+  } else if (argc != 1) {
+    std::fprintf(stderr,
+                 "usage: windows_x64_w013_mem_map_probe.exe [--exhaustive-low-va]\n");
+    return 2;
+  }
+
   art::MemMap::Init();
   bool ok = true;
   std::string error;
@@ -275,70 +285,73 @@ int main() {
     }
   }
 
-  {
-    SYSTEM_INFO system_info = {};
-    ::GetSystemInfo(&system_info);
-    const size_t granularity = system_info.dwAllocationGranularity;
-    std::vector<void*> fragments;
-    fragments.reserve(8192u);
-    ok &= Check(ReserveLowFreeRanges(/*fragment=*/true, &fragments, &fragment_count),
-                "failed to fragment the complete low address range");
+  if (exhaustive_low_va) {
+    {
+      SYSTEM_INFO system_info = {};
+      ::GetSystemInfo(&system_info);
+      const size_t granularity = system_info.dwAllocationGranularity;
+      std::vector<void*> fragments;
+      fragments.reserve(128u);
+      ok &= Check(ReserveLowFreeRanges(/*fragment=*/true, &fragments, &fragment_count),
+                  "failed to fragment the complete low address range");
 
-    art::MemMap fragmented = art::MemMap::MapAnonymous(
-        "w013-fragmented-low",
-        2u * granularity,
-        PROT_READ | PROT_WRITE,
-        /*low_4gb=*/true,
-        /*error_msg=*/nullptr);
-    ok &= Check(!fragmented.IsValid(),
-                "two-granularity low mapping unexpectedly fit in fragmented low VA");
-    ok &= Check(ReleaseReservations(&fragments), "failed to release low-VA fragments");
+      art::MemMap fragmented = art::MemMap::MapAnonymous(
+          "w013-fragmented-low",
+          2u * granularity,
+          PROT_READ | PROT_WRITE,
+          /*low_4gb=*/true,
+          /*error_msg=*/nullptr);
+      ok &= Check(!fragmented.IsValid(),
+                  "two-granularity low mapping unexpectedly fit in fragmented low VA");
+      ok &= Check(ReleaseReservations(&fragments), "failed to release low-VA fragments");
 
-    error.clear();
-    art::MemMap recovered = art::MemMap::MapAnonymous(
-        "w013-fragmented-recovery",
-        2u * granularity,
-        PROT_READ | PROT_WRITE,
-        /*low_4gb=*/true,
-        &error);
-    ok &= Check(recovered.IsValid(), error.c_str());
-  }
+      error.clear();
+      art::MemMap recovered = art::MemMap::MapAnonymous(
+          "w013-fragmented-recovery",
+          2u * granularity,
+          PROT_READ | PROT_WRITE,
+          /*low_4gb=*/true,
+          &error);
+      ok &= Check(recovered.IsValid(), error.c_str());
+    }
 
-  {
-    std::vector<void*> reservations;
-    reservations.reserve(1024u);
-    ok &= Check(ReserveLowFreeRanges(/*fragment=*/false, &reservations, &exhaustion_count),
-                "failed to reserve the complete low address range");
+    {
+      std::vector<void*> reservations;
+      reservations.reserve(1024u);
+      ok &= Check(ReserveLowFreeRanges(/*fragment=*/false, &reservations, &exhaustion_count),
+                  "failed to reserve the complete low address range");
 
-    art::MemMap exhausted = art::MemMap::MapAnonymous(
-        "w013-exhausted-low",
-        64u * 1024u,
-        PROT_READ | PROT_WRITE,
-        /*low_4gb=*/true,
-        /*error_msg=*/nullptr);
-    ok &= Check(!exhausted.IsValid(), "low mapping unexpectedly succeeded after low-VA exhaustion");
+      art::MemMap exhausted = art::MemMap::MapAnonymous(
+          "w013-exhausted-low",
+          64u * 1024u,
+          PROT_READ | PROT_WRITE,
+          /*low_4gb=*/true,
+          /*error_msg=*/nullptr);
+      ok &= Check(!exhausted.IsValid(),
+                  "low mapping unexpectedly succeeded after low-VA exhaustion");
 
-    error.clear();
-    art::MemMap high_available = art::MemMap::MapAnonymous(
-        "w013-high-after-low-exhaustion",
-        64u * 1024u,
-        PROT_READ | PROT_WRITE,
-        /*low_4gb=*/false,
-        &error);
-    ok &= Check(high_available.IsValid(), error.c_str());
-    ok &= Check(!high_available.IsValid() ||
-                    reinterpret_cast<uintptr_t>(high_available.Begin()) >= k4GB,
-                "unrestricted mapping was not high while all low VA was reserved");
-    ok &= Check(ReleaseReservations(&reservations), "failed to release exhausted low VA");
+      error.clear();
+      art::MemMap high_available = art::MemMap::MapAnonymous(
+          "w013-high-after-low-exhaustion",
+          64u * 1024u,
+          PROT_READ | PROT_WRITE,
+          /*low_4gb=*/false,
+          &error);
+      ok &= Check(high_available.IsValid(), error.c_str());
+      ok &= Check(!high_available.IsValid() ||
+                      reinterpret_cast<uintptr_t>(high_available.Begin()) >= k4GB,
+                  "unrestricted mapping was not high while all low VA was reserved");
+      ok &= Check(ReleaseReservations(&reservations), "failed to release exhausted low VA");
 
-    error.clear();
-    art::MemMap recovered = art::MemMap::MapAnonymous(
-        "w013-exhaustion-recovery",
-        64u * 1024u,
-        PROT_READ | PROT_WRITE,
-        /*low_4gb=*/true,
-        &error);
-    ok &= Check(recovered.IsValid(), error.c_str());
+      error.clear();
+      art::MemMap recovered = art::MemMap::MapAnonymous(
+          "w013-exhaustion-recovery",
+          64u * 1024u,
+          PROT_READ | PROT_WRITE,
+          /*low_4gb=*/true,
+          &error);
+      ok &= Check(recovered.IsValid(), error.c_str());
+    }
   }
 
   {
@@ -511,11 +524,13 @@ int main() {
     return 1;
   }
   std::printf("W013_MEM_MAP_POLICY_PASS anywhere=%p low=%p boundary=%s transitions=%zu "
-              "fragments=%zu exhaustion_reservations=%zu destruction_cycles=%zu\n",
+              "low_va_stress=%s fragments=%zu exhaustion_reservations=%zu "
+              "destruction_cycles=%zu\n",
               reinterpret_cast<void*>(anywhere_address),
               reinterpret_cast<void*>(low_address),
               boundary_tested ? "tested" : "occupied",
               kTransitionCycles,
+              exhaustive_low_va ? "exhaustive" : "skipped",
               fragment_count,
               exhaustion_count,
               kDestructionCycles);

@@ -54,7 +54,7 @@ python tools/build_art.py test --target-id windows-x86_64-msvc --stage w004 --pa
 python tools/build_art.py test --target-id windows-x86_64-msvc --stage w013 --parallel 32
 
 W-004: 4/4 PASS, including windows_crypto_sha_probe
-W-013: 1/1 PASS, windows_socket_fd_registry_probe
+W-013 Stage-8: 6/6 PASS; windows_socket_fd_registry_probe passed in 0.50 seconds
 source/output reparse points: 0
 ```
 

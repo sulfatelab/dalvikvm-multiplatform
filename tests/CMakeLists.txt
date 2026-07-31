@@ -119,7 +119,7 @@ endfunction()
 
 function(art_add_target_probe)
     set(options PRODUCT_POLICY WINDOWS_EXPORT_ALL_SYMBOLS)
-    set(one_value_args NAME STAGE TYPE OUTPUT_NAME PREFIX EXECUTION)
+    set(one_value_args NAME STAGE TYPE OUTPUT_NAME PREFIX EXECUTION TIMEOUT)
     set(multi_value_args
         SOURCES INCLUDE_DIRS LINK_LIBRARIES COMPILE_OPTIONS COMPILE_DEFINITIONS
         LINK_OPTIONS CONTRACTS DEPENDS PLATFORMS TARGET_ARCHES TARGET_ABIS
@@ -137,6 +137,14 @@ function(art_add_target_probe)
     if(NOT PROBE_EXECUTION MATCHES "^(compile-only|target-runnable|host-review|cross-runner)$")
         message(FATAL_ERROR
             "Unsupported execution mode for ${PROBE_NAME}: ${PROBE_EXECUTION}")
+    endif()
+    if(PROBE_TIMEOUT AND NOT PROBE_TIMEOUT MATCHES "^[1-9][0-9]*$")
+        message(FATAL_ERROR
+            "ART target probe ${PROBE_NAME} has invalid timeout: ${PROBE_TIMEOUT}")
+    endif()
+    if(PROBE_TIMEOUT AND NOT PROBE_EXECUTION STREQUAL "target-runnable")
+        message(FATAL_ERROR
+            "Only target-runnable probe ${PROBE_NAME} may declare a timeout")
     endif()
     if(PROBE_TARGET_IDS AND
        (PROBE_PLATFORMS OR PROBE_TARGET_ARCHES OR PROBE_TARGET_ABIS))
@@ -217,6 +225,11 @@ function(art_add_target_probe)
     _art_test_json_array(abis_json ${PROBE_TARGET_ABIS})
     _art_test_json_array(ids_json ${PROBE_TARGET_IDS})
     _art_test_json_array(capabilities_json ${PROBE_CAPABILITIES})
+    if(PROBE_TIMEOUT)
+        set(timeout_json "${PROBE_TIMEOUT}")
+    else()
+        set(timeout_json null)
+    endif()
     if(applicable)
         set(applicable_json true)
         set(build_status pending)
@@ -241,6 +254,7 @@ function(art_add_target_probe)
         "\"type\":\"${PROBE_TYPE}\",\"execution\":\"${PROBE_EXECUTION}\","
         "\"applicable\":${applicable_json},\"reason\":\"${reason}\","
         "\"ctest_registered\":${ctest_registered_json},"
+        "\"timeout_seconds\":${timeout_json},"
         "\"build_verified\":false,\"runtime_verified\":false,"
         "\"build_status\":\"${build_status}\","
         "\"runtime_status\":\"${runtime_status}\","
@@ -395,6 +409,10 @@ function(art_add_target_probe)
         set_tests_properties("art.${PROBE_STAGE}.${PROBE_NAME}" PROPERTIES
             LABELS "${labels}"
             WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
+        if(PROBE_TIMEOUT)
+            set_tests_properties("art.${PROBE_STAGE}.${PROBE_NAME}" PROPERTIES
+                TIMEOUT "${PROBE_TIMEOUT}")
+        endif()
     endif()
 endfunction()
 
@@ -791,14 +809,16 @@ art_add_target_probe(
 
 # W-013: ART-owned Windows virtual-memory and allocator contracts.
 art_add_target_probe(
-    NAME windows_x64_w013_mem_map_probe STAGE w013 TYPE EXECUTABLE EXECUTION compile-only
+    NAME windows_x64_w013_mem_map_probe STAGE w013 TYPE EXECUTABLE
+    EXECUTION target-runnable TIMEOUT 60
     ${_art_windows_current_selector}
     SOURCES "${_art_test_cases_root}/mem-map-policy/probe.cc"
     INCLUDE_DIRS "${_art_test_repo_root}/vendor/art/libartbase"
     LINK_LIBRARIES artbase base log
     CONTRACTS virtual-memory PRODUCT_POLICY)
 art_add_target_probe(
-    NAME windows_x64_w013_mspace_owner_probe STAGE w013 TYPE EXECUTABLE EXECUTION compile-only
+    NAME windows_x64_w013_mspace_owner_probe STAGE w013 TYPE EXECUTABLE
+    EXECUTION target-runnable TIMEOUT 60
     ${_art_windows_current_selector}
     SOURCES
         "${_art_test_cases_root}/mspace-owner/probe.cc"
@@ -810,12 +830,52 @@ art_add_target_probe(
     LINK_LIBRARIES artbase base log
     CONTRACTS allocator virtual-memory PRODUCT_POLICY)
 art_add_target_probe(
+    NAME windows_x64_w013_dlmalloc_config_probe STAGE w013 TYPE EXECUTABLE
+    EXECUTION target-runnable TIMEOUT 60
+    ${_art_windows_x86_64_msvc_selector}
+    SOURCES "${_art_test_cases_root}/dlmalloc-config/probe.c"
+    INCLUDE_DIRS "${MDVM_NATIVE_SRC_ROOT_DIR}/external/dlmalloc"
+    LINK_LIBRARIES kernel32
+    LINK_OPTIONS "${_art_no_cet}"
+    CONTRACTS allocator configuration)
+art_add_target_probe(
     NAME managed_w013_non_moving STAGE w013 TYPE MANAGED EXECUTION compile-only
     ${_art_windows_current_selector}
     SOURCES
         "${_art_test_cases_root}/non-moving-heap/W013NonMovingStressProbe.java"
     CONTRACTS allocator gc stress
     OUTPUT_NAME w013nonmovingstressprobe)
+foreach(_art_w013_heap_mib IN ITEMS 128 1024)
+    art_add_target_probe(
+        NAME "managed_w013_non_moving_${_art_w013_heap_mib}m"
+        STAGE w013 TYPE GATE EXECUTION target-runnable TIMEOUT 300
+        ${_art_windows_current_selector}
+        DEPENDS managed_w013_non_moving dalvikvm icu_jni javacore openjdk
+        CONTRACTS allocator gc stress runtime-load
+        COMMAND
+            "${Python3_EXECUTABLE}"
+            "${_art_test_repo_root}/tests/support/runtime_gate.py"
+            managed
+            --target-id "${ART_TARGET_ID}"
+            --dalvikvm "$<TARGET_FILE:dalvikvm>"
+            --boot-jar "${_art_boot_jar}"
+            --app-jar "${_art_managed_root}/w013nonmovingstressprobe.jar"
+            --main-class W013NonMovingStressProbe
+            --work-root
+                "${CMAKE_CURRENT_BINARY_DIR}/results/w013-non-moving-${_art_w013_heap_mib}m"
+            --icu-data "${_art_icu_data}"
+            ${_art_managed_runtime_library_args}
+            --vm-option=-Xint
+            --vm-option=-Xmx${_art_w013_heap_mib}m
+            --expect "nonmoving.total_bytes=75497472"
+            --expect "nonmoving.stable=true"
+            --expect "nonmoving.low=true"
+            --expect "nonmoving.ok=true"
+            --expect "W013NonMovingStressProbe.done=ok"
+            --expect "main end exception=0"
+            --forbid AssertionError
+            --timeout 240)
+endforeach()
 
 # W-014: native thread-stack, guard-page, CET, and stack high-water contracts.
 art_add_target_probe(

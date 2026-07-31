@@ -95,7 +95,7 @@ Each case owns its native and managed source plus an adjacent `RESULT.md`. The
 stage analysis links the case-specific results without physically grouping the
 source by stage. The XMM sentinel remains explicitly x86-64-only; moving it did
 not broaden its selector to AArch64 or ARM64EC.
-The source-ownership slices moved all 31 catalog-owned native probe declarations
+The source-ownership slices moved all 32 catalog-owned native probe declarations
 into logical cases. The registry now has zero
 source references into `tools/verify`; every case containing catalog native
 source has an adjacent target-status result. Shared stack-fault assembly has
@@ -175,6 +175,7 @@ Every logical test declaration records:
 | selectors | platform/architecture/ABI intersection or exact target IDs |
 | capabilities | target features required before the test is meaningful |
 | execution | `compile-only`, `target-runnable`, `cross-runner`, or `host-review` |
+| timeout | optional positive whole seconds for a `target-runnable` declaration |
 | contracts | searchable behavior labels such as `jni`, `stack`, `unwind`, or `jit` |
 
 Use exact `TARGET_IDS` for a test tied to one complete target ABI. Use the typed
@@ -284,6 +285,12 @@ reviewed from returned evidence.
 : The configured build host can natively execute the exact target and CTest may
   register the command.
 
+  A declaration-level `TIMEOUT` is a positive whole number of seconds. CMake
+  records it as `timeout_seconds` in `art_test_catalog.json` and applies it to
+  the registered CTest command. When the Python runner also has an internal
+  timeout, keep that timeout shorter so it can terminate the child, sanitize
+  its result, and return before CTest enforces the outer limit.
+
 `cross-runner`
 
 : Build and package locally, execute on an authoritative target machine, then
@@ -294,6 +301,16 @@ reviewed from returned evidence.
 : A Python reviewer validates manifests, hashes, text results, object metadata,
   or another result that does not require executing the target program in the
   current process.
+
+### Host-disruptive stress
+
+A routine `target-runnable` gate must not deliberately exhaust a process-wide
+or host-wide resource when failure can leave the build host unhealthy after
+CTest terminates the child. Preserve such a closure test behind an explicit
+opt-in argument, keep its accepted historical evidence adjacent to the source,
+and run it only through a separately reviewed isolated-host procedure. The
+default catalog command must exercise a bounded behavioral contract and finish
+within its declared timeout.
 
 Do not report a compile-only DLL as runtime-verified. Do not infer target
 applicability from the architecture of the build host or from an emulation layer

@@ -200,6 +200,9 @@ canonical policy is [HOST_GATE_POLICY.md](tools/verify/windows_x64_phase4/HOST_G
 - **Code anchors:** `compat/src/windows_x64_posix_stubs.c`;
   `vendor/art/runtime/multiplatform/windows/runtime_windows.cc`;
   `vendor/art/runtime/multiplatform/windows/cet_compat.cc`
+- **Scheduling:** DEFERRED until the active unified build and runtime-gate
+  migration builds and runs end to end; do not let this repository-wide audit
+  displace the current bring-up work.
 - **Blocked on / design doc:** none; finish the unified build/runtime-gate
   migration before expanding this into a repository-wide Windows API change.
 - **Opened:** 2026-07-31

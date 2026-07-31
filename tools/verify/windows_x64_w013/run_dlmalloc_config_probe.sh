@@ -54,7 +54,7 @@ clang --target=x86_64-pc-windows-msvc -std=c11 -O2 \
   -L"$WINDOWS_X64_DEV_ENV/xwin/sdk/lib/ucrt/x86_64" \
   -L"$WINDOWS_X64_DEV_ENV/xwin/crt/lib/x86_64" \
   -lonecore -lmsvcrt -lvcruntime -lucrt \
-  "$REPO/tools/verify/windows_x64_w013/W013DlmallocConfigProbe.c" \
+  "$REPO/tests/cases/dlmalloc-config/probe.c" \
   -o "$OUT"
 
 WINEDEBUG="${WINEDEBUG:--all}" wine "$OUT"
