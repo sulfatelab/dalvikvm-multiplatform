@@ -10,7 +10,8 @@ endif()
 get_filename_component(_repo "${CMAKE_CURRENT_SOURCE_DIR}/../../../.." ABSOLUTE)
 set(MDVM_REPO_ROOT "${_repo}" CACHE PATH "Repository root")
 
-add_library(jvmtiforceprobe SHARED jvmti_force_probe.c)
+add_library(jvmtiforceprobe SHARED
+  "${MDVM_REPO_ROOT}/tests/cases/jvmti-force/probe.c")
 target_include_directories(jvmtiforceprobe PRIVATE
   "${MDVM_REPO_ROOT}/vendor/libnativehelper/include_jni"
   "${MDVM_REPO_ROOT}/vendor/art/openjdkjvmti/include")

@@ -89,14 +89,14 @@ PASS native_crash_aborts
 | W-003 attributed frame-family gate | `../../../tests/cases/w003-frame-probe/`; `run_w003_frame_probe.sh` |
 | W-003 XMM runtime sentinel | `../../../tests/cases/w003-xmm-sentinel/`; `run_w003_xmm_sentinel.sh` |
 | W-003 native package and evidence | `package_windows_x64_w003.sh`; `evidence/w003_host/ACCEPTANCE.md` |
-| W-014 Stages A-B stack/pthread/page gate | `../windows_x64_phase1/win32_thread_stack_probe.c`; `../windows_x64_phase1/win32_stack_page_probe.cc`; `../windows_x64_phase1/win32_stack_page_fault_probe.S`; `run_thread_stack_probe.sh` |
-| W-010 Stage C adapter and probes | `../windows_x64_phase1/win32_fault_record_probe.cc`; `../windows_x64_phase1/win32_sigchain_probe.cc`; `run_fault_adapter_probe.sh`; `vendor/art/runtime/multiplatform/windows/sigchain_windows.cc` |
+| W-014 Stages A-B stack/pthread/page gate | `tests/cases/thread-stack/probe.c`; `tests/cases/stack-page-growth/`; `run_thread_stack_probe.sh` |
+| W-010 Stage C adapter and probes | `tests/cases/fault-record/probe.cc`; `tests/cases/sigchain-fault/probe.cc`; `run_fault_adapter_probe.sh`; `vendor/art/runtime/multiplatform/windows/sigchain_windows.cc` |
 | W-010 Stage D activation and stress | `src/W010ManagedFaultProbe.java`; `run_w010_managed_fault_probe.sh`; common runtime null/SO flags and early nterp range registration |
 | W-010 dynamic-JIT PE unwind | `runtime/multiplatform/windows/jit_unwind_windows.*`; `runtime/jit/{jit_code_cache,jit_memory_region}.*`; `run_jit_unwind_{info,registry,lifecycle}.sh`; `run_jit_fatal_unwind.sh` |
-| W-010 static OSR PE unwind | `quick_entrypoints_x86_64.S`; `../windows_x64_phase1/win32_osr_unwind_probe.cc`; `run_osr_unwind_probe.sh`; `check_win32_boundary_unwind.py` |
+| W-010 static OSR PE unwind | `quick_entrypoints_x86_64.S`; `tests/cases/osr-unwind/probe.cc`; `run_osr_unwind_probe.sh`; `check_win32_boundary_unwind.py` |
 | W-010/W-014 native Stage E package and diagnostics | `package_windows_x64_w010_w014.sh`; `host/RUN_W010_W014_HOST.ps1`; `host/RUN_W010_W014_DIAGNOSTICS.ps1`; `check_w010_w014_host_package.py`; `review_w010_w014_host_result.py`; `W010_W014_HOST_CHECKLIST.md`; `W010_W014_DIAGNOSTICS.md` |
 | FS-1 stack high-water probe/package/evidence | `run_fs1_stack_high_water.sh`; `check_fs1_stack_high_water*.py`; `host/RUN_FS1_STACK_HIGH_WATER_HOST.ps1`; `package_windows_x64_fs1.sh`; `evidence/fs1_stack_high_water/ACCEPTANCE.md` |
-| FS-2 debugger/CET/embedding/exception-XMM probes and evidence | `../windows_x64_phase1/win32_debugger_probe.cc`; `../windows_x64_phase1/win32_art_embedding_probe.cc`; `host/RUN_W010_W014_HOST.ps1`; `evidence/fs2_w010_w014_native/ACCEPTANCE.md` |
+| FS-2 debugger/CET/embedding/exception-XMM probes and evidence | `tests/cases/debugger-fault/probe.cc`; `tests/cases/cet-stack-policy/probe.cc`; `tests/cases/art-embedding/probe.cc`; `host/RUN_W010_W014_HOST.ps1`; `evidence/fs2_w010_w014_native/ACCEPTANCE.md` |
 
 ## Host
 

@@ -7,11 +7,6 @@ option(ART_ENABLE_TARGET_RUNTIME_TESTS
 
 get_filename_component(_art_test_repo_root "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
 set(_art_test_cases_root "${CMAKE_CURRENT_LIST_DIR}/cases")
-set(_art_test_verify_root "${_art_test_repo_root}/tools/verify")
-set(_art_test_phase1 "${_art_test_verify_root}/windows_x64_phase1")
-set(_art_test_phase4 "${_art_test_verify_root}/windows_x64_phase4")
-set(_art_test_w013 "${_art_test_verify_root}/windows_x64_w013")
-set(_art_test_w025 "${_art_test_verify_root}/windows_x64_w025")
 
 function(art_define_test_stage stage)
     if(NOT stage MATCHES "^w[0-9][0-9][0-9]$")
@@ -341,7 +336,7 @@ set(_art_linux_x86_64_gnu_selector
 art_add_target_probe(
     NAME w002attachprobe STAGE w002 TYPE SHARED EXECUTION compile-only
     ${_art_windows_current_selector}
-    SOURCES "${_art_test_phase4}/w002_attach/w002_attach_probe.c"
+    SOURCES "${_art_test_cases_root}/attached-thread-entry/probe.c"
     INCLUDE_DIRS "${_art_jni_include}"
     LINK_OPTIONS "${_art_no_cet}"
     CONTRACTS jni attach
@@ -349,7 +344,7 @@ art_add_target_probe(
 art_add_target_probe(
     NAME win32_osr_unwind_probe STAGE w002 TYPE EXECUTABLE EXECUTION target-runnable
     ${_art_windows_x86_64_msvc_selector}
-    SOURCES "${_art_test_phase1}/win32_osr_unwind_probe.cc"
+    SOURCES "${_art_test_cases_root}/osr-unwind/probe.cc"
     DEPENDS art
     CONTRACTS osr unwind PRODUCT_POLICY)
 
@@ -395,13 +390,13 @@ art_add_target_probe(
 art_add_target_probe(
     NAME win32_art_embedding_probe STAGE w004 TYPE EXECUTABLE EXECUTION compile-only
     ${_art_windows_current_selector}
-    SOURCES "${_art_test_phase1}/win32_art_embedding_probe.cc"
+    SOURCES "${_art_test_cases_root}/art-embedding/probe.cc"
     INCLUDE_DIRS "${_art_jni_include}"
     CONTRACTS embedding runtime-load PRODUCT_POLICY)
 art_add_target_probe(
     NAME jvmtiforceprobe STAGE w004 TYPE SHARED EXECUTION compile-only
     ${_art_windows_current_selector}
-    SOURCES "${_art_test_phase4}/jvmti_force/jvmti_force_probe.c"
+    SOURCES "${_art_test_cases_root}/jvmti-force/probe.c"
     INCLUDE_DIRS
         "${_art_jni_include}"
         "${_art_test_repo_root}/vendor/art/openjdkjvmti/include"
@@ -442,20 +437,20 @@ art_add_target_probe(
 art_add_target_probe(
     NAME win32_uef_probe STAGE w010 TYPE EXECUTABLE EXECUTION compile-only
     ${_art_windows_current_selector}
-    SOURCES "${_art_test_phase1}/win32_uef_probe.cc"
+    SOURCES "${_art_test_cases_root}/unhandled-exception-filter/probe.cc"
     CONTRACTS fault seh PRODUCT_POLICY)
 art_add_target_probe(
     NAME win32_fault_record_probe STAGE w010 TYPE EXECUTABLE EXECUTION compile-only
     ${_art_windows_current_selector}
-    SOURCES "${_art_test_phase1}/win32_fault_record_probe.cc"
+    SOURCES "${_art_test_cases_root}/fault-record/probe.cc"
     INCLUDE_DIRS "${_art_test_repo_root}/vendor/art"
     CONTRACTS fault seh PRODUCT_POLICY)
 art_add_target_probe(
     NAME win32_sigchain_probe STAGE w010 TYPE EXECUTABLE EXECUTION compile-only
     ${_art_windows_x86_64_msvc_selector}
     SOURCES
-        "${_art_test_phase1}/win32_sigchain_probe.cc"
-        "${_art_test_phase1}/win32_stack_page_fault_probe.S"
+        "${_art_test_cases_root}/sigchain-fault/probe.cc"
+        "${_art_test_cases_root}/stack-page-growth/fault_x86_64.S"
     INCLUDE_DIRS
         "${_art_test_repo_root}/vendor/art"
         "${_art_test_repo_root}/vendor/art/sigchainlib"
@@ -465,14 +460,14 @@ art_add_target_probe(
 art_add_target_probe(
     NAME win32_debugger_probe STAGE w010 TYPE EXECUTABLE EXECUTION compile-only
     ${_art_windows_current_selector}
-    SOURCES "${_art_test_phase1}/win32_debugger_probe.cc"
+    SOURCES "${_art_test_cases_root}/debugger-fault/probe.cc"
     CONTRACTS debugger fault PRODUCT_POLICY)
 
 # W-013: ART-owned Windows virtual-memory and allocator contracts.
 art_add_target_probe(
     NAME windows_x64_w013_mem_map_probe STAGE w013 TYPE EXECUTABLE EXECUTION compile-only
     ${_art_windows_current_selector}
-    SOURCES "${_art_test_w013}/W013MemMapPolicyProbe.cc"
+    SOURCES "${_art_test_cases_root}/mem-map-policy/probe.cc"
     INCLUDE_DIRS "${_art_test_repo_root}/vendor/art/libartbase"
     LINK_LIBRARIES artbase base log
     CONTRACTS virtual-memory PRODUCT_POLICY)
@@ -480,7 +475,7 @@ art_add_target_probe(
     NAME windows_x64_w013_mspace_owner_probe STAGE w013 TYPE EXECUTABLE EXECUTION compile-only
     ${_art_windows_current_selector}
     SOURCES
-        "${_art_test_w013}/W013MspaceOwnerProbe.cc"
+        "${_art_test_cases_root}/mspace-owner/probe.cc"
         "${_art_test_repo_root}/vendor/art/runtime/gc/allocator/art-dlmalloc.cc"
     INCLUDE_DIRS
         "${_art_test_repo_root}/vendor/art/runtime"
@@ -493,19 +488,19 @@ art_add_target_probe(
 art_add_target_probe(
     NAME windows_x64_pthread_once_probe STAGE w014 TYPE EXECUTABLE
     EXECUTION target-runnable ${_art_windows_current_selector}
-    SOURCES "${_art_test_phase4}/pthread_once_probe.c"
+    SOURCES "${_art_test_cases_root}/pthread-once/probe.c"
     CONTRACTS threads PRODUCT_POLICY)
 art_add_target_probe(
     NAME win32_thread_stack_probe STAGE w014 TYPE EXECUTABLE
     EXECUTION target-runnable ${_art_windows_current_selector}
-    SOURCES "${_art_test_phase1}/win32_thread_stack_probe.c"
+    SOURCES "${_art_test_cases_root}/thread-stack/probe.c"
     CONTRACTS stack threads PRODUCT_POLICY)
 art_add_target_probe(
     NAME win32_stack_page_probe STAGE w014 TYPE EXECUTABLE EXECUTION compile-only
     ${_art_windows_x86_64_msvc_selector}
     SOURCES
-        "${_art_test_phase1}/win32_stack_page_probe.cc"
-        "${_art_test_phase1}/win32_stack_page_fault_probe.S"
+        "${_art_test_cases_root}/stack-page-growth/page_probe.cc"
+        "${_art_test_cases_root}/stack-page-growth/fault_x86_64.S"
         "${_art_test_repo_root}/vendor/art/runtime/multiplatform/windows/stack_windows.cc"
     INCLUDE_DIRS "${_art_test_repo_root}/vendor/art/runtime/multiplatform/windows"
     CONTRACTS stack fault PRODUCT_POLICY)
@@ -513,22 +508,22 @@ art_add_target_probe(
     NAME win32_stack_growth_probe STAGE w014 TYPE EXECUTABLE EXECUTION compile-only
     ${_art_windows_x86_64_msvc_selector}
     SOURCES
-        "${_art_test_phase1}/win32_stack_growth_probe.cc"
-        "${_art_test_phase1}/win32_stack_page_fault_probe.S"
+        "${_art_test_cases_root}/stack-page-growth/growth_probe.cc"
+        "${_art_test_cases_root}/stack-page-growth/fault_x86_64.S"
         "${_art_test_repo_root}/vendor/art/runtime/multiplatform/windows/stack_windows.cc"
     INCLUDE_DIRS "${_art_test_repo_root}/vendor/art/runtime/multiplatform/windows"
     CONTRACTS stack fault PRODUCT_POLICY)
 art_add_target_probe(
     NAME win32_stack_growth_rx_probe STAGE w014 TYPE EXECUTABLE EXECUTION compile-only
     ${_art_windows_current_selector}
-    SOURCES "${_art_test_phase1}/win32_stack_growth_rx_probe.c"
+    SOURCES "${_art_test_cases_root}/stack-executable-memory/probe.c"
     CONTRACTS stack executable-memory)
 art_add_target_probe(
     NAME win32_stack_pregrow_probe STAGE w014 TYPE EXECUTABLE EXECUTION compile-only
     ${_art_windows_x86_64_msvc_selector}
     SOURCES
-        "${_art_test_phase1}/win32_stack_pregrow_probe.c"
-        "${_art_test_phase1}/win32_stack_implicit_probe.S"
+        "${_art_test_cases_root}/stack-pregrow/probe.c"
+        "${_art_test_cases_root}/stack-pregrow/implicit_fault_x86_64.S"
     LINK_LIBRARIES psapi
     COMPILE_DEFINITIONS ${_art_windows_defines}
     CONTRACTS stack fault)
@@ -536,14 +531,14 @@ art_add_target_probe(
     NAME win32_cet_policy_probe STAGE w014 TYPE EXECUTABLE EXECUTION compile-only
     ${_art_windows_current_selector}
     SOURCES
-        "${_art_test_phase1}/win32_cet_policy_probe.cc"
+        "${_art_test_cases_root}/cet-stack-policy/probe.cc"
         "${_art_test_repo_root}/vendor/art/runtime/multiplatform/windows/cet_compat.cc"
     INCLUDE_DIRS "${_art_test_repo_root}/vendor/art/runtime/multiplatform/windows"
     CONTRACTS cet stack PRODUCT_POLICY)
 art_add_target_probe(
     NAME fs1stackhighwater STAGE w014 TYPE SHARED EXECUTION compile-only
     ${_art_windows_current_selector}
-    SOURCES "${_art_test_phase4}/fs1_stack_high_water/fs1_stack_high_water_probe.cc"
+    SOURCES "${_art_test_cases_root}/stack-high-water/probe.cc"
     INCLUDE_DIRS "${_art_jni_include}"
     LINK_OPTIONS "${_art_no_cet}"
     CONTRACTS stack jni
@@ -553,14 +548,14 @@ art_add_target_probe(
 art_add_target_probe(
     NAME win32_jit_unwind_info_probe STAGE w025 TYPE EXECUTABLE EXECUTION compile-only
     ${_art_windows_x86_64_msvc_selector}
-    SOURCES "${_art_test_phase1}/win32_jit_unwind_info_probe.cc"
+    SOURCES "${_art_test_cases_root}/jit-unwind-info/probe.cc"
     INCLUDE_DIRS "${_art_test_repo_root}/vendor/art/compiler"
     CONTRACTS jit unwind PRODUCT_POLICY)
 art_add_target_probe(
     NAME win32_jit_unwind_registry_probe STAGE w025 TYPE EXECUTABLE EXECUTION compile-only
     ${_art_windows_x86_64_msvc_selector}
     SOURCES
-        "${_art_test_phase1}/win32_jit_unwind_registry_probe.cc"
+        "${_art_test_cases_root}/jit-unwind-registry/probe.cc"
         "${_art_test_repo_root}/vendor/art/runtime/multiplatform/windows/jit_unwind_windows.cc"
     INCLUDE_DIRS
         "${_art_test_repo_root}/vendor/art"
@@ -571,7 +566,7 @@ art_add_target_probe(
 art_add_target_probe(
     NAME jitunwindlifecycleprobe STAGE w025 TYPE SHARED EXECUTION compile-only
     ${_art_windows_x86_64_msvc_selector}
-    SOURCES "${_art_test_phase1}/win32_jit_unwind_lifecycle_probe.cc"
+    SOURCES "${_art_test_cases_root}/jit-unwind-lifecycle/probe.cc"
     LINK_LIBRARIES art
     COMPILE_OPTIONS
         -fno-rtti -Wno-thread-safety -Wno-unused-command-line-argument
@@ -582,7 +577,7 @@ art_add_target_probe(
 art_add_target_probe(
     NAME w025jitlifecyclestressprobe STAGE w025 TYPE SHARED EXECUTION compile-only
     ${_art_windows_x86_64_msvc_selector}
-    SOURCES "${_art_test_w025}/W025JitLifecycleStressProbe.cc"
+    SOURCES "${_art_test_cases_root}/jit-lifecycle-stress/probe.cc"
     LINK_LIBRARIES art
     COMPILE_OPTIONS
         -fno-rtti -Wno-thread-safety -Wno-unused-command-line-argument
@@ -593,7 +588,7 @@ art_add_target_probe(
 art_add_target_probe(
     NAME w025jitmappingprobe STAGE w025 TYPE SHARED EXECUTION compile-only
     ${_art_windows_current_selector}
-    SOURCES "${_art_test_w025}/W025JitMappingProbe.cc"
+    SOURCES "${_art_test_cases_root}/jit-mapping/probe.cc"
     INCLUDE_DIRS
         "${_art_test_repo_root}/vendor/art/runtime"
         "${_art_test_repo_root}/vendor/art/libartbase"
@@ -607,7 +602,7 @@ art_add_target_probe(
 art_add_target_probe(
     NAME windows_x64_w025_section_policy_probe STAGE w025 TYPE EXECUTABLE
     EXECUTION compile-only ${_art_windows_current_selector}
-    SOURCES "${_art_test_w025}/W025SectionPolicyProbe.cc"
+    SOURCES "${_art_test_cases_root}/jit-section-policy/probe.cc"
     LINK_LIBRARIES onecore psapi
     COMPILE_OPTIONS -Xclang -cfguard
     LINK_OPTIONS "LINKER:/guard:cf"
@@ -616,7 +611,7 @@ art_add_target_probe(
 art_add_target_probe(
     NAME windows_x64_w025_policy_launcher STAGE w025 TYPE EXECUTABLE
     EXECUTION compile-only ${_art_windows_current_selector}
-    SOURCES "${_art_test_w025}/W025PolicyLauncher.cc"
+    SOURCES "${_art_test_cases_root}/jit-section-policy/launcher.cc"
     CONTRACTS jit process-policy
     OUTPUT_NAME W025PolicyLauncher PRODUCT_POLICY)
 

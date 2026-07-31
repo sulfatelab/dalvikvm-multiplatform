@@ -7,7 +7,8 @@ if(NOT MDVM_REPO_ROOT)
   message(FATAL_ERROR "MDVM_REPO_ROOT is required")
 endif()
 
-add_library(w002attachprobe SHARED w002_attach_probe.c)
+add_library(w002attachprobe SHARED
+  "${MDVM_REPO_ROOT}/tests/cases/attached-thread-entry/probe.c")
 target_include_directories(w002attachprobe PRIVATE
   "${MDVM_REPO_ROOT}/vendor/libnativehelper/include_jni")
 set_target_properties(w002attachprobe PROPERTIES

@@ -52,7 +52,7 @@ items are closed.
 ### Latest verification baseline (2026-07-31)
 
 - [x] `PYTHONPATH=tools/bp2cmake python3 -m pytest tools/bp2cmake/tests tests/host -q`:
-  111 passed, including generated PE-header, Linux/Windows test-catalog,
+  112 passed, including generated PE-header, Linux/Windows test-catalog,
   shell-free runtime-gate, parallel-frontend, and VCS binary-audit coverage.
 - [x] Fresh generation loads the same 260 Blueprint files for both targets and
   emits 33 generated modules for `linux-x86_64-gnu` versus 32 for
@@ -66,6 +66,10 @@ items are closed.
 - [x] A minimal Windows-profile CMake configuration emits the same 31
   declarations and keeps only the original 29 probes applicable: 10 exact-ID
   selectors, 19 broad typed selectors, and three `target-runnable` probes.
+- [x] All 27 catalog-owned native/assembly sources formerly under
+  `tools/verify` now have logical `tests/cases` ownership and adjacent results.
+  A 68-action `windows-x86_64-msvc` cross rebuild compiled and linked all 29
+  applicable probes from their new regular-file paths with `--parallel 32`.
 - [x] Linux `art-compiler` completed a fresh 701-action build after the
   identity migration and emits `libart-compiler.so` with dynamic ART
   dependencies.
@@ -139,10 +143,11 @@ One historical work stage maps to exactly one virtual target named
 | `w025` | 4 EXEs, 3 DLLs | 4 exact / 3 typed | 7 compile-only | JIT mapping/lifecycle/CFG managed and host-review gates |
 | Total | 19 EXEs, 10 DLLs, 2 gates | 12 exact / 19 typed | 5 runnable, 26 compile-only | compile ownership is ahead of managed behavioral ownership |
 
-The shared registry references 27 source files from historical verification
-directories. All four W-003 native probe declarations now consume canonical
-source under `tests/cases/`; their managed source and result records are
-adjacent, and the shared analysis is under `tests/stages/w003/`. Another
+The shared registry now references zero source files from historical
+verification directories. All 31 declarations own either canonical source
+under `tests/cases/` or a shell-free runner under `tests/support/`; native case
+results are adjacent, and shared stage analysis remains under `tests/stages/`.
+Another
 47 C, C++, assembly, or Java probe sources remain outside
 the registry, including all 26 Phase-3 Java probes, most Phase-4 managed
 probes, W013 non-moving stress, W025 managed lifecycle/mapping, and the three
@@ -687,13 +692,14 @@ header overlays are force-included only into the defining and consuming
 translation units. This keeps `vendor/art` clean, requires no source-tree
 symlink, and avoids committing generated or absolute-path-bearing headers.
 
-The first test-ownership migration slice moves that registry from `native/` to
-the top-level `tests/` tree and moves all four W-003 probe cases to stable
-logical directories. CriticalNative, native-ABI, frame-family, and explicitly
-x86-64-only XMM-sentinel cases each own their native/managed source and adjacent
-result; the W-003 cross-case analysis is stage-owned without relocating source
-by stage. Legacy per-probe CMake entry points and shell runners temporarily
-reference those canonical sources; they no longer own copies. A portable VCS
+The test-ownership migration moves the registry from `native/` to the top-level
+`tests/` tree and places every one of its 31 declarations under stable logical
+ownership. All 29 compiled probes consume canonical native/assembly source
+under `tests/cases/`; the two Linux runtime gates use the shared shell-free
+runner under `tests/support/`. Each source case has an adjacent result, while
+the W-003 cross-case analysis remains stage-owned without relocating source by
+stage. Legacy per-probe CMake entry points and shell runners temporarily
+reference canonical source; they no longer own copies. A portable VCS
 audit rejects tracked product/test binaries and archives
 while retaining the one named `vendor/r8/r8.jar` D8/R8 exception. The old Phase
 3 returned ZIP is retained under ignored `out/` storage, and its tracked result

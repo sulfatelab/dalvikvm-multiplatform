@@ -7,7 +7,8 @@ if(NOT MDVM_REPO_ROOT)
   message(FATAL_ERROR "MDVM_REPO_ROOT is required")
 endif()
 
-add_library(fs1stackhighwater SHARED fs1_stack_high_water_probe.cc)
+add_library(fs1stackhighwater SHARED
+  "${MDVM_REPO_ROOT}/tests/cases/stack-high-water/probe.cc")
 target_include_directories(fs1stackhighwater PRIVATE
   "${MDVM_REPO_ROOT}/vendor/libnativehelper/include_jni")
 set_target_properties(fs1stackhighwater PROPERTIES

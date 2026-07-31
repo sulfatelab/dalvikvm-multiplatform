@@ -90,13 +90,19 @@ Each case owns its native and managed source plus an adjacent `RESULT.md`. The
 stage analysis links the case-specific results without physically grouping the
 source by stage. The XMM sentinel remains explicitly x86-64-only; moving it did
 not broaden its selector to AArch64 or ARM64EC.
+The second source-ownership slice moved all remaining 27 catalog-owned native
+and assembly files into 23 additional logical cases. The registry now has zero
+source references into `tools/verify`; every case containing catalog native
+source has an adjacent target-status result. Shared stack-fault assembly has
+one physical owner under `stack-page-growth/` and is consumed by related
+targets without copying or filesystem links.
 Two Linux x86-64 command gates in `w004` now exercise `dalvikvm -showversion`
 and the runtime/compiler ELF load topology through
 `support/runtime_gate.py`. A command gate owns no dummy target binary; its
 virtual target depends on the exact product artifacts that must exist before
 CTest runs it.
-Legacy shell runners and per-probe CMake entry points still reference these
-canonical files as temporary compatibility shims; they must be replaced by the
+Legacy shell runners and the few retained per-probe CMake entry points use
+these canonical files as temporary compatibility shims; they must be replaced by the
 unified Python/CMake/Ninja path before `tools/verify` can be removed.
 
 Until `catalog.py` generation replaces the declarations, add or migrate test

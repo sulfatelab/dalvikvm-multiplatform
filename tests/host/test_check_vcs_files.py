@@ -29,3 +29,20 @@ def test_r8_is_the_only_named_binary_exception():
 
 def test_repository_index_contains_no_unapproved_binary_or_archive():
     assert forbidden_tracked_paths(tracked_paths(REPO_ROOT)) == []
+
+
+def test_catalog_native_sources_are_case_owned_with_adjacent_results():
+    catalog_source = (REPO_ROOT / "tests" / "CMakeLists.txt").read_text(
+        encoding="utf-8"
+    )
+    assert "tools/verify" not in catalog_source
+
+    case_root = REPO_ROOT / "tests" / "cases"
+    source_suffixes = {".c", ".cc", ".cpp", ".S"}
+    source_cases = {
+        path.parent
+        for path in case_root.glob("*/*")
+        if path.is_file() and path.suffix in source_suffixes
+    }
+    assert len(source_cases) == 27
+    assert all((case / "RESULT.md").is_file() for case in source_cases)

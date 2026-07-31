@@ -39,7 +39,7 @@ def main() -> int:
     mem_map = (repo / "vendor/art/libartbase/base/mem_map_windows.cc").read_text()
     jit_region = (repo / "vendor/art/runtime/jit/jit_memory_region.cc").read_text()
     section_probe_source = (
-        repo / "tools/verify/windows_x64_w025/W025SectionPolicyProbe.cc"
+        repo / "tests/cases/jit-section-policy/probe.cc"
     ).read_text()
     create_match = re.search(
         r"void\* MemMap::CreatePageFileSection\(.*?\n\}", mem_map, re.DOTALL

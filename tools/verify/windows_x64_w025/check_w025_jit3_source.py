@@ -45,7 +45,7 @@ def main() -> int:
     repo = args.repo.resolve()
     build = args.build.resolve()
 
-    native_source = repo / "tools/verify/windows_x64_w025/W025JitLifecycleStressProbe.cc"
+    native_source = repo / "tests/cases/jit-lifecycle-stress/probe.cc"
     java_source = repo / "tools/verify/windows_x64_w025/src/W025JitLifecycleStressProbe.java"
     nterp_source = repo / "vendor/art/runtime/interpreter/mterp/x86_64ng/main.S"
     probe_dll = build / "libw025jitlifecyclestressprobe.dll"
