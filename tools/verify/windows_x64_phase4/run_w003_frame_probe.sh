@@ -75,7 +75,7 @@ JAVA_TMP="$(mktemp -d "${TMPDIR:-/tmp}/w003-frame-java.XXXXXX")"
 trap 'rm -rf "$JAVA_TMP"' EXIT
 mkdir -p "$JAVA_TMP/classes" "$JAVA_TMP/dex"
 "$JAVAC" -d "$JAVA_TMP/classes" \
-  "$REPO/tools/verify/windows_x64_phase4/src/W003FrameProbe.java"
+  "$REPO/tests/cases/w003-frame-probe/W003FrameProbe.java"
 java -cp "$R8JAR" com.android.tools.r8.D8 \
   --release --min-api 31 --output "$JAVA_TMP/dex" \
   "$JAVA_TMP/classes/W003FrameProbe.class" \

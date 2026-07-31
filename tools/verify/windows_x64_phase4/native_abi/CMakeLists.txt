@@ -7,7 +7,8 @@ if(NOT MDVM_REPO_ROOT)
   message(FATAL_ERROR "MDVM_REPO_ROOT is required")
 endif()
 
-add_library(nativeabiprobe SHARED native_abi_probe.c)
+add_library(nativeabiprobe SHARED
+  "${MDVM_REPO_ROOT}/tests/cases/jni-native-abi/probe.c")
 target_include_directories(nativeabiprobe PRIVATE
   "${MDVM_REPO_ROOT}/vendor/libnativehelper/include_jni")
 set_target_properties(nativeabiprobe PROPERTIES

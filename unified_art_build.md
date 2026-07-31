@@ -22,6 +22,11 @@ items are closed.
 - Distinguish a compile-only probe group from a runnable behavioral gate.
 - Preserve useful probe sources and result evidence while removing alternative
   product graphs and host-specific orchestration around them.
+- Do not commit generated or returned binary artifacts, executable images,
+  libraries, crash dumps, or package archives. `vendor/r8/r8.jar` is the one
+  explicit retained exception because it is the pinned D8/R8 build tool, not a
+  product or test artifact, and replacing it with a reproducible source build
+  is not presently practical.
 - Record machine paths only in ignored local configuration. Tracker evidence
   uses canonical target IDs and stable repository-relative names.
 - Update the dated evidence below after any change to the frontend, generated
@@ -32,8 +37,8 @@ items are closed.
 | Area | Status | Current position | Exit condition |
 |---|---|---|---|
 | Python frontend | COMPLETE for the initial slice | `generate`, `check-generated`, `configure`, `build`, `test`, and `stage` exist; subprocesses are shell-free | keep regression coverage current |
-| Linux x86-64 product | PARTIAL | generation and the full `art-compiler` build pass; staging passed previously | register runnable Linux CTest gates so the documented `test` command succeeds |
-| Windows x86-64 product | PARTIAL / experimental | cross and native Windows Server 2025 builds produce `art.dll`, `art-compiler.dll`, and `art-compiler.lib` | automate the complete artifact/topology/runtime gate set |
+| Linux x86-64 product | PARTIAL | a fresh full product build, 28-artifact stage, and native runtime version smoke pass | register runnable Linux CTest gates so the documented `test` command succeeds |
+| Windows x86-64 product | PARTIAL / experimental | the Linux-hosted cross build completes the full product graph, including the runtime, compiler, dex2oat, and libcore DSOs; the native Windows Server 2025 build has passed the earlier compiler/test slice | repeat the full product build natively and automate the complete artifact/topology/runtime gate set |
 | Compiler DSO parity | COMPLETE for `art-compiler` | both targets emit a shared compiler DSO; Windows imports `art.dll` and exports `art_compiler_jit_create` | retain exact ABI and no-cycle gates |
 | Full DSO topology parity | PARTIAL | five module kinds and two target-specific module pairs still differ | convert each difference or record a reviewed target exception |
 | Unified phase catalog | PARTIAL | seven virtual stages declare 29 typed probes; all are currently applicable only to `windows-x86_64-msvc`, with three runnable CTest gates and a per-target status catalog | migrate behavioral runners, managed probes, portable JNI probes, and result checks |
@@ -46,10 +51,14 @@ items are closed.
 
 ### Latest verification baseline (2026-07-31)
 
-- [x] `PYTHONPATH=tools/bp2cmake python3 -m pytest tools/bp2cmake/tests -q`:
-  101 passed.
-- [x] Fresh `linux-x86_64-gnu` and `windows-x86_64-msvc` generation: 33 modules and
-  260 loaded Blueprint files for each target.
+- [x] `PYTHONPATH=tools/bp2cmake python3 -m pytest tools/bp2cmake/tests tests/host -q`:
+  106 passed, including generated PE-header, top-level test-catalog, and VCS
+  binary-audit coverage.
+- [x] Fresh generation loads the same 260 Blueprint files for both targets and
+  emits 33 generated modules for `linux-x86_64-gnu` versus 32 for
+  `windows-x86_64-msvc`; Windows supplies `sigchain` as the reviewed
+  platform-source target in the common native entry point instead of emitting
+  the Linux module.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, and Ninja emits a
   29-declaration catalog with zero applicable probes and zero CTest gates.
@@ -59,6 +68,10 @@ items are closed.
 - [x] Linux `art-compiler` completed a fresh 701-action build after the
   identity migration and emits `libart-compiler.so` with dynamic ART
   dependencies.
+- [x] The complete Linux product completed a fresh 1850-action build; after the
+  latest Windows-scoped CMake changes, a 264-action affected rebuild also
+  passed with `--parallel 32`, and `dalvikvm -showversion` reported
+  `ART version 2.1.0 x86_64`.
 - [x] A second identical Linux `art-compiler` build reports
   `ninja: no work to do.`
 - [x] Native Windows Server 2025 x86-64 freshly builds the canonical
@@ -71,10 +84,21 @@ items are closed.
   `runtime_status=not-required`.
 - [x] Windows `check-generated` passes and a second identical
   `art-compiler` build reports `ninja: no work to do.`
+- [x] A clean Linux-hosted `windows-x86_64-msvc` cross build completed all
+  1825 Ninja actions with `--parallel 32`. It links `art.dll`,
+  `art-compiler.dll`, `art-dex2oat.dll`, `dex2oat.exe`, `javacore.dll`,
+  `openjdk.dll`, and `openjdkjvm.dll`; this is a build/link result and does not
+  claim Windows AOT/OAT runtime capability.
 - [x] Windows staging records 14 regular-file artifacts, contains no reparse
   points, and passes the staged DLL load/export smoke.
-- [x] Linux staging records 16 artifacts with no staged symlinks.
+- [x] The current cross-built Windows stage records 27 regular-file artifacts
+  and the Linux stage records 28; non-following scans find no symlinks in
+  either build or stage tree.
 - [x] Generated graph/profile files contain no filesystem absolute paths.
+- [x] The main-repository VCS audit permits only the exact pinned
+  `vendor/r8/r8.jar` binary-tool exception; the former tracked Phase 3 evidence
+  ZIP now lives under ignored `out/` storage and its accepted SHA-256 remains in
+  the text record.
 - [x] Audited Ninja commands contain no Bash, Make, NMake, GCC, MinGW,
   `cl.exe`, `clang-cl`, or clang-mingw invocation.
 - [ ] The documented Linux `test` command currently fails: the Linux catalog
@@ -96,8 +120,11 @@ One historical work stage maps to exactly one virtual target named
 | `w025` | 4 EXEs, 3 DLLs | 4 exact / 3 typed | 7 compile-only | JIT mapping/lifecycle/CFG managed and host-review gates |
 | Total | 19 EXEs, 10 DLLs | 10 exact / 19 typed | 3 runnable, 26 compile-only | compile ownership is ahead of behavioral ownership |
 
-The shared registry references 32 source files from historical verification
-directories. Another 52 C, C++, assembly, or Java probe sources remain outside
+The shared registry references 27 source files from historical verification
+directories. All four W-003 native probe declarations now consume canonical
+source under `tests/cases/`; their managed source and result records are
+adjacent, and the shared analysis is under `tests/stages/w003/`. Another
+47 C, C++, assembly, or Java probe sources remain outside
 the registry, including all 26 Phase-3 Java probes, most Phase-4 managed
 probes, W013 non-moving stress, W025 managed lifecycle/mapping, and the three
 libcore/ICU native smokes. The relevant verification directories still contain
@@ -166,7 +193,7 @@ making MSYS2, Cygwin, or any POSIX environment a build-host prerequisite.
 
 #### Current probe-by-probe selector audit
 
-`native/tests/CMakeLists.txt` now declares every probe through the common
+`tests/CMakeLists.txt` now declares every probe through the common
 `art_add_target_probe` API. There is no platform-level early return and no
 `ARCH any` spelling. Ten Microsoft x86-64-specific probes use the exact
 `windows-x86_64-msvc` target ID. The other nineteen use the explicit typed
@@ -248,6 +275,172 @@ Windows ARMv7 GNU/MSVC identities. Transitional unsuffixed target IDs are
 rejected with migration diagnostics and do not enter generated profiles or
 output paths.
 
+### Test source, artifact, and result ownership
+
+`tools/verify` combines five different roles: reusable test source, alternate
+product build graphs, host runners/reviewers, generated artifacts, and
+historical evidence. It must not be renamed wholesale. The useful pieces move
+by role into a top-level `tests/` tree; obsolete product graphs and shell-only
+orchestration are removed only after their behavior is owned by the unified
+frontend.
+
+The target layout is:
+
+```text
+tests/
+  README.md
+  CMakeLists.txt
+  catalog.py
+  native/
+    <logical-test-id>/
+      probe.c or probe.cc
+      <architecture-specific source when required>
+  java/
+    <logical-test-id>/
+  host/
+    <Python runner or result reviewer>
+  fixtures/
+    <logical-test-id>/
+  records/
+    <target-id>/
+      <record-id>/
+        RESULT.md
+        manifest.json
+```
+
+Physical source directories describe the stable behavior being tested, not the
+historical phase, current target architecture, or temporary bring-up status.
+Do not create `tests/windows_arm64_phaseX`, `tests/windows_x64_phaseX`, or
+`tests/quick`. Stage membership remains virtual metadata such as `w014`, and
+one stage remains one CMake group such as `art-test-stage-w014`.
+
+#### Native probe reuse and linkage
+
+A Windows AArch64 bring-up probe initially uses the exact canonical selector
+`windows-aarch64-msvc`. Source portability does not automatically broaden test
+applicability. The selector may expand only after the source, build result,
+runtime behavior, and reviewer have been validated for each added target.
+Windows ARM64EC remains the separate `arm64ec` target architecture and never
+inherits AArch64 applicability implicitly.
+
+Reuse one physical source file without copying or linking it when the same
+C/C++ code and acceptance rule apply to x86-64 and AArch64. When the assertion
+is common but the implementation is architecture-specific, keep one logical
+test and select adjacent variants such as `fault_x86_64.S` and
+`fault_aarch64.S`. When the ABI assertion itself differs, use separate logical
+test IDs. No test source, fixture, build tree, result, or package may depend on
+a filesystem symlink or reparse point.
+
+Linkage is explicit registry metadata rather than a directory convention:
+
+| Linkage | Contract |
+|---|---|
+| `standalone` | link only the exact target SDK/system dependencies; do not acquire ART transitively |
+| `art-dso` | link through the generated CMake target/import library for `art.dll` or `libart.so`, never a filesystem path |
+| `jni-dso` | build a target DSO loaded by managed/JNI test code; direct ART linkage is not implied |
+
+All three use the product's plain Clang GNU-style driver, target bundle, CMake,
+Ninja, and target policy. An `art-dso` runtime probe executes against a staged
+regular-file DSO closure, not against a build-host DLL search path.
+
+#### Test catalog generation
+
+The final target-neutral declaration belongs in `tests/catalog.py`. It records
+the logical ID, virtual stage, output kind, linkage, common and per-architecture
+sources, platform/architecture/ABI or exact-ID selectors, required
+capabilities, and execution mode. The target-aware Python overlay resolves that
+catalog and emits a small target-specific `generated/Tests.cmake`; the emitted
+file refers to repository-root variables plus relative paths and contains no
+machine absolute paths. A generated JSON manifest retains every declared test,
+including non-applicable tests and the selector that excluded each one.
+
+During migration, a thin checked-in `tests/CMakeLists.txt` may continue to own
+the common target declaration API while declarations are transferred out of
+the historical directories. It is migration scaffolding, not permission for a
+second product graph.
+
+#### Generated outputs and cross-run results
+
+All ordinary build and execution state belongs below the canonical target and
+build-type directory:
+
+```text
+out/<target-id>/<build-type>/
+  generated/
+    Tests.cmake
+    test_catalog.json
+  tests/
+    bin/
+    lib/
+  test-work/
+    <logical-test-id>/
+  results/
+    <logical-test-id>/
+      <run-id>/
+        result.json
+        stdout.txt
+        stderr.txt
+  stage/
+    tests/
+  packages/
+    <stage-or-test-bundle>.zip
+```
+
+The path never contains `<host>-to-`; build-host identity is manifest metadata.
+An ordinary configure, build, test, import, or review command must not modify a
+tracked file. A cross-runner package is created under `out/.../packages`,
+contains no links/reparse points, is returned into `out/.../results`, and stays
+outside VCS.
+
+Generated and returned files with binary or archive types such as `.zip`,
+`.exe`, `.dll`, `.lib`, `.pdb`, `.dmp`, `.jar`, `.dex`, and native object or
+library formats must not be added to the product repository. Small accepted
+text logs may be retained only when they add diagnostic value; otherwise the
+tracked record stores hashes and the accepted conclusion. The pinned
+`vendor/r8/r8.jar` D8/R8 tool is the sole named exception and must not become a
+general `vendor/` or `*.jar` exemption.
+
+#### Tracked acceptance records
+
+`RESULT.md` does not live beside reusable source because one source may have
+different results for several exact targets. An accepted stage or milestone is
+recorded at:
+
+```text
+tests/records/<target-id>/<record-id>/RESULT.md
+```
+
+For example, x86-64 and AArch64 results for the same virtual stage are separate
+records:
+
+```text
+tests/records/windows-x86_64-msvc/w014/RESULT.md
+tests/records/windows-aarch64-msvc/w014/RESULT.md
+```
+
+The record states the target ID, product commit, toolchain identity, portable
+build/run commands, applicable tests and explicit skips, separate build/run/
+review status, authoritative runner, stable artifact/result hashes, known
+limitations, and an acceptance time in `yyyy-MM-dd HH:mm:ss` form. It contains
+no workstation absolute path, environment dump, executable, DLL, archive, or
+crash dump. Promotion from `out/.../results` to a tracked record is explicit
+and reviewed; normal test execution never performs it.
+
+#### Migration classification
+
+| Current `tools/verify` content | Destination or disposition |
+|---|---|
+| reusable C/C++/assembly source | owning `tests/cases/<logical-test-id>/` |
+| managed Java source | same logical case as its native/behavioral contract |
+| maintained test-specific Python runner/reviewer | same logical case |
+| shared Python test framework | `tests/support/` |
+| intentional static input | `tests/fixtures/<logical-test-id>/` |
+| accepted target-specific summary | `tests/records/<target-id>/<record-id>/` |
+| shell/PowerShell runner | replace with Python, then remove |
+| Phase-0/Phase-1 or per-probe product CMake graph | remove after unified ownership; do not relocate |
+| generated source, binary, log bundle, dump, or package | regenerate below `out/`; never track |
+| obsolete progress narrative | move selectively to `docs/history/` or remove |
+
 ### Fresh Linux/Windows topology comparison
 
 `libart-compiler` is shared on both targets, but full module-kind equality is
@@ -274,9 +467,11 @@ an unreviewed module-set or kind change.
 - [x] Replace the Windows-only `ARCH any` probe API with typed `PLATFORMS`,
   `TARGET_ARCHES`, `TARGET_ABIS`, `TARGET_IDS`, `CAPABILITIES`, and `EXECUTION`
   selectors plus an applicability/build/runtime-status manifest.
-- [ ] Move `criticalnativeprobe` and `nativeabiprobe` into common
-  platform-resolved ownership, then validate rather than assume their exact
-  Linux and Windows target-architecture sets.
+- [x] Move the `criticalnativeprobe` and `nativeabiprobe` native/managed source,
+  result, and CMake ownership into adjacent `tests/cases/` directories without
+  copying or linking the sources.
+- [ ] Make those two probes fully platform-resolved, then validate rather than
+  assume their exact Linux and Windows target-architecture sets.
 - [ ] Add Linux CTest registrations for show-version, imageless Hello, GC
   stress, DSO loading, and compiler-DSO topology.
 - [ ] Replace shell-only boot-JAR construction with a fail-fast Python stage
@@ -423,7 +618,7 @@ frontend rejects symlink/reparse-point configured paths and records a build-host
 fingerprint before reusing a binary directory.
 
 Target verification probes now have one shared registry at
-[`native/tests/CMakeLists.txt`](native/tests/CMakeLists.txt). A historical
+[`tests/CMakeLists.txt`](tests/CMakeLists.txt). A historical
 stage is exactly one virtual CMake target such as `art-test-stage-w002`; probe
 targets declare typed platform, target-architecture, target-ABI, capability,
 exact-ID, and execution selectors. The stage target is a build group, not a
@@ -439,10 +634,14 @@ The Windows overlay now emits `art-compiler` as `SHARED` and links it to
 point injects the Windows runtime sources, sets the stable `art-compiler.dll`
 name, passes bundle SDK/libc++ paths to Clang, and supplies a reviewed DEF
 allowlist for its narrow public entry point. ART runtime globals used by the
-compiler use the existing `LIBART_PE_DATA` producer/consumer annotations, so
-PE data imports have the required indirection while `Thread::Current()` keeps
-TLS inside `art.dll`. A Linux-hosted `windows-x86_64-msvc` cross build now links
-`art.dll`, `art-compiler.dll`, and `art-compiler.lib`. A native Windows Server
+compiler use `LIBART_PE_DATA` producer/consumer annotations, including regular
+header overlays generated under the target's `gensrc` tree for declarations
+that must remain out of the nested vendor checkout. PE data imports therefore
+have the required indirection while `Thread::Current()` keeps TLS inside
+`art.dll`. A Linux-hosted `windows-x86_64-msvc` cross build now links the full
+1825-action product graph, including `art.dll`, `art-compiler.dll`,
+`art-dex2oat.dll`, both command-line executables, and the libcore DSOs. A
+native Windows Server
 2025 x86-64 build using LLVM 21.1.8, CMake 3.31.8, and Ninja 1.13.2 also
 configures and links the same graph without a POSIX environment. The native
 `w002` unwind test runs through the unified virtual stage, and the complete
@@ -450,11 +649,33 @@ catalog builds 19 executable probes and 10 probe DLLs. Loading staged
 `art.dll` and `art-compiler.dll` and resolving `art_compiler_jit_create` pass
 from a directory containing only the staged closure. A frontend-owned
 `linux-x86_64-gnu` build produces `libart-compiler.so` with dynamic dependencies
-on `libart.so` and `libart-disassembler.so`. Fresh Linux and Windows builds use
-the same 33-module generated graph. `build_art.py stage` validates the Windows
+on `libart.so` and `libart-disassembler.so`. Fresh Linux and Windows generation
+loads the same Blueprint input set and uses the same converter; the resolved
+graphs contain 33 and 32 generated modules respectively because Windows owns
+its platform `sigchain` target in the common native entry point.
+`build_art.py stage` validates the Windows
 DLL/import-library pair, copies the complete top-level DSO closure (including
 the pinned Windows `c++.dll`), rejects links/reparse points, and records
 regular-file hashes.
+
+Windows source selection replaces Linux-only libcore backends with the
+maintained Windows bridge sources for `javacore` and `openjdk`; the pinned
+static Expat target propagates `XML_STATIC` to consumers. The generated PE
+header overlays are force-included only into the defining and consuming
+translation units. This keeps `vendor/art` clean, requires no source-tree
+symlink, and avoids committing generated or absolute-path-bearing headers.
+
+The first test-ownership migration slice moves that registry from `native/` to
+the top-level `tests/` tree and moves all four W-003 probe cases to stable
+logical directories. CriticalNative, native-ABI, frame-family, and explicitly
+x86-64-only XMM-sentinel cases each own their native/managed source and adjacent
+result; the W-003 cross-case analysis is stage-owned without relocating source
+by stage. Legacy per-probe CMake entry points and shell runners temporarily
+reference those canonical sources; they no longer own copies. A portable VCS
+audit rejects tracked product/test binaries and archives
+while retaining the one named `vendor/r8/r8.jar` D8/R8 exception. The old Phase
+3 returned ZIP is retained under ignored `out/` storage, and its tracked result
+now records the package hash instead of committing the archive.
 
 In particular, `art-compiler` is a shared library on both targets:
 
@@ -2086,6 +2307,9 @@ Audit `compile_commands.json` and `ninja -t commands` for every matrix cell:
 - the Windows product has no static compiler fallback or cyclic DLL imports;
 - non-following scans find no symlink, junction/name-surrogate reparse point,
   or archive symlink entry in build and staged artifacts.
+- the main Git index contains no generated binary or package/archive extension;
+  `vendor/r8/r8.jar` is the sole exact-path exception and no wildcard binary
+  exception is accepted by the VCS audit.
 
 ### Build and runtime validation
 

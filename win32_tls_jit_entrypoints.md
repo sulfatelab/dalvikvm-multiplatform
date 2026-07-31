@@ -1853,11 +1853,11 @@ CET-shadow-stack-disabled process contract; unwind/EH-continuation metadata
 cannot be interpreted as latent CET support.
 
 See
-[RESULT-w003-quick-frames-analysis.md](tools/verify/windows_x64_phase4/RESULT-w003-quick-frames-analysis.md)
+[W-003 analysis](tests/stages/w003/ANALYSIS.md)
 and
-[RESULT-w003-frame-probe.md](tools/verify/windows_x64_phase4/RESULT-w003-frame-probe.md)
+[W-003 frame-family result](tests/cases/w003-frame-probe/RESULT.md)
 and
-[RESULT-w003-xmm-sentinel.md](tools/verify/windows_x64_phase4/RESULT-w003-xmm-sentinel.md)
+[W-003 XMM-sentinel result](tests/cases/w003-xmm-sentinel/RESULT.md)
 and
 [W003_HOST_CHECKLIST.md](tools/verify/windows_x64_phase4/W003_HOST_CHECKLIST.md)
 and
@@ -1876,7 +1876,7 @@ for the design, staged implementation, and accepted evidence.
 | QuickEntryPoints in Thread | `quick_entrypoints.h`, `Thread::QuickEntryPointOffset` |
 | Win quick-invoke policy | `vendor/art/runtime/art_method.cc` (default quick invoke with diagnostic opt-out) |
 | Win SETUP frames (was int3) | Ported off Win `int3`; Apple still traps |
-| W-003 frame/ABI analysis | §17.10; `tools/verify/windows_x64_phase4/RESULT-w003-quick-frames-analysis.md` |
+| W-003 frame/ABI analysis | §17.10; `tests/stages/w003/ANALYSIS.md` |
 | Direct PE Runtime singleton load | `LOAD_RUNTIME_INSTANCE` in `asm_support_x86_64.S`; §6.7 |
 | Nterp Win conflicts (GS + r15=rREFS) | `mterp/x86_64ng/main.S`; generated `mterp_x86_64.S`; §15 |
 | Nterp Win policy | `interpreter/mterp/nterp.cc` `IsNterpSupported` (default on; diagnostic opt-out) |

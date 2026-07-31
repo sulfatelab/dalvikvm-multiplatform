@@ -28,8 +28,11 @@ Phase 3 libcore bring-up for Windows x64 imageless ART:
 
 ### Real Windows host (authoritative G12)
 
-Zip: `evidence/host/logs-20260716T205926.zip`  
-Host dir: `C:\Users\sulfate\Desktop\windows_x64_phase3_host`
+Original returned-package SHA-256:
+`4f15b7808a7ff6039663d9931523a82b33c429d00a6a7b068eecb36feac58e3b`.
+The ZIP is retained outside VCS; the accepted text result and analysis remain
+under `evidence/host/`. The runner working directory is normalized as
+`<host-workdir>\windows_x64_phase3_host`.
 
 ```text
 OVERALL PASS

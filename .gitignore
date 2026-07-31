@@ -30,6 +30,15 @@ __pycache__/
 *.class
 *.dex
 *.jar
+# Generated/returned packages and compressed evidence stay below /out/.
+*.zip
+*.7z
+*.tar
+*.tar.gz
+*.tgz
+*.tar.xz
+*.txz
+# Pinned D8/R8 tool; this is the sole tracked binary exception.
 !vendor/r8/r8.jar
 
 # Tool verify scratch

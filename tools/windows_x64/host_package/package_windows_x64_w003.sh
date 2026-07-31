@@ -90,7 +90,7 @@ xmm_jni_exports="$(llvm-readobj --coff-exports \
   "$XMM_NATIVE_BUILD/libw003xmmsentinel.dll" | \
   grep -cF 'Name: Java_W003XmmSentinelProbe_runXmmSentinel' || true)"
 xmm_obj="$(find "$XMM_NATIVE_BUILD/CMakeFiles/w003xmmsentinel.dir" \
-  -name 'w003_xmm_sentinel_x86_64.S.obj' -print -quit)"
+  -name 'sentinel_x86_64.S.obj' -print -quit)"
 xmm_unwind_saves="$(llvm-readobj --unwind "$xmm_obj" | grep -c 'SAVE_XMM128' || true)"
 
 if [[ "$product_probe_exports" -ne 0 ||

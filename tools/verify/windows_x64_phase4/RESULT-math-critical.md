@@ -99,6 +99,6 @@ Related files:
 
 - `run_math_critical_probe.sh`
 - `src/MathCriticalProbe.java`
-- `RESULT-critical-native.md`
+- `../../../tests/cases/jni-critical-native/RESULT.md`
 - `RESULT-jvmti-force.md`
 - `../../../win32_open_items.md` W-024

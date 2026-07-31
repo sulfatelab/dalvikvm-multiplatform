@@ -64,4 +64,4 @@ default native-JIT policy and the managed-JIT control environment variables.
 
 - [win32_jit_memory.md](../../win32_jit_memory.md) §13 — implementation status
 - [win32_open_items.md](../../win32_open_items.md) W-025 — JIT code cache + codegen TLS
-- [RESULT-native-abi.md](RESULT-native-abi.md) — focused W-024 native ABI evidence
+- [JNI native ABI result](../../../tests/cases/jni-native-abi/RESULT.md) — focused W-024 native ABI evidence

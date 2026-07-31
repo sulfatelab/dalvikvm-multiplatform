@@ -4,7 +4,15 @@
 #else
 /* POSIX-ish sockets over Winsock, using CRT fds via _open_osfhandle. */
 #include <winsock2.h>
+#ifndef CONST
+#define MDVM_SYS_SOCKET_DEFINED_CONST 1
+#define CONST const
+#endif
 #include <ws2tcpip.h>
+#ifdef MDVM_SYS_SOCKET_DEFINED_CONST
+#undef CONST
+#undef MDVM_SYS_SOCKET_DEFINED_CONST
+#endif
 #include <stdint.h>
 #ifndef _SSIZE_T_DEFINED
 typedef intptr_t ssize_t;

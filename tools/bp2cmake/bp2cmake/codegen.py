@@ -334,12 +334,97 @@ def gen_aconfig(cfg: CodegenConfig) -> list[str]:
     return aconfig.generate(files, out_dir)
 
 
+# PE consumers need dllimport on data referenced across the art.dll boundary.
+# Keep these target-only annotations out of the nested vendor checkout: stage
+# complete, include-guard-compatible header overlays under gensrc instead.
+WINDOWS_PE_HEADER_REPLACEMENTS: dict[str, list[tuple[str, str]]] = {
+    "art/runtime/runtime_options.h": [
+        (
+            "#define RUNTIME_OPTIONS_KEY(Type, Name, ...) static const Key<Type> (Name);",
+            "#define RUNTIME_OPTIONS_KEY(Type, Name, ...) "
+            "LIBART_PE_DATA static const Key<Type> (Name);",
+        ),
+    ],
+    "art/runtime/base/locks.h": [
+        (
+            "  static Mutex* intern_table_lock_ ACQUIRED_AFTER(host_dlopen_handles_lock_);",
+            "  LIBART_PE_DATA static Mutex* intern_table_lock_ "
+            "ACQUIRED_AFTER(host_dlopen_handles_lock_);",
+        ),
+    ],
+    "art/runtime/well_known_classes.h": [
+        (
+            "  static ArtMethod* java_lang_OutOfMemoryError_init;  // Only for the declaring class.",
+            "  LIBART_PE_DATA static ArtMethod* java_lang_OutOfMemoryError_init;  "
+            "// Only for the declaring class.",
+        ),
+        (
+            "  static ArtField* dalvik_system_BaseDexClassLoader_sharedLibraryLoaders;",
+            "  LIBART_PE_DATA static ArtField* "
+            "dalvik_system_BaseDexClassLoader_sharedLibraryLoaders;",
+        ),
+        (
+            "  static ArtField* dalvik_system_BaseDexClassLoader_sharedLibraryLoadersAfter;",
+            "  LIBART_PE_DATA static ArtField* "
+            "dalvik_system_BaseDexClassLoader_sharedLibraryLoadersAfter;",
+        ),
+    ],
+    "art/runtime/oat/oat_quick_method_header.h": [
+        (
+            "  static OatQuickMethodHeader* NterpMethodHeader;",
+            "  LIBART_PE_DATA static OatQuickMethodHeader* NterpMethodHeader;",
+        ),
+        (
+            "  EXPORT static ArrayRef<const uint8_t> NterpWithClinitImpl;",
+            "  LIBART_PE_DATA EXPORT static ArrayRef<const uint8_t> NterpWithClinitImpl;",
+        ),
+        (
+            "  EXPORT static ArrayRef<const uint8_t> NterpImpl;",
+            "  LIBART_PE_DATA EXPORT static ArrayRef<const uint8_t> NterpImpl;",
+        ),
+    ],
+}
+
+
+def gen_windows_pe_headers(cfg: CodegenConfig) -> list[str]:
+    """Stage target-only ART headers carrying explicit PE data boundaries."""
+    os_name = (cfg.asm_target_os or "linux").lower()
+    if os_name not in ("windows", "win32", "windows_x64", "pe"):
+        return []
+
+    outputs: list[str] = []
+    for relative_path, replacements in WINDOWS_PE_HEADER_REPLACEMENTS.items():
+        source_path = cfg.pa(relative_path)
+        if not os.path.isfile(source_path):
+            raise CodegenError(f"PE header overlay source not found: {source_path}")
+        with open(source_path, "r", encoding="utf-8") as source_file:
+            contents = source_file.read()
+        for original, replacement in replacements:
+            if replacement in contents:
+                continue
+            if original not in contents:
+                raise CodegenError(
+                    f"PE header overlay anchor not found in {relative_path}: {original}"
+                )
+            contents = contents.replace(original, replacement, 1)
+
+        output_path = cfg.out("art/windows-pe-headers", relative_path)
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        staged_path = output_path + ".tmp"
+        with open(staged_path, "w", encoding="utf-8", newline="\n") as output_file:
+            output_file.write(contents)
+        _replace_if_changed(staged_path, output_path)
+        outputs.append(output_path)
+    return outputs
+
+
 def run_all(cfg: CodegenConfig, operator_sets: dict[str, list[str]] | None = None,
             do_mterp: bool = True, do_asm_defines: bool = True,
             do_aconfig: bool = True) -> dict[str, list[str]]:
     """Stage the whole gensrc tree. Returns a report of produced files."""
     report: dict[str, list[str]] = {"operator_out": [], "mterp": [],
-                                     "asm_defines": [], "aconfig": []}
+                                     "asm_defines": [], "aconfig": [],
+                                     "windows_pe_headers": []}
     sets = operator_sets if operator_sets is not None else OPERATOR_OUT_SETS
     # aconfig headers first: asm_defines and other TUs may include them.
     if do_aconfig:
@@ -350,4 +435,5 @@ def run_all(cfg: CodegenConfig, operator_sets: dict[str, list[str]] | None = Non
         report["mterp"].append(gen_mterp(cfg))
     if do_asm_defines:
         report["asm_defines"].append(gen_asm_defines(cfg))
+    report["windows_pe_headers"].extend(gen_windows_pe_headers(cfg))
     return report

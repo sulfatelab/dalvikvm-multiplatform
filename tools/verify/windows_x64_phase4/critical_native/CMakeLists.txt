@@ -7,7 +7,8 @@ if(NOT MDVM_REPO_ROOT)
   message(FATAL_ERROR "MDVM_REPO_ROOT is required")
 endif()
 
-add_library(criticalnativeprobe SHARED critical_native_probe.c)
+add_library(criticalnativeprobe SHARED
+  "${MDVM_REPO_ROOT}/tests/cases/jni-critical-native/probe.c")
 target_include_directories(criticalnativeprobe PRIVATE
   "${MDVM_REPO_ROOT}/vendor/libnativehelper/include_jni")
 set_target_properties(criticalnativeprobe PROPERTIES

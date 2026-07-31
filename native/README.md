@@ -59,5 +59,6 @@ overlay) + Layer 3 (emit). The dependency closure (`bp2cmake/closure.py`)
 walks the link graph from the product roots so the module list is derived, not
 maintained by hand.
 
-The per-module harnesses under `tools/verify/*` remain as focused regression
-checks / RESULT records; this is the real build.
+The unified target-aware registry and migrated probe sources live under
+`../tests/`. Historical harnesses under `tools/verify/*` remain temporary
+migration inputs and RESULT records; they do not own the product build.

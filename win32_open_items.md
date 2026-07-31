@@ -327,7 +327,7 @@ Summary (details below; do not delete history):
 - **Native R1 acceptance:** Windows 10 build 19044 returns exactly 19 PASS records and `OVERALL PASS`. All 14 children exit zero without timeout. The frame matrix passes 8/8; the XMM sentinel passes 6/6 with `mask=0 selfTestMask=63 iterations=128`; JIT logs confirm the corrected pagefile-section J-2 dual view and successful probe compilation; fatal and dump scans pass with `NO_DMP_FILES`. Package metadata and structural reports match the issued package byte for byte.
 - **Unwind and W-010 scope:** W-003 closed the frame/XMM ABI defect independently of Windows exception dispatch. Later W-010 substages added emitted PE unwind records to `art_quick_invoke_stub`, `art_quick_invoke_static_stub`, `art_quick_generic_jni_trampoline`, and split OSR entry/return ranges after recursive unwind tracing proved those records are required for fatal dispatch correctness. Dynamic JIT code now has allocation-lifetime runtime-function registration as well. W-010 also owns the full XMM6-XMM15 follow-up, exact VEH/non-owning-`CONTEXT` managed-fault adapter, cooperative VEH/SEH chaining, and the independent nterp implicit-null fault formerly observed at `nterp_op_invoke_virtual+0x3a`; Stage D translates that product path in the dedicated W-010 gate. The W-003 probe still excludes only that implicit-null case and retains class-cast, array-store, and bounds paths; no W-003 product fallback was added.
 - **Close bar:** Satisfied: no Windows-only SETUP trap; XMM6–XMM11 preserved at ordinary Microsoft C++-to-managed boundaries; all four frame families have focused attributed Wine and native coverage; Linux frame bodies remain unchanged; and native Windows acceptance passes.
-- **Evidence:** [RESULT-w003-quick-frames-analysis.md](tools/verify/windows_x64_phase4/RESULT-w003-quick-frames-analysis.md); [RESULT-w003-frame-probe.md](tools/verify/windows_x64_phase4/RESULT-w003-frame-probe.md); [RESULT-w003-xmm-sentinel.md](tools/verify/windows_x64_phase4/RESULT-w003-xmm-sentinel.md); [W003_HOST_CHECKLIST.md](tools/verify/windows_x64_phase4/W003_HOST_CHECKLIST.md); [native acceptance](tools/verify/windows_x64_phase4/evidence/w003_host/ACCEPTANCE.md)
+- **Evidence:** [W-003 analysis](tests/stages/w003/ANALYSIS.md); [frame-family result](tests/cases/w003-frame-probe/RESULT.md); [XMM-sentinel result](tests/cases/w003-xmm-sentinel/RESULT.md); [W003_HOST_CHECKLIST.md](tools/verify/windows_x64_phase4/W003_HOST_CHECKLIST.md); [native acceptance](tools/verify/windows_x64_phase4/evidence/w003_host/ACCEPTANCE.md)
 - **Code anchors:** `asm_support_x86_64.S`; `quick_entrypoints_x86_64.S`; `callee_save_frame_x86_64.h`; `art_method.cc`; `jit.cc`; `ART_QUICK_ENTRYPOINT_ABI` in `libartbase/base/macros.h` and quick helper declarations
 - **Depends on:** W-001 and W-002 are closed prerequisites; W-004 direct Runtime load is closed. W-010 owns the managed-fault and handler-chain work defined in [win32_faults_and_stacks.md](win32_faults_and_stacks.md).
 - **Opened:** 2026-07-16
@@ -425,7 +425,7 @@ Summary (details below; do not delete history):
 - **Area:** art / jni
 - **Current behavior:** Product and upstream fallback paths use ART's normal registered entrypoint and generated dlsym-stub policy. The Windows x64-only direct resolver no longer exists.
 - **Proper fix:** Complete with ART commit `42a03f2ea0`.
-- **Evidence:** `tools/verify/windows_x64_phase4/RESULT-interpreter-jni-fallback.md`, `tools/verify/windows_x64_phase4/RESULT-critical-native.md`, `tools/verify/windows_x64_phase4/RESULT-native-abi.md`, `tools/verify/windows_x64_phase4/evidence/w024_host/ACCEPTANCE.md`
+- **Evidence:** `tools/verify/windows_x64_phase4/RESULT-interpreter-jni-fallback.md`, `tests/cases/jni-critical-native/RESULT.md`, `tests/cases/jni-native-abi/RESULT.md`, `tools/verify/windows_x64_phase4/evidence/w024_host/ACCEPTANCE.md`
 - **Code anchors:** `vendor/art/runtime/interpreter/interpreter.cc`; generated JNI dlsym stubs
 - **Opened:** 2026-07-16
 - **Closed:** 2026-07-24 — upstream resolver behavior restored
@@ -635,8 +635,8 @@ Summary (details below; do not delete history):
   - `vendor/libcore/ojluni/src/main/java/java/lang/Math.java` (restored native CriticalNative ceil/floor)
   - `vendor/libcore/ojluni/src/main/native/Math.c` (one common ELF/PE registration table)
   - `vendor/art/runtime/interpreter/interpreter.cc` (exact `android-16.0.0_r4` parity)
-  - `tools/verify/windows_x64_phase4/{run_native_abi_probe.sh,src/FastNativeAbiProbe.java,native_abi/,RESULT-native-abi.md}`
-  - `tools/verify/windows_x64_phase4/{run_critical_native_probe.sh,src/CriticalNativeProbe.java,src/CriticalNativeDlsymProbe.java,critical_native/,RESULT-critical-native.md}`
+  - `tests/cases/jni-native-abi/` (canonical source/result) plus transitional `tools/verify/windows_x64_phase4/{run_native_abi_probe.sh,native_abi/}`
+  - `tests/cases/jni-critical-native/` (canonical source/result) plus transitional `tools/verify/windows_x64_phase4/{run_critical_native_probe.sh,critical_native/}`
   - `tools/verify/windows_x64_phase4/{run_jvmti_force_probe.sh,src/JvmtiForceProbe.java,jvmti_force/,RESULT-jvmti-force.md}`
   - `tools/verify/windows_x64_phase4/{run_math_critical_probe.sh,src/MathCriticalProbe.java,RESULT-math-critical.md}`
   - `tools/verify/windows_x64_phase4/RESULT-interpreter-jni-fallback.md` (accepted Wine and native-Windows tripwire reachability audit)

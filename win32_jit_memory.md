@@ -1090,7 +1090,7 @@ completed JIT-1 through JIT-5 gates.
 | Dynamic PE unwind metadata | `vendor/art/compiler/utils/x86_64/windows_x64_unwind_info.h`; `vendor/art/runtime/multiplatform/windows/jit_unwind_windows.*`; `vendor/art/runtime/jit/{jit_code_cache,jit_memory_region}.*` |
 | D-1 Thread-address helper | `vendor/art/compiler/utils/x86_64/assembler_x86_64.*` |
 | W-002 OSR entry adapters | `vendor/art/runtime/arch/x86_64/quick_entrypoints_x86_64.S`; `vendor/art/runtime/interpreter/mterp/x86_64ng/main.S` |
-| W-003 frame-family/XMM acceptance | `tools/verify/windows_x64_phase4/run_w003_frame_probe.sh`; `tools/verify/windows_x64_phase4/RESULT-w003-frame-probe.md`; `tools/verify/windows_x64_phase4/evidence/w003_host/ACCEPTANCE.md` |
+| W-003 frame-family/XMM acceptance | `tools/verify/windows_x64_phase4/run_w003_frame_probe.sh`; `tests/cases/w003-frame-probe/RESULT.md`; `tests/cases/w003-xmm-sentinel/RESULT.md`; `tools/verify/windows_x64_phase4/evidence/w003_host/ACCEPTANCE.md` |
 | W-025 JIT-2 mapping/policy acceptance | `tools/verify/windows_x64_w025/RESULT-jit2-native.md`; `tools/verify/windows_x64_w025/evidence/jit2_native/ACCEPTANCE.md` |
 | W-025 JIT-3/FS-3 lifecycle/unwind acceptance | `tools/verify/windows_x64_w025/RESULT-jit3-native.md`; `tools/verify/windows_x64_w025/evidence/jit3_native/ACCEPTANCE.md` |
 | W-025 JIT-4 final native regression | `tools/verify/windows_x64_w025/RESULT-jit4-native.md`; `tools/verify/windows_x64_w025/evidence/jit4_native/ACCEPTANCE.md` |

@@ -4,7 +4,7 @@ import subprocess
 
 import pytest
 
-from bp2cmake.local_config import LocalBuildConfig
+from bp2cmake.local_config import LocalBuildConfig, LocalConfigError
 from tools import build_art
 
 
@@ -239,6 +239,27 @@ def test_windows_configure_uses_target_bundle_and_clang_target(tmp_path, monkeyp
     assert f"-DCMAKE_RC_COMPILER={llvm_rc.as_posix()}" in commands[0]
     assert any(arg.startswith("-DART_TARGET_BUNDLE_ROOT=") for arg in commands[0])
     assert "-DART_ENABLE_TARGET_RUNTIME_TESTS=OFF" in commands[0]
+
+
+def test_resolve_tools_rejects_clangxx_symlink(tmp_path):
+    tool_dir = tmp_path / "llvm" / "bin"
+    tool_dir.mkdir(parents=True)
+    clang = tool_dir / "clang"
+    clang.write_bytes(b"")
+    try:
+        (tool_dir / "clang++").symlink_to(clang.name)
+    except OSError:
+        pytest.skip("host cannot create a compiler symlink")
+    cmake = tmp_path / "cmake"
+    ninja = tmp_path / "ninja"
+    cmake.write_bytes(b"")
+    ninja.write_bytes(b"")
+    local = LocalBuildConfig(
+        tools={"cmake": cmake, "ninja": ninja, "llvm_root": tool_dir.parent}
+    )
+
+    with pytest.raises(LocalConfigError, match="link/reparse component"):
+        build_art._resolve_tools(local, need_compiler=True)
 
 
 @pytest.mark.parametrize(

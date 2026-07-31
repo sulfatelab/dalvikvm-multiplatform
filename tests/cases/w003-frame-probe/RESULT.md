@@ -6,6 +6,18 @@
 
 **Host:** agent01
 
+## Target status
+
+| Target ID | Applicable | Build | Runtime | Last accepted |
+|---|---:|---:|---:|---|
+| `windows-x86_64-msvc` | yes | verified | verified | 2026-07-26 |
+| `windows-aarch64-msvc` | no current implementation | not applicable | not applicable | — |
+| `windows-arm64ec-msvc` | no current implementation | not applicable | not applicable | — |
+
+The JNI source is simple, but the tested counter hooks are implemented in the
+x86-64 quick-entrypoint assembly. Another architecture needs its own reviewed
+instrumentation before this logical test can become applicable there.
+
 ## Outcome
 
 The opt-in W-003 probe now attributes execution to all four x86-64 ART
@@ -147,7 +159,9 @@ W003_HOST_PACKAGE_PASS path=.../dist/windows_x64_w003_host.zip
 
 The package carries `art.product.dll`, the opt-in `art.frame-probe.dll`, both
 JNI probe DLLs and jars, a precomputed structural report, full SHA-256
-manifests, and [W003_HOST_CHECKLIST.md](W003_HOST_CHECKLIST.md). Its PowerShell
+manifests, and the transitional
+[W003 host checklist](../../../tools/verify/windows_x64_phase4/W003_HOST_CHECKLIST.md).
+Its PowerShell
 runner requires Windows build 17134 or newer and no compiler, JDK, LLVM tools,
 or network connection. It runs 8 frame processes plus 6 XMM processes, scans
 all logs for fatal markers, recursively scans the package for dumps, and
@@ -166,7 +180,15 @@ six native XMM runs return `mask=0 selfTestMask=63 iterations=128`. The JIT
 logs explicitly confirm construction of the Windows pagefile-section J-2
 dual view and successful workload compilation.
 
-The accepted package and returned evidence are documented in
-[evidence/w003_host/ACCEPTANCE.md](evidence/w003_host/ACCEPTANCE.md). W-003 is
-closed. PE quick-assembly unwind and generated-fault translation remain with
-W-010 as documented in the main W-003 analysis.
+The accepted package and returned evidence are documented in the transitional
+[native acceptance](../../../tools/verify/windows_x64_phase4/evidence/w003_host/ACCEPTANCE.md).
+W-003 is closed. PE quick-assembly unwind and generated-fault translation
+remain with W-010 as documented in the
+[main W-003 analysis](../../stages/w003/ANALYSIS.md).
+
+## Related files
+
+- `probe.c`
+- `W003FrameProbe.java`
+- `../../../tools/verify/windows_x64_phase4/run_w003_frame_probe.sh`
+- `../w003-xmm-sentinel/RESULT.md`

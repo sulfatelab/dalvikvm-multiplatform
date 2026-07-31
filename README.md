@@ -37,7 +37,8 @@ dalvikvm-multiplatform/
   compat/
     include/                  # product POSIX/Win prelude headers (kept on main)
     java-stubs/ openjdk_fdlibm/ src/
-  tools/                      # bp2cmake, bootjar, windows_x64, verify gates
+  tools/                      # portable build/provision/audit frontends
+  tests/                      # target-aware probes, host checks, records
   overlay/                    # port policies
   docs/
     history/                  # completed migration/design records

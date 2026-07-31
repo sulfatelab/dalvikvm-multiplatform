@@ -99,3 +99,25 @@ def test_unified_overlay_factory_selects_current_target_policy():
     compiler = windows.policy_for("libart-compiler")
     assert compiler.kind == "shared"
     assert compiler.add_shared_libs == ["libart", "libart-disassembler"]
+    dex2oat = windows.policy_for("dex2oat")
+    assert dex2oat.kind == "executable"
+    assert dex2oat.absorb_whole_static is False
+    assert dex2oat.remove_static_libs == ["libdex2oat_static"]
+    assert "libart-dex2oat" in dex2oat.add_shared_libs
+    art_dex2oat = windows.policy_for("libart-dex2oat")
+    assert "MDVM_WINDOWS_DEX2OAT_COMPAT" in art_dex2oat.add_defines
+    assert "ART_CONSUMING_LIBART" in art_dex2oat.add_defines
+    assert "ART_CONSUMING_LIBART" in dex2oat.add_defines
+    icu = windows.policy_for("libicu")
+    assert icu.kind == "shared"
+    assert "U_SHOW_CPLUSPLUS_API=0" in icu.add_defines
+    assert "__INTRODUCED_IN(x)=" in icu.add_defines
+    openjdkjvm = windows.policy_for("libopenjdkjvm")
+    assert "ART_CONSUMING_LIBART" in openjdkjvm.add_defines
+    assert "MDVM_SOCKET_FD_REGISTRY_EXPORTS=1" in openjdkjvm.add_defines
+    javacore = windows.policy_for("libjavacore")
+    assert "libcore_io_Linux.cpp" in javacore.remove_srcs
+    assert "MDVM_WINDOWS_KEEP_CONST_MACRO" in javacore.add_defines
+    openjdk = windows.policy_for("libopenjdk")
+    assert "LinuxNativeDispatcher.c" in openjdk.remove_srcs
+    assert "NativeThread.c" in openjdk.remove_srcs

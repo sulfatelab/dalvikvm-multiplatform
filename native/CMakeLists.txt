@@ -156,7 +156,11 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
         endif()
     endforeach()
 endif()
-foreach(_kind aconfig mterp asm_defines)
+set(_art_codegen_kinds aconfig mterp asm_defines)
+if(ART_TARGET_PLATFORM STREQUAL "windows")
+    list(APPEND _art_codegen_kinds windows_pe_headers)
+endif()
+foreach(_kind IN LISTS _art_codegen_kinds)
     execute_process(
         COMMAND ${CMAKE_COMMAND} -E env "PYTHONPATH=${MDVM_BP2CMAKE}"
                 ${Python3_EXECUTABLE} -m bp2cmake.codegen_main
@@ -287,7 +291,9 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
         "${MDVM_NATIVE_SRC_ROOT_DIR}/external/expat/lib/xmltok_impl.c"
         "${MDVM_NATIVE_SRC_ROOT_DIR}/external/expat/lib/xmltok_ns.c")
     target_include_directories(expat PUBLIC "${MDVM_NATIVE_SRC_ROOT_DIR}/external/expat/lib")
-    target_compile_definitions(expat PRIVATE HAVE_EXPAT_CONFIG_H XML_DEV_URANDOM)
+    target_compile_definitions(expat
+        PUBLIC XML_STATIC
+        PRIVATE HAVE_EXPAT_CONFIG_H XML_DEV_URANDOM)
     add_library(cap INTERFACE)
 else()
     find_package(ZLIB REQUIRED)
@@ -390,6 +396,82 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
             "${_art_windows_runtime}/monitor_windows.cc"
             "${_art_windows_openjdk}/openjdkjvm_memory_windows.cc")
     endif()
+    if(TARGET openjdkjvm)
+        # Keep socket-fd ownership process-wide. libjavacore, libopenjdk, NIO,
+        # and the JVM_* bridge must not each absorb a private registry copy.
+        target_sources(openjdkjvm PRIVATE
+            "${_repo}/compat/src/windows_x64_socket_posix.c"
+            "${_repo}/compat/src/windows_x64_socket_fd_registry.c")
+        if(TARGET javacore)
+            target_link_libraries(javacore openjdkjvm)
+        endif()
+    endif()
+    if(TARGET javacore)
+        # Replace the Linux libcore.io backend with the existing Windows JNI
+        # bridge while retaining the common Memory/NetworkUtilities sources.
+        target_sources(javacore PRIVATE
+            "${MDVM_LIBCORE_DIR}/multiplatform/windows/native/register_libcore_io_Linux_win.cpp"
+            "${MDVM_LIBCORE_DIR}/multiplatform/windows/native/AsynchronousCloseMonitor_win.cpp"
+            "${MDVM_LIBCORE_DIR}/multiplatform/windows/native/android_system_OsConstantsHolder_win.cpp"
+            "${_repo}/tools/windows_x64/jni_stubs/win_path.c"
+            "${_repo}/tools/windows_x64/jni_stubs/win_fs_natives.c"
+            "${_repo}/tools/windows_x64/jni_stubs/win_net_natives.c"
+            "${_repo}/tools/windows_x64/jni_stubs/libcore_hello3.c")
+        target_include_directories(javacore BEFORE PRIVATE
+            "${MDVM_LIBCORE_DIR}/multiplatform/windows/native"
+            "${MDVM_LIBCORE_DIR}/luni/src/main/native"
+            "${_repo}/tools/windows_x64/jni_stubs")
+        target_compile_definitions(javacore PRIVATE MDVM_SOCKET_FD_TRACKING=1)
+        target_link_libraries(javacore openjdkjvm icuuc icui18n)
+    endif()
+    if(TARGET openjdk)
+        # Keep the portable Java/native modules and swap only the Unix process,
+        # thread, close, OnLoad, and excluded NIO.2 registration surfaces.
+        target_sources(openjdk PRIVATE
+            "${MDVM_LIBCORE_DIR}/multiplatform/windows/native/openjdk_OnLoad_win.cpp"
+            "${MDVM_LIBCORE_DIR}/multiplatform/windows/native/win_close.cpp"
+            "${MDVM_LIBCORE_DIR}/multiplatform/windows/native/NativeThread_win.c"
+            "${MDVM_LIBCORE_DIR}/multiplatform/windows/native/AsynchronousCloseMonitor_win.cpp"
+            "${_repo}/tools/windows_x64/jni_stubs/win_runtime_natives.c"
+            "${_repo}/tools/windows_x64/jni_stubs/libcore_hello3.c"
+            "${_repo}/tools/windows_x64/jni_stubs/win_process_natives.c"
+            "${_repo}/compat/src/openjdk_excluded_registers_windows.cc")
+        target_include_directories(openjdk BEFORE PRIVATE
+            "${MDVM_LIBCORE_DIR}/multiplatform/windows/native"
+            "${MDVM_LIBCORE_DIR}/luni/src/main/native"
+            "${MDVM_LIBCORE_DIR}/ojluni/src/main/native"
+            "${_repo}/tools/windows_x64/jni_stubs")
+        set(_art_windows_openjdk_linuxish_c
+            "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/FileDispatcherImpl.c"
+            "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/FileChannelImpl.c"
+            "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/IOUtil.c"
+            "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/Net.c"
+            "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/net_util_md.c"
+            "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/net_util.c"
+            "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/EPoll.c"
+            "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/SocketChannelImpl.c"
+            "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/ServerSocketChannelImpl.c"
+            "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/DatagramChannelImpl.c"
+            "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/DatagramDispatcher.c"
+            "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/PollArrayWrapper.c"
+            "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/FileKey.c"
+            "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/MappedByteBuffer.c"
+            "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/FileInputStream.c"
+            "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/io_util_md.c"
+            "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/SocketInputStream.c"
+            "${MDVM_LIBCORE_DIR}/ojluni/src/main/native/SocketOutputStream.c")
+        set_source_files_properties(${_art_windows_openjdk_linuxish_c}
+            PROPERTIES COMPILE_DEFINITIONS "__linux__=1;MDVM_SOCKET_FD_TRACKING=1")
+        target_link_libraries(openjdk openjdkjvm icuuc)
+    endif()
+    if(TARGET javacore OR TARGET openjdk)
+        # The shared legacy fallback source must not provide either product
+        # DSO's authoritative JNI_OnLoad entry point.
+        set_source_files_properties(
+            "${_repo}/tools/windows_x64/jni_stubs/libcore_hello3.c"
+            PROPERTIES COMPILE_DEFINITIONS
+                "JNI_OnLoad=mdvm_stub_JNI_OnLoad_unused;JNI_OnUnload=mdvm_stub_JNI_OnUnload_unused")
+    endif()
     if(TARGET lzma)
         # The portable graph intentionally omits AesOpt.c.  Keep the same
         # scalar AES contract as the former Windows phase rather than probing
@@ -446,6 +528,14 @@ set_source_files_properties(
     ${MDVM_NATIVE_SRC_ROOT_DIR}/art/libartbase/base/file_utils.cc
     ${MDVM_NATIVE_SRC_ROOT_DIR}/art/libartbase/base/utils.cc
     PROPERTIES COMPILE_OPTIONS "-Wno-strict-primary-template-shadow")
+if(ART_TARGET_PLATFORM STREQUAL "windows")
+    # Windows headers define CALLBACK as __stdcall, but ICU's ucnvisci.cpp
+    # uses CALLBACK as a private goto label. Keep the forced compatibility
+    # prelude and suppress that macro for this source only.
+    set_property(SOURCE
+        ${MDVM_ICU_DIR}/icu4c/source/common/ucnvisci.cpp
+        APPEND PROPERTY COMPILE_DEFINITIONS MDVM_WINDOWS_NO_CALLBACK_MACRO)
+endif()
 file(GLOB _DEX_CC ${MDVM_NATIVE_SRC_ROOT_DIR}/art/libdexfile/dex/*.cc)
 set_source_files_properties(${_DEX_CC}
     PROPERTIES COMPILE_OPTIONS "-include;${_PRELUDE};-Wno-strict-primary-template-shadow")
@@ -538,12 +628,43 @@ foreach(_t IN LISTS _all_targets)
         set_target_properties(${_t} PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
     endif()
     if(_ttype STREQUAL "EXECUTABLE")
-        target_compile_options(${_t} PRIVATE -fPIE)
         if(ART_TARGET_PLATFORM STREQUAL "linux")
+            target_compile_options(${_t} PRIVATE -fPIE)
             target_link_options(${_t} PRIVATE -pie)
         endif()
     endif()
 endforeach()
+if(ART_TARGET_PLATFORM STREQUAL "windows")
+    # Python stages include-guard-compatible copies of the few ART headers
+    # whose cross-DSO data needs explicit dllexport/dllimport on PE. Force the
+    # same declarations into art.dll and its dex2oat consumer without touching
+    # the nested vendor checkout.
+    set(_art_windows_pe_headers
+        "${MDVM_GENSRC_DIR}/art/windows-pe-headers/art/runtime/base/locks.h"
+        "${MDVM_GENSRC_DIR}/art/windows-pe-headers/art/runtime/well_known_classes.h"
+        "${MDVM_GENSRC_DIR}/art/windows-pe-headers/art/runtime/oat/oat_quick_method_header.h")
+    foreach(_art_pe_target art art-dex2oat)
+        if(TARGET ${_art_pe_target})
+            # The generated oat header no longer sits beside stack_map.h, so
+            # preserve the original quoted-include lookup explicitly.
+            target_include_directories(${_art_pe_target} PRIVATE
+                "${MDVM_ART_ROOT_DIR}/art/runtime/oat")
+            foreach(_art_pe_header IN LISTS _art_windows_pe_headers)
+                target_compile_options(${_art_pe_target} PRIVATE
+                    "$<$<COMPILE_LANGUAGE:CXX>:SHELL:-include ${_art_pe_header}>")
+            endforeach()
+        endif()
+    endforeach()
+    set(_art_windows_runtime_options_header
+        "${MDVM_GENSRC_DIR}/art/windows-pe-headers/art/runtime/runtime_options.h")
+    # Only the defining TU and dex2oat's consuming TU use cross-DSO runtime
+    # option keys; keep this overlay source-scoped to avoid broad rebuilds.
+    set_property(SOURCE
+        "${MDVM_ART_ROOT_DIR}/art/runtime/runtime_options.cc"
+        "${MDVM_ART_ROOT_DIR}/art/dex2oat/dex2oat.cc"
+        APPEND PROPERTY COMPILE_OPTIONS
+            "-include;${_art_windows_runtime_options_header}")
+endif()
 foreach(_t art dalvikvm)
     if(TARGET ${_t} AND ART_TARGET_PLATFORM STREQUAL "linux")
         target_compile_definitions(${_t} PRIVATE ANDROID_HOST_MUSL)
@@ -562,5 +683,5 @@ endif()
 option(ART_BUILD_TESTS "Define the unified target-aware ART test catalog" ON)
 if(ART_BUILD_TESTS)
     include(CTest)
-    add_subdirectory(tests)
+    add_subdirectory("${_repo}/tests" tests)
 endif()

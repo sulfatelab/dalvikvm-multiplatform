@@ -10,7 +10,15 @@ from __future__ import annotations
 import argparse
 import sys
 
-from .codegen import CodegenConfig, CodegenError, run_all, gen_mterp, gen_asm_defines, gen_aconfig
+from .codegen import (
+    CodegenConfig,
+    CodegenError,
+    gen_aconfig,
+    gen_asm_defines,
+    gen_mterp,
+    gen_windows_pe_headers,
+    run_all,
+)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -28,7 +36,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="System include directory for cross-target asm_defines; repeatable.")
     ap.add_argument("--asm-define", action="append", default=[],
                     help="Additional definition for layout-sensitive asm_defines; repeatable.")
-    ap.add_argument("--only", choices=["operator_out", "mterp", "asm_defines", "aconfig"],
+    ap.add_argument("--only", choices=["operator_out", "mterp", "asm_defines", "aconfig",
+                                              "windows_pe_headers"],
                     help="run only one generation kind")
     args = ap.parse_args(argv)
 
@@ -45,6 +54,8 @@ def main(argv: list[str] | None = None) -> int:
             print("asm_defines:", gen_asm_defines(cfg))
         elif args.only == "aconfig":
             print("aconfig:", ", ".join(gen_aconfig(cfg)) or "(none)")
+        elif args.only == "windows_pe_headers":
+            print("windows_pe_headers:", ", ".join(gen_windows_pe_headers(cfg)) or "(none)")
         elif args.only == "operator_out":
             rep = run_all(cfg, do_mterp=False, do_asm_defines=False, do_aconfig=False)
             print(f"operator_out: {len(rep['operator_out'])} files")

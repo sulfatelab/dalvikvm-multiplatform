@@ -29,7 +29,7 @@ if ! grep -qF "Name: Java_W003XmmSentinelProbe_runXmmSentinel" <<<"$EXPORTS"; th
 fi
 
 OBJ="$(find "$NATIVE_BUILD/CMakeFiles/w003xmmsentinel.dir" \
-  -name 'w003_xmm_sentinel_x86_64.S.obj' -print -quit)"
+  -name 'sentinel_x86_64.S.obj' -print -quit)"
 DIS="$(llvm-objdump -dr --no-show-raw-insn "$OBJ")"
 for token in \
     $'subq\t$0xc8, %rsp' \
@@ -53,7 +53,7 @@ if ! grep -qF 'W003XmmSentinelAssembly' <<<"$UNWIND" ||
   exit 1
 fi
 C_OBJ="$(find "$NATIVE_BUILD/CMakeFiles/w003xmmsentinel.dir" \
-  -name 'w003_xmm_sentinel.c.obj' -print -quit)"
+  -name 'probe.c.obj' -print -quit)"
 HELPER_DIS="$(llvm-objdump -dr --no-show-raw-insn "$C_OBJ" | \
   sed -n '/<W003InvokeManagedCallback>:/,/^$/p')"
 if grep -Eq '%xmm(6|7|8|9|10|11|12|13|14|15)' <<<"$HELPER_DIS"; then
@@ -71,7 +71,7 @@ JAVA_TMP="$(mktemp -d "${TMPDIR:-/tmp}/w003-xmm-java.XXXXXX")"
 trap 'rm -rf "$JAVA_TMP"' EXIT
 mkdir -p "$JAVA_TMP/classes" "$JAVA_TMP/dex"
 "$JAVAC" -d "$JAVA_TMP/classes" \
-  "$REPO/tools/verify/windows_x64_phase4/src/W003XmmSentinelProbe.java"
+  "$REPO/tests/cases/w003-xmm-sentinel/W003XmmSentinelProbe.java"
 java -cp "$R8JAR" com.android.tools.r8.D8 \
   --release --min-api 31 --output "$JAVA_TMP/dex" \
   "$JAVA_TMP/classes/W003XmmSentinelProbe.class" \

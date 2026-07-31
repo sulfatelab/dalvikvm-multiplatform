@@ -129,6 +129,71 @@ OVERLAY = Overlay(
             force_enabled=True,
         ),
 
+        # Stable NDK-style ICU shim. Android's API-level annotation macro is
+        # supplied by Bionic; make it empty on non-Android targets, matching
+        # the Linux overlay. Keep the generated shim C-only at its public API.
+        "libicu": ModulePolicy(
+            kind="shared", absorb_whole_static=True,
+            add_defines=["U_SHOW_CPLUSPLUS_API=0", "__INTRODUCED_IN(x)="],
+            force_enabled=True,
+        ),
+        "libicu_jni": ModulePolicy(
+            kind="shared", force_enabled=True,
+            add_defines=[
+                "U_USING_ICU_NAMESPACE=0",
+                "ANDROID_LINK_SHARED_ICU4C",
+                "__INTRODUCED_IN(x)=",
+            ],
+            add_cflags=_WIN_CFLAGS,
+        ),
+        "libjavacore": ModulePolicy(
+            kind="shared", force_enabled=True,
+            remove_srcs=[
+                "libcore_io_Linux.cpp",
+                "cbigint.cpp",
+                "android_system_OsConstantsHolder.cpp",
+            ],
+            add_defines=[
+                "U_USING_ICU_NAMESPACE=0",
+                "ANDROID_LINK_SHARED_ICU4C",
+                "LIBICU_U_SHOW_CPLUSPLUS_API=1",
+                "MDVM_WINDOWS_KEEP_CONST_MACRO",
+                "__INTRODUCED_IN(x)=",
+            ],
+            add_shared_libs=["libicuuc", "libicui18n", "libopenjdkjvm"],
+            remove_static_libs=["libnativehelper_compat_libc++"],
+            add_cflags=_WIN_CFLAGS,
+        ),
+        "libopenjdk": ModulePolicy(
+            kind="shared", force_enabled=True,
+            remove_srcs=[
+                "linux_close.cpp",
+                "NativeThread.c",
+                "OnLoad.cpp",
+                "LinuxNativeDispatcher.c",
+                "LinuxWatchService.c",
+                "UnixCopyFile.c",
+                "UnixNativeDispatcher.c",
+                "UNIXProcess_md.c",
+                "EPollPort.c",
+                "UnixAsynchronousServerSocketChannelImpl.c",
+                "UnixAsynchronousSocketChannelImpl.c",
+                "FileSystemPreferences.c",
+                "UnixDomainSockets.c",
+                "UnixFileSystem_md.c",
+                "System.c",
+                "Runtime.c",
+            ],
+            add_defines=[
+                "U_USING_ICU_NAMESPACE=0",
+                "_LP64=1",
+                "__INTRODUCED_IN(x)=",
+            ],
+            add_shared_libs=["libicuuc", "libopenjdkjvm"],
+            remove_static_libs=["libnativehelper_compat_libc++"],
+            add_cflags=_WIN_CFLAGS,
+        ),
+
         # --- Phase 1 runtime graph ----------------------------------------
         "libdexfile": ModulePolicy(
             kind="static", force_enabled=True,
@@ -170,6 +235,16 @@ OVERLAY = Overlay(
         "libart-disassembler": ModulePolicy(
             kind="shared", force_enabled=True, add_cflags=_WIN_CFLAGS,
         ),
+        "libopenjdkjvm": ModulePolicy(
+            kind="shared", force_enabled=True, add_cflags=_WIN_CFLAGS,
+            # OpenjdkJvm.cc is an optional runtime DSO, not part of art.dll.
+            # Import ART's PE data/accessor boundary and export the one
+            # process-wide CRT-fd/socket ownership registry hosted here.
+            add_defines=[
+                "ART_CONSUMING_LIBART",
+                "MDVM_SOCKET_FD_REGISTRY_EXPORTS=1",
+            ],
+        ),
         "libart-compiler": ModulePolicy(
             # Keep the standalone compiler topology equal to Linux. libart
             # still absorbs compiler sources for its JIT implementation; this
@@ -178,6 +253,31 @@ OVERLAY = Overlay(
             kind="shared", force_enabled=True, add_cflags=_WIN_CFLAGS,
             add_defines=["_CRT_SECURE_NO_WARNINGS"],
             add_shared_libs=["libart", "libart-disassembler"],
+        ),
+        "libart-dex2oat": ModulePolicy(
+            kind="shared", force_enabled=True,
+            add_cflags=_WIN_CFLAGS,
+            add_defines=[
+                "_CRT_SECURE_NO_WARNINGS",
+                "ART_CONSUMING_LIBART",
+                "MDVM_WINDOWS_DEX2OAT_COMPAT",
+            ],
+            add_shared_libs=["libart-compiler"],
+        ),
+        "dex2oat": ModulePolicy(
+            kind="executable", force_enabled=True,
+            absorb_whole_static=False,
+            remove_static_libs=["libdex2oat_static"],
+            add_shared_libs=[
+                "libart-dex2oat", "libart-compiler", "libart", "libartbase",
+                "libdexfile", "libprofile", "libartpalette", "libelffile",
+            ],
+            add_cflags=_WIN_CFLAGS,
+            add_defines=[
+                "_CRT_SECURE_NO_WARNINGS",
+                "ART_CONSUMING_LIBART",
+                "MDVM_WINDOWS_DEX2OAT_COMPAT",
+            ],
         ),
         # Core runtime static library (host picks monitor_linux etc.; we swap OS files in harness)
         "libart-runtime": ModulePolicy(

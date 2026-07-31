@@ -644,11 +644,11 @@ def _resolve_tools(local: LocalBuildConfig, *, need_compiler: bool) -> dict[str,
     else:
         clang = _discover("clang")
         clangxx = _discover("clang++")
-    tools["clang"] = validate_managed_path(clang.resolve())
-    tools["clang++"] = validate_managed_path(clangxx.resolve())
+    tools["clang"] = validate_managed_path(clang)
+    tools["clang++"] = validate_managed_path(clangxx)
     if tools["clang"].name not in ("clang", "clang.exe"):
         raise BuildFrontendError(f"plain Clang driver required: {tools['clang']}")
-    if tools["clang++"].name not in ("clang++", "clang++.exe", "clang"):
+    if tools["clang++"].name not in ("clang++", "clang++.exe"):
         raise BuildFrontendError(f"plain Clang++ driver required: {tools['clang++']}")
     return tools
 
@@ -658,7 +658,7 @@ def _resolve_llvm_resource_compiler(local: LocalBuildConfig) -> Path:
     executable = "llvm-rc.exe" if os.name == "nt" else "llvm-rc"
     llvm_root = local.tools.get("llvm_root")
     path = llvm_root / "bin" / executable if llvm_root is not None else _discover(executable)
-    resolved = validate_managed_path(path.resolve())
+    resolved = validate_managed_path(path)
     if resolved.name not in ("llvm-rc", "llvm-rc.exe"):
         raise BuildFrontendError(
             f"LLVM resource compiler required; got {resolved.name!r}"
@@ -770,12 +770,17 @@ def _init_local_config() -> int:
     cmake = validate_managed_path(cmake_path.resolve())
     ninja = validate_managed_path(ninja_path.resolve())
     clang = validate_managed_path(clang_path.resolve())
+    llvm_root = clang.parent.parent
+    validate_managed_path(llvm_root / "bin" / ("clang.exe" if os.name == "nt" else "clang"))
+    validate_managed_path(
+        llvm_root / "bin" / ("clang++.exe" if os.name == "nt" else "clang++")
+    )
     content = (
         "# Machine-local paths only. This file is ignored by Git.\n"
         "[tools]\n"
         f"cmake = {json.dumps(str(cmake))}\n"
         f"ninja = {json.dumps(str(ninja))}\n"
-        f"llvm_root = {json.dumps(str(clang.parent.parent))}\n"
+        f"llvm_root = {json.dumps(str(llvm_root))}\n"
     )
     _write_text_atomic(path, content)
     print(f"created {path}")

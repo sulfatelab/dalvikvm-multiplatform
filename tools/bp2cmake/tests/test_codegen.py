@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from bp2cmake.codegen import (
     CodegenConfig, _asm_defines_macros_for, _forward_slash_path,
     _replace_if_changed,
-    gen_operator_out, gen_mterp, gen_asm_defines,
+    gen_operator_out, gen_mterp, gen_asm_defines, gen_windows_pe_headers,
 )
 
 # Pure multipath: foundational native sources live under nested vendor/.
@@ -120,6 +120,21 @@ def test_windows_asm_defines_config():
     assert "ART_TARGET_WINDOWS" in macros
     assert "_WIN32" in macros
     assert "ART_TARGET_LINUX" not in macros
+
+
+def test_windows_pe_header_overlays_are_staged_without_modifying_vendor():
+    if not HAVE_ART:
+        return
+    with tempfile.TemporaryDirectory() as tmp:
+        cfg = _cfg(tmp)
+        cfg.asm_target_os = "windows"
+        outputs = gen_windows_pe_headers(cfg)
+        assert len(outputs) == 4
+        joined = "\n".join(open(path, encoding="utf-8").read() for path in outputs)
+        assert "LIBART_PE_DATA static const Key<Type>" in joined
+        assert "LIBART_PE_DATA static Mutex* intern_table_lock_" in joined
+        assert "LIBART_PE_DATA static ArtMethod* java_lang_OutOfMemoryError_init" in joined
+        assert "LIBART_PE_DATA EXPORT static ArrayRef<const uint8_t> NterpImpl" in joined
 
 
 def test_asm_extra_defines_are_appended_once():

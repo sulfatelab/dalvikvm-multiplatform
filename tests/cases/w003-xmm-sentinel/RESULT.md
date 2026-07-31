@@ -9,6 +9,18 @@ follow-up accepted on native Windows
 
 **Host:** agent01
 
+## Target status
+
+| Target ID | Applicable | Build | Runtime | Last accepted |
+|---|---:|---:|---:|---|
+| `windows-x86_64-msvc` | yes | verified | verified | 2026-07-28 |
+| `windows-aarch64-msvc` | no | not applicable | not applicable | — |
+| `windows-arm64ec-msvc` | no | not applicable | not applicable | — |
+
+This test is intrinsically Microsoft x86-64-specific: its contract names
+XMM6-XMM15, uses PE x86-64 unwind directives, and validates AMD64 relocations.
+An AArch64 SIMD preservation test requires a separate logical ID and source.
+
 ## Contract tested
 
 `art_quick_invoke_stub`, `art_quick_invoke_static_stub`, and
@@ -40,7 +52,8 @@ away or wired to only a subset of the registers.
 
 ## Structural checks
 
-`run_w003_xmm_sentinel.sh` verifies:
+The transitional
+`../../../tools/verify/windows_x64_phase4/run_w003_xmm_sentinel.sh` verifies:
 
 - the JNI symbol is exported from `libw003xmmsentinel.dll`;
 - the PE object reserves/releases exactly 200 bytes;
@@ -95,15 +108,25 @@ compile the twelve-double managed callback through the corrected Windows
 pagefile-section dual view.
 
 The separate four-family managed-frame probe also passes 8/8 on the same
-native host; see [RESULT-w003-frame-probe.md](RESULT-w003-frame-probe.md).
+native host; see the adjacent
+[frame-family result](../w003-frame-probe/RESULT.md).
 Fatal-marker and recursive dump scans are clean. The complete accepted return
 is documented in
-[evidence/w003_host/ACCEPTANCE.md](evidence/w003_host/ACCEPTANCE.md), and W-003
-is closed. The historical accepted logs are intentionally not rewritten.
+[native acceptance](../../../tools/verify/windows_x64_phase4/evidence/w003_host/ACCEPTANCE.md),
+and W-003 is closed. The historical accepted logs are intentionally not
+rewritten.
 
 E9 subsequently performs the strengthened ten-register repetition on Windows
 Server 2025 build 26100. Nterp, switch, and threshold-zero JIT each pass two
 runs with `mask=0`, the retained `selfTestMask=63`, and authoritative
 `fullSelfTestMask=1023`. These six cases are part of the accepted 30/30
 W-010/W-014 package described in
-[evidence/w010_w014_e9/ACCEPTANCE.md](evidence/w010_w014_e9/ACCEPTANCE.md).
+[E9 acceptance](../../../tools/verify/windows_x64_phase4/evidence/w010_w014_e9/ACCEPTANCE.md).
+
+## Related files
+
+- `probe.c`
+- `sentinel_x86_64.S`
+- `W003XmmSentinelProbe.java`
+- `../../../tools/verify/windows_x64_phase4/run_w003_xmm_sentinel.sh`
+- `../../stages/w003/ANALYSIS.md`

@@ -86,8 +86,8 @@ PASS native_crash_aborts
 | W-002 OSR adapters | `quick_entrypoints_x86_64.S`; `mterp/x86_64ng/main.S` |
 | W-002 probes and native package | `run_w002_*.sh`; `package_windows_x64_w002.sh` |
 | W-003 XMM boundary and structural gate | `quick_entrypoints_x86_64.S`; `check_w003_quick_boundaries.py` |
-| W-003 attributed frame-family gate | `w003_frame_probe/`; `run_w003_frame_probe.sh` |
-| W-003 XMM runtime sentinel | `w003_xmm_sentinel/`; `run_w003_xmm_sentinel.sh` |
+| W-003 attributed frame-family gate | `../../../tests/cases/w003-frame-probe/`; `run_w003_frame_probe.sh` |
+| W-003 XMM runtime sentinel | `../../../tests/cases/w003-xmm-sentinel/`; `run_w003_xmm_sentinel.sh` |
 | W-003 native package and evidence | `package_windows_x64_w003.sh`; `evidence/w003_host/ACCEPTANCE.md` |
 | W-014 Stages A-B stack/pthread/page gate | `../windows_x64_phase1/win32_thread_stack_probe.c`; `../windows_x64_phase1/win32_stack_page_probe.cc`; `../windows_x64_phase1/win32_stack_page_fault_probe.S`; `run_thread_stack_probe.sh` |
 | W-010 Stage C adapter and probes | `../windows_x64_phase1/win32_fault_record_probe.cc`; `../windows_x64_phase1/win32_sigchain_probe.cc`; `run_fault_adapter_probe.sh`; `vendor/art/runtime/multiplatform/windows/sigchain_windows.cc` |
@@ -494,7 +494,7 @@ attribute all four frame families; every XMM run reports
 pagefile-section J-2 dual view and successful compilation; and fatal/dump
 scans are clean. W-003 is closed. The independent nterp implicit-null and
 PE/SEH/native-unwind work remains W-010. See
-[`RESULT-w003-quick-frames-analysis.md`](RESULT-w003-quick-frames-analysis.md)
+[`tests/stages/w003/ANALYSIS.md`](../../../tests/stages/w003/ANALYSIS.md)
 and [`evidence/w003_host/ACCEPTANCE.md`](evidence/w003_host/ACCEPTANCE.md).
 
 The accepted native evidence above remains the historical XMM6-XMM11

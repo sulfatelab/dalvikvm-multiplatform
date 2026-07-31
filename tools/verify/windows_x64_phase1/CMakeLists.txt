@@ -143,7 +143,7 @@ set(ART_TARGET_ID windows-x86_64)
 set(ART_TARGET_OS_OR_RUNTIME windows)
 set(ART_TARGET_CPU_ARCH x86_64)
 include(CTest)
-add_subdirectory("${_repo}/native/tests" "${CMAKE_BINARY_DIR}/art-tests")
+add_subdirectory("${_repo}/tests" "${CMAKE_BINARY_DIR}/art-tests")
 
 # ART's JVMTI implementation is a runtime plugin rather than part of art.dll.
 # Keep the target source list aligned with libopenjdkjvmti_defaults in

@@ -38,7 +38,7 @@ add_library(art INTERFACE)
 add_library(art_windows_cxx INTERFACE)
 add_library(windows_x64_posix_stubs INTERFACE)
 enable_testing()
-add_subdirectory("{(repo / 'native' / 'tests').as_posix()}" art-tests)
+add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
 """
     (source / "CMakeLists.txt").write_text(cmake_lists, encoding="utf-8")
 

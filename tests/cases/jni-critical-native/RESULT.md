@@ -3,6 +3,17 @@
 Date: 2026-07-24. VM: agent01. Runtime: Wine 10.0. Build:
 `build/windows_x64_phase1` RelWithDebInfo.
 
+## Target status
+
+| Target ID | Applicable | Build | Runtime | Last accepted |
+|---|---:|---:|---:|---|
+| `windows-x86_64-msvc` | yes | verified | verified | 2026-07-24 |
+| `windows-aarch64-msvc` | not yet declared | pending | pending | — |
+| `windows-arm64ec-msvc` | not yet declared | pending | pending | — |
+
+The shared C/Java source is a portability candidate, not evidence for either
+AArch64 target. Each target requires its own build and runtime acceptance.
+
 ## Result
 
 The Windows x64 optimizing-compiler direct `@CriticalNative` convention now matches
@@ -16,7 +27,7 @@ method-tracing transitions:
 | Default corrected dual view | 3/3 | 3/3 | 3/3 |
 | J-1 diagnostic view | 3/3 | 3/3 | 3/3 |
 
-Command:
+Transitional compatibility command:
 
 ```sh
 bash tools/verify/windows_x64_phase4/run_critical_native_probe.sh
@@ -151,30 +162,36 @@ the product-default tripwire-OFF mode and the final Windows x64 binaries were re
 
 The same packaged tripwire matrix subsequently passed on native Windows 10
 build 19044, authorizing fallback cleanup. Detailed evidence and the cleanup
-sequence are in `RESULT-interpreter-jni-fallback.md`; accepted host artifacts
-are under `evidence/w024_host/`.
+sequence are in
+`../../../tools/verify/windows_x64_phase4/RESULT-interpreter-jni-fallback.md`;
+accepted host text evidence remains temporarily under
+`../../../tools/verify/windows_x64_phase4/evidence/w024_host/`.
 
 ## Final W-024 status
 
 Native Windows 10 acceptance, native-JIT gate removal, upstream interpreter
 fallback restoration, and post-change Linux/Windows x64 regressions are complete.
 Math.ceil/floor and the shared ELF/PE registration table are restored; see
-`RESULT-math-critical.md`. Registered and unresolved CriticalNative calls also
-pass the JVMTI forced-interpreter transition in both memory modes; see
-`RESULT-jvmti-force.md`.
+`../../../tools/verify/windows_x64_phase4/RESULT-math-critical.md`. Registered
+and unresolved CriticalNative calls also pass the JVMTI forced-interpreter
+transition in both memory modes; see
+`../../../tools/verify/windows_x64_phase4/RESULT-jvmti-force.md`.
 
 ## Regression verification
 
 The same ART build also passed:
 
 - Windows x64 `art` and `dalvikvm` build;
-- `run_native_abi_probe.sh`: default 7/7 mixed/high-FP normal/FastNative checks
+- `../../../tools/verify/windows_x64_phase4/run_native_abi_probe.sh`: default
+  7/7 mixed/high-FP normal/FastNative checks
   across rebinding and method-tracing phases with no extra target compilation;
-- `run_jvmti_force_probe.sh`: 3/3 dual-view and 3/3 J-1 forced-interpreter
+- `../../../tools/verify/windows_x64_phase4/run_jvmti_force_probe.sh`: 3/3
+  dual-view and 3/3 J-1 forced-interpreter
   transitions over registered and unresolved normal, FastNative, and
   CriticalNative calls;
-- `run_jit_smoke.sh`: 12/12, including default-silent compile diagnostics;
-- `run_jit_matrix.sh`: 14/14;
+- `../../../tools/verify/windows_x64_phase4/run_jit_smoke.sh`: 12/12,
+  including default-silent compile diagnostics;
+- `../../../tools/verify/windows_x64_phase4/run_jit_matrix.sh`: 14/14;
 - native Linux `nativeloader`, `art`, `openjdkjvm`, and `dalvikvm` build;
 - Linux L-005 imageless Hello on the same shared multipath `boot.jar` bytes
   staged for Windows x64.
@@ -182,13 +199,14 @@ The same ART build also passed:
 The final repeated matrix initially exposed an unrelated pre-existing
 `pthread_once` early-return race in the parent compatibility layer. That race
 was fixed and given a separate 32-thread stress test; see
-`RESULT-pthread-once.md`. No CriticalNative workaround was added for it.
+`../../../tools/verify/windows_x64_phase4/RESULT-pthread-once.md`. No
+CriticalNative workaround was added for it.
 
 Related files:
 
-- `run_critical_native_probe.sh`
-- `src/CriticalNativeProbe.java`
-- `src/CriticalNativeDlsymProbe.java`
-- `critical_native/critical_native_probe.c`
-- `../windows_x64_libcore_icu/openjdkjvm_memory_standalone.c`
+- `probe.c`
+- `CriticalNativeProbe.java`
+- `CriticalNativeDlsymProbe.java`
+- `../../../tools/verify/windows_x64_phase4/run_critical_native_probe.sh`
+- `../../../tools/verify/windows_x64_libcore_icu/openjdkjvm_memory_standalone.c`
 - `../../../win32_open_items.md` W-024

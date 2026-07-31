@@ -5,7 +5,8 @@ option(ART_ENABLE_TARGET_RUNTIME_TESTS
     "Register target executables with CTest when the configured host can run them"
     OFF)
 
-get_filename_component(_art_test_repo_root "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
+get_filename_component(_art_test_repo_root "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
+set(_art_test_cases_root "${CMAKE_CURRENT_LIST_DIR}/cases")
 set(_art_test_verify_root "${_art_test_repo_root}/tools/verify")
 set(_art_test_phase1 "${_art_test_verify_root}/windows_x64_phase1")
 set(_art_test_phase4 "${_art_test_verify_root}/windows_x64_phase4")
@@ -338,7 +339,7 @@ art_add_target_probe(
 art_add_target_probe(
     NAME criticalnativeprobe STAGE w003 TYPE SHARED EXECUTION compile-only
     ${_art_windows_current_selector}
-    SOURCES "${_art_test_phase4}/critical_native/critical_native_probe.c"
+    SOURCES "${_art_test_cases_root}/jni-critical-native/probe.c"
     INCLUDE_DIRS "${_art_jni_include}"
     LINK_OPTIONS "${_art_no_cet}"
     CONTRACTS jni native-abi
@@ -346,7 +347,7 @@ art_add_target_probe(
 art_add_target_probe(
     NAME nativeabiprobe STAGE w003 TYPE SHARED EXECUTION compile-only
     ${_art_windows_current_selector}
-    SOURCES "${_art_test_phase4}/native_abi/native_abi_probe.c"
+    SOURCES "${_art_test_cases_root}/jni-native-abi/probe.c"
     INCLUDE_DIRS "${_art_jni_include}"
     LINK_OPTIONS "${_art_no_cet}"
     CONTRACTS jni native-abi
@@ -354,7 +355,7 @@ art_add_target_probe(
 art_add_target_probe(
     NAME w003frameprobe STAGE w003 TYPE SHARED EXECUTION compile-only
     ${_art_windows_current_selector}
-    SOURCES "${_art_test_phase4}/w003_frame_probe/w003_frame_probe.c"
+    SOURCES "${_art_test_cases_root}/w003-frame-probe/probe.c"
     INCLUDE_DIRS "${_art_jni_include}"
     LINK_OPTIONS "${_art_no_cet}"
     CONTRACTS jni stack
@@ -363,8 +364,8 @@ art_add_target_probe(
     NAME w003xmmsentinel STAGE w003 TYPE SHARED EXECUTION compile-only
     ${_art_windows_x86_64_msvc_selector}
     SOURCES
-        "${_art_test_phase4}/w003_xmm_sentinel/w003_xmm_sentinel.c"
-        "${_art_test_phase4}/w003_xmm_sentinel/w003_xmm_sentinel_x86_64.S"
+        "${_art_test_cases_root}/w003-xmm-sentinel/probe.c"
+        "${_art_test_cases_root}/w003-xmm-sentinel/sentinel_x86_64.S"
     INCLUDE_DIRS "${_art_jni_include}"
     LINK_OPTIONS "${_art_no_cet}"
     CONTRACTS jni native-abi xmm

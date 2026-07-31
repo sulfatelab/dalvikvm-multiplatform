@@ -7,7 +7,8 @@ if(NOT MDVM_REPO_ROOT)
   message(FATAL_ERROR "MDVM_REPO_ROOT is required")
 endif()
 
-add_library(w003frameprobe SHARED w003_frame_probe.c)
+add_library(w003frameprobe SHARED
+  "${MDVM_REPO_ROOT}/tests/cases/w003-frame-probe/probe.c")
 target_include_directories(w003frameprobe PRIVATE
   "${MDVM_REPO_ROOT}/vendor/libnativehelper/include_jni")
 set_target_properties(w003frameprobe PROPERTIES

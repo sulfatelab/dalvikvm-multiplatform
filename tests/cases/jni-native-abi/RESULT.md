@@ -3,6 +3,17 @@
 Date: 2026-07-24. VM: agent01. Runtime: Wine 10.0. Build:
 `build/windows_x64_phase1` RelWithDebInfo.
 
+## Target status
+
+| Target ID | Applicable | Build | Runtime | Last accepted |
+|---|---:|---:|---:|---|
+| `windows-x86_64-msvc` | yes | verified | verified | 2026-07-24 |
+| `windows-aarch64-msvc` | not yet declared | pending | pending | — |
+| `windows-arm64ec-msvc` | not yet declared | pending | pending | — |
+
+The scalar C/JNI and Java sources are portability candidates, not evidence for
+either AArch64 target. Each target requires its own ABI and runtime acceptance.
+
 ## Result
 
 The focused compiled-JNI acceptance gate now passes the mixed/high-FP matrix:
@@ -12,7 +23,7 @@ The focused compiled-JNI acceptance gate now passes the mixed/high-FP matrix:
 | Default native compilation | PASS: exit 0, three exact binding phases, 7/7 targets and exactly 7 compile records |
 | Default native compilation plus method tracing | PASS: tracing mode `0 -> 1 -> 0`, exact during/after values, exactly 7 target compile records |
 
-Command:
+Transitional compatibility command:
 
 ```sh
 bash tools/verify/windows_x64_phase4/run_native_abi_probe.sh
@@ -153,7 +164,16 @@ instrumentation and JVMTI forced-interpreter transitions pass with native
 methods compiled by default. Per-method compile records remain opt-in. Native
 Windows 10 acceptance, upstream interpreter fallback restoration, native-JIT
 gate removal, and post-change Linux/Windows x64 regressions are complete.
-The Math/libcore native demotion is restored in `RESULT-math-critical.md`.
-CriticalNative method tracing is covered by
-`run_critical_native_probe.sh`; JVMTI single-step/deoptimization coverage is
-recorded in `RESULT-jvmti-force.md`.
+The Math/libcore native demotion is restored in
+`../../../tools/verify/windows_x64_phase4/RESULT-math-critical.md`.
+CriticalNative method tracing is covered by the adjacent
+`../jni-critical-native/RESULT.md`; JVMTI single-step/deoptimization coverage
+is recorded in
+`../../../tools/verify/windows_x64_phase4/RESULT-jvmti-force.md`.
+
+## Related files
+
+- `probe.c`
+- `FastNativeAbiProbe.java`
+- `../../../tools/verify/windows_x64_phase4/run_native_abi_probe.sh`
+- `../../../win32_open_items.md` W-024

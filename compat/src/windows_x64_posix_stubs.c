@@ -132,6 +132,46 @@ int nftw(const char* path, int (*fn)(const char*, const struct stat*, int, struc
 }
 
 int flock(int fd, int operation) { (void)fd; (void)operation; return 0; }
+int fchmod(int fd, int mode) { (void)fd; (void)mode; return 0; }
+
+ssize_t getline(char** lineptr, size_t* capacity, FILE* stream) {
+  if (lineptr == NULL || capacity == NULL || stream == NULL) {
+    errno = EINVAL;
+    return -1;
+  }
+  if (*lineptr == NULL || *capacity == 0u) {
+    *capacity = 128u;
+    *lineptr = (char*)malloc(*capacity);
+    if (*lineptr == NULL) {
+      errno = ENOMEM;
+      return -1;
+    }
+  }
+
+  size_t length = 0u;
+  int ch;
+  while ((ch = fgetc(stream)) != EOF) {
+    if (length + 1u >= *capacity) {
+      if (*capacity > SIZE_MAX / 2u) {
+        errno = ENOMEM;
+        return -1;
+      }
+      size_t replacement_capacity = *capacity * 2u;
+      char* replacement = (char*)realloc(*lineptr, replacement_capacity);
+      if (replacement == NULL) {
+        errno = ENOMEM;
+        return -1;
+      }
+      *lineptr = replacement;
+      *capacity = replacement_capacity;
+    }
+    (*lineptr)[length++] = (char)ch;
+    if (ch == '\n') break;
+  }
+  if (length == 0u && ch == EOF) return -1;
+  (*lineptr)[length] = '\0';
+  return (ssize_t)length;
+}
 /* Prefer SetThreadDescription (Win10 1607+); fall back to no-op success. */
 int pthread_setname_np(pthread_t t, const char* name) {
   if (!name) return EINVAL;

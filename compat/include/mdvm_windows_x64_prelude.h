@@ -24,7 +24,10 @@
 #endif
 #include <winsock2.h>
 #include <windows.h>
-#ifdef CONST
+#if defined(MDVM_WINDOWS_NO_CALLBACK_MACRO) && defined(CALLBACK)
+#undef CALLBACK
+#endif
+#if defined(__cplusplus) && defined(CONST) && !defined(MDVM_WINDOWS_KEEP_CONST_MACRO)
 #undef CONST
 #endif
 #ifdef __reserved
@@ -207,7 +210,7 @@ int posix_memalign(void** memptr, size_t alignment, size_t size);
 #endif
 
 /* minwindef.h defines CONST as const; ART dex opcodes use identifier CONST. */
-#ifdef CONST
+#if defined(__cplusplus) && defined(CONST) && !defined(MDVM_WINDOWS_KEEP_CONST_MACRO)
 #undef CONST
 #endif
 #ifdef __reserved
@@ -232,6 +235,46 @@ static inline int getpagesize(void) {
 #endif
 /* If art redefine macros later, this may need to be after their define.
  * Provide a softer helper used if we redefine. */
+
+#if defined(MDVM_WINDOWS_DEX2OAT_COMPAT)
+/*
+ * MS-compatible unqualified friend lookup otherwise binds OatKeyValueStore's
+ * friend to art::OatWriter instead of the later art::linker::OatWriter.
+ */
+#ifdef __cplusplus
+namespace art {
+namespace linker {
+class OatWriter;
+}  // namespace linker
+}  // namespace art
+extern "C" {
+#endif
+
+struct mallinfo {
+  int arena;
+  int ordblks;
+  int smblks;
+  int hblks;
+  int hblkhd;
+  int usmblks;
+  int fsmblks;
+  int uordblks;
+  int fordblks;
+  int keepcost;
+};
+
+static inline struct mallinfo mallinfo(void) {
+  const struct mallinfo info = {0};
+  return info;
+}
+
+int fchmod(int fd, int mode);
+ssize_t getline(char** lineptr, size_t* capacity, FILE* stream);
+
+#ifdef __cplusplus
+}  // extern "C"
+#endif
+#endif
 
 /* XSI strerror_r for Windows CRT. */
 #ifdef __cplusplus
