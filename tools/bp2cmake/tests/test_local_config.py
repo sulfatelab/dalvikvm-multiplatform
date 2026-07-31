@@ -27,7 +27,7 @@ def test_loads_valid_path_bindings(tmp_path):
         f"llvm_root = {_literal(llvm)}\n"
         "[build]\n"
         f"output_root = {_literal(output)}\n"
-        '[targets."windows-x86_64"]\n'
+        '[targets."windows-x86_64-msvc"]\n'
         f"bundle_root = {_literal(bundle)}\n",
         encoding="utf-8",
     )
@@ -35,12 +35,12 @@ def test_loads_valid_path_bindings(tmp_path):
     config = load_local_config(tmp_path)
     assert config.tools["llvm_root"] == llvm
     assert config.output_root == output
-    assert config.target_bindings("windows-x86_64")["bundle_root"] == bundle
+    assert config.target_bindings("windows-x86_64-msvc")["bundle_root"] == bundle
 
 
 def test_rejects_policy_in_local_config(tmp_path):
     (tmp_path / ".art-build.local.toml").write_text(
-        '[targets."windows-x86_64"]\ncompiler_flags = "-O3"\n',
+        '[targets."windows-x86_64-msvc"]\ncompiler_flags = "-O3"\n',
         encoding="utf-8",
     )
     with pytest.raises(LocalConfigError, match="unsupported keys"):
@@ -51,7 +51,7 @@ def test_rejects_noncanonical_target_key(tmp_path):
     (tmp_path / ".art-build.local.toml").write_text(
         '[targets."windows-x64"]\n', encoding="utf-8"
     )
-    with pytest.raises(LocalConfigError, match="windows-x86_64"):
+    with pytest.raises(LocalConfigError, match="windows-x86_64-msvc"):
         load_local_config(tmp_path)
 
 

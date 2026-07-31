@@ -8,7 +8,7 @@
 #   - source/toolchain compatibility policy.
 #
 # Supported configuration starts with:
-#   python tools/build_art.py configure --target-id linux-x86_64
+#   python tools/build_art.py configure --target-id linux-x86_64-gnu
 
 cmake_minimum_required(VERSION 3.16)
 
@@ -18,13 +18,16 @@ if(NOT ART_PROFILE_FILE)
         "ART_PROFILE_FILE is required; configure through tools/build_art.py")
 endif()
 include("${ART_PROFILE_FILE}")
-if(NOT ART_TARGET_OS_OR_RUNTIME MATCHES "^(linux|windows)$")
+if(NOT ART_TARGET_PLATFORM MATCHES "^(linux|windows)$")
     message(FATAL_ERROR
         "The native product entry point admits Linux and Windows targets; "
         "got ${ART_TARGET_ID}.")
 endif()
 foreach(_art_required_profile_value
-        ART_TARGET_ID ART_TARGET_TRIPLE ART_TARGET_AOSP_ARCH ART_TARGET_CPU_ARCH)
+        ART_TARGET_ID ART_TARGET_TRIPLE ART_TARGET_PLATFORM ART_TARGET_ARCH
+        ART_TARGET_BASE_ISA ART_TARGET_AOSP_ARCH ART_TARGET_ABI
+        ART_TARGET_ID_ENUM ART_TARGET_PLATFORM_ENUM ART_TARGET_ARCH_ENUM
+        ART_TARGET_ABI_ENUM)
     if(NOT ${_art_required_profile_value})
         message(FATAL_ERROR
             "Target profile omits required ${_art_required_profile_value}")
@@ -99,7 +102,7 @@ set(ART_TARGET_SDK_ROOT "" CACHE PATH "Target SDK root")
 set(ART_TARGET_SYSROOT "" CACHE PATH "Target sysroot")
 set(ART_TARGET_RUNTIME_ROOT "" CACHE PATH "Target runtime root")
 
-if(ART_TARGET_OS_OR_RUNTIME STREQUAL "windows")
+if(ART_TARGET_PLATFORM STREQUAL "windows")
     if(NOT ART_TARGET_BUNDLE_ROOT)
         message(FATAL_ERROR
             "Windows targets require ART_TARGET_BUNDLE_ROOT; host libraries are forbidden")
@@ -127,7 +130,7 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${MDVM_BP2CMAKE}/bp2cmake/codegen.py"
     "${MDVM_BP2CMAKE}/bp2cmake/codegen_main.py")
 set(_art_codegen_options)
-if(ART_TARGET_OS_OR_RUNTIME STREQUAL "windows")
+if(ART_TARGET_PLATFORM STREQUAL "windows")
     list(APPEND _art_codegen_options --os windows)
     execute_process(
         COMMAND ${CMAKE_CXX_COMPILER} -print-resource-dir
@@ -171,7 +174,7 @@ endforeach()
 # --- Platform imported libraries ---------------------------------------------
 # These replace AOSP in-tree host libraries. Windows searches only the explicit
 # target bundle, never the build host's default library paths.
-if(ART_TARGET_OS_OR_RUNTIME STREQUAL "windows")
+if(ART_TARGET_PLATFORM STREQUAL "windows")
     function(_art_import_windows_library target)
         set(options)
         set(one_value_args)
@@ -211,7 +214,7 @@ if(ART_TARGET_OS_OR_RUNTIME STREQUAL "windows")
     _art_import_windows_library(onecore
         NAMES onecore OneCore
         INCLUDE_DIRS "${ART_TARGET_BUNDLE_ROOT}/xwin/sdk/include/um"
-        LIB_DIRS "${ART_TARGET_BUNDLE_ROOT}/xwin/sdk/lib/um/${ART_TARGET_CPU_ARCH}")
+        LIB_DIRS "${ART_TARGET_BUNDLE_ROOT}/xwin/sdk/lib/um/${ART_TARGET_AOSP_ARCH}")
 
     # The Windows profile is deliberately self-contained.  Clang's Windows
     # driver otherwise discovers an MSVC-style C++ include tree and host
@@ -253,11 +256,11 @@ if(ART_TARGET_OS_OR_RUNTIME STREQUAL "windows")
     endif()
     target_link_libraries(art_windows_cxx INTERFACE "${_art_windows_cxx_lib}")
     foreach(_art_windows_runtime_lib
-            "${ART_TARGET_BUNDLE_ROOT}/xwin/crt/lib/${ART_TARGET_CPU_ARCH}/msvcprt.lib"
-            "${ART_TARGET_BUNDLE_ROOT}/xwin/crt/lib/${ART_TARGET_CPU_ARCH}/msvcrt.lib"
-            "${ART_TARGET_BUNDLE_ROOT}/xwin/crt/lib/${ART_TARGET_CPU_ARCH}/vcruntime.lib"
-            "${ART_TARGET_BUNDLE_ROOT}/xwin/sdk/lib/ucrt/${ART_TARGET_CPU_ARCH}/ucrt.lib"
-            "${ART_TARGET_BUNDLE_ROOT}/xwin/sdk/lib/um/${ART_TARGET_CPU_ARCH}/kernel32.lib")
+            "${ART_TARGET_BUNDLE_ROOT}/xwin/crt/lib/${ART_TARGET_AOSP_ARCH}/msvcprt.lib"
+            "${ART_TARGET_BUNDLE_ROOT}/xwin/crt/lib/${ART_TARGET_AOSP_ARCH}/msvcrt.lib"
+            "${ART_TARGET_BUNDLE_ROOT}/xwin/crt/lib/${ART_TARGET_AOSP_ARCH}/vcruntime.lib"
+            "${ART_TARGET_BUNDLE_ROOT}/xwin/sdk/lib/ucrt/${ART_TARGET_AOSP_ARCH}/ucrt.lib"
+            "${ART_TARGET_BUNDLE_ROOT}/xwin/sdk/lib/um/${ART_TARGET_AOSP_ARCH}/kernel32.lib")
         if(EXISTS "${_art_windows_runtime_lib}")
             target_link_libraries(art_windows_cxx INTERFACE "${_art_windows_runtime_lib}")
         endif()
@@ -304,7 +307,7 @@ endif()
 # Windows' sigchain module is intentionally supplied by the platform source
 # tree rather than the portable Blueprint closure. Define it before loading the
 # graph so target_link_libraries resolves it as a CMake target, not `-lsigchain`.
-if(ART_TARGET_OS_OR_RUNTIME STREQUAL "windows" AND NOT TARGET sigchain)
+if(ART_TARGET_PLATFORM STREQUAL "windows" AND NOT TARGET sigchain)
     set(_art_windows_runtime "${MDVM_ART_ROOT_DIR}/art/runtime/multiplatform/windows")
     add_library(sigchain SHARED "${_art_windows_runtime}/sigchain_windows.cc")
     target_include_directories(sigchain PUBLIC
@@ -316,7 +319,7 @@ if(ART_TARGET_OS_OR_RUNTIME STREQUAL "windows" AND NOT TARGET sigchain)
     set_target_properties(sigchain PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
 endif()
 
-if(ART_TARGET_OS_OR_RUNTIME STREQUAL "windows" AND NOT TARGET windows_x64_posix_stubs)
+if(ART_TARGET_PLATFORM STREQUAL "windows" AND NOT TARGET windows_x64_posix_stubs)
     # The common libbase/libprocinfo sources intentionally retain their POSIX
     # API surface.  This regular source library provides the Windows ABI
     # implementation once for the product graph and for the unified probes.
@@ -342,7 +345,7 @@ else()
     message(FATAL_ERROR "Generated ART graph must define the shared art-compiler target")
 endif()
 
-if(ART_TARGET_OS_OR_RUNTIME STREQUAL "windows")
+if(ART_TARGET_PLATFORM STREQUAL "windows")
     # The graph deliberately contains only portable ART sources. These are the
     # target-OS implementations that used to be injected by phase1.cmake.
     set(_art_windows_runtime "${MDVM_ART_ROOT_DIR}/art/runtime/multiplatform/windows")
@@ -421,7 +424,7 @@ endif()
 # These compensate for source/toolchain drift and disappear when submodules are
 # bumped to current AOSP. NONE of this is in the converter or the overlay. See
 # tools/verify/runtime/RESULT.md and the toolchain-drift notes.
-if(ART_TARGET_OS_OR_RUNTIME STREQUAL "windows")
+if(ART_TARGET_PLATFORM STREQUAL "windows")
     set(_PRELUDE "${MDVM_COMPAT_INCLUDE_DIR}/mdvm_windows_x64_prelude.h")
     set(_art_windows_system_compile_options)
     foreach(_art_windows_system_include IN LISTS _art_windows_system_includes)
@@ -459,7 +462,7 @@ foreach(_t IN LISTS _all_targets)
     # -include would pull <features.h> into posix_strerror_r.cpp BEFORE its
     # deliberate `#undef _GNU_SOURCE`, breaking its POSIX strerror_r selection.
     if(NOT _ttype STREQUAL "INTERFACE_LIBRARY" AND
-       (NOT _t STREQUAL "base" OR ART_TARGET_OS_OR_RUNTIME STREQUAL "windows"))
+       (NOT _t STREQUAL "base" OR ART_TARGET_PLATFORM STREQUAL "windows"))
         target_compile_options(${_t} PRIVATE
             "$<$<COMPILE_LANGUAGE:C,CXX>:SHELL:-include ${_PRELUDE}>"
             "$<$<COMPILE_LANGUAGE:C,CXX>:-Wno-strict-primary-template-shadow>"
@@ -483,7 +486,7 @@ foreach(_t IN LISTS _all_targets)
         # FIRST, so art compiles against the API it expects rather than the
         # archive's 2023 nativehelper headers (which lack them).
         target_include_directories(${_t} BEFORE PRIVATE "${MDVM_NATIVEHELPER_HDRS_DIR}")
-        if(ART_TARGET_OS_OR_RUNTIME STREQUAL "windows")
+        if(ART_TARGET_PLATFORM STREQUAL "windows")
             # The bundle is a regular-file projection of libc++, UCRT, and the
             # Windows SDK. No host include or library search path is allowed.
             target_include_directories(${_t} BEFORE PRIVATE
@@ -501,9 +504,9 @@ foreach(_t IN LISTS _all_targets)
                 "$<$<COMPILE_LANGUAGE:C,CXX>:-fno-omit-frame-pointer>")
             foreach(_art_bundle_lib_dir
                     "${ART_TARGET_BUNDLE_ROOT}/lib/libcxx/lib"
-                    "${ART_TARGET_BUNDLE_ROOT}/xwin/sdk/lib/ucrt/${ART_TARGET_CPU_ARCH}"
-                    "${ART_TARGET_BUNDLE_ROOT}/xwin/sdk/lib/um/${ART_TARGET_CPU_ARCH}"
-                    "${ART_TARGET_BUNDLE_ROOT}/xwin/crt/lib/${ART_TARGET_CPU_ARCH}")
+                    "${ART_TARGET_BUNDLE_ROOT}/xwin/sdk/lib/ucrt/${ART_TARGET_AOSP_ARCH}"
+                    "${ART_TARGET_BUNDLE_ROOT}/xwin/sdk/lib/um/${ART_TARGET_AOSP_ARCH}"
+                    "${ART_TARGET_BUNDLE_ROOT}/xwin/crt/lib/${ART_TARGET_AOSP_ARCH}")
                 if(EXISTS "${_art_bundle_lib_dir}")
                     target_link_directories(${_t} BEFORE PRIVATE "${_art_bundle_lib_dir}")
                 endif()
@@ -513,13 +516,13 @@ foreach(_t IN LISTS _all_targets)
     if(_ttype STREQUAL "EXECUTABLE" OR _ttype STREQUAL "SHARED_LIBRARY" OR
        _ttype STREQUAL "MODULE_LIBRARY")
         target_link_options(${_t} PRIVATE -fuse-ld=lld)
-        if(ART_TARGET_OS_OR_RUNTIME STREQUAL "windows")
+        if(ART_TARGET_PLATFORM STREQUAL "windows")
             # bp2cmake emits the plain target_link_libraries signature; keep
             # this augmentation in the same signature family.
             target_link_libraries(${_t} art_windows_cxx)
         endif()
     endif()
-    if(ART_TARGET_OS_OR_RUNTIME STREQUAL "windows" AND
+    if(ART_TARGET_PLATFORM STREQUAL "windows" AND
        NOT _t STREQUAL "windows_x64_posix_stubs" AND
        NOT _ttype STREQUAL "UTILITY" AND
        NOT _ttype STREQUAL "INTERFACE_LIBRARY")
@@ -527,7 +530,7 @@ foreach(_t IN LISTS _all_targets)
         # to every generated library/executable and to future stage probes.
         target_link_libraries(${_t} windows_x64_posix_stubs ws2_32 synchronization)
     endif()
-    if(ART_TARGET_OS_OR_RUNTIME STREQUAL "windows" AND
+    if(ART_TARGET_PLATFORM STREQUAL "windows" AND
        _ttype STREQUAL "SHARED_LIBRARY" AND NOT _t STREQUAL "art-compiler")
         # Windows import libraries are required by downstream generated
         # targets (for example base -> log).  The compiler DSO is the sole
@@ -536,13 +539,13 @@ foreach(_t IN LISTS _all_targets)
     endif()
     if(_ttype STREQUAL "EXECUTABLE")
         target_compile_options(${_t} PRIVATE -fPIE)
-        if(ART_TARGET_OS_OR_RUNTIME STREQUAL "linux")
+        if(ART_TARGET_PLATFORM STREQUAL "linux")
             target_link_options(${_t} PRIVATE -pie)
         endif()
     endif()
 endforeach()
 foreach(_t art dalvikvm)
-    if(TARGET ${_t} AND ART_TARGET_OS_OR_RUNTIME STREQUAL "linux")
+    if(TARGET ${_t} AND ART_TARGET_PLATFORM STREQUAL "linux")
         target_compile_definitions(${_t} PRIVATE ANDROID_HOST_MUSL)
     endif()
 endforeach()

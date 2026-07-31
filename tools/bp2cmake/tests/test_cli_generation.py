@@ -33,7 +33,7 @@ def test_target_generation_writes_relocatable_graph_and_manifest(tmp_path):
         "--overlay-factory",
         str(factory),
         "--target-id",
-        "linux-x86_64",
+        "linux-x86_64-gnu",
         "--module",
         "libsample",
         "--out",
@@ -51,13 +51,16 @@ def test_target_generation_writes_relocatable_graph_and_manifest(tmp_path):
     assert str(source) not in graph_text
 
     graph_manifest = json.loads(manifest.read_text(encoding="utf-8"))
-    assert graph_manifest["target"]["target_id"] == "linux-x86_64"
+    assert graph_manifest["target"]["target_id"] == "linux-x86_64-gnu"
+    assert graph_manifest["target"]["target_platform"] == "linux"
+    assert graph_manifest["target"]["target_arch"] == "x86_64"
+    assert graph_manifest["target"]["target_abi"] == "gnu"
     assert graph_manifest["modules"][0]["cmake_target"] == "sample"
     assert graph_manifest["blueprint_inputs"][0]["path"] == "Android.bp"
     assert str(source) not in manifest.read_text(encoding="utf-8")
 
     profile_text = profile.read_text(encoding="utf-8")
-    assert 'set(ART_TARGET_ID "linux-x86_64")' in profile_text
+    assert 'set(ART_TARGET_ID "linux-x86_64-gnu")' in profile_text
     assert str(source) not in profile_text
     assert main(args + ["--check"]) == 0
 
@@ -71,7 +74,7 @@ def test_check_detects_stale_output_without_rewriting(tmp_path):
         "--overlay-factory",
         str(factory),
         "--target-id",
-        "linux-x86_64",
+        "linux-x86_64-gnu",
         "--module",
         "libsample",
         "--out",
@@ -96,7 +99,7 @@ def test_planned_target_is_rejected_before_loading_sources(tmp_path):
             "--overlay-factory",
             str(factory),
             "--target-id",
-            "linux-riscv64",
+            "linux-riscv64-gnu",
             "--module",
             "libsample",
         ]

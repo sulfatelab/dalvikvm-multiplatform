@@ -13,8 +13,8 @@ from bp2cmake.target import TargetProfile
 
 def make_overlay(target: TargetProfile) -> Overlay:
     policy_dir = Path(__file__).parent
-    if target.os_or_runtime == "linux":
+    if target.target_platform == "linux":
         return load_overlay(str(policy_dir / "port_policy.py"))
-    if target.os_or_runtime == "windows":
+    if target.target_platform == "windows":
         return load_overlay(str(policy_dir / "port_policy_windows.py"))
     raise ValueError(f"no ART overlay policy for target {target.target_id!r}")

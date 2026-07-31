@@ -36,26 +36,41 @@ items are closed.
 | Windows x86-64 product | PARTIAL / experimental | cross and native Windows Server 2025 builds produce `art.dll`, `art-compiler.dll`, and `art-compiler.lib` | automate the complete artifact/topology/runtime gate set |
 | Compiler DSO parity | COMPLETE for `art-compiler` | both targets emit a shared compiler DSO; Windows imports `art.dll` and exports `art_compiler_jit_create` | retain exact ABI and no-cycle gates |
 | Full DSO topology parity | PARTIAL | five module kinds and two target-specific module pairs still differ | convert each difference or record a reviewed target exception |
-| Unified phase catalog | PARTIAL | seven Windows-only virtual stages compile 19 EXEs and 10 probe DLLs for `windows-x86_64`; applicability is not yet modeled per platform and target architecture | add typed applicability, then migrate behavioral runners, managed probes, and result checks |
+| Unified phase catalog | PARTIAL | seven virtual stages declare 29 typed probes; all are currently applicable only to `windows-x86_64-msvc`, with three runnable CTest gates and a per-target status catalog | migrate behavioral runners, managed probes, portable JNI probes, and result checks |
 | Boot/runtime packaging | NOT STARTED in the unified frontend | boot JAR, boot image, run assets, cacerts, and host packages remain shell-driven | Python/CMake/Ninja-owned, binary-directory-local, fail-fast stages |
 | POSIX-free Windows build host | COMPLETE for native compilation, PARTIAL end to end | native product compilation needs no POSIX layer; packaging and most gates still use shell scripts | complete build, test, and staging on Windows without Bash/WSL/Cygwin |
 | Legacy build removal | PARTIAL | active product ownership was demoted and project-owned symlink overlays were removed; old generators, generated snapshots, phase product CMake, and split overlay datasets remain | remove or demote every alternative product path after gate migration |
 | CI/acceptance automation | NOT STARTED | no in-repository CI workflow owns the acceptance matrix | fresh-build, no-op, graph, command, artifact, and native-host gates run automatically |
-| Additional architectures | BLOCKED by capability gates | only `linux-x86_64` and experimental `windows-x86_64` generate | admit each profile only after its architecture and runtime gates pass |
+| Additional architectures | BLOCKED by capability gates | all 17 canonical identities are registered; only `linux-x86_64-gnu` and experimental `windows-x86_64-msvc` generate | admit each profile only after its architecture and runtime gates pass |
 | Windows AOT/OAT | BLOCKED / separate track | compiler DSO parity does not provide Windows OAT production or loading | satisfy `win32_aot_oat.md`; do not imply capability from `art-compiler.dll` |
 
 ### Latest verification baseline (2026-07-31)
 
-- [x] `python -m pytest tools/bp2cmake/tests -q`: 85 passed.
-- [x] Fresh `linux-x86_64` and `windows-x86_64` generation: 33 modules and
+- [x] `PYTHONPATH=tools/bp2cmake python3 -m pytest tools/bp2cmake/tests -q`:
+  101 passed.
+- [x] Fresh `linux-x86_64-gnu` and `windows-x86_64-msvc` generation: 33 modules and
   260 loaded Blueprint files for each target.
-- [x] Linux `check-generated` passes for the frontend-owned graph.
-- [x] Linux `art-compiler` completed a fresh 701-action build before this
-  audit and emits `libart-compiler.so` with dynamic ART dependencies.
-- [x] Native Windows Server 2025 x86-64 builds the same product graph with
-  LLVM 21.1.8, CMake 3.31.8, Ninja 1.13.2, and Python 3.13.14.
-- [x] Native Windows builds all 19 executable probes and 10 probe DLLs.
-- [x] Unified native `w002` runtime selection passes 1/1.
+- [x] `check-generated` passes for both frontend-owned canonical graphs.
+- [x] Fresh Linux configuration with Clang 21, CMake, and Ninja emits a
+  29-declaration catalog with zero applicable probes and zero CTest gates.
+- [x] A minimal Windows-profile CMake configuration emits 29 applicable
+  probes: 10 exact-ID selectors, 19 broad typed selectors, and three
+  `target-runnable` probes.
+- [x] Linux `art-compiler` completed a fresh 701-action build after the
+  identity migration and emits `libart-compiler.so` with dynamic ART
+  dependencies.
+- [x] A second identical Linux `art-compiler` build reports
+  `ninja: no work to do.`
+- [x] Native Windows Server 2025 x86-64 freshly builds the canonical
+  `windows-x86_64-msvc` graph in 714 actions with LLVM 21.1.8, CMake 3.31.8,
+  Ninja 1.13.2, and Python 3.13.14.
+- [x] The no-stage Windows `test` command builds all 19 executable probes and
+  10 probe DLLs in 68 actions, then passes all three registered runnable gates.
+- [x] The resulting Windows catalog records 29 applicable/build-verified
+  probes, three runtime-verified probes, and 26 compile-only probes with
+  `runtime_status=not-required`.
+- [x] Windows `check-generated` passes and a second identical
+  `art-compiler` build reports `ninja: no work to do.`
 - [x] Windows staging records 14 regular-file artifacts, contains no reparse
   points, and passes the staged DLL load/export smoke.
 - [x] Linux staging records 16 artifacts with no staged symlinks.
@@ -64,30 +79,22 @@ items are closed.
   `cl.exe`, `clang-cl`, or clang-mingw invocation.
 - [ ] The documented Linux `test` command currently fails: the Linux catalog
   registers zero CTest tests and `--no-tests=error` correctly returns failure.
-- [ ] Recreate the ignored local Windows output before using
-  `check-generated`; its retained graph predates the latest overlay state.
-- [ ] Recreate the ignored local Linux output before the next incremental
-  no-op acceptance run; the audit build tree is not a clean no-op baseline.
-
-The last two unchecked output-tree items are local operational state, not
-tracked source defects. A fresh `configure` owns generation and avoids both
-stale trees.
 
 ### Unified stage migration coverage
 
 One historical work stage maps to exactly one virtual target named
 `art-test-stage-wNNN`. Building a stage is not by itself a runtime pass.
 
-| Stage | Current build catalog | Current Windows architecture selector | Runnable CTest gates | Remaining semantic coverage |
-|---|---:|---|---:|---|
-| `w002` | 1 EXE, 1 DLL | 1 `any`, 1 x86-64 | 1 | managed attach/OSR package and reviewers |
-| `w003` | 4 DLLs | 3 `any`, 1 x86-64 | 0 | frame, XMM, CriticalNative/FastNative managed runners |
-| `w004` | 1 EXE, 1 DLL | 2 `any` | 0 | embedding, runtime-load, and JVMTI behavioral gates |
-| `w010` | 4 EXEs | 3 `any`, 1 x86-64 | 0 | managed-fault, fatal-unwind, debugger, and dump review |
-| `w013` | 2 EXEs | 2 `any` | 0 | dlmalloc configuration and non-moving heap stress |
-| `w014` | 7 EXEs, 1 DLL | 5 `any`, 3 x86-64 | 2 | stack-growth, CET, high-water, and reservation matrices |
-| `w025` | 4 EXEs, 3 DLLs | 3 `any`, 4 x86-64 | 0 | JIT mapping/lifecycle/CFG managed and host-review gates |
-| Total | 19 EXEs, 10 DLLs | 19 `any`, 10 x86-64 | 3 | compile ownership is ahead of behavioral ownership |
+| Stage | Current build catalog | Exact-ID / typed selectors | Execution modes | Remaining semantic coverage |
+|---|---:|---|---|---|
+| `w002` | 1 EXE, 1 DLL | 1 exact / 1 typed | 1 runnable, 1 compile-only | managed attach/OSR package and reviewers |
+| `w003` | 4 DLLs | 1 exact / 3 typed | 4 compile-only | frame, XMM, CriticalNative/FastNative managed runners |
+| `w004` | 1 EXE, 1 DLL | 0 exact / 2 typed | 2 compile-only | embedding, runtime-load, and JVMTI behavioral gates |
+| `w010` | 4 EXEs | 1 exact / 3 typed | 4 compile-only | managed-fault, fatal-unwind, debugger, and dump review |
+| `w013` | 2 EXEs | 0 exact / 2 typed | 2 compile-only | dlmalloc configuration and non-moving heap stress |
+| `w014` | 7 EXEs, 1 DLL | 3 exact / 5 typed | 2 runnable, 6 compile-only | stack-growth, CET, high-water, and reservation matrices |
+| `w025` | 4 EXEs, 3 DLLs | 4 exact / 3 typed | 7 compile-only | JIT mapping/lifecycle/CFG managed and host-review gates |
+| Total | 19 EXEs, 10 DLLs | 10 exact / 19 typed | 3 runnable, 26 compile-only | compile ownership is ahead of behavioral ownership |
 
 The shared registry references 32 source files from historical verification
 directories. Another 52 C, C++, assembly, or Java probe sources remain outside
@@ -159,14 +166,16 @@ making MSYS2, Cygwin, or any POSIX environment a build-host prerequisite.
 
 #### Current probe-by-probe selector audit
 
-`native/tests/CMakeLists.txt` currently returns immediately unless the target
-platform is Windows. Consequently every probe in this table is currently
-Windows-only regardless of source portability. Its `ARCH any` spelling means
-only "do not filter on `ART_TARGET_CPU_ARCH`". It does not mean all platforms,
-all five Windows target architectures, build-verified on Windows ARM64/ARM64EC, or
-runtime-verified anywhere.
+`native/tests/CMakeLists.txt` now declares every probe through the common
+`art_add_target_probe` API. There is no platform-level early return and no
+`ARCH any` spelling. Ten Microsoft x86-64-specific probes use the exact
+`windows-x86_64-msvc` target ID. The other nineteen use the explicit typed
+intersection `PLATFORMS windows`, `TARGET_ARCHES x86_64`, and
+`TARGET_ABIS msvc`. Both forms currently select the same one verified target;
+the distinction preserves which probes are intrinsically exact-ABI tests and
+which are candidates for reviewed expansion.
 
-| Stage | Current Windows architecture-unfiltered probes (`ARCH any`) | Current `windows-x86_64`-only probes | Portable-source candidates |
+| Stage | Typed `windows`/`x86_64`/`msvc` probes | Exact `windows-x86_64-msvc` probes | Portable-source candidates |
 |---|---|---|---|
 | `w002` | `w002attachprobe` | `win32_osr_unwind_probe` | none |
 | `w003` | `criticalnativeprobe`, `nativeabiprobe`, `w003frameprobe` | `w003xmmsentinel` | `criticalnativeprobe`, `nativeabiprobe` |
@@ -176,20 +185,19 @@ runtime-verified anywhere.
 | `w014` | `windows_x64_pthread_once_probe`, `win32_thread_stack_probe`, `win32_stack_growth_rx_probe`, `win32_cet_policy_probe`, `fs1stackhighwater` | `win32_stack_page_probe`, `win32_stack_growth_probe`, `win32_stack_pregrow_probe` | none |
 | `w025` | `w025jitmappingprobe`, `windows_x64_w025_section_policy_probe`, `windows_x64_w025_policy_launcher` | `win32_jit_unwind_info_probe`, `win32_jit_unwind_registry_probe`, `jitunwindlifecycleprobe`, `w025jitlifecyclestressprobe` | none |
 
-The ten x86-64 entries inspect or depend on Microsoft x86-64 calling,
-register, stack, PE unwind, or handwritten assembly behavior. Their correct
-current selector is the exact `windows-x86_64` target (the transitional name
-for intended `windows-x86_64-msvc`), not `arm64ec` or a Windows GNU profile.
-The ability of a Windows ARM64 or ARM64EC machine to execute an x86-64 program
-through emulation would not turn that program into an ARM64EC ABI test.
+The ten exact-ID entries inspect or depend on Microsoft x86-64 calling,
+register, stack, PE unwind, or handwritten assembly behavior. They are not
+applicable to `arm64ec` or a Windows GNU profile. The ability of a Windows
+ARM64 or ARM64EC machine to execute an x86-64 program through emulation would
+not turn that program into an ARM64EC ABI test.
 
-The other seventeen Windows-specific `ARCH any` entries use Windows APIs or
-Windows ART contracts but contain no cataloged target assembly. They are only
-unreviewed port candidates for Windows x86, ARMv7, AArch64, and ARM64EC. Each
-must compile and pass its own native runtime or result-review gate before that
-exact target is added to its applicability set. Names containing
-`windows_x64` must then be renamed to describe the tested contract rather than
-an obsolete assumed CPU.
+The other nineteen typed entries use Windows APIs or Windows ART contracts but
+are not proven for another Windows architecture or ABI. They remain unreviewed
+port candidates for Windows AArch64 and ARM64EC. Each must compile and pass its
+own native runtime or result-review gate before another exact selector value is
+added. Windows x86 and ARMv7 remain valid registry identities but are explicitly
+outside the implementation roadmap. Names containing `windows_x64` must be
+renamed if their audited contract proves architecture-independent.
 
 Only `criticalnativeprobe` and `nativeabiprobe` currently use
 platform-neutral JNI/C scalar sources and are credible common Linux/Windows
@@ -201,21 +209,21 @@ platform/target-architecture combination declared.
 
 Current evidence remains much narrower than theoretical applicability:
 
-- all 29 native probes have compile evidence only for `windows-x86_64`;
+- all 29 native probes have compile evidence only for `windows-x86_64-msvc`;
 - only three probes are registered as runnable CTest gates, also only for
-  `windows-x86_64`;
+  `windows-x86_64-msvc`;
 - no unified phase probe is currently registered for any Linux target; and
 - no probe has build or runtime evidence for Windows x86, ARMv7, AArch64, or
   ARM64EC.
 
 #### Required registry semantics
 
-Replace `art_add_windows_probe(... ARCH any)` with a common declaration that
-can state `PLATFORMS`, `TARGET_ARCHES`, `TARGET_ABIS`, `TARGET_IDS`,
-`CAPABILITIES`, and `EXECUTION`. A target is applicable only when all specified
-selectors match its serialized profile. `TARGET_IDS` is the narrow override
-for tests such as the Windows x86-64 MSVC unwind probes; applicability must
-never be inferred from the build-host architecture.
+The implemented common declaration states `PLATFORMS`, `TARGET_ARCHES`,
+`TARGET_ABIS`, `TARGET_IDS`, `CAPABILITIES`, and `EXECUTION`. A target is
+applicable only when all specified selectors match its serialized profile.
+`TARGET_IDS` is the narrow override for tests such as the Windows x86-64 MSVC
+unwind probes; applicability is never inferred from the build-host
+architecture.
 
 The registry and generated test manifest must record three separate states for
 every exact target:
@@ -230,16 +238,15 @@ explicit skip with its failed selector recorded, not a silent disappearance.
 A requested stage with zero applicable tests must report that fact distinctly
 from a stage whose applicable tests were expected but not built or run.
 
-The current profile registry also needs correction before those selectors are
-implemented: it uses the awkward `os_or_runtime`, ambiguous `cpu_arch`, and
-unprefixed `abi` field names, represents ARM64EC as `cpu_arch=aarch64` under
-`windows-aarch64-arm64ec`, and has no theoretical Windows ARMv7 entry. The
-intended ARM64EC identity family uses
+The profile registry now uses the closed `target_platform`, `target_arch`, and
+`target_abi` enums and contains all 17 canonical identities. The ARM64EC family
+uses
 `target_platform=windows, target_arch=arm64ec, base_isa=aarch64` plus an
 independent `target_abi`, yielding exact `windows-arm64ec-gnu` and
-`windows-arm64ec-msvc` profiles. It also requires a capability-blocked Windows
-ARMv7 GNU/MSVC family. This is tracked migration work, not current frontend
-behavior.
+`windows-arm64ec-msvc` profiles. The registry also contains capability-blocked
+Windows ARMv7 GNU/MSVC identities. Transitional unsuffixed target IDs are
+rejected with migration diagnostics and do not enter generated profiles or
+output paths.
 
 ### Fresh Linux/Windows topology comparison
 
@@ -264,7 +271,7 @@ an unreviewed module-set or kind change.
 
 #### P0: make `test` and runtime packaging truthful
 
-- [ ] Replace the Windows-only `ARCH any` probe API with typed `PLATFORMS`,
+- [x] Replace the Windows-only `ARCH any` probe API with typed `PLATFORMS`,
   `TARGET_ARCHES`, `TARGET_ABIS`, `TARGET_IDS`, `CAPABILITIES`, and `EXECUTION`
   selectors plus an applicability/build/runtime-status manifest.
 - [ ] Move `criticalnativeprobe` and `nativeabiprobe` into common
@@ -331,7 +338,7 @@ an unreviewed module-set or kind change.
 - [ ] Remove fixed x86-64 triples, preludes, stack-gap definitions, CPU-feature
   sources, BoringSSL assembly, probe names, and object-inspection assumptions.
 - [ ] Validate and admit Linux AArch64, x86, ARMv7, and RISC-V64 separately.
-- [ ] Migrate the ARM64EC identity from transitional
+- [x] Migrate the ARM64EC identity from transitional
   `windows-aarch64-arm64ec/cpu_arch=aarch64` to
   distinct `windows-arm64ec-gnu` and `windows-arm64ec-msvc` profiles with
   `target_arch=arm64ec/base_isa=aarch64`; rename the profile fields from
@@ -415,16 +422,17 @@ explicit regular-file target bundle and never searches host libraries. The
 frontend rejects symlink/reparse-point configured paths and records a build-host
 fingerprint before reusing a binary directory.
 
-Windows verification probes now have one shared registry at
+Target verification probes now have one shared registry at
 [`native/tests/CMakeLists.txt`](native/tests/CMakeLists.txt). A historical
 stage is exactly one virtual CMake target such as `art-test-stage-w002`; probe
-targets carry `stage:w002`, `platform:windows`, `arch:any` or
-`arch:x86_64`, and contract labels. The stage target is a build group, not a
-second product graph. These labels describe the implemented Windows-only
-slice, not final cross-platform or cross-CPU applicability; `arch:any` is the
-known over-broad selector tracked above. The old phase source directories
-remain temporary source and evidence locations while their product graph
-ownership is removed.
+targets declare typed platform, target-architecture, target-ABI, capability,
+exact-ID, and execution selectors. The stage target is a build group, not a
+second product graph. CMake writes `tests/art_test_catalog.json` with every
+declaration, failed-selector reason, applicability, CTest registration, and
+separate build/runtime verification status. All 29 current probes remain
+truthfully limited to `windows-x86_64-msvc`; 26 are compile-only and three are
+target-runnable. The old phase source directories remain temporary source and
+evidence locations while their product graph ownership is removed.
 
 The Windows overlay now emits `art-compiler` as `SHARED` and links it to
 `art` and `art-disassembler`, matching the Linux topology. The native entry
@@ -433,7 +441,7 @@ name, passes bundle SDK/libc++ paths to Clang, and supplies a reviewed DEF
 allowlist for its narrow public entry point. ART runtime globals used by the
 compiler use the existing `LIBART_PE_DATA` producer/consumer annotations, so
 PE data imports have the required indirection while `Thread::Current()` keeps
-TLS inside `art.dll`. A Linux-hosted `windows-x86_64` cross build now links
+TLS inside `art.dll`. A Linux-hosted `windows-x86_64-msvc` cross build now links
 `art.dll`, `art-compiler.dll`, and `art-compiler.lib`. A native Windows Server
 2025 x86-64 build using LLVM 21.1.8, CMake 3.31.8, and Ninja 1.13.2 also
 configures and links the same graph without a POSIX environment. The native
@@ -441,7 +449,7 @@ configures and links the same graph without a POSIX environment. The native
 catalog builds 19 executable probes and 10 probe DLLs. Loading staged
 `art.dll` and `art-compiler.dll` and resolving `art_compiler_jit_create` pass
 from a directory containing only the staged closure. A frontend-owned
-`linux-x86_64` build produces `libart-compiler.so` with dynamic dependencies
+`linux-x86_64-gnu` build produces `libart-compiler.so` with dynamic dependencies
 on `libart.so` and `libart-disassembler.so`. Fresh Linux and Windows builds use
 the same 33-module generated graph. `build_art.py stage` validates the Windows
 DLL/import-library pair, copies the complete top-level DSO closure (including
@@ -726,7 +734,7 @@ support_status
 `target_platform` is the canonical target-system name for `linux`, `windows`,
 and `wasi`. It is not named `target_os` because WASI is a system-interface and
 runtime contract rather than a conventional operating system. It replaces the
-current implementation's awkward `os_or_runtime` field.
+former implementation's awkward `os_or_runtime` field.
 
 `target_arch` is the canonical build-selection name for `x86`, `x86_64`,
 `armv7`, `aarch64`, `riscv64`, `arm64ec`, `wasm32`, and `wasm64`. This field is
@@ -797,15 +805,13 @@ status.
 
 Inputs such as `linux-x64`, `linux-arm`, `windows-aarch64-arm64ec`, bare
 `windows-arm64ec`, `wasm64-wasi`, and underscore-separated whole IDs are
-rejected with the canonical replacement in the diagnostic. The current
-implementation's `linux-x86_64`, `windows-x86_64`, and
-`windows-aarch64-arm64ec` IDs are transitional; they must migrate respectively
-to `linux-x86_64-gnu`, `windows-x86_64-msvc`, and the explicit
-`windows-arm64ec-{gnu,msvc}` profiles. A temporary migration tool may rewrite
-old names, but aliases do not enter the final profile registry, manifests,
-cache keys, or output paths. If a Linux ARM soft-float ABI is ever required, it
-receives a distinct canonical profile rather than changing the meaning of
-`linux-armv7-gnu`.
+rejected with the canonical replacement in the diagnostic. The former
+`linux-x86_64`, `windows-x86_64`, and `windows-aarch64-arm64ec` IDs now produce
+migration diagnostics to `linux-x86_64-gnu`, `windows-x86_64-msvc`, and the
+explicit `windows-arm64ec-{gnu,msvc}` profiles. Aliases do not enter the profile
+registry, manifests, cache keys, or output paths. If a Linux ARM soft-float ABI
+is ever required, it receives a distinct canonical profile rather than
+changing the meaning of `linux-armv7-gnu`.
 
 `target_arch` uses the canonical external tokens, including distinct `arm64ec`.
 `base_isa` maps `arm64ec` to `aarch64` and otherwise normally equals

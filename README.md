@@ -142,26 +142,29 @@ they must not require a sibling MinDalvikVM-Archive tree.
 
 ```text
 python tools/build_art.py init-local-config
-python tools/build_art.py configure --target-id linux-x86_64
-python tools/build_art.py build --target-id linux-x86_64 --cmake-target dalvikvm
-python tools/build_art.py test --target-id linux-x86_64
-python tools/build_art.py stage --target-id linux-x86_64
+python tools/build_art.py configure --target-id linux-x86_64-gnu
+python tools/build_art.py build --target-id linux-x86_64-gnu --cmake-target dalvikvm
+python tools/build_art.py stage --target-id linux-x86_64-gnu
 ```
 
-Use `windows-x86_64` with the same commands after binding its target bundle in
-the ignored `.art-build.local.toml`. Historical shell scripts and phase CMake
-files remain migration evidence and focused probes; they are not product build
-entry points and are not required on a native Windows host.
+Use `windows-x86_64-msvc` with the same commands after binding its target bundle
+in the ignored `.art-build.local.toml`. The Linux test catalog does not yet
+contain a runnable gate, so `test` reports an explicit empty-applicability
+failure. Historical shell scripts and phase CMake files remain migration
+evidence and focused probes; they are not product build entry points and are
+not required on a native Windows host.
 
 ## Documentation map
 
 These root documents are part of the project context. Automated and LLM-based
 work should read the relevant design document before changing the corresponding
-subsystem; [win32_open_items.md](win32_open_items.md) is the authoritative
-current-work tracker.
+subsystem. [unified_art_build.md](unified_art_build.md) is the authoritative
+build-refactor tracker, while [win32_open_items.md](win32_open_items.md) tracks
+Windows runtime-port work.
 
 | Document | Purpose |
 |----------|---------|
+| [unified_art_build.md](unified_art_build.md) | Live unified build-system refactor tracker, closed target identity model, test applicability, and acceptance contract |
 | [bp2cmake_linux_scope.md](bp2cmake_linux_scope.md) | Historical Linux scope, Android.bp-to-CMake converter design, and Linux native/runtime bring-up record |
 | [win32_art_port.md](win32_art_port.md) | Overall native Windows x64 architecture, toolchain policy, phased implementation record, and current platform position |
 | [win32_filesystem.md](win32_filesystem.md) | Implemented Option H Windows path/filesystem model, mixed-path rules, classpath separator policy, and NIO.2 boundary |

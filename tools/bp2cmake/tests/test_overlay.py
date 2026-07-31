@@ -93,8 +93,8 @@ def test_absorbed_whole_static_includes_precede_other_link_dependencies():
 def test_unified_overlay_factory_selects_current_target_policy():
     repo = Path(__file__).resolve().parents[3]
     factory = repo / "overlay" / "art_port_policy.py"
-    linux = load_overlay_factory(str(factory), resolve_target("linux-x86_64"))
-    windows = load_overlay_factory(str(factory), resolve_target("windows-x86_64"))
+    linux = load_overlay_factory(str(factory), resolve_target("linux-x86_64-gnu"))
+    windows = load_overlay_factory(str(factory), resolve_target("windows-x86_64-msvc"))
     assert linux.policy_for("libart-compiler").kind == "shared"
     compiler = windows.policy_for("libart-compiler")
     assert compiler.kind == "shared"

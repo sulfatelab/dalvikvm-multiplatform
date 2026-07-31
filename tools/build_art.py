@@ -44,7 +44,7 @@ ROOT_MODULES = (
 def _host_can_run_target(target: TargetProfile) -> bool:
     """Conservatively admit runtime probes only on an exact native host."""
     host_os = platform.system().lower()
-    if host_os != target.os_or_runtime:
+    if host_os != target.target_platform:
         return False
     host_arch = platform.machine().lower()
     normalized_arch = {
@@ -54,7 +54,9 @@ def _host_can_run_target(target: TargetProfile) -> bool:
         "i386": "x86",
         "i686": "x86",
     }.get(host_arch, host_arch)
-    return normalized_arch == target.cpu_arch
+    if target.target_arch == "arm64ec":
+        return target.target_platform == "windows" and normalized_arch == "aarch64"
+    return normalized_arch == target.target_arch
 
 
 class BuildFrontendError(RuntimeError):
@@ -234,7 +236,7 @@ def _configure(
     local: LocalBuildConfig,
 ) -> None:
     tools = _resolve_tools(local, need_compiler=True)
-    if target.os_or_runtime == "windows":
+    if target.target_platform == "windows":
         tools["llvm-rc"] = _resolve_llvm_resource_compiler(local)
     bindings = _target_bindings(target, local)
     fingerprint = _build_fingerprint(target, build_type, tools)
@@ -255,14 +257,14 @@ def _configure(
         f"-DCMAKE_C_COMPILER_TARGET={target.target_triple}",
         f"-DCMAKE_CXX_COMPILER_TARGET={target.target_triple}",
         f"-DCMAKE_ASM_COMPILER_TARGET={target.target_triple}",
-        f"-DCMAKE_SYSTEM_NAME={target.os_or_runtime.capitalize()}",
+        f"-DCMAKE_SYSTEM_NAME={target.cmake_system_name}",
         f"-DPython3_EXECUTABLE={_python_executable()}",
         f"-DART_PROFILE_FILE={generated / 'target_profile.cmake'}",
         f"-DART_GRAPH_FILE={generated / 'art_graph.cmake'}",
         "-DART_ENABLE_TARGET_RUNTIME_TESTS="
         + ("ON" if _host_can_run_target(target) else "OFF"),
     ]
-    if target.os_or_runtime == "windows":
+    if target.target_platform == "windows":
         bundle = bindings.get("bundle_root")
         if bundle is None:
             raise BuildFrontendError(
@@ -310,7 +312,7 @@ def _build(
             raise BuildFrontendError("--parallel must be positive")
         command.extend(("--parallel", str(parallel)))
     _run_checked(command)
-    if target.os_or_runtime == "windows" and (
+    if target.target_platform == "windows" and (
         cmake_target is None or cmake_target in ("all", "art-compiler")
     ):
         _validate_windows_art_compiler(binary_dir, target, local)
@@ -324,9 +326,22 @@ def _test(
 ) -> None:
     _require_configured(binary_dir)
     cmake = _resolve_tools(local, need_compiler=False)["cmake"]
-    stages = stages or []
+    catalog_path, catalog, probes = _load_test_catalog(binary_dir)
+    target_id = str(catalog["target_id"])
+    stages = list(dict.fromkeys(stages or []))
     stage_labels = [_stage_label(stage) for stage in stages]
-    for stage in dict.fromkeys(stages):
+    for stage in stages:
+        declared = [probe for probe in probes if probe["stage"] == stage]
+        if not declared:
+            raise BuildFrontendError(
+                f"test stage {stage} has no declared probes for target {target_id}"
+            )
+        applicable = [probe for probe in declared if probe["applicable"]]
+        if not applicable:
+            raise BuildFrontendError(
+                f"test stage {stage} has zero applicable probes for target {target_id}; "
+                f"all {len(declared)} declarations were excluded by their selectors"
+            )
         _run_checked(
             [
                 str(cmake),
@@ -335,6 +350,48 @@ def _test(
                 "--target",
                 f"art-test-stage-{stage}",
             ]
+        )
+        for probe in applicable:
+            probe["build_verified"] = True
+            probe["build_status"] = "verified"
+        _write_json_atomic(catalog_path, catalog)
+
+    selected = probes if not stages else [
+        probe for probe in probes if probe["stage"] in stages
+    ]
+    applicable_selected = [probe for probe in selected if probe["applicable"]]
+    if not stages:
+        if not applicable_selected:
+            raise BuildFrontendError(
+                f"target {target_id} has zero applicable probes in the selected test scope"
+            )
+        _run_checked(
+            [
+                str(cmake),
+                "--build",
+                str(binary_dir),
+                "--target",
+                "art-tests",
+            ]
+        )
+        for probe in applicable_selected:
+            probe["build_verified"] = True
+            probe["build_status"] = "verified"
+        _write_json_atomic(catalog_path, catalog)
+
+    registered = [
+        probe for probe in selected
+        if probe["applicable"] and probe["ctest_registered"]
+    ]
+    if not registered:
+        applicable_count = len(applicable_selected)
+        if applicable_count:
+            raise BuildFrontendError(
+                f"target {target_id} has {applicable_count} applicable probes in the "
+                "selected scope but zero registered runnable CTest gates"
+            )
+        raise BuildFrontendError(
+            f"target {target_id} has zero applicable probes in the selected test scope"
         )
 
     ctest_name = "ctest.exe" if os.name == "nt" else "ctest"
@@ -351,12 +408,59 @@ def _test(
         label_regex = "^(" + "|".join(re.escape(label) for label in selected_labels) + ")$"
         command.extend(("--label-regex", label_regex))
     _run_checked(command)
+    if not labels:
+        for probe in registered:
+            probe["runtime_verified"] = True
+            probe["runtime_status"] = "verified"
+        _write_json_atomic(catalog_path, catalog)
+
+
+def _load_test_catalog(
+    binary_dir: Path,
+) -> tuple[Path, dict[str, object], list[dict[str, object]]]:
+    path = binary_dir / "tests" / "art_test_catalog.json"
+    try:
+        catalog = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise BuildFrontendError(
+            f"test catalog is missing; reconfigure the build directory: {path}"
+        ) from exc
+    except (OSError, json.JSONDecodeError) as exc:
+        raise BuildFrontendError(f"cannot read test catalog {path}: {exc}") from exc
+    if not isinstance(catalog, dict) or catalog.get("schema_version") != 1:
+        raise BuildFrontendError(f"unsupported test catalog schema in {path}")
+    target_id = catalog.get("target_id")
+    raw_probes = catalog.get("probes")
+    if not isinstance(target_id, str) or not isinstance(raw_probes, list):
+        raise BuildFrontendError(f"malformed test catalog in {path}")
+    probes: list[dict[str, object]] = []
+    required = {
+        "name": str,
+        "stage": str,
+        "execution": str,
+        "applicable": bool,
+        "ctest_registered": bool,
+        "build_verified": bool,
+        "runtime_verified": bool,
+    }
+    for index, raw_probe in enumerate(raw_probes):
+        if not isinstance(raw_probe, dict):
+            raise BuildFrontendError(
+                f"malformed test catalog probe {index} in {path}"
+            )
+        for key, expected_type in required.items():
+            if not isinstance(raw_probe.get(key), expected_type):
+                raise BuildFrontendError(
+                    f"malformed test catalog probe {index} field {key!r} in {path}"
+                )
+        probes.append(raw_probe)
+    return path, catalog, probes
 
 
 def _stage(target: TargetProfile, binary_dir: Path, local: LocalBuildConfig) -> None:
     """Copy product outputs into a regular-file staging tree and record them."""
     _require_configured(binary_dir)
-    if target.os_or_runtime == "windows":
+    if target.target_platform == "windows":
         _validate_windows_art_compiler(binary_dir, target, local)
 
     stage_dir = binary_dir / "stage"
@@ -377,7 +481,7 @@ def _stage(target: TargetProfile, binary_dir: Path, local: LocalBuildConfig) -> 
             continue
         sources.append(source)
 
-        if target.os_or_runtime == "windows" and name == "art-compiler":
+        if target.target_platform == "windows" and name == "art-compiler":
             import_lib = next(
                 (candidate for candidate in _artifact_candidates(binary_dir, target, name)
                  if candidate.suffix.lower() == ".lib" and candidate.is_file()),
@@ -392,7 +496,7 @@ def _stage(target: TargetProfile, binary_dir: Path, local: LocalBuildConfig) -> 
     # The product is a DSO closure, not only its public entry points. Generated
     # CMake DSOs are emitted in the top-level binary directory; test-only DSOs
     # remain below tests/ and are deliberately excluded.
-    if target.os_or_runtime == "windows":
+    if target.target_platform == "windows":
         sources.extend(sorted(binary_dir.glob("*.dll")))
         bundle_root = _target_bindings(target, local).get("bundle_root")
         if bundle_root is None:
@@ -439,7 +543,7 @@ def _stage(target: TargetProfile, binary_dir: Path, local: LocalBuildConfig) -> 
 
 
 def _artifact_candidates(binary_dir: Path, target: TargetProfile, name: str) -> list[Path]:
-    if target.os_or_runtime == "windows":
+    if target.target_platform == "windows":
         suffixes = (".exe",) if name in ("dalvikvm", "dex2oat") else (".dll", ".lib")
         prefixes = ("", "lib")
     else:
