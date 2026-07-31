@@ -3,7 +3,7 @@
 Status: live refactor tracker; the x86-64 product build is unified, while test,
 packaging, topology-parity, and legacy-removal work remains active
 
-Last updated: 2026-07-31
+Last updated: 2026-08-01
 
 This document is the authoritative live tracker and design record for replacing
 the repository's split Linux and Windows ART build paths. Keep the tracker near
@@ -38,7 +38,7 @@ items are closed.
 |---|---|---|---|
 | Python frontend | COMPLETE for the initial slice | `generate`, `check-generated`, `configure`, `build`, `test`, and `stage` exist; subprocesses are shell-free; configured JDK 21 is validated and passed to CMake | keep regression coverage current |
 | Linux x86-64 product | COMPLETE for the current W-004 runtime slice | a fresh target-local boot/runtime closure and all five W-004 CTest gates pass: imageless Hello, GC stress, Math CriticalNative, show-version, and compiler-DSO topology; an identical rebuild is a Ninja no-op | add boot-image/security packaging and migrate the remaining behavioral stages |
-| Windows x86-64 product | PARTIAL / experimental | Linux-hosted cross and native Windows Server 2025 product builds pass; fresh native W-004 passes 4/4 and the unified W-013 stage passes 6/6, including allocator, virtual-memory, socket-fd, and two managed heap gates | run the remaining multi-stage catalog and migrate its behavioral tests |
+| Windows x86-64 product | PARTIAL / experimental | Linux-hosted cross and native Windows Server 2025 product builds pass; fresh native W-004 passes 4/4 and the unified W-013 stage passes 7/7, including allocator, virtual-memory, fatal-contract, socket-fd, source-policy, and two managed heap gates | run the remaining multi-stage catalog and migrate its behavioral tests |
 | Compiler DSO parity | COMPLETE for `art-compiler` | both targets emit a shared compiler DSO; Windows imports `art.dll` and exports `art_compiler_jit_create` | retain exact ABI and no-cycle gates |
 | Full DSO topology parity | PARTIAL | five module kinds and two target-specific module pairs still differ | convert each difference or record a reviewed target exception |
 | Unified phase catalog | PARTIAL | seven virtual stages declare 32 native probes, 47 managed JARs, and five command gates; Windows has 82 applicable items (13 target-runnable plus one host-review), while Linux x86-64 has five applicable/runnable W-004 items | migrate the remaining behavioral runners, portable JNI expansion, and result checks |
@@ -49,13 +49,14 @@ items are closed.
 | Additional architectures | BLOCKED by capability gates | all 17 canonical identities are registered; only `linux-x86_64-gnu` and experimental `windows-x86_64-msvc` generate | admit each profile only after its architecture and runtime gates pass |
 | Windows AOT/OAT | BLOCKED / separate track | compiler DSO parity does not provide Windows OAT production or loading | satisfy `win32_aot_oat.md`; do not imply capability from `art-compiler.dll` |
 
-### Latest verification baseline (2026-07-31)
+### Latest verification baseline (2026-08-01)
 
 - [x] `PYTHONPATH=tools/bp2cmake python3 -m pytest tools/bp2cmake/tests tests/host -q`:
-  129 passed, including generated PE-header, Linux/Windows test-catalog,
+  131 passed, including generated PE-header, Linux/Windows test-catalog,
   shell-free runtime/managed-artifact gates, parallel-frontend, JDK validation,
-  deterministic JAR, Windows-path/DSO-name, reviewer ownership, W-024 cleanup,
-  and VCS binary/source-ownership coverage.
+  deterministic JAR, Windows-path/DSO-name, reviewer ownership, W-013
+  source-policy and fatal-contract orchestration, W-024 cleanup, and VCS
+  binary/source-ownership coverage.
 - [x] Fresh generation loads the same 260 Blueprint files for both targets and
   emits 33 generated modules for `linux-x86_64-gnu` versus 32 for
   `windows-x86_64-msvc`; Windows supplies `sigchain` as the reviewed
@@ -99,6 +100,15 @@ items are closed.
   and passed the expanded W-013 stage 7/7 in 6.89 seconds, including the source
   review in 3.69 seconds. The two superseded mixed Bash audit/build/Wine entry
   points were removed.
+- [x] The W-013 mspace-owner executable now runs through a shell-free Python
+  fatal-contract gate. It accepts the normal attach/rebind path and requires
+  four subprocesses to terminate with the expected missing-provider,
+  use-after-detach, wrong-owner-detach, and double-attach diagnostics. The
+  rebooted authoritative Server 2025 Stage-8 tree remained a Ninja no-op and
+  passed W-013 7/7 in 5.31 seconds; the mspace gate took 0.50 seconds, its
+  sanitized JSON records one success and four nonzero death cases with no
+  timeout, and the host remained responsive afterward. The superseded Bash/Wine
+  mspace runner was removed.
 - [x] All 48 retained Java probe sources now have logical `tests/cases`
   ownership and adjacent results. The registry emits 47 managed artifacts;
   the old verification tree owns no Java source.
@@ -236,7 +246,7 @@ One historical work stage maps to exactly one virtual target named
 | `w003` | 4 DLLs, 4 managed | 2 exact / 6 typed | 8 compile-only | frame, XMM, CriticalNative/FastNative runtime commands |
 | `w004` | 2 EXEs, 1 DLL, 33 managed, 2 gates | 5 exact / 33 typed | 6 runnable, 32 compile-only | Windows embedding/JVMTI/libcore behavior beyond the accepted Hello/GC/Math/SHA slice |
 | `w010` | 4 EXEs, 3 managed | 1 exact / 6 typed | 7 compile-only | managed-fault, fatal-unwind, debugger, and dump review |
-| `w013` | 4 EXEs, 1 managed, 3 gates | 1 exact / 7 typed | 6 runnable, 1 host-review, 1 compile-only | migrate the four mspace-owner death cases and classify the opt-in disruptive historical stress path |
+| `w013` | 4 EXEs, 1 managed, 3 gates | 1 exact / 7 typed | 6 runnable, 1 host-review, 1 compile-only | registered native coverage is complete; assess the remaining historical dual-target non-moving stress runner before retirement |
 | `w014` | 7 EXEs, 1 DLL, 1 managed | 3 exact / 6 typed | 2 runnable, 7 compile-only | stack-growth, CET, high-water, and reservation matrices |
 | `w025` | 4 EXEs, 3 DLLs, 3 managed | 6 exact / 4 typed | 10 compile-only | JIT mapping/lifecycle/CFG runtime and host-review gates |
 | Total | 22 EXEs, 10 DLLs, 47 managed, 5 gates | 20 exact / 64 typed | 15 runnable, 1 host-review, 68 compile-only | Windows applies 82 declarations; two exact Linux gates are excluded there |

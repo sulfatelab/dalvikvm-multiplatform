@@ -59,22 +59,31 @@ Landed behavior:
 The focused probe now also rejects raw `create_mspace*()` calls outside
 `art-dlmalloc.cc` and rejects restoration of the global owner-discovery path.
 
-The actual `art-dlmalloc.cc` wrapper is also compiled into a focused executable:
+The actual `art-dlmalloc.cc` wrapper is also compiled into a focused executable
+and exercised by the unified stage command:
 
 ```text
-tools/verify/windows_x64_w013/run_mspace_owner_probe.sh
+python tools/build_art.py test --target-id windows-x86_64-msvc --stage w013 --parallel 32
 ```
 
 Its success case grows through one provider, trims, detaches, rebinds a second
-provider, and regrows. Four subprocess death cases verify missing provider,
-use-after-detach, wrong-owner detach, and double attachment all terminate with
-the expected `CHECK` diagnostic. The source gate also requires the heap and JIT
-external-lock assertions.
+provider, and regrows. A shell-free Python gate runs four subprocess death cases
+and verifies missing provider, use-after-detach, wrong-owner detach, and double
+attachment all terminate with the expected `CHECK` diagnostic. It applies an
+individual timeout, invokes no shell, and writes sanitized JSON below the target
+build tree. The source gate separately requires the heap and JIT external-lock
+assertions.
 
 ```text
 W013_MSPACE_OWNER_PASS first_calls=5 second_calls=2
-W013_MSPACE_OWNER_PROBE_PASS success=1 death=4
+W013_MSPACE_OWNER_GATE_PASS target=windows-x86_64-msvc success=1 death=4
 ```
+
+On 2026-08-01, the authoritative native Server 2025 Stage-8 tree was a Ninja
+no-op and passed W-013 7/7 in 5.31 seconds. The mspace-owner gate passed in 0.50
+seconds with one success, four nonzero death exits, every expected diagnostic,
+no timeout, and no host path in its result record. The host remained responsive
+after all four fatal subprocesses.
 
 Native R1 additionally exposed a J-1-only move failure after the executable
 mspace mapping had returned to RX. `ArtDetachMspaceMoreCoreProvider()` was
@@ -246,7 +255,6 @@ startup setting. Both runtimes reported `nonmoving.stable=true`,
 ```text
 cmake --build build/windows_x64_phase1 --target art dalvikvm -j16
 tools/verify/windows_x64_w013/run_dlmalloc_config_probe.sh
-tools/verify/windows_x64_w013/run_mspace_owner_probe.sh
 tools/verify/windows_x64_w013/run_non_moving_stress.sh
 python tests/support/windows/check_w013_source_policy.py
 python tools/build_art.py test --target-id windows-x86_64-msvc --stage w013 --parallel 32

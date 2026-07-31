@@ -407,6 +407,9 @@ function(art_add_target_probe)
         elseif(PROBE_TYPE STREQUAL "GATE" OR PROBE_TYPE STREQUAL "MANAGED")
             add_test(NAME "art.${PROBE_STAGE}.${PROBE_NAME}"
                 COMMAND ${PROBE_COMMAND})
+        elseif(PROBE_COMMAND)
+            add_test(NAME "art.${PROBE_STAGE}.${PROBE_NAME}"
+                COMMAND ${PROBE_COMMAND})
         else()
             # Keep target runtime files explicit and outside the host environment:
             # generated ART DLLs live in CMAKE_BINARY_DIR and the pinned libc++ DLL
@@ -838,7 +841,17 @@ art_add_target_probe(
         "${_art_test_repo_root}/vendor/art/libartbase"
         "${MDVM_NATIVE_SRC_ROOT_DIR}/external/dlmalloc"
     LINK_LIBRARIES artbase base log
-    CONTRACTS allocator virtual-memory PRODUCT_POLICY)
+    CONTRACTS allocator virtual-memory fatal-contract PRODUCT_POLICY
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_test_repo_root}/tests/support/windows/mspace_owner_gate.py"
+        --target-id "${ART_TARGET_ID}"
+        --probe "$<TARGET_FILE:windows_x64_w013_mspace_owner_probe>"
+        --result
+            "${CMAKE_CURRENT_BINARY_DIR}/results/w013-mspace-owner/result.json"
+        --library-dir "${CMAKE_BINARY_DIR}"
+        --library-dir "${_art_bundle_lib}/libcxx/bin"
+        --timeout 8)
 art_add_target_probe(
     NAME windows_x64_w013_dlmalloc_config_probe STAGE w013 TYPE EXECUTABLE
     EXECUTION target-runnable TIMEOUT 60
