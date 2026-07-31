@@ -22,7 +22,7 @@ Landed changes:
 Command:
 
 ```text
-tools/verify/windows_x64_w013/run_dlmalloc_config_probe.sh
+python tools/build_art.py test --target-id windows-x86_64-msvc --stage w013 --parallel 32
 ```
 
 Observed under Wine:
@@ -254,7 +254,6 @@ startup setting. Both runtimes reported `nonmoving.stable=true`,
 
 ```text
 cmake --build build/windows_x64_phase1 --target art dalvikvm -j16
-tools/verify/windows_x64_w013/run_dlmalloc_config_probe.sh
 tools/verify/windows_x64_w013/run_non_moving_stress.sh
 python tests/support/windows/check_w013_source_policy.py
 python tools/build_art.py test --target-id windows-x86_64-msvc --stage w013 --parallel 32

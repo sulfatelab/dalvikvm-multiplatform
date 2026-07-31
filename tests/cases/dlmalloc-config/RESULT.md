@@ -16,8 +16,10 @@ the separate product-source audit for raw mspace creation or owner attachment.
 | `windows-arm64ec-msvc` | no | not applicable | not applicable | — |
 
 The selector remains the exact currently supported Windows x86-64 MSVC
-profile. The authoritative Server 2025 Stage-8 run passed the probe in 0.11
-seconds as part of the 6/6 W-013 result:
+profile. The authoritative Server 2025 Stage-8 rerun passed the probe in 0.07
+seconds as part of the 7/7 W-013 result. The same run's shell-free source
+reviewer accepted the exclusive raw-creation inventory, six owner-attachment
+tokens, active Windows macros, and absence of global owner discovery:
 
 ```text
 W013_DLMALLOC_CONFIG_PASS page=4096 granularity=4096 positive=4 negative=2 queries=8 failures=1 last_positive=8192 last_negative=-20480

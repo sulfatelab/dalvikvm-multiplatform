@@ -18,6 +18,14 @@ EXPECTED_LOW_ADDRESS_FILES = {
     "runtime/jit/jit_memory_region.cc",
     "runtime/runtime.cc",
 }
+MSPACE_ATTACHMENT_TOKENS = (
+    "kArtMspaceProviderMagic",
+    "ArtCreateMspaceWithBase",
+    "ArtAttachMspaceMoreCoreProvider",
+    "ArtDetachMspaceMoreCoreProvider",
+    "state->extp",
+    "state->exts",
+)
 
 
 def fail(message: str) -> None:
@@ -42,8 +50,50 @@ def reject_pattern(text: str, pattern: str, label: str) -> None:
         fail(f"forbidden {label}")
 
 
+def check_mspace_owner_policy(repo: Path) -> dict[str, int]:
+    art = repo / "vendor/art"
+    allocator_relative = "runtime/gc/allocator/art-dlmalloc.cc"
+    art_dlmalloc = read(repo, f"vendor/art/{allocator_relative}")
+    reject_pattern(
+        art_dlmalloc,
+        r"^#\s*undef\s+(?:_WIN32|WIN32)\b",
+        "Windows platform-macro masking in art-dlmalloc.cc",
+    )
+    for token in MSPACE_ATTACHMENT_TOKENS:
+        if token not in art_dlmalloc:
+            fail(f"missing mspace-owner attachment token: {token}")
+
+    creation_pattern = re.compile(r"\bcreate_mspace(?:_with_base)?\s*\(")
+    creation_files = {
+        path.relative_to(art).as_posix()
+        for suffix in ("*.cc", "*.h")
+        for path in art.rglob(suffix)
+        if creation_pattern.search(path.read_text(encoding="utf-8"))
+    }
+    expected_creation_files = {allocator_relative}
+    if creation_files != expected_creation_files:
+        missing = sorted(expected_creation_files - creation_files)
+        unexpected = sorted(creation_files - expected_creation_files)
+        fail(
+            "raw mspace creation inventory changed: "
+            f"missing={missing} unexpected={unexpected}"
+        )
+
+    dlmalloc_space = read(repo, "vendor/art/runtime/gc/space/dlmalloc_space.cc")
+    reject_pattern(
+        dlmalloc_space,
+        r"ArtDlMallocMoreCore|GetContinuousSpaces\s*\(|GetJitCodeCache\s*\(",
+        "global mspace-owner discovery in dlmalloc_space.cc",
+    )
+    return {
+        "mspace_attachment_tokens": len(MSPACE_ATTACHMENT_TOKENS),
+        "raw_mspace_creation_files": len(creation_files),
+    }
+
+
 def check_repository(repo: Path) -> dict[str, int]:
     art = repo / "vendor/art"
+    mspace_counts = check_mspace_owner_policy(repo)
     windows_map = read(repo, "vendor/art/libartbase/base/mem_map_windows.cc")
     mem_map_header = read(repo, "vendor/art/libartbase/base/mem_map.h")
 
@@ -148,6 +198,7 @@ def check_repository(repo: Path) -> dict[str, int]:
         "low_address_files": len(observed),
         "page_transition_files": len(transition_files),
         "mspace_lock_assertions": 2,
+        **mspace_counts,
     }
 
 
@@ -159,6 +210,8 @@ def main() -> int:
         f"low_address_files={counts['low_address_files']} "
         f"page_transition_files={counts['page_transition_files']} "
         f"mspace_lock_assertions={counts['mspace_lock_assertions']} "
+        f"mspace_attachment_tokens={counts['mspace_attachment_tokens']} "
+        f"raw_mspace_creation_files={counts['raw_mspace_creation_files']} "
         "metadata=anywhere card_mark=unconditional nonmoving_barrier=unconditional"
     )
     return 0

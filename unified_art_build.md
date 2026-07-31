@@ -52,7 +52,7 @@ items are closed.
 ### Latest verification baseline (2026-08-01)
 
 - [x] `PYTHONPATH=tools/bp2cmake python3 -m pytest tools/bp2cmake/tests tests/host -q`:
-  131 passed, including generated PE-header, Linux/Windows test-catalog,
+  132 passed, including generated PE-header, Linux/Windows test-catalog,
   shell-free runtime/managed-artifact gates, parallel-frontend, JDK validation,
   deterministic JAR, Windows-path/DSO-name, reviewer ownership, W-013
   source-policy and fatal-contract orchestration, W-024 cleanup, and VCS
@@ -109,6 +109,13 @@ items are closed.
   sanitized JSON records one success and four nonzero death cases with no
   timeout, and the host remained responsive afterward. The superseded Bash/Wine
   mspace runner was removed.
+- [x] The remaining dlmalloc Bash runner was retired after its source-only
+  contracts moved into the W-013 Python reviewer. That reviewer now enforces
+  active Windows macros, six provider-attachment tokens, exactly one authorized
+  raw-mspace creation file, and absence of global owner discovery in addition
+  to the existing memory policies. The native Stage-8 tree remained a Ninja
+  no-op and passed 7/7 in 25.16 seconds on a cold source scan; the reviewer
+  completed an immediate repeat in 2.01 seconds.
 - [x] All 48 retained Java probe sources now have logical `tests/cases`
   ownership and adjacent results. The registry emits 47 managed artifacts;
   the old verification tree owns no Java source.
