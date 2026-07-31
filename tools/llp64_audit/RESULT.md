@@ -1,4 +1,4 @@
-# LLP64 pointer/jlong cast audit — RESULT
+# LLP64 pointer/`jlong` cast audit — accepted historical result
 
 **Date:** 2026-07-17 22:56:00  
 **Scope:** **full Windows build path** (all TUs in Windows x64 compile DBs), not only libcore  
@@ -16,7 +16,9 @@
    - `-fsyntax-only -Wvoid-pointer-to-int-cast -Wint-to-void-pointer-cast`
    - Clang only warns when the integer type is **smaller than a pointer** → catches LLP64 `long`/`unsigned long` traps.
    - jobs=16 (jobs=32 previously OOM'd; confirmed via `dmesg`)
-3. **clang-query** `scan_ast.sh` / experimental `scan_ast_full.py` — noisier AST matchers (SDK `HandleToLong`, ioctl macros); not primary evidence.
+3. At the historical checkpoint, noisier clang-query and experimental
+   libclang matchers were also compared (including SDK `HandleToLong` and ioctl
+   macro noise). Those redundant implementations have since been retired.
 4. **Manual review** of `jlong_md.h` / multipath include order / FileChannelImpl_map0.
 5. Confirmed product openjdk flags: multipath include **first**, `-D_LP64=1`.
 
@@ -30,9 +32,9 @@ Hits (repo vendor/tools/compat/native only): 0
 Worker failures: 0
 ```
 
-Artifacts:
-- `tools/verify/llp64_ptr_cast_audit/FULL_AST_RESULT.md`
-- `tools/verify/llp64_ptr_cast_audit/FULL_AST_RESULT.json`
+The detailed generated Markdown/JSON reports were intentionally retired from
+VCS after this accepted summary captured their stable conclusion. Future
+reports belong below the exact target output directory.
 
 **Conclusion:** No product-path `void*` ↔ smaller-integer casts remain on the full Windows x64 compile graph.
 
@@ -74,21 +76,12 @@ No remaining `(jlong)(unsigned long)` / `(jlong)(long)` / `void*`↔`long` spell
 
 ```bash
 # Fast text heuristics
-python3 tools/verify/llp64_ptr_cast_audit/scan_text.py
+python3 tools/llp64_audit/scan_text.py
 
 # Full Windows compile-graph frontend scan (recommended)
 # Prefer jobs=16 on this host; jobs=32 OOM'd previously.
-python3 -u tools/verify/llp64_ptr_cast_audit/scan_compile_db_warnings.py \
-  build/windows_x64_phase1 build/windows_x64_libcore_icu \
-  --jobs 16 \
-  --out tools/verify/llp64_ptr_cast_audit/FULL_AST_RESULT.md \
-  --json-out tools/verify/llp64_ptr_cast_audit/FULL_AST_RESULT.json
-
-# Optional clang-query (noisy):
-source $WINDOWS_X64_DEV_ENV/env.sh
-cmake -S tools/verify/windows_x64_libcore_icu -B build/windows_x64_libcore_icu -G Ninja \
-  -DCMAKE_TOOLCHAIN_FILE=$WINDOWS_X64_CMAKE_TOOLCHAIN -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-tools/verify/llp64_ptr_cast_audit/scan_ast.sh build/windows_x64_libcore_icu
+python3 -u tools/llp64_audit/scan_compile_db_warnings.py \
+  out/windows-x86_64-msvc/RelWithDebInfo --jobs 16
 ```
 
 ## Recommended project rule

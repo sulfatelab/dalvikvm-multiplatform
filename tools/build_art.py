@@ -255,6 +255,7 @@ def _configure(
         "-G",
         "Ninja",
         f"-DCMAKE_BUILD_TYPE={build_type}",
+        "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
         f"-DCMAKE_MAKE_PROGRAM={tools['ninja']}",
         f"-DCMAKE_C_COMPILER={tools['clang']}",
         f"-DCMAKE_CXX_COMPILER={tools['clang++']}",

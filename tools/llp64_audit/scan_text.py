@@ -6,10 +6,10 @@ jlong through long/unsigned long truncates the high 32 bits (W-020 FileChannel
 map0). This scanner finds explicit/implicit *looking* conversion sites in
 .c/.cc/.cpp/.h/.hpp via regex heuristics.
 
-For AST precision, use scan_ast.sh with compile_commands.json + clang-query.
+For compile-graph precision, use scan_compile_db_warnings.py.
 
 Usage:
-  python3 tools/verify/llp64_ptr_cast_audit/scan_text.py [root ...]
+  python3 tools/llp64_audit/scan_text.py [root ...]
 """
 from __future__ import annotations
 
@@ -21,7 +21,6 @@ DEFAULT_ROOTS = [
     "vendor/libcore",
     "vendor/art",
     "tools/windows_x64",
-    "tools/verify/windows_x64_libcore_icu",
     "compat",
 ]
 EXTS = {".c", ".cc", ".cpp", ".h", ".hpp"}

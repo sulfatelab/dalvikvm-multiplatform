@@ -12,9 +12,8 @@ Clang only emits void-pointer-to-int / int-to-void-pointer when the integer
 type is *smaller* than a pointer — exactly the LLP64 long/unsigned long trap.
 
 Usage:
-  python3 tools/verify/llp64_ptr_cast_audit/scan_compile_db_warnings.py \
-    build/windows_x64_phase1 build/windows_x64_libcore_icu --jobs 32 \
-    --out tools/verify/llp64_ptr_cast_audit/FULL_AST_RESULT.md
+  python3 tools/llp64_audit/scan_compile_db_warnings.py \
+    out/windows-x86_64-msvc/RelWithDebInfo --jobs 16
 """
 from __future__ import annotations
 
@@ -41,7 +40,7 @@ INTERESTING = {
 
 
 def load_db(path: Path) -> list[dict]:
-    data = json.loads(path.read_text())
+    data = json.loads(path.read_text(encoding="utf-8"))
     out = []
     for e in data:
         f = e["file"]
@@ -60,9 +59,9 @@ def load_db(path: Path) -> list[dict]:
 
 def build_cmd(entry: dict, extra: list[str]) -> list[str]:
     args = entry["args"][:]
-    # drop compiler is first
-    # remove -c -S -o out
-    new = []
+    source = Path(entry["file"]).resolve()
+    directory = Path(entry["directory"])
+    new: list[str] = []
     skip = False
     for a in args:
         if skip:
@@ -74,14 +73,16 @@ def build_cmd(entry: dict, extra: list[str]) -> list[str]:
             skip = True
             continue
         if a.startswith("-o") and not a.startswith("-og") and not a.startswith("-object"):
-            # -oFILE
             if len(a) > 2 and not a.startswith("-opt"):
                 continue
+        candidate = Path(a)
+        if candidate.suffix == source.suffix:
+            if not candidate.is_absolute():
+                candidate = directory / candidate
+            if candidate.resolve() == source:
+                continue
         new.append(a)
-    # strip trailing source path duplicates later
-    # append warnings + fsyntax-only + file
-    cmd = new + extra + ["-fsyntax-only", entry["file"]]
-    return cmd
+    return new + extra + ["-fsyntax-only", entry["file"]]
 
 
 def run_one(entry: dict, repo: str) -> dict:
@@ -98,6 +99,7 @@ def run_one(entry: dict, repo: str) -> dict:
             capture_output=True,
             text=True,
             timeout=120,
+            shell=False,
         )
     except Exception as e:
         return {"file": entry["file"], "ok": False, "err": str(e), "hits": []}
@@ -129,15 +131,24 @@ def run_one(entry: dict, repo: str) -> dict:
             "msg": m.group("msg"),
             "kind": "PTR->INT" if "void-pointer-to-int" in flag else "INT->PTR",
         })
-    return {"file": entry["file"], "ok": True, "err": "", "hits": hits, "rc": r.returncode}
+    return {
+        "file": entry["file"],
+        "ok": r.returncode == 0,
+        "err": "" if r.returncode == 0 else text[-2000:],
+        "hits": hits,
+        "rc": r.returncode,
+    }
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("dbs", nargs="+")
     ap.add_argument("--jobs", type=int, default=max(4, (os.cpu_count() or 8)))
-    ap.add_argument("--out", default="tools/verify/llp64_ptr_cast_audit/FULL_AST_RESULT.md")
-    ap.add_argument("--json-out", default="tools/verify/llp64_ptr_cast_audit/FULL_AST_RESULT.json")
+    default_result_root = (
+        "out/windows-x86_64-msvc/RelWithDebInfo/results/llp64-audit"
+    )
+    ap.add_argument("--out", default=f"{default_result_root}/result.md")
+    ap.add_argument("--json-out", default=f"{default_result_root}/result.json")
     ap.add_argument("--limit", type=int, default=0)
     args = ap.parse_args()
 
@@ -185,16 +196,26 @@ def main() -> int:
 
     high = [h for h in uniq if h["kind"] in ("PTR->INT", "INT->PTR")]
     Path(args.json_out).parent.mkdir(parents=True, exist_ok=True)
-    Path(args.json_out).write_text(json.dumps({
-        "method": "clang-frontend -Wvoid-pointer-to-int-cast / -Wint-to-void-pointer-cast",
-        "tus": len(items),
-        "elapsed_sec": time.time() - t0,
-        "high": high,
-        "med": [],
-        "all_hits": uniq,
-        "parse_fail_count": fails,
-        "dbs": args.dbs,
-    }, indent=2))
+    Path(args.json_out).write_text(
+        json.dumps(
+            {
+                "method": (
+                    "clang-frontend -Wvoid-pointer-to-int-cast / "
+                    "-Wint-to-void-pointer-cast"
+                ),
+                "tus": len(items),
+                "elapsed_sec": time.time() - t0,
+                "high": high,
+                "med": [],
+                "all_hits": uniq,
+                "parse_fail_count": fails,
+                "dbs": args.dbs,
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
 
     lines = []
     lines.append("# Full Windows AST LLP64 cast audit (compile_commands + clang frontend)\n")
@@ -221,9 +242,9 @@ def main() -> int:
     lines.append("- System SDK hits (basetsd HandleToLong) are filtered by path.")
     lines.append("- Pair with `scan_text.py` for `(jlong)(unsigned long)` spelling patterns.")
     lines.append("- Optional custom LibTooling binary: see `llp64_cast_tool/` if libclang-*-dev is installed.\n")
-    Path(args.out).write_text("\n".join(lines) + "\n")
+    Path(args.out).write_text("\n".join(lines) + "\n", encoding="utf-8")
     print(f"Wrote {args.out} hits={len(uniq)} fails={fails}")
-    return 1 if uniq else 0
+    return 1 if uniq or fails else 0
 
 
 if __name__ == "__main__":

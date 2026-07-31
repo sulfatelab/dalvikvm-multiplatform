@@ -265,6 +265,7 @@ def test_windows_configure_uses_target_bundle_and_clang_target(tmp_path, monkeyp
     )
 
     assert "-G" in commands[0] and "Ninja" in commands[0]
+    assert "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON" in commands[0]
     assert "-DCMAKE_SYSTEM_NAME=Windows" in commands[0]
     assert "-DCMAKE_CXX_COMPILER_TARGET=x86_64-pc-windows-msvc" in commands[0]
     assert f"-DCMAKE_RC_COMPILER={llvm_rc.as_posix()}" in commands[0]

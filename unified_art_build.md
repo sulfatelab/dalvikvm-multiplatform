@@ -52,10 +52,10 @@ items are closed.
 ### Latest verification baseline (2026-07-31)
 
 - [x] `PYTHONPATH=tools/bp2cmake python3 -m pytest tools/bp2cmake/tests tests/host -q`:
-  125 passed, including generated PE-header, Linux/Windows test-catalog,
+  129 passed, including generated PE-header, Linux/Windows test-catalog,
   shell-free runtime/managed-artifact gates, parallel-frontend, JDK validation,
-  deterministic JAR, Windows-path/DSO-name, and VCS binary/source-ownership
-  coverage.
+  deterministic JAR, Windows-path/DSO-name, reviewer ownership, W-024 cleanup,
+  and VCS binary/source-ownership coverage.
 - [x] Fresh generation loads the same 260 Blueprint files for both targets and
   emits 33 generated modules for `linux-x86_64-gnu` versus 32 for
   `windows-x86_64-msvc`; Windows supplies `sigchain` as the reviewed
@@ -149,6 +149,14 @@ items are closed.
 - [x] The six documentation-only Linux E2E bring-up records moved from
   `tools/verify/e2e` to flat, clearly historical names under `docs/history`;
   their obsolete harness commands are not test entry points.
+- [x] The maintained LLP64 audit moved to `tools/llp64_audit`, now consumes the
+  unified compile database and writes regenerated reports below `out/`. The
+  redundant Bash/clang-query path, experimental libclang scanner, and generated
+  report copies were removed; the accepted summary remains beside the scanner.
+  Its fast source scan reports zero high/medium findings and 119 safe-helper
+  sites on the current tree. A fresh frontend-owned Linux configure emitted a
+  1,771-entry unified `compile_commands.json`, proving the database is available
+  without a legacy verification graph.
 - [x] Native Windows `check-generated` passes for the 32-module, 260-Blueprint
   graph, and a second identical full product build reports
   `ninja: no work to do.`
