@@ -67,7 +67,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     assert sum(not probe["target_ids"] for probe in catalog["probes"]) == 62
     assert sum(
         probe["execution"] == "target-runnable" for probe in catalog["probes"]
-    ) == 15
+    ) == 16
     assert {
         probe["name"]: probe["timeout_seconds"]
         for probe in catalog["probes"]
@@ -78,6 +78,9 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "windows_x64_w013_dlmalloc_config_probe": 60,
         "managed_w013_non_moving_128m": 300,
         "managed_w013_non_moving_1024m": 300,
+        "windows_x64_pthread_once_probe": 180,
+        "win32_thread_stack_probe": 240,
+        "win32_stack_page_probe": 240,
     }
     assert [
         probe["name"] for probe in catalog["probes"] if probe["ctest_registered"]

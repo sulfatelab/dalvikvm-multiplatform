@@ -161,6 +161,121 @@ def run_show_version(dalvikvm: Path, expected: str) -> None:
     print(expected)
 
 
+def run_native(
+    *,
+    target_id: str,
+    probe: Path,
+    work_root: Path,
+    library_dirs: list[Path],
+    probe_args: list[str],
+    expected: list[str],
+    forbidden: list[str],
+    expected_exit: int,
+    repetitions: int,
+    timeout: int,
+) -> None:
+    probe = _regular_file(str(probe))
+    library_dirs = [_managed_path(path) for path in library_dirs]
+    work_root = _managed_path(work_root, allow_missing=True)
+    if work_root.exists() or work_root.is_symlink():
+        _reject_tree_links(work_root)
+        shutil.rmtree(work_root)
+    work_root.mkdir(parents=True)
+    _managed_path(work_root)
+
+    environment = os.environ.copy()
+    if os.name == "nt":
+        system_root = environment.get("SystemRoot", r"C:\Windows")
+        environment["PATH"] = os.pathsep.join(
+            [*(str(path) for path in library_dirs), str(Path(system_root) / "System32")]
+        )
+    elif library_dirs:
+        environment["LD_LIBRARY_PATH"] = os.pathsep.join(
+            str(path) for path in library_dirs
+        )
+
+    cases: list[dict[str, object]] = []
+    failure: str | None = None
+    for iteration in range(1, repetitions + 1):
+        try:
+            result = subprocess.run(
+                [str(probe), *probe_args],
+                cwd=probe.parent,
+                env=environment,
+                text=True,
+                capture_output=True,
+                check=False,
+                shell=False,
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired:
+            cases.append({
+                "iteration": iteration,
+                "actual_exit": None,
+                "timed_out": True,
+                "missing_markers": list(expected),
+                "forbidden_markers": [],
+            })
+            failure = f"iteration {iteration} timed out after {timeout} seconds"
+            break
+
+        (work_root / f"stdout-{iteration:03d}.txt").write_text(
+            result.stdout, encoding="utf-8"
+        )
+        (work_root / f"stderr-{iteration:03d}.txt").write_text(
+            result.stderr, encoding="utf-8"
+        )
+        combined = result.stdout + "\n" + result.stderr
+        missing = [marker for marker in expected if marker not in combined]
+        present_forbidden = [marker for marker in forbidden if marker in combined]
+        cases.append({
+            "iteration": iteration,
+            "actual_exit": result.returncode,
+            "timed_out": False,
+            "missing_markers": missing,
+            "forbidden_markers": present_forbidden,
+        })
+        if result.returncode != expected_exit or missing or present_forbidden:
+            tail = "\n".join(combined.splitlines()[-80:])
+            failure = (
+                f"iteration {iteration} failed: exit={result.returncode}, "
+                f"expected={expected_exit}, missing={missing}, "
+                f"forbidden={present_forbidden}\n{tail}"
+            )
+            break
+
+    record = {
+        "schema_version": 1,
+        "target_id": target_id,
+        "probe": {"name": probe.name, "sha256": _sha256(probe)},
+        "argument_count": len(probe_args),
+        "expected_exit": expected_exit,
+        "expected_markers": expected,
+        "forbidden_markers": forbidden,
+        "requested_repetitions": repetitions,
+        "attempted_repetitions": len(cases),
+        "completed_repetitions": sum(
+            case["actual_exit"] == expected_exit
+            and not case["timed_out"]
+            and not case["missing_markers"]
+            and not case["forbidden_markers"]
+            for case in cases
+        ),
+        "cases": cases,
+    }
+    temporary = work_root / "result.json.tmp"
+    temporary.write_text(
+        json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    os.replace(temporary, work_root / "result.json")
+    if failure is not None:
+        raise GateError(f"{probe.name} {failure}")
+    print(
+        f"{probe.name} passed for {target_id}: repetitions={repetitions}, "
+        f"markers={len(expected)}"
+    )
+
+
 def run_dso_topology(
     runtime: Path,
     compiler: Path,
@@ -325,6 +440,17 @@ def _parser() -> argparse.ArgumentParser:
     topology.add_argument("--compiler", type=_regular_file, required=True)
     topology.add_argument("--compiler-needed", required=True)
     topology.add_argument("--runtime-forbidden", required=True)
+    native = subparsers.add_parser("native")
+    native.add_argument("--target-id", required=True)
+    native.add_argument("--probe", type=_regular_file, required=True)
+    native.add_argument("--work-root", type=Path, required=True)
+    native.add_argument("--library-dir", type=Path, action="append", default=[])
+    native.add_argument("--probe-arg", action="append", default=[])
+    native.add_argument("--expect", action="append", default=[])
+    native.add_argument("--forbid", action="append", default=[])
+    native.add_argument("--expected-exit", type=int, default=0)
+    native.add_argument("--repeat", type=int, default=1)
+    native.add_argument("--timeout", type=int, default=60)
     managed = subparsers.add_parser("managed")
     managed.add_argument("--target-id", required=True)
     managed.add_argument("--dalvikvm", type=_regular_file, required=True)
@@ -355,7 +481,24 @@ def main(argv: list[str] | None = None) -> int:
                 args.compiler_needed,
                 args.runtime_forbidden,
             )
+        elif args.command == "native":
+            if args.repeat < 1 or args.timeout < 1:
+                raise GateError("native repeat and timeout must be positive")
+            run_native(
+                target_id=args.target_id,
+                probe=args.probe,
+                work_root=args.work_root,
+                library_dirs=args.library_dir,
+                probe_args=args.probe_arg,
+                expected=args.expect,
+                forbidden=args.forbid,
+                expected_exit=args.expected_exit,
+                repetitions=args.repeat,
+                timeout=args.timeout,
+            )
         else:
+            if args.timeout < 1:
+                raise GateError("managed timeout must be positive")
             run_managed(
                 target_id=args.target_id,
                 dalvikvm=args.dalvikvm,

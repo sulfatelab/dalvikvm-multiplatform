@@ -1,5 +1,6 @@
 from pathlib import Path
 import importlib.util
+import json
 import subprocess
 import sys
 from types import SimpleNamespace
@@ -43,6 +44,51 @@ def test_show_version_requires_exit_zero_and_marker(tmp_path, monkeypatch, capsy
     assert commands[0][0] == [str(dalvikvm), "-showversion"]
     assert commands[0][1]["shell"] is False
     assert capsys.readouterr().out == "ART version test\n"
+
+
+def test_native_gate_repeats_without_shell_and_records_sanitized_result(
+    tmp_path, monkeypatch, capsys
+):
+    probe = tmp_path / "probe.exe"
+    probe.write_bytes(b"native probe")
+    commands = []
+
+    def run(command, **kwargs):
+        commands.append((command, kwargs))
+        return SimpleNamespace(
+            returncode=0,
+            stdout="probe count=1 failures=0\nprobe OK\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", run)
+    work = tmp_path / "out" / "tests" / "results" / "native"
+    runtime_gate.run_native(
+        target_id="windows-x86_64-msvc",
+        probe=probe,
+        work_root=work,
+        library_dirs=[tmp_path],
+        probe_args=["success"],
+        expected=["probe count=1 failures=0", "probe OK"],
+        forbidden=["probe FAIL"],
+        expected_exit=0,
+        repetitions=3,
+        timeout=5,
+    )
+
+    assert len(commands) == 3
+    for command, options in commands:
+        assert command == [str(probe), "success"]
+        assert options["cwd"] == probe.parent
+        assert options["shell"] is False
+        assert options["timeout"] == 5
+    record_text = (work / "result.json").read_text(encoding="utf-8")
+    record = json.loads(record_text)
+    assert record["requested_repetitions"] == 3
+    assert record["completed_repetitions"] == 3
+    assert all(case["actual_exit"] == 0 for case in record["cases"])
+    assert str(tmp_path) not in record_text
+    assert "repetitions=3" in capsys.readouterr().out
 
 
 def test_managed_gate_uses_isolated_runtime_and_records_result(

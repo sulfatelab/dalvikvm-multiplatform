@@ -52,7 +52,7 @@ items are closed.
 ### Latest verification baseline (2026-08-01)
 
 - [x] `PYTHONPATH=tools/bp2cmake python3 -m pytest tools/bp2cmake/tests tests/host -q`:
-  132 passed, including generated PE-header, Linux/Windows test-catalog,
+  133 passed, including generated PE-header, Linux/Windows test-catalog,
   shell-free runtime/managed-artifact gates, parallel-frontend, JDK validation,
   deterministic JAR, Windows-path/DSO-name, reviewer ownership, W-013
   source-policy and fatal-contract orchestration, W-024 cleanup, and VCS
@@ -125,6 +125,15 @@ items are closed.
   reconfigured Server 2025 Stage-8 tree was also a Ninja no-op and passed W-013
   7/7 in 5.14 seconds. All managed results are sanitized, both Windows trees
   contain zero reparse points, and the host remained responsive.
+- [x] The shared shell-free runtime gate now owns native executable repetition,
+  marker, timeout, DSO-path, log, and sanitized-result orchestration. W-014
+  pthread-once passed 10/10, thread-stack preserved all five reservation sizes
+  and its 512/128 join/detach counters, and stack-page preserved all selection,
+  restoration, and 258-fault checks. The authoritative Server 2025 stage built
+  in 24 Ninja actions and passed 3/3 in 1.95 seconds. All records contain zero
+  failed iterations or host paths; both Windows trees have zero reparse points
+  and the VM remained responsive. The two superseded Bash/Wine runners were
+  removed.
 - [x] All 48 retained Java probe sources now have logical `tests/cases`
   ownership and adjacent results. The registry emits 47 managed artifacts;
   the old verification tree owns no Java source.
@@ -263,9 +272,9 @@ One historical work stage maps to exactly one virtual target named
 | `w004` | 2 EXEs, 1 DLL, 33 managed, 2 gates | 5 exact / 33 typed | 6 runnable, 32 compile-only | Windows embedding/JVMTI/libcore behavior beyond the accepted Hello/GC/Math/SHA slice |
 | `w010` | 4 EXEs, 3 managed | 1 exact / 6 typed | 7 compile-only | managed-fault, fatal-unwind, debugger, and dump review |
 | `w013` | 4 EXEs, 1 managed, 3 gates | 3 exact / 5 typed | 6 runnable, 1 host-review, 1 compile-only | registered x86-64 native, managed, and source-policy coverage is complete |
-| `w014` | 7 EXEs, 1 DLL, 1 managed | 3 exact / 6 typed | 2 runnable, 7 compile-only | stack-growth, CET, high-water, and reservation matrices |
+| `w014` | 7 EXEs, 1 DLL, 1 managed | 3 exact / 6 typed | 3 runnable, 6 compile-only | recursive growth, CET, pre-growth, and managed stack-high-water matrices |
 | `w025` | 4 EXEs, 3 DLLs, 3 managed | 6 exact / 4 typed | 10 compile-only | JIT mapping/lifecycle/CFG runtime and host-review gates |
-| Total | 22 EXEs, 10 DLLs, 47 managed, 5 gates | 22 exact / 62 typed | 15 runnable, 1 host-review, 68 compile-only | Windows applies 82 declarations; Linux x86-64 applies seven |
+| Total | 22 EXEs, 10 DLLs, 47 managed, 5 gates | 22 exact / 62 typed | 16 runnable, 1 host-review, 67 compile-only | Windows applies 82 declarations; Linux x86-64 applies seven |
 
 The shared registry now references zero source files from historical
 verification directories. All 84 declarations own canonical source under
@@ -273,7 +282,7 @@ verification directories. All 84 declarations own canonical source under
 source cases and all 48 Java sources have adjacent results, and shared stage
 analysis remains under `tests/stages/`. The old verification tree now contains
 zero Java sources and two uncatalogued native sources retained by unfinished
-legacy evidence paths. It still contains 66 shell scripts, 11 PowerShell
+legacy evidence paths. It still contains 61 shell scripts, 11 PowerShell
 scripts, and 29 Python scripts. Python checkers
 and reviewers may remain, but the unified frontend must invoke them through a
 declared stage instead of a phase-local product build.

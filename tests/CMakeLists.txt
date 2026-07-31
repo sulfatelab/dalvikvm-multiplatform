@@ -917,23 +917,71 @@ endforeach()
 # W-014: native thread-stack, guard-page, CET, and stack high-water contracts.
 art_add_target_probe(
     NAME windows_x64_pthread_once_probe STAGE w014 TYPE EXECUTABLE
-    EXECUTION target-runnable ${_art_windows_current_selector}
+    EXECUTION target-runnable TIMEOUT 180 ${_art_windows_current_selector}
     SOURCES "${_art_test_cases_root}/pthread-once/probe.c"
-    CONTRACTS threads PRODUCT_POLICY)
+    CONTRACTS threads PRODUCT_POLICY
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_test_repo_root}/tests/support/runtime_gate.py"
+        native
+        --target-id "${ART_TARGET_ID}"
+        --probe "$<TARGET_FILE:windows_x64_pthread_once_probe>"
+        --work-root
+            "${CMAKE_CURRENT_BINARY_DIR}/results/w014-pthread-once"
+        --library-dir "${CMAKE_BINARY_DIR}"
+        --library-dir "${_art_bundle_lib}/libcxx/bin"
+        --expect "pthread_once_probe init_calls=1 failures=0 value=0x12345678"
+        --expect "pthread_once_probe OK"
+        --repeat 10
+        --timeout 15)
 art_add_target_probe(
     NAME win32_thread_stack_probe STAGE w014 TYPE EXECUTABLE
-    EXECUTION target-runnable ${_art_windows_current_selector}
+    EXECUTION target-runnable TIMEOUT 240 ${_art_windows_current_selector}
     SOURCES "${_art_test_cases_root}/thread-stack/probe.c"
-    CONTRACTS stack threads PRODUCT_POLICY)
+    CONTRACTS stack threads PRODUCT_POLICY
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_test_repo_root}/tests/support/runtime_gate.py"
+        native
+        --target-id "${ART_TARGET_ID}"
+        --probe "$<TARGET_FILE:win32_thread_stack_probe>"
+        --work-root
+            "${CMAKE_CURRENT_BINARY_DIR}/results/w014-thread-stack"
+        --library-dir "${CMAKE_BINARY_DIR}"
+        --library-dir "${_art_bundle_lib}/libcxx/bin"
+        --expect "win32_thread_stack_probe failures=0 join_stress=512 detach_stress=128"
+        --expect "requested=65536"
+        --expect "requested=262144"
+        --expect "requested=1048576"
+        --expect "requested=2097152"
+        --expect "requested=9437184"
+        --expect "win32_thread_stack_probe OK"
+        --timeout 180)
 art_add_target_probe(
-    NAME win32_stack_page_probe STAGE w014 TYPE EXECUTABLE EXECUTION compile-only
+    NAME win32_stack_page_probe STAGE w014 TYPE EXECUTABLE
+    EXECUTION target-runnable TIMEOUT 240
     ${_art_windows_x86_64_msvc_selector}
     SOURCES
         "${_art_test_cases_root}/stack-page-growth/page_probe.cc"
         "${_art_test_cases_root}/stack-page-growth/fault_x86_64.S"
         "${_art_test_repo_root}/vendor/art/runtime/multiplatform/windows/stack_windows.cc"
     INCLUDE_DIRS "${_art_test_repo_root}/vendor/art/runtime/multiplatform/windows"
-    CONTRACTS stack fault PRODUCT_POLICY)
+    CONTRACTS stack fault PRODUCT_POLICY
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_test_repo_root}/tests/support/runtime_gate.py"
+        native
+        --target-id "${ART_TARGET_ID}"
+        --probe "$<TARGET_FILE:win32_stack_page_probe>"
+        --work-root
+            "${CMAKE_CURRENT_BINARY_DIR}/results/w014-stack-page"
+        --library-dir "${CMAKE_BINARY_DIR}"
+        --library-dir "${_art_bundle_lib}/libcxx/bin"
+        --expect "selection_cases count=8"
+        --expect "reserved_case size=1048576 iterations=64"
+        --expect "win32_stack_page_probe failures=0 committed_restore_iterations=64 reserved_restore_iterations=64 faults=258"
+        --expect "win32_stack_page_probe OK"
+        --timeout 180)
 art_add_target_probe(
     NAME win32_stack_growth_probe STAGE w014 TYPE EXECUTABLE EXECUTION compile-only
     ${_art_windows_x86_64_msvc_selector}

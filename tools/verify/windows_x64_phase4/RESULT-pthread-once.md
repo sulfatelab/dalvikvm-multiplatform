@@ -47,15 +47,18 @@ The permanent stress probe starts 32 Windows threads simultaneously. Its
 initializer deliberately sleeps before publishing a value, making the former
 early-return behavior directly observable.
 
-```sh
-REPEATS=10 bash tools/verify/windows_x64_phase4/run_pthread_once_probe.sh
+```text
+python tools/build_art.py test --target-id windows-x86_64-msvc --stage w014 --parallel 32
 ```
 
 Result:
 
 ```text
-pthread_once acceptance: 10/10
+windows_x64_pthread_once_probe.exe passed for windows-x86_64-msvc: repetitions=10, markers=2
 ```
+
+The authoritative Server 2025 unified gate passed 10/10 in 1.37 seconds on
+2026-08-01. The superseded Bash/Wine runner was removed.
 
 Additional final-binary verification:
 

@@ -50,7 +50,7 @@ historical evidence only. See [HOST_GATE_POLICY.md](HOST_GATE_POLICY.md).
 | W-003 historical XMM6-XMM11 / W-010 full XMM6-XMM15 sentinel | **PASS, 6/6** | `run_w003_xmm_sentinel.sh` (`selfTestMask=63`, `fullSelfTestMask=1023`) |
 | W-002 OSR matrix | **PASS, 8/8** | `run_w002_osr_probe.sh` |
 | W-002 attached-thread matrix | **PASS, 8/8** | `run_w002_attach_probe.sh`; each raw thread now detaches, uses native stack, and reattaches |
-| W-014 thread reservation/lifetime/guarantee-aware bounds | **PASS** | `run_thread_stack_probe.sh`; E9 raises/preserves/queries the guarantee and debits prefix + guarantee + moving guard |
+| W-014 thread reservation/lifetime/guarantee-aware bounds | **PASS** | unified `stage:w014` native gates; E9 raises/preserves/queries the guarantee and debits prefix + guarantee + moving guard |
 | W-010 fault record/context adapter | **PASS** | `run_fault_adapter_probe.sh` (`failures=0 cases=8`; live probe `calls=2 first=0 second=0`) |
 | W-010 JIT unwind serializer | **PASS, 6/6** | `run_jit_unwind_info_probe.sh` |
 | W-010 JIT runtime registry | **PASS** | `run_jit_unwind_registry_probe.sh` (lookup, virtual unwind, delete, re-register) |
@@ -89,7 +89,7 @@ PASS native_crash_aborts
 | W-003 attributed frame-family gate | `../../../tests/cases/w003-frame-probe/`; `run_w003_frame_probe.sh` |
 | W-003 XMM runtime sentinel | `../../../tests/cases/w003-xmm-sentinel/`; `run_w003_xmm_sentinel.sh` |
 | W-003 native package and evidence | `package_windows_x64_w003.sh`; `evidence/w003_host/ACCEPTANCE.md` |
-| W-014 Stages A-B stack/pthread/page gate | `tests/cases/thread-stack/probe.c`; `tests/cases/stack-page-growth/`; `run_thread_stack_probe.sh` |
+| W-014 Stages A-B stack/pthread/page gate | `tests/cases/pthread-once/`; `tests/cases/thread-stack/`; `tests/cases/stack-page-growth/`; `tests/support/runtime_gate.py` |
 | W-010 Stage C adapter and probes | `tests/cases/fault-record/probe.cc`; `tests/cases/sigchain-fault/probe.cc`; `run_fault_adapter_probe.sh`; `vendor/art/runtime/multiplatform/windows/sigchain_windows.cc` |
 | W-010 Stage D activation and stress | `src/W010ManagedFaultProbe.java`; `run_w010_managed_fault_probe.sh`; common runtime null/SO flags and early nterp range registration |
 | W-010 dynamic-JIT PE unwind | `runtime/multiplatform/windows/jit_unwind_windows.*`; `runtime/jit/{jit_code_cache,jit_memory_region}.*`; `run_jit_unwind_{info,registry,lifecycle}.sh`; `run_jit_fatal_unwind.sh` |

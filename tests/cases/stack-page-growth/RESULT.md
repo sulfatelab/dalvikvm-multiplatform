@@ -4,10 +4,27 @@ This case owns the page-state probe, recursive growth probe, and their one
 shared `fault_x86_64.S` implementation. Both targets are exact
 `windows-x86_64-msvc`.
 
-| Targets | Build | Runtime | Last checked |
+| Target | Build | Runtime | Last checked |
 |---|---|---|---|
-| page, growth | verified | pending unified behavioral gates | 2026-07-31 |
+| page | verified | verified | 2026-08-01 |
+| growth | verified | pending unified behavioral gate | 2026-08-01 |
 
 The unified cross catalog compiled the same assembly file for both targets
 without a copy, symlink, junction, or generated source alias. AArch64 and
 ARM64EC need explicit architecture variants and separate results.
+
+The page-state executable now has a shell-free native gate. It passed on the
+authoritative Server 2025 host in 0.22 seconds with all eight selection cases,
+64 reserved-stack restorations, 64 committed-stack restorations, and 258
+faults:
+
+```text
+selection_cases count=8
+reserved_case size=1048576 iterations=64
+win32_stack_page_probe failures=0 committed_restore_iterations=64 reserved_restore_iterations=64 faults=258
+win32_stack_page_probe OK
+```
+
+Its sanitized JSON record contains one completed iteration, zero failed
+marker/exit/timeout checks, and no host path. Recursive growth remains a
+separate compile-verified declaration and is not claimed by this result.

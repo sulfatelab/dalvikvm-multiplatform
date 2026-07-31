@@ -30,7 +30,6 @@ bash "$REPO/tools/verify/windows_x64_libcore_icu/install_into_phase1.sh" "$HYBRI
 bash "$REPO/tools/verify/windows_x64_phase4/build_one.sh" W010ManagedFaultProbe
 bash "$REPO/tools/verify/windows_x64_phase4/build_one.sh" CrashNativeProbe
 cp -a "$BUILD/art.dll" "$BUILD/run/art.dll"
-WINEDEBUG="$WINEDEBUG" "$REPO/tools/verify/windows_x64_phase4/run_thread_stack_probe.sh"
 WINEDEBUG="$WINEDEBUG" "$REPO/tools/verify/windows_x64_phase4/run_fault_adapter_probe.sh"
 osr_unwind_output="$(
   WINEDEBUG="$WINEDEBUG" "$REPO/tools/verify/windows_x64_phase4/run_osr_unwind_probe.sh"
