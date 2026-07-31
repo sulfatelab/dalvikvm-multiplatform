@@ -714,7 +714,8 @@ Each phase has a kill-or-continue gate. This is the execution roadmap when imple
 
 - Foundations (2026-07-16): Option H path/FS + `;` classpath; A4–A7 + GoldenApp under wine64.
 - A5 forced GC: `System.gc()` hang fixed (`GetThreadTimes` ThreadCpuNanoTime + WaitOnAddress ETIMEDOUT); gate `run_gcforced.sh`.
-- See `tools/verify/windows_x64_phase3/RESULT.md` and `archive-patches/windows_x64_phase3_system_gc_hang_fix.md`.
+- See `tools/verify/windows_x64_phase3/RESULT.md` and
+  `docs/windows-port-notes/windows_x64_phase3_system_gc_hang_fix.md`.
 - Path gates (same day): `File.isAbsolute("C:\\…")` **PASS**, mixed/UNC **PASS**, multi-jar `-cp a;b` **PASS** under wine64 (`tools/verify/windows_x64_phase3/run_probe.sh`).
 - **Pitfall:** imageless ART has `Character.isLetter('C')==false` (no ICU props). `WinNTFileSystem` must use ASCII `isDriveLetter`, not `Character.isLetter`.
 - **Shell pitfall:** bash splits on `;` — multi-jar `-cp` must be passed via argv list (Python subprocess), not a shell string.

@@ -39,8 +39,10 @@ dalvikvm-multiplatform/
     java-stubs/ openjdk_fdlibm/ src/
   tools/                      # bp2cmake, bootjar, windows_x64, verify gates
   overlay/                    # port policies
+  docs/
+    history/                  # completed migration/design records
+    windows-port-notes/       # audited Windows bring-up knowledge
   *.md                        # project documentation; see Documentation map
-  archived/                   # completed migration/design records
 ```
 
 ### Folded Windows sources (no main `compat/windows/{art,libcore}`)
@@ -177,7 +179,7 @@ Windows runtime-port work.
 
 ## Migration history
 
-See [archived/git_repo_migrate.md](archived/git_repo_migrate.md) for the
+See [docs/history/git_repo_migrate.md](docs/history/git_repo_migrate.md) for the
 completed nested-repository and de-overlay plan, push order, and checklist.
 
 ## Push order (after GitHub repos exist)

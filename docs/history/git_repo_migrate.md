@@ -26,7 +26,7 @@ git clone --recursive git@github.com:sulfatelab/dalvikvm-multiplatform.git
 | `dalvikvm-linux/vendor/art` | Detached `android-16.0.0_r4` (`1690c69`), **dirty** (~49 files, ~+1797/−167), shallow |
 | `dalvikvm-linux/vendor/libcore` | Detached `android-16.0.0_r4` (`1c599b6`), **clean** |
 | `vendor/` in product | **gitignored** — not recorded as gitlinks today |
-| Port “overlay” | Split: **in-tree ART dirt** + product `compat/` + `archive-patches/` + PE stubs |
+| Port “overlay” | Split: **in-tree ART dirt** + product `compat/` + `docs/windows-port-notes/` + PE stubs |
 
 ---
 
@@ -40,7 +40,7 @@ git clone --recursive git@github.com:sulfatelab/dalvikvm-multiplatform.git
 | Execute now? | Only when explicitly approved |
 
 **Verdict: Go, with a clear migration design.**  
-The model (named `artmp_*` branches on nested AOSP-derived repos + main repo recording gitlinks + `.gitmodules` for clone UX) is standard Git and fits this project better than “ignored dirty `vendor/` + `archive-patches/`.”
+The model (named `artmp_*` branches on nested AOSP-derived repos + main repo recording gitlinks + `.gitmodules` for clone UX) is standard Git and fits this project better than “ignored dirty `vendor/` + top-level patch notes.”
 
 ---
 
@@ -105,7 +105,7 @@ The model (named `artmp_*` branches on nested AOSP-derived repos + main repo rec
 | Current change location | Destination | Why |
 |-------------------------|-------------|-----|
 | Dirty files under `vendor/art` | Nested **art** `artmp_*` | Primary de-patch target |
-| `archive-patches/*` | Nested commits + docs | History on `artmp_*`; notes only in main |
+| `docs/windows-port-notes/*` | Nested commits + docs | History on `artmp_*`; notes only in main |
 | `compat/windows/art/*` | Nested **art** `artmp_*` (**locked fold**) | Windows runtime spine owned with ART multipath branch |
 | `compat/windows/libcore/*` | Nested **libcore** `artmp_*` (**locked fold**) | WinNT FS / properties owned with libcore multipath branch |
 | `compat/include/*` | **Main** (**locked keep**) | Toolchain/POSIX shims for multiplatform product build |
@@ -229,7 +229,8 @@ dalvikvm-multiplatform/
 
 **Copy (yes)**
 
-- Docs: `../win32_art_port.md`, `../win32_filesystem.md`, `../bp2cmake_linux_scope.md`, `archive-patches/` (historical notes), this plan  
+- Docs: `win32_art_port.md`, `win32_filesystem.md`, `bp2cmake_linux_scope.md`,
+  `docs/windows-port-notes/` (historical notes), this plan
 - Product: `compat/include/` (**keep**), other non-folded `compat/*` if any, `overlay/`, `tools/` (bp2cmake, bootjar, windows_x64, verify), useful `native/` recipes  
 - **Do not** keep `compat/windows/art` or `compat/windows/libcore` as long-term main overlays after fold (sources live in nested artmp)  
 - New `.gitignore` that does **not** blanket-ignore nested vendor pins  
@@ -448,7 +449,7 @@ Expect **~15–20** submodule entries for a complete graph (not 2). Generation c
 - [ ] ICU, BoringSSL, libbase, logging, ziparchive, unwinding, lzma, and other inventory deps are nested (not left only in MinDalvikVM-Archive)  
 - [ ] Multiplatform main has commit(s) with product tree + **gitlinks for every nested path** + complete `.gitmodules`  
 - [ ] README states: `git clone --recursive` → full Linux+Windows ART source graph  
-- [ ] No reliance on `archive-patches` as **apply steps** for ART (docs only)  
+- [ ] No reliance on Windows port notes as **apply steps** for ART (docs only)
 - [ ] Ready for you to push **all nested**, then main, when GitHub + SSH ready  
 - [ ] Optional smoke: fresh recursive clone configures/builds on Linux and produces Windows x64 PE package  
 
@@ -458,7 +459,7 @@ Expect **~15–20** submodule entries for a complete graph (not 2). Generation c
 
 | Risk | Severity | Mitigation |
 |------|----------|------------|
-| Commit incomplete dirty ART | High | Review status/diff; map archive-patches into commits |
+| Commit incomplete dirty ART | High | Review status/diff; map Windows port notes into commits |
 | Shallow push fails | Medium | Unshallow before first nested push |
 | Main still ignores `vendor/` | High | New gitignore policy |
 | `cp -r` without `-a` loses `.git`/modes | High | Use `cp -a` |
@@ -559,4 +560,3 @@ When ready to execute, say **execute**.
 - `vendor/r8/r8.jar` is a product prebuilt (exception in `.gitignore`), not a nested repo.
 - `../dalvikvm-linux` left intact as fallback.
 - Local nested working trees stay full git repos; consumers use submodule protocol via `.gitmodules`.
-

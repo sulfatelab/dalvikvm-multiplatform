@@ -28,19 +28,19 @@ The repository's existing classification of `wasi-wasm64` as
 | Area | Finding |
 |---|---|
 | Toolchain | LLVM 21 recognizes `wasm64`, but the official WASI SDK currently says 64-bit linear-memory targets are unsupported. It has no plans for `wasm64-wasi`/Preview1 variants; a future `wasm64-wasip2` depends on unresolved component-model work. |
-| Build frontend | [`native/CMakeLists.txt`](../native/CMakeLists.txt) rejects anything except Linux or Windows. The registered Wasm profiles deliberately fail before graph generation in [`target.py`](../tools/bp2cmake/bp2cmake/target.py). |
-| ART architecture | [`instruction_set.h`](../vendor/art/libartbase/arch/instruction_set.h) knows only ARM, ARM64, RISC-V64, x86, and x86-64. Under wasm64, `kRuntimeISA` becomes `kNone`. The current tree contains 276 ISA switch cases across 23 runtime/compiler files. |
-| Interpreter | The portable C++ switch interpreter exists, which is encouraging, but even it enters through an architecture-specific assembly/CFI wrapper in [`interpreter_switch_impl.h`](../vendor/art/runtime/interpreter/interpreter_switch_impl.h). There is no Wasm quick-invoke, JNI, context, frame, TLS, or long-jump implementation. |
-| Compiler | [`code_generator.cc`](../vendor/art/compiler/optimizing/code_generator.cc) has no WebAssembly backend. JNI calling conventions, trampolines, register allocation, unwind metadata, and runtime entrypoints are similarly ISA-specific. |
-| Executable code | ART assumes generated code is byte-addressable executable memory. `OatQuickMethodHeader` physically precedes its machine-code bytes and is recovered by pointer subtraction in [`oat_quick_method_header.h`](../vendor/art/runtime/oat/oat_quick_method_header.h). Wasm functions live in code sections/function tables, not linear memory. |
-| JIT memory | ART requires executable mappings, dual RW/RX views, `mprotect`, `memfd`, and fixed mappings; see [`jit_memory_region.cc`](../vendor/art/runtime/jit/jit_memory_region.cc). WebAssembly linear memory has no executable pages or per-page protection. |
+| Build frontend | [`native/CMakeLists.txt`](../../native/CMakeLists.txt) rejects anything except Linux or Windows. The registered Wasm profiles deliberately fail before graph generation in [`target.py`](../../tools/bp2cmake/bp2cmake/target.py). |
+| ART architecture | [`instruction_set.h`](../../vendor/art/libartbase/arch/instruction_set.h) knows only ARM, ARM64, RISC-V64, x86, and x86-64. Under wasm64, `kRuntimeISA` becomes `kNone`. The current tree contains 276 ISA switch cases across 23 runtime/compiler files. |
+| Interpreter | The portable C++ switch interpreter exists, which is encouraging, but even it enters through an architecture-specific assembly/CFI wrapper in [`interpreter_switch_impl.h`](../../vendor/art/runtime/interpreter/interpreter_switch_impl.h). There is no Wasm quick-invoke, JNI, context, frame, TLS, or long-jump implementation. |
+| Compiler | [`code_generator.cc`](../../vendor/art/compiler/optimizing/code_generator.cc) has no WebAssembly backend. JNI calling conventions, trampolines, register allocation, unwind metadata, and runtime entrypoints are similarly ISA-specific. |
+| Executable code | ART assumes generated code is byte-addressable executable memory. `OatQuickMethodHeader` physically precedes its machine-code bytes and is recovered by pointer subtraction in [`oat_quick_method_header.h`](../../vendor/art/runtime/oat/oat_quick_method_header.h). Wasm functions live in code sections/function tables, not linear memory. |
+| JIT memory | ART requires executable mappings, dual RW/RX views, `mprotect`, `memfd`, and fixed mappings; see [`jit_memory_region.cc`](../../vendor/art/runtime/jit/jit_memory_region.cc). WebAssembly linear memory has no executable pages or per-page protection. |
 | Fault handling | ART relies on recoverable `SIGSEGV`/`SIGBUS` contexts, guard pages, and PC/SP rewriting. Browser Wasm has traps rather than resumable POSIX faults; Emscripten explicitly does not support POSIX signals. |
 | OAT/AOT | Current OAT loading is ELF/`dlopen`-oriented. A WebAssembly module cannot be copied from an OAT mapping into linear memory and called like native instructions. Supporting AOT would require a new artifact, linker, metadata, and entrypoint model. |
-| JNI/DSOs | Startup dynamically loads `libicu_jni`, `libjavacore`, and `libopenjdk` in [`runtime.cc`](../vendor/art/runtime/runtime.cc). WebAssembly dynamic linking has no stable ABI, and official WASI support remains incomplete. |
-| Heap references | Managed references remain raw 32-bit compressed pointers even in a 64-bit ART build; see [`object_reference.h`](../vendor/art/runtime/mirror/object_reference.h). Therefore the managed heap still has to reside below 4 GiB. wasm64 does not automatically give ART a larger Java heap. |
+| JNI/DSOs | Startup dynamically loads `libicu_jni`, `libjavacore`, and `libopenjdk` in [`runtime.cc`](../../vendor/art/runtime/runtime.cc). WebAssembly dynamic linking has no stable ABI, and official WASI support remains incomplete. |
+| Heap references | Managed references remain raw 32-bit compressed pointers even in a 64-bit ART build; see [`object_reference.h`](../../vendor/art/runtime/mirror/object_reference.h). Therefore the managed heap still has to reside below 4 GiB. wasm64 does not automatically give ART a larger Java heap. |
 
 The repository already records essentially the same architectural boundary in
-[`unified_art_build.md`](../unified_art_build.md).
+[`unified_art_build.md`](../../unified_art_build.md).
 
 ## What is realistically feasible
 

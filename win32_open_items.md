@@ -780,7 +780,7 @@ Summary (details below; do not delete history):
 ### D-001 — Shared boot.jar via runtime OS selection
 - **State:** CLOSED (2026-07-17)
 - **Goal (actual):** **one** multipath `boot.jar` (not dual packaged jars / not “prove WinFS-on-Win and UnixFS-on-Unix” as close criteria)
-- **Doc:** `archived/shared_bootjar_runtime_os_detection.md`
+- **Doc:** `docs/history/shared_bootjar_runtime_os_detection.md`
 - **Canonical property:** `dalvik.vm.multiplatform.internal.os` = `windows` | `unix`
   - Long + `internal` intentional (not a public app API; not expected for external use)
   - Reject short `dalvik.vm.mp.os` (`mp` ambiguous)

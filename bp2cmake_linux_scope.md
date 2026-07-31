@@ -77,7 +77,7 @@ the converter + codegen driver, and the VM RUNS:
 **One authorized source change** to the read-only archive made this possible:
 `art_method-inl.h` `FillVRegs` terminal overload lost its value parameters to
 resolve a clang≥17 variadic-overload ambiguity (behavior-preserving; recorded in
-`archive-patches/README.md`). This is the source rot the submodule-update goal
+`docs/windows-port-notes/README.md`). This is the source rot the submodule-update goal
 will eliminate upstream.
 
 Final converter mechanisms added: recursive `whole_static_libs` absorption,
