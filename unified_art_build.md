@@ -1,12 +1,366 @@
-# Unified ART build design
+# Unified ART build refactor tracker and design
 
-Status: design plus an active migration slice
+Status: live refactor tracker; the x86-64 product build is unified, while test,
+packaging, topology-parity, and legacy-removal work remains active
 
-Date: 2026-07-30
+Last updated: 2026-07-31
 
-This document defines the intended replacement for the repository's split
-Linux and Windows ART build paths. The migration is incremental; the status
-notes below distinguish implemented plumbing from remaining product gates.
+This document is the authoritative live tracker and design record for replacing
+the repository's split Linux and Windows ART build paths. Keep the tracker near
+the top current whenever build ownership, target admission, phase-gate
+migration, validation evidence, or the remaining work queue changes. The
+deeper design and acceptance sections remain the contract against which tracker
+items are closed.
+
+## Live refactor tracker
+
+### Tracker rules
+
+- Use `COMPLETE`, `PARTIAL`, `BLOCKED`, and `NOT STARTED` for area status.
+- Mark an item complete only after its command path and required native or
+  cross-target gate pass from a fresh frontend-owned build directory.
+- Distinguish a compile-only probe group from a runnable behavioral gate.
+- Preserve useful probe sources and result evidence while removing alternative
+  product graphs and host-specific orchestration around them.
+- Record machine paths only in ignored local configuration. Tracker evidence
+  uses canonical target IDs and stable repository-relative names.
+- Update the dated evidence below after any change to the frontend, generated
+  graph, target bundle contract, test registry, staging rules, or topology.
+
+### Current status snapshot
+
+| Area | Status | Current position | Exit condition |
+|---|---|---|---|
+| Python frontend | COMPLETE for the initial slice | `generate`, `check-generated`, `configure`, `build`, `test`, and `stage` exist; subprocesses are shell-free | keep regression coverage current |
+| Linux x86-64 product | PARTIAL | generation and the full `art-compiler` build pass; staging passed previously | register runnable Linux CTest gates so the documented `test` command succeeds |
+| Windows x86-64 product | PARTIAL / experimental | cross and native Windows Server 2025 builds produce `art.dll`, `art-compiler.dll`, and `art-compiler.lib` | automate the complete artifact/topology/runtime gate set |
+| Compiler DSO parity | COMPLETE for `art-compiler` | both targets emit a shared compiler DSO; Windows imports `art.dll` and exports `art_compiler_jit_create` | retain exact ABI and no-cycle gates |
+| Full DSO topology parity | PARTIAL | five module kinds and two target-specific module pairs still differ | convert each difference or record a reviewed target exception |
+| Unified phase catalog | PARTIAL | seven Windows-only virtual stages compile 19 EXEs and 10 probe DLLs for `windows-x86_64`; applicability is not yet modeled per platform and target architecture | add typed applicability, then migrate behavioral runners, managed probes, and result checks |
+| Boot/runtime packaging | NOT STARTED in the unified frontend | boot JAR, boot image, run assets, cacerts, and host packages remain shell-driven | Python/CMake/Ninja-owned, binary-directory-local, fail-fast stages |
+| POSIX-free Windows build host | COMPLETE for native compilation, PARTIAL end to end | native product compilation needs no POSIX layer; packaging and most gates still use shell scripts | complete build, test, and staging on Windows without Bash/WSL/Cygwin |
+| Legacy build removal | PARTIAL | active product ownership was demoted and project-owned symlink overlays were removed; old generators, generated snapshots, phase product CMake, and split overlay datasets remain | remove or demote every alternative product path after gate migration |
+| CI/acceptance automation | NOT STARTED | no in-repository CI workflow owns the acceptance matrix | fresh-build, no-op, graph, command, artifact, and native-host gates run automatically |
+| Additional architectures | BLOCKED by capability gates | only `linux-x86_64` and experimental `windows-x86_64` generate | admit each profile only after its architecture and runtime gates pass |
+| Windows AOT/OAT | BLOCKED / separate track | compiler DSO parity does not provide Windows OAT production or loading | satisfy `win32_aot_oat.md`; do not imply capability from `art-compiler.dll` |
+
+### Latest verification baseline (2026-07-31)
+
+- [x] `python -m pytest tools/bp2cmake/tests -q`: 85 passed.
+- [x] Fresh `linux-x86_64` and `windows-x86_64` generation: 33 modules and
+  260 loaded Blueprint files for each target.
+- [x] Linux `check-generated` passes for the frontend-owned graph.
+- [x] Linux `art-compiler` completed a fresh 701-action build before this
+  audit and emits `libart-compiler.so` with dynamic ART dependencies.
+- [x] Native Windows Server 2025 x86-64 builds the same product graph with
+  LLVM 21.1.8, CMake 3.31.8, Ninja 1.13.2, and Python 3.13.14.
+- [x] Native Windows builds all 19 executable probes and 10 probe DLLs.
+- [x] Unified native `w002` runtime selection passes 1/1.
+- [x] Windows staging records 14 regular-file artifacts, contains no reparse
+  points, and passes the staged DLL load/export smoke.
+- [x] Linux staging records 16 artifacts with no staged symlinks.
+- [x] Generated graph/profile files contain no filesystem absolute paths.
+- [x] Audited Ninja commands contain no Bash, Make, NMake, GCC, MinGW,
+  `cl.exe`, `clang-cl`, or clang-mingw invocation.
+- [ ] The documented Linux `test` command currently fails: the Linux catalog
+  registers zero CTest tests and `--no-tests=error` correctly returns failure.
+- [ ] Recreate the ignored local Windows output before using
+  `check-generated`; its retained graph predates the latest overlay state.
+- [ ] Recreate the ignored local Linux output before the next incremental
+  no-op acceptance run; the audit build tree is not a clean no-op baseline.
+
+The last two unchecked output-tree items are local operational state, not
+tracked source defects. A fresh `configure` owns generation and avoids both
+stale trees.
+
+### Unified stage migration coverage
+
+One historical work stage maps to exactly one virtual target named
+`art-test-stage-wNNN`. Building a stage is not by itself a runtime pass.
+
+| Stage | Current build catalog | Current Windows architecture selector | Runnable CTest gates | Remaining semantic coverage |
+|---|---:|---|---:|---|
+| `w002` | 1 EXE, 1 DLL | 1 `any`, 1 x86-64 | 1 | managed attach/OSR package and reviewers |
+| `w003` | 4 DLLs | 3 `any`, 1 x86-64 | 0 | frame, XMM, CriticalNative/FastNative managed runners |
+| `w004` | 1 EXE, 1 DLL | 2 `any` | 0 | embedding, runtime-load, and JVMTI behavioral gates |
+| `w010` | 4 EXEs | 3 `any`, 1 x86-64 | 0 | managed-fault, fatal-unwind, debugger, and dump review |
+| `w013` | 2 EXEs | 2 `any` | 0 | dlmalloc configuration and non-moving heap stress |
+| `w014` | 7 EXEs, 1 DLL | 5 `any`, 3 x86-64 | 2 | stack-growth, CET, high-water, and reservation matrices |
+| `w025` | 4 EXEs, 3 DLLs | 3 `any`, 4 x86-64 | 0 | JIT mapping/lifecycle/CFG managed and host-review gates |
+| Total | 19 EXEs, 10 DLLs | 19 `any`, 10 x86-64 | 3 | compile ownership is ahead of behavioral ownership |
+
+The shared registry references 32 source files from historical verification
+directories. Another 52 C, C++, assembly, or Java probe sources remain outside
+the registry, including all 26 Phase-3 Java probes, most Phase-4 managed
+probes, W013 non-moving stress, W025 managed lifecycle/mapping, and the three
+libcore/ICU native smokes. The relevant verification directories still contain
+70 shell scripts, 11 PowerShell scripts, and 35 Python scripts. Python checkers
+and reviewers may remain, but the unified frontend must invoke them through a
+declared stage instead of a phase-local product build.
+
+### Test applicability and target-architecture coverage
+
+Test applicability belongs to each probe or behavioral test, not to its stage.
+A stage is only a virtual grouping. Tests in one stage may have different
+platform, target-architecture, capability, and execution requirements.
+
+For this build, ARM64EC is modeled as the distinct target-architecture token
+`arm64ec`, not as ordinary `aarch64` plus a GNU/MSVC-level switch. This is a
+deliberate build-system distinction: ARM64EC changes compiler predefined
+macros, source and assembly eligibility, calling conventions, PE imports and
+exports, unwind data, and the tests that are meaningful. A separate derived
+`base_isa=aarch64` may be used only by code generation proven to be shared with
+ordinary AArch64. It must not drive general source or test selection.
+
+The three identity fields are closed enums. The following values are all
+possible choices; adding another value requires an explicit design and registry
+change:
+
+| Field | Complete enum |
+|---|---|
+| `target_platform` | `linux`, `windows`, `wasi` |
+| `target_arch` | `x86`, `x86_64`, `armv7`, `aarch64`, `riscv64`, `arm64ec`, `wasm32`, `wasm64` |
+| `target_abi` | `gnu`, `msvc`, `wasi` |
+
+`base_isa` is derived metadata, not a fourth user-selectable identity enum. It
+equals `target_arch` except that `arm64ec` derives `aarch64`; consumers must
+still opt in before using that relationship. Aliases such as `x64`, `amd64`,
+`arm64`, `arm`, `win32`, `unix`, `posix`, `mingw`, and every MIPS spelling are
+not enum values.
+
+The theoretical target platform/architecture/ABI sets are:
+
+| Target platform | Target architectures | Target ABIs | Explicitly absent |
+|---|---|---|---|
+| `windows` | `x86`, `x86_64`, `armv7`, `aarch64`, `arm64ec` | `gnu`, `msvc` | RISC-V64 is not currently planned for Windows |
+| `linux` | `x86`, `x86_64`, `armv7`, `aarch64`, `riscv64` | `gnu` | ARM64EC is Windows-only |
+| `wasi` | `wasm32`, `wasm64` | `wasi` | native ART contracts are capability-blocked |
+| All | no additional architecture values | no additional ABI values | no MIPS platform/architecture/ABI profile exists |
+
+This yields exactly 17 theoretical identity triples: five Linux GNU, ten
+Windows GNU/MSVC, and two WASI. These are all possible target choices in this
+design. A known identity may remain planned or capability-blocked; identity
+enumeration is not a support claim. Every other Cartesian-product combination
+is invalid and must be rejected before graph generation.
+
+`target_abi` is the canonical name for the `gnu`, `msvc`, or `wasi` contract.
+The platform, `target_arch`, and `target_abi` triple identifies the exact
+profile relevant to source and test selection. Details such as the compiler
+target triple, object format, calling convention, and C runtime remain
+immutable profile facts. `target_abi` does not replace `target_arch`:
+`windows-arm64ec-gnu` and `windows-arm64ec-msvc` both remain ARM64EC builds,
+distinct from `windows-aarch64-gnu` and `windows-aarch64-msvc`.
+
+The theoretical Windows GNU profiles are representable but capability-blocked
+under the current product contract, which forbids MinGW and clang-mingw
+toolchains. A future decision to admit such a profile must define its official
+headers, CRT/import libraries, Clang target triple, and runtime gates without
+making MSYS2, Cygwin, or any POSIX environment a build-host prerequisite.
+
+#### Current probe-by-probe selector audit
+
+`native/tests/CMakeLists.txt` currently returns immediately unless the target
+platform is Windows. Consequently every probe in this table is currently
+Windows-only regardless of source portability. Its `ARCH any` spelling means
+only "do not filter on `ART_TARGET_CPU_ARCH`". It does not mean all platforms,
+all five Windows target architectures, build-verified on Windows ARM64/ARM64EC, or
+runtime-verified anywhere.
+
+| Stage | Current Windows architecture-unfiltered probes (`ARCH any`) | Current `windows-x86_64`-only probes | Portable-source candidates |
+|---|---|---|---|
+| `w002` | `w002attachprobe` | `win32_osr_unwind_probe` | none |
+| `w003` | `criticalnativeprobe`, `nativeabiprobe`, `w003frameprobe` | `w003xmmsentinel` | `criticalnativeprobe`, `nativeabiprobe` |
+| `w004` | `win32_art_embedding_probe`, `jvmtiforceprobe` | none | none |
+| `w010` | `win32_uef_probe`, `win32_fault_record_probe`, `win32_debugger_probe` | `win32_sigchain_probe` | none |
+| `w013` | `windows_x64_w013_mem_map_probe`, `windows_x64_w013_mspace_owner_probe` | none | none |
+| `w014` | `windows_x64_pthread_once_probe`, `win32_thread_stack_probe`, `win32_stack_growth_rx_probe`, `win32_cet_policy_probe`, `fs1stackhighwater` | `win32_stack_page_probe`, `win32_stack_growth_probe`, `win32_stack_pregrow_probe` | none |
+| `w025` | `w025jitmappingprobe`, `windows_x64_w025_section_policy_probe`, `windows_x64_w025_policy_launcher` | `win32_jit_unwind_info_probe`, `win32_jit_unwind_registry_probe`, `jitunwindlifecycleprobe`, `w025jitlifecyclestressprobe` | none |
+
+The ten x86-64 entries inspect or depend on Microsoft x86-64 calling,
+register, stack, PE unwind, or handwritten assembly behavior. Their correct
+current selector is the exact `windows-x86_64` target (the transitional name
+for intended `windows-x86_64-msvc`), not `arm64ec` or a Windows GNU profile.
+The ability of a Windows ARM64 or ARM64EC machine to execute an x86-64 program
+through emulation would not turn that program into an ARM64EC ABI test.
+
+The other seventeen Windows-specific `ARCH any` entries use Windows APIs or
+Windows ART contracts but contain no cataloged target assembly. They are only
+unreviewed port candidates for Windows x86, ARMv7, AArch64, and ARM64EC. Each
+must compile and pass its own native runtime or result-review gate before that
+exact target is added to its applicability set. Names containing
+`windows_x64` must then be renamed to describe the tested contract rather than
+an obsolete assumed CPU.
+
+Only `criticalnativeprobe` and `nativeabiprobe` currently use
+platform-neutral JNI/C scalar sources and are credible common Linux/Windows
+candidates. They are especially useful as per-target calling-convention
+tests, but source portability is not a support claim. Their CMake ownership,
+library naming/options, managed runners, 32-bit expectations, and result
+expectations must become target-resolved and pass separately for every exact
+platform/target-architecture combination declared.
+
+Current evidence remains much narrower than theoretical applicability:
+
+- all 29 native probes have compile evidence only for `windows-x86_64`;
+- only three probes are registered as runnable CTest gates, also only for
+  `windows-x86_64`;
+- no unified phase probe is currently registered for any Linux target; and
+- no probe has build or runtime evidence for Windows x86, ARMv7, AArch64, or
+  ARM64EC.
+
+#### Required registry semantics
+
+Replace `art_add_windows_probe(... ARCH any)` with a common declaration that
+can state `PLATFORMS`, `TARGET_ARCHES`, `TARGET_ABIS`, `TARGET_IDS`,
+`CAPABILITIES`, and `EXECUTION`. A target is applicable only when all specified
+selectors match its serialized profile. `TARGET_IDS` is the narrow override
+for tests such as the Windows x86-64 MSVC unwind probes; applicability must
+never be inferred from the build-host architecture.
+
+The registry and generated test manifest must record three separate states for
+every exact target:
+
+1. `applicable`: the declared selectors match;
+2. `build-verified`: the probe and all managed assets compiled for that target;
+3. `runtime-verified`: the behavioral command and required reviewer passed on
+   an authoritative runner.
+
+An applicable test is not automatically verified. A non-applicable test is an
+explicit skip with its failed selector recorded, not a silent disappearance.
+A requested stage with zero applicable tests must report that fact distinctly
+from a stage whose applicable tests were expected but not built or run.
+
+The current profile registry also needs correction before those selectors are
+implemented: it uses the awkward `os_or_runtime`, ambiguous `cpu_arch`, and
+unprefixed `abi` field names, represents ARM64EC as `cpu_arch=aarch64` under
+`windows-aarch64-arm64ec`, and has no theoretical Windows ARMv7 entry. The
+intended ARM64EC identity family uses
+`target_platform=windows, target_arch=arm64ec, base_isa=aarch64` plus an
+independent `target_abi`, yielding exact `windows-arm64ec-gnu` and
+`windows-arm64ec-msvc` profiles. It also requires a capability-blocked Windows
+ARMv7 GNU/MSVC family. This is tracked migration work, not current frontend
+behavior.
+
+### Fresh Linux/Windows topology comparison
+
+`libart-compiler` is shared on both targets, but full module-kind equality is
+not yet achieved:
+
+| Module | Linux | Windows | Required disposition |
+|---|---|---|---|
+| `libartbase` | shared | static | convert or document exception |
+| `libdexfile` | shared | static | convert or document exception |
+| `libprofile` | shared | static | convert or document exception |
+| `libunwindstack` | shared | static | convert or document exception |
+| `libicuuc_stubdata` | static | shared | convert or document exception |
+| compiler tool component | `libart-dex2oat` | `libdex2oat_static` | reconcile capability/topology |
+| signal-chain component | generated `libsigchain` | handwritten Windows `sigchain` | record the platform mapping and validate ABI |
+| native-helper compatibility | none | `libnativehelper_compat_libc++` | record or remove compatibility exception |
+
+The next topology gate must compare fresh manifests mechanically and fail on
+an unreviewed module-set or kind change.
+
+### Prioritized work queue
+
+#### P0: make `test` and runtime packaging truthful
+
+- [ ] Replace the Windows-only `ARCH any` probe API with typed `PLATFORMS`,
+  `TARGET_ARCHES`, `TARGET_ABIS`, `TARGET_IDS`, `CAPABILITIES`, and `EXECUTION`
+  selectors plus an applicability/build/runtime-status manifest.
+- [ ] Move `criticalnativeprobe` and `nativeabiprobe` into common
+  platform-resolved ownership, then validate rather than assume their exact
+  Linux and Windows target-architecture sets.
+- [ ] Add Linux CTest registrations for show-version, imageless Hello, GC
+  stress, DSO loading, and compiler-DSO topology.
+- [ ] Replace shell-only boot-JAR construction with a fail-fast Python stage
+  using configured JDK/R8 paths and binary-directory-local outputs.
+- [ ] Add boot image, ICU data, security assets/cacerts, and runtime package
+  staging to the frontend without `/tmp` or shared cross-target state.
+- [ ] Convert Phase-3 Java and Phase-4 managed probe compilation/D8 packaging
+  into declared CMake/Ninja custom commands implemented by Python helpers.
+- [ ] Register behavioral commands and expected-result reviewers for every
+  current stage; do not mark a compile-only DLL as a passed runtime gate.
+- [ ] Run the newly unified stage set on the authoritative Windows Server 2025
+  host and preserve sanitized evidence.
+
+#### P1: complete parity and mechanical acceptance
+
+- [ ] Resolve or explicitly approve every topology difference in the table
+  above.
+- [ ] Enforce the exact `art-compiler.dll` export allowlist, target
+  architecture/object format, ASLR flags, imports, and absence of an
+  `art.dll` -> `art-compiler.dll` reverse dependency.
+- [ ] Validate the Linux compiler DSO and the complete staged import closure,
+  not only the Windows compiler DLL.
+- [ ] Make staging start from an empty frontend-owned directory or reject every
+  stale entry, then scan the complete result for links/reparse points.
+- [ ] Add generated-command audits for compiler drivers, link drivers, shell
+  operators, POSIX utilities, host include/library leakage, and forbidden
+  generators.
+- [ ] Add in-repository CI for fresh Linux generation/build/test/stage and the
+  provisioned Windows cross/native cells.
+
+#### P2: remove migration scaffolding and harden orchestration
+
+- [ ] Remove `native/generate.sh` and the checked-in
+  `native/generated/dalvikvm.cmake` after focused verification harnesses stop
+  consuming them.
+- [ ] Remove the Phase-0/Phase-1 product CMake graphs and the unproducible
+  libcore/ICU `sources.cmake`; retain probe sources and result records.
+- [ ] Consolidate `overlay/port_policy.py` and
+  `overlay/port_policy_windows.py` into common policy plus explicit target
+  deltas behind `make_overlay(profile)`.
+- [ ] Move converter scan exclusions from global CLI behavior into typed
+  target/product policy.
+- [ ] Split the maintained product CMake into focused codegen, platform import,
+  compatibility, test, and staging modules without creating target-specific
+  product entry points.
+- [ ] Strengthen the build fingerprint with the full serialized profile,
+  generated graph digest, tool versions, and target-bundle identity rather
+  than only paths and the target triple.
+- [ ] Retire global toolchain-drift warning demotions and forced preludes as
+  vendored dependencies are updated or the required compatibility becomes
+  explicit per module.
+- [ ] Prove a second identical build is a true Ninja no-op and that Blueprint,
+  overlay, and codegen input changes rebuild only affected outputs.
+
+#### P3: admit additional targets one at a time
+
+- [ ] Remove the `<arch>ng` mterp assumption and select generated assembly from
+  explicit profile metadata, including RISC-V's different naming.
+- [ ] Remove fixed x86-64 triples, preludes, stack-gap definitions, CPU-feature
+  sources, BoringSSL assembly, probe names, and object-inspection assumptions.
+- [ ] Validate and admit Linux AArch64, x86, ARMv7, and RISC-V64 separately.
+- [ ] Migrate the ARM64EC identity from transitional
+  `windows-aarch64-arm64ec/cpu_arch=aarch64` to
+  distinct `windows-arm64ec-gnu` and `windows-arm64ec-msvc` profiles with
+  `target_arch=arm64ec/base_isa=aarch64`; rename the profile fields from
+  `os_or_runtime`/`cpu_arch`/`abi` to
+  `target_platform`/`target_arch`/`target_abi`; and add the valid but deliberately
+  unavailable Windows ARMv7 GNU/MSVC placeholders.
+- [ ] Keep Windows x86 and ARMv7 GNU/MSVC identities as recognized placeholders
+  that fail capability admission; do not place them on the implementation or
+  CI roadmap without an explicit future decision.
+- [ ] Validate the Windows x86-64, AArch64, and ARM64EC MSVC profiles as
+  distinct targets; an `arch:any` test annotation alone is not port completion.
+- [ ] Keep every Windows GNU profile capability-blocked under the current
+  no-MinGW/clang-mingw contract unless a future decision explicitly replaces
+  that constraint and supplies an official regular-file target bundle.
+- [ ] Run native Windows ARM64 host tools for the Windows x86-64 cross cell and
+  the Windows-to-Linux sysroot cell without x86-64 host-tool emulation.
+- [ ] Keep WASI profiles as explicit capability failures until ART's DSO,
+  executable-memory, fault, threading, and JIT contracts are redesigned.
+
+### Legacy inventory blocking Phase 5 removal
+
+The retained alternative build descriptions comprise roughly 8,067 lines
+across the checked-in Linux graph, Phase-0/Phase-1 graphs and CMake entry
+points, libcore/ICU snapshot, and split overlay datasets. They are not invoked
+by `tools/build_art.py`, but remain runnable and can drift. Removal is blocked
+only by missing unified gate ownership, not by product graph generation.
+
+The repository also has no checked-in CI workflow. External or manual evidence
+does not replace a repeatable in-repository acceptance entry point.
 
 ## Decision
 
@@ -66,8 +420,11 @@ Windows verification probes now have one shared registry at
 stage is exactly one virtual CMake target such as `art-test-stage-w002`; probe
 targets carry `stage:w002`, `platform:windows`, `arch:any` or
 `arch:x86_64`, and contract labels. The stage target is a build group, not a
-second product graph. The old phase source directories remain temporary source
-and evidence locations while their product graph ownership is removed.
+second product graph. These labels describe the implemented Windows-only
+slice, not final cross-platform or cross-CPU applicability; `arch:any` is the
+known over-broad selector tracked above. The old phase source directories
+remain temporary source and evidence locations while their product graph
+ownership is removed.
 
 The Windows overlay now emits `art-compiler` as `SHARED` and links it to
 `art` and `art-disassembler`, matching the Linux topology. The native entry
@@ -126,7 +483,8 @@ driver with GNU-style options and `-fuse-ld=lld`.
 
 - Make a build mean the same thing regardless of whether CMake and Clang run
   on Linux or Windows.
-- Make the target OS/ABI explicit and independent of the build host OS.
+- Make the target platform/ABI explicit and independent of the build-host
+  platform.
 - Derive source/dependency graphs from `Android.bp`, then apply all intentional
   port policy through one reviewed Python overlay.
 - Generate build-tree CMake deterministically; do not maintain generated
@@ -214,12 +572,12 @@ Conceptually:
 ```text
 one maintained CMake implementation
               |
-              +-- linux-x86_64 profile
-              |     -> out/linux-x86_64/<type>/...
-              +-- linux-aarch64 profile
-              |     -> out/linux-aarch64/<type>/...
-              +-- windows-x86_64 profile
-              |     -> out/windows-x86_64/<type>/...
+              +-- linux-x86_64-gnu profile
+              |     -> out/linux-x86_64-gnu/<type>/...
+              +-- linux-aarch64-gnu profile
+              |     -> out/linux-aarch64-gnu/<type>/...
+              +-- windows-x86_64-msvc profile
+              |     -> out/windows-x86_64-msvc/<type>/...
               +-- future profiles
                     -> one isolated configured instance each
 ```
@@ -251,7 +609,7 @@ validates the complete profile in Python, then gives CMake only the resolved
 inputs, for example:
 
 ```text
-cmake -S native -B out/linux-riscv64/RelWithDebInfo \
+cmake -S native -B out/linux-riscv64-gnu/RelWithDebInfo \
   -G Ninja \
   --toolchain native/cmake/toolchains/LLVM.cmake \
   -DART_PROFILE_FILE:FILEPATH=<absolute-path>/target_profile.cmake \
@@ -313,11 +671,11 @@ graphs. A simplified shape is:
 ```cmake
 include("${ART_PROFILE_FILE}")
 
-if(ART_TARGET_OS STREQUAL "linux")
+if(ART_TARGET_PLATFORM STREQUAL "linux")
   include(PlatformLinux)
-elseif(ART_TARGET_OS STREQUAL "windows")
+elseif(ART_TARGET_PLATFORM STREQUAL "windows")
   include(PlatformWindows)
-elseif(ART_TARGET_RUNTIME STREQUAL "wasi")
+elseif(ART_TARGET_PLATFORM STREQUAL "wasi")
   include(PlatformWasi)
 else()
   message(FATAL_ERROR "Unsupported ART target: ${ART_TARGET_ID}")
@@ -327,8 +685,9 @@ include("${ART_GRAPH_FILE}")
 ```
 
 The generated profile defines immutable, mutually validated values such as
-`ART_TARGET_ID`, `ART_TARGET_OS`, `ART_TARGET_CPU_ARCH`, `ART_TARGET_ABI`, and
-`ART_TARGET_OBJECT_FORMAT`. `CMAKE_SYSTEM_NAME` and
+`ART_TARGET_ID`, `ART_TARGET_PLATFORM`, `ART_TARGET_ARCH`,
+`ART_TARGET_BASE_ISA`, `ART_TARGET_ABI`, and `ART_TARGET_OBJECT_FORMAT`.
+`CMAKE_SYSTEM_NAME` and
 `CMAKE_SYSTEM_PROCESSOR` must agree with them, but are not sufficiently precise
 to be the registry key. `CMAKE_HOST_SYSTEM_NAME` describes the build host;
 `CMAKE_SYSTEM_NAME` describes the target. Similarly, CMake's `WIN32` condition
@@ -349,10 +708,11 @@ resolved target schema should include at least:
 
 ```text
 target_id
-os_or_runtime
-cpu_arch
+target_platform
+target_arch
+base_isa
 aosp_arch
-abi
+target_abi
 object_format
 pointer_bits
 endianness
@@ -363,52 +723,102 @@ capabilities
 support_status
 ```
 
-For example, ARM64EC is a Windows ABI/interoperability model over the ARM64
-architecture, not a new CPU architecture. Likewise, `wasm32` only describes a
-WebAssembly address width; it does not say whether the runtime contract is
-WASI, a browser, or a custom embedding. A WebAssembly target ID must include
-that runtime ABI.
+`target_platform` is the canonical target-system name for `linux`, `windows`,
+and `wasi`. It is not named `target_os` because WASI is a system-interface and
+runtime contract rather than a conventional operating system. It replaces the
+current implementation's awkward `os_or_runtime` field.
+
+`target_arch` is the canonical build-selection name for `x86`, `x86_64`,
+`armv7`, `aarch64`, `riscv64`, `arm64ec`, `wasm32`, and `wasm64`. This field is
+not named `cpu` because WebAssembly is not a physical CPU; it is not named
+`isa` because ARM64EC changes contracts beyond the instruction set; and it is
+not named `abi` because the other tokens describe more than calling convention
+and object ABI. The `target_` prefix prevents confusion with the build-host
+architecture.
+
+`target_abi` is the canonical ABI-environment name. Its complete enum is
+`gnu`, `msvc`, and `wasi`. It is separate from `target_arch`: selecting
+`arm64ec` still controls ARM64EC macros and sources, while selecting `gnu` or
+`msvc` chooses the ABI/CRT/import-library environment for that architecture.
+
+For build selection, ARM64EC is the distinct `arm64ec` target-architecture
+token because it materially changes compiler macros, sources, assembly
+eligibility, calling conventions, PE metadata, and test applicability. Its
+derived `base_isa=aarch64` records only the instruction-family relationship that
+explicitly reviewed code generators may share. Generic source selection must
+not collapse it into `aarch64` or treat it as merely a GNU/MSVC-level ABI
+switch. Likewise, `wasm32` only describes a WebAssembly address width; it does
+not say whether the runtime contract is WASI, a browser, or a custom embedding.
+A WebAssembly target ID must include that runtime ABI.
 
 Canonical target IDs use the grammar
-`<platform-or-runtime>-<cpu>[-<abi-variant>]`. They are lowercase ASCII;
+`<target-platform>-<target-arch>-<target-abi>`. They are lowercase ASCII;
 hyphens separate identity dimensions, while an underscore remains part of the
-standard `x86_64` CPU token. The platform/runtime comes first, so WASI follows
-the same ordering as Linux and Windows.
+standard `x86_64` architecture token. The target platform comes first, so
+WASI follows the same ordering as Linux and Windows.
 
 The product frontend accepts registered canonical IDs, not informal
 architecture aliases. In particular, use `x86_64`, not `x64`; `aarch64`, not
 `arm64`; and `armv7`, not bare `arm`. This avoids one spelling acquiring
-different meanings on different operating systems. Suggested canonical IDs
-are:
+different meanings on different operating systems. The 17 canonical IDs below
+are the complete theoretical registry; no other platform/architecture/ABI
+combination is implicitly available:
 
-| Canonical target ID | CPU | ABI/runtime | Object format | Initial status |
+| Canonical target ID | Target arch | Target ABI | Object format | Initial status |
 |---|---|---|---|---|
-| `linux-x86_64` | `x86_64` | GNU/Linux profile | ELF64 | `supported` |
-| `linux-aarch64` | `aarch64` | GNU/Linux profile | ELF64 | `planned` |
-| `linux-x86` | `x86` | GNU/Linux profile | ELF32 | `planned` |
-| `linux-armv7` | `armv7` | GNU EABI hard-float fixed by this profile | ELF32 | `planned` |
-| `linux-riscv64` | `riscv64` | GNU/Linux profile | ELF64 | `planned` |
-| `windows-x86_64` | `x86_64` | MSVC ABI | PE32+ | `experimental` |
-| `windows-aarch64` | `aarch64` | Windows ARM64 ABI | PE32+ | `planned` |
-| `windows-aarch64-arm64ec` | `aarch64` | ARM64EC ABI | PE32+ | `planned` |
-| `windows-x86` | `x86` | Windows x86 ABI | PE32 | `planned` placeholder |
-| `wasi-wasm32` | `wasm32` | WASI | WebAssembly | `impossible_under_current_art_contract` |
-| `wasi-wasm64` | `wasm64` | WASI/Memory64 | WebAssembly | `impossible_under_current_art_contract` |
+| `linux-x86-gnu` | `x86` | GNU | ELF32 | `planned` |
+| `linux-x86_64-gnu` | `x86_64` | GNU | ELF64 | `supported` after ID migration |
+| `linux-armv7-gnu` | `armv7` | GNU EABI hard-float fixed by this profile | ELF32 | `planned` |
+| `linux-aarch64-gnu` | `aarch64` | GNU | ELF64 | `planned` |
+| `linux-riscv64-gnu` | `riscv64` | GNU | ELF64 | `planned` |
+| `windows-x86-gnu` | `x86` | GNU | PE32 | valid `planned` placeholder; no near/far implementation commitment; also blocked by the no-MinGW contract |
+| `windows-x86-msvc` | `x86` | MSVC | PE32 | valid `planned` placeholder; no near/far implementation commitment |
+| `windows-x86_64-gnu` | `x86_64` | GNU | PE32+ | capability-blocked by the current no-MinGW contract |
+| `windows-x86_64-msvc` | `x86_64` | MSVC | PE32+ | `experimental` after ID migration |
+| `windows-armv7-gnu` | `armv7` | GNU | PE32 | valid `planned` placeholder; no near/far implementation commitment; also blocked by the no-MinGW contract |
+| `windows-armv7-msvc` | `armv7` | MSVC | PE32 | valid `planned` placeholder; no near/far implementation commitment |
+| `windows-aarch64-gnu` | `aarch64` | GNU | PE32+ | capability-blocked by the current no-MinGW contract |
+| `windows-aarch64-msvc` | `aarch64` | MSVC | PE32+ | `planned` |
+| `windows-arm64ec-gnu` | `arm64ec` (`base_isa=aarch64`) | GNU | PE32+ | capability-blocked by the current no-MinGW contract |
+| `windows-arm64ec-msvc` | `arm64ec` (`base_isa=aarch64`) | MSVC | PE32+ | `planned` |
+| `wasi-wasm32-wasi` | `wasm32` | WASI | WebAssembly | `impossible_under_current_art_contract` |
+| `wasi-wasm64-wasi` | `wasm64` | WASI/Memory64 | WebAssembly | `impossible_under_current_art_contract` |
 
-Windows x86-64 is the first parity target and is promoted to `supported` only
-after the unified graph, DLL topology, and runtime acceptance gates pass.
+Windows x86-64 MSVC is the first parity target and is promoted to `supported`
+only after the unified graph, DLL topology, and runtime acceptance gates pass.
 
-Inputs such as `linux-x64`, `linux-arm`, `windows-arm64ec`, `wasm64-wasi`, and
-underscore-separated whole IDs are rejected with the canonical replacement in
-the diagnostic. A temporary migration tool may rewrite old names, but aliases
-do not enter the profile registry, manifests, cache keys, or output paths. If a
-Linux ARM soft-float ABI is ever required, it receives a distinct canonical
-profile rather than changing the meaning of `linux-armv7`.
+Both Windows x86 profiles and both Windows ARMv7 profiles are valid canonical
+registry choices, not spelling errors or aliases. They deliberately fail
+generation through capability admission and carry no implementation expectation
+for either the near or far roadmap. Their purpose is to keep target identity,
+test applicability, and unsupported-target diagnostics complete. They must not
+appear in build/CI matrices unless a future roadmap decision changes their
+status.
 
-`cpu_arch` uses those canonical external tokens. A separate derived
-`aosp_arch` field translates to Blueprint/Soong vocabulary: `aarch64` maps to
-`arm64`, and `armv7` maps to `arm`. The user-facing ID, output directory, cache
-key, and manifest never collapse back to the ambiguous AOSP token.
+Inputs such as `linux-x64`, `linux-arm`, `windows-aarch64-arm64ec`, bare
+`windows-arm64ec`, `wasm64-wasi`, and underscore-separated whole IDs are
+rejected with the canonical replacement in the diagnostic. The current
+implementation's `linux-x86_64`, `windows-x86_64`, and
+`windows-aarch64-arm64ec` IDs are transitional; they must migrate respectively
+to `linux-x86_64-gnu`, `windows-x86_64-msvc`, and the explicit
+`windows-arm64ec-{gnu,msvc}` profiles. A temporary migration tool may rewrite
+old names, but aliases do not enter the final profile registry, manifests,
+cache keys, or output paths. If a Linux ARM soft-float ABI is ever required, it
+receives a distinct canonical profile rather than changing the meaning of
+`linux-armv7-gnu`.
+
+`target_arch` uses the canonical external tokens, including distinct `arm64ec`.
+`base_isa` maps `arm64ec` to `aarch64` and otherwise normally equals
+`target_arch`. A separate derived `aosp_arch` field translates to
+Blueprint/Soong vocabulary: `aarch64` and explicitly compatible ARM64EC
+selections map to `arm64`, while `armv7` maps to `arm`. The user-facing ID,
+source/test selector, output directory, cache key, and manifest never collapse
+back to the ambiguous AOSP or base-ISA token.
+
+The supported native architecture universe is deliberately closed: Linux has
+`x86`, `x86_64`, `armv7`, `aarch64`, and `riscv64`; Windows has `x86`,
+`x86_64`, `armv7`, `aarch64`, and `arm64ec`. MIPS is not supported and must not
+appear as a placeholder profile, fallback branch, or test selector.
 
 Support state is machine-readable:
 
@@ -626,7 +1036,7 @@ document them:
    through the configured Clang driver.
 5. every link selects LLD with `-fuse-ld=lld`; an internal `lld-link` process
    for PE is acceptable, but a direct `lld-link` CMake rule is not.
-6. target triple, target OS, CMake system name, sysroot/SDK, runtime libraries,
+6. target triple, target platform, CMake system name, sysroot/SDK, runtime libraries,
    and `bp2cmake` target profile agree.
 7. CMake never searches build-host include or library paths for a cross target.
 8. generated CMake and generated sources live under the configured target's
@@ -667,7 +1077,8 @@ document them:
 21. a `planned` or `impossible_under_current_art_contract` profile fails
     capability validation before CMake rather than degrading DSO topology,
     disabling runtime contracts silently, or compiling host fallbacks.
-22. canonical target IDs follow `<platform-or-runtime>-<cpu>[-<abi-variant>]`;
+22. canonical target IDs follow
+    `<target-platform>-<target-arch>-<target-abi>`;
     informal aliases such as `x64`, `arm`, and suffix-first WASI IDs are not
     accepted as profile identities.
 23. the default binary directory is `out/<target-id>/<build-type>`. Build-host
@@ -767,7 +1178,7 @@ Python frontend.
 For a target environment such as the legacy environment named
 `windows_x64-dev-env`, prefer one regular-file target bundle over an activation
 environment or a collection of independent paths. The local TOML binds the
-canonical `windows-x86_64` profile to that bundle root. A bundle-local manifest
+canonical `windows-x86_64-msvc` profile to that bundle root. A bundle-local manifest
 uses only relative paths to its SDK, UCRT, import libraries, libc++, and
 compiler-rt components and records their versions and hashes. The checked-in
 target profile records the required bundle schema and component constraints,
@@ -833,10 +1244,11 @@ build:
 
 target:
   target_id
-  os_or_runtime
-  cpu_arch
+  target_platform
+  target_arch
+  base_isa
   aosp_arch
-  abi
+  target_abi
   object_format
   pointer_bits
   endianness
@@ -858,10 +1270,11 @@ product:
 ```
 
 The build-host fields control only executable suffixes, path handling, and
-host-native tool discovery/validation. `os_or_runtime`, `cpu_arch`, ABI, and
-capabilities control Blueprint selects and target policy. The target graph for
-`windows-x86_64` must therefore be the same whether generation runs on Linux
-x86-64 or Windows 10 ARM64.
+host-native tool discovery/validation. `target_platform`, `target_arch`,
+`base_isa`, `target_abi`, and capabilities control Blueprint selects and target
+policy. `target_arch`, not `base_isa`, is the default source, macro, and test
+selector. The target graph for `windows-x86_64-msvc` must therefore be the
+same whether generation runs on Linux x86-64 or Windows 10 ARM64.
 
 The serialized profile should have separate `build_host` and `target`
 sections. `bp2cmake` consumes only the target, AOSP-build-kind, source, and
@@ -889,16 +1302,16 @@ Replace two top-level policy objects with one factory, conceptually:
 ```python
 def make_overlay(target: TargetProfile) -> Overlay:
     policy = common_art_policy(target)
-    policy.merge(os_or_runtime_policy(target.os_or_runtime, target))
+    policy.merge(target_platform_policy(target.target_platform, target))
     policy.merge(object_format_policy(target.object_format, target))
-    policy.merge(abi_policy(target.abi, target))
-    policy.merge(architecture_policy(target.cpu_arch, target))
+    policy.merge(abi_policy(target.target_abi, target))
+    policy.merge(architecture_policy(target.target_arch, target))
     policy.merge(capability_policy(target.capabilities, target))
     return policy.validate()
 ```
 
 This is one Python overlay module and one schema, composed as common policy,
-OS/runtime policy, object-format/ABI policy, architecture policy, and
+target-platform policy, object-format/ABI policy, architecture policy, and
 capability policy. It may contain clearly named policy sections, but modules
 are declared once and refined by target. A module cannot have unrelated
 definitions in separate files, and a new architecture must not require a copy
@@ -1029,14 +1442,15 @@ Studio, or Multi-Config fallback. The exact configure argument vector is
 recorded in the build manifest so the dynamic frontend is no less auditable
 than a static preset.
 
-The public command shape is identical on both hosts:
+After the identity-field migration, the public command shape is identical on
+both hosts:
 
 ```text
-python tools/build_art.py configure --target-id windows-x86_64
-python tools/build_art.py build --target-id windows-x86_64 --cmake-target art-compiler
-python tools/build_art.py test --target-id windows-x86_64
-python tools/build_art.py stage --target-id windows-x86_64
-python tools/build_art.py check-generated --target-id windows-x86_64
+python tools/build_art.py configure --target-id windows-x86_64-msvc
+python tools/build_art.py build --target-id windows-x86_64-msvc --cmake-target art-compiler
+python tools/build_art.py test --target-id windows-x86_64-msvc
+python tools/build_art.py stage --target-id windows-x86_64-msvc
+python tools/build_art.py check-generated --target-id windows-x86_64-msvc
 ```
 
 Only the operating system's Python executable spelling may differ. There
@@ -1428,7 +1842,8 @@ Each binary directory should contain a build manifest with at least:
 - source revision and submodule revisions;
 - resolved profile and graph/input digest;
 - build host OS/architecture;
-- canonical target ID, OS/runtime, CPU architecture, ABI, object format,
+- canonical target ID, target platform, target architecture, base ISA, ABI,
+  object format,
   pointer width, and triple;
 - canonical Clang paths and `--version` output;
 - host executable formats/architectures for Python, CMake, Ninja, LLVM, and the
@@ -1572,8 +1987,11 @@ unified product targets instead of alternative ways to build those targets.
   assumptions identified in the current-state audit.
 - Validate Linux AArch64, x86, ARMv7, and RISC-V64 independently; source-tree
   presence alone is not an admission gate.
-- Treat Windows AArch64, ARM64EC, and x86 as separate ABI profiles with their
-  own SDK, triple, exports, object inspection, and runtime gates.
+- Treat Windows x86, x86-64, ARMv7, AArch64, and ARM64EC as separate
+  target-architecture profiles with their own SDK, triple, source/macro
+  selection, exports, object inspection, and runtime gates. ARM64EC uses
+  `target_arch=arm64ec` and
+  only derives `base_isa=aarch64` for explicitly shared code generation.
 - Retain WASM profiles as explicit capability failures until a runtime/DSO/JIT
   contract is designed; do not introduce a static-library compatibility mode.
 
@@ -1597,9 +2015,12 @@ unified product targets instead of alternative ways to build those targets.
 - Generating twice produces no diff and identical digests.
 - Linux-host and Windows-host generation of the same target profile produces
   equivalent graph manifests.
-- canonical ID tests accept `linux-x86_64`, `linux-aarch64`, `linux-armv7`,
-  `windows-aarch64-arm64ec`, and `wasi-wasm64`, while rejecting `x64`, bare
-  `arm`, whole-ID underscore variants, and suffix-first WASI names;
+- canonical ID tests recognize all 17 exact IDs enumerated above, including
+  the deliberately unavailable Windows x86/ARMv7 placeholders; capability
+  admission then rejects unavailable profiles with their recorded reason;
+- canonical ID tests reject transitional suffix-less IDs,
+  `windows-aarch64-arm64ec`, `x64`, bare `arm`, whole-ID underscore variants,
+  suffix-first WASI names, unregistered cross-products, and every MIPS target;
 - default outputs use `out/<target-id>/<build-type>` with no build-host path
   component, and opening that directory from a mismatched build host rejects
   the existing cache;
