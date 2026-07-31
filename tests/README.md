@@ -95,8 +95,8 @@ Each case owns its native and managed source plus an adjacent `RESULT.md`. The
 stage analysis links the case-specific results without physically grouping the
 source by stage. The XMM sentinel remains explicitly x86-64-only; moving it did
 not broaden its selector to AArch64 or ARM64EC.
-The second source-ownership slice moved all remaining 27 catalog-owned native
-and assembly files into 23 additional logical cases. The registry now has zero
+The source-ownership slices moved all 31 catalog-owned native probe declarations
+into logical cases. The registry now has zero
 source references into `tools/verify`; every case containing catalog native
 source has an adjacent target-status result. Shared stack-fault assembly has
 one physical owner under `stack-page-growth/` and is consumed by related

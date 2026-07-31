@@ -259,7 +259,7 @@ if(MDVM_WINDOWS_X64_BUILD_OPENJDK)
   endif()
 
   add_executable(socket_fd_registry_smoke
-    "${CMAKE_CURRENT_SOURCE_DIR}/socket_fd_registry_smoke.c")
+    "${_repo}/tests/cases/windows-libcore-smoke/socket_fd_registry_smoke.c")
   target_include_directories(socket_fd_registry_smoke PRIVATE "${MDVM_COMPAT_INCLUDE_DIR}")
   target_compile_definitions(socket_fd_registry_smoke PRIVATE ${_WIN_DEFS})
   target_compile_options(socket_fd_registry_smoke PRIVATE ${_WIN_CFLAGS})
@@ -410,7 +410,8 @@ if(MDVM_WINDOWS_X64_BUILD_CRYPTO)
   )
   target_link_libraries(crypto PRIVATE ws2_32 advapi32 bcrypt kernel32)
   # Minimal smoke tool: SHA256 of fixed string via exported C API
-  add_executable(crypto_sha_smoke "${CMAKE_CURRENT_SOURCE_DIR}/crypto_sha_smoke.c")
+  add_executable(crypto_sha_smoke
+    "${_repo}/tests/cases/windows-libcore-smoke/crypto_sha_smoke.c")
   target_link_libraries(crypto_sha_smoke PRIVATE crypto)
   target_include_directories(crypto_sha_smoke PRIVATE "${MDVM_ART_ROOT_DIR}/external/boringssl/src/include")
 

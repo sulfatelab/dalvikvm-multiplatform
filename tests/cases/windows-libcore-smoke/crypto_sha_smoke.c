@@ -1,4 +1,4 @@
-/* Windows x64 PE smoke: boringssl SHA-256 of a fixed string. */
+/* Windows PE smoke: BoringSSL SHA-256 of a fixed string. */
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>

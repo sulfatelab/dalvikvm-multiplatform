@@ -208,5 +208,6 @@ Related files:
 - `CriticalNativeProbe.java`
 - `CriticalNativeDlsymProbe.java`
 - `../../../tools/verify/windows_x64_phase4/run_critical_native_probe.sh`
-- `../../../tools/verify/windows_x64_libcore_icu/openjdkjvm_memory_standalone.c`
+- `../../../vendor/art/openjdkjvm/OpenjdkJvm.cc`
+- `../../../vendor/art/openjdkjvm/openjdkjvm_memory_windows.cc`
 - `../../../win32_open_items.md` W-024

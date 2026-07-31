@@ -699,6 +699,21 @@ foreach(_art_libcore_class IN LISTS _art_windows_libcore_managed_classes)
         OUTPUT_NAME "${_art_libcore_name}")
 endforeach()
 art_add_target_probe(
+    NAME windows_crypto_sha_probe STAGE w004 TYPE EXECUTABLE
+    EXECUTION target-runnable ${_art_windows_current_selector}
+    SOURCES "${_art_test_cases_root}/windows-libcore-smoke/crypto_sha_smoke.c"
+    LINK_LIBRARIES crypto_static
+    LINK_OPTIONS "${_art_no_cet}"
+    CONTRACTS crypto libcore)
+art_add_target_probe(
+    NAME windows_socket_fd_registry_probe STAGE w013 TYPE EXECUTABLE
+    EXECUTION target-runnable ${_art_windows_current_selector}
+    SOURCES
+        "${_art_test_cases_root}/windows-libcore-smoke/socket_fd_registry_smoke.c"
+    LINK_LIBRARIES openjdkjvm ws2_32
+    LINK_OPTIONS "${_art_no_cet}"
+    CONTRACTS libcore socket fd PRODUCT_POLICY)
+art_add_target_probe(
     NAME art_runtime_show_version STAGE w004 TYPE GATE
     EXECUTION target-runnable ${_art_linux_x86_64_gnu_selector}
     DEPENDS dalvikvm

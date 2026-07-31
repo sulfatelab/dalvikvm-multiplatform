@@ -38,10 +38,10 @@ items are closed.
 |---|---|---|---|
 | Python frontend | COMPLETE for the initial slice | `generate`, `check-generated`, `configure`, `build`, `test`, and `stage` exist; subprocesses are shell-free; configured JDK 21 is validated and passed to CMake | keep regression coverage current |
 | Linux x86-64 product | COMPLETE for the current W-004 runtime slice | a fresh target-local boot/runtime closure and all five W-004 CTest gates pass: imageless Hello, GC stress, Math CriticalNative, show-version, and compiler-DSO topology; an identical rebuild is a Ninja no-op | add boot-image/security packaging and migrate the remaining behavioral stages |
-| Windows x86-64 product | PARTIAL / experimental | Linux-hosted cross and native Windows Server 2025 product builds pass; a fresh native W-004 closure built 1,515 actions with official JDK 21 and all three managed runtime gates pass, followed by a Ninja no-op | run the current complete multi-stage catalog and migrate the remaining behavioral tests |
+| Windows x86-64 product | PARTIAL / experimental | Linux-hosted cross and native Windows Server 2025 product builds pass; a fresh native W-004 closure with official JDK 21 passes its three managed gates plus the BoringSSL SHA gate, and the unified W-013 socket-fd gate also passes | run the current complete multi-stage catalog and migrate the remaining behavioral tests |
 | Compiler DSO parity | COMPLETE for `art-compiler` | both targets emit a shared compiler DSO; Windows imports `art.dll` and exports `art_compiler_jit_create` | retain exact ABI and no-cycle gates |
 | Full DSO topology parity | PARTIAL | five module kinds and two target-specific module pairs still differ | convert each difference or record a reviewed target exception |
-| Unified phase catalog | PARTIAL | seven virtual stages declare 29 native probes, 47 managed JARs, and two command gates; Windows has 76 applicable items and six runnable registrations, while Linux x86-64 has five applicable/runnable W-004 items | migrate behavioral runners, portable JNI expansion, and result checks |
+| Unified phase catalog | PARTIAL | seven virtual stages declare 31 native probes, 47 managed JARs, and two command gates; Windows has 78 applicable items and eight runnable registrations, while Linux x86-64 has five applicable/runnable W-004 items | migrate behavioral runners, portable JNI expansion, and result checks |
 | Boot/runtime packaging | PARTIAL | the base boot JAR and probe JARs are Python/CMake/Ninja-owned, deterministic, target-local, and fail-fast; managed gates isolate a runtime root and stage pinned ICU data plus the mandatory native boot DSO closure | add boot images, security providers/resources, cacerts, and complete runtime packages |
 | POSIX-free Windows build host | COMPLETE for the current native/managed W-004 graph; PARTIAL end to end | Server 2025 uses configured official JDK 21, Python, CMake, Ninja, and plain Clang drivers; native managed build/runtime and no-op gates pass without POSIX tooling | migrate every retained behavioral gate and run the complete current catalog |
 | Legacy build removal | PARTIAL | active product ownership was demoted, project-owned symlink overlays were removed, and the superseded Linux miniature plus Windows Phase-0/Phase-1 product graphs were deleted; the checked-in Linux graph, libcore product CMake, and split overlay datasets remain | remove or demote every alternative product path after gate migration |
@@ -63,17 +63,18 @@ items are closed.
   the Linux module.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
-  JDK 21 emits a 78-declaration catalog. Imageless Hello, GC stress, Math
+  JDK 21 emits an 80-declaration catalog. Imageless Hello, GC stress, Math
   CriticalNative, show-version, and compiler-DSO topology are the five
   applicable `linux-x86_64-gnu` declarations, and all five register with CTest.
-- [x] Native Windows configuration emits the same 78 declarations and keeps
-  76 items applicable: 29 native probes and all 47 managed JAR declarations.
-  Six items are `target-runnable`: the three existing native probes plus the
-  three common managed runtime gates.
-- [x] All 27 catalog-owned native/assembly sources formerly under
-  `tools/verify` now have logical `tests/cases` ownership and adjacent results.
-  A 68-action `windows-x86_64-msvc` cross rebuild compiled and linked all 29
-  applicable probes from their new regular-file paths with `--parallel 32`.
+- [x] Native Windows configuration emits the same 80 declarations and keeps
+  78 items applicable: 31 native probes and all 47 managed JAR declarations.
+  Eight items are `target-runnable`: five native probes plus the three common
+  managed runtime gates.
+- [x] All 31 catalog-owned native/assembly probe declarations have logical
+  `tests/cases` ownership across 28 source-owning cases with adjacent results.
+  The latest clean `windows-x86_64-msvc` cross graph compiled and linked both
+  newly migrated libcore probes from their regular-file paths with
+  `--parallel 32`.
 - [x] All 48 retained Java probe sources now have logical `tests/cases`
   ownership and adjacent results. The registry emits 47 managed artifacts;
   the old verification tree owns no Java source.
@@ -120,6 +121,12 @@ items are closed.
   W-004 artifacts, `icu_jni.dll`, `javacore.dll`, and `openjdk.dll`. Imageless
   Hello, GC stress, and Math CriticalNative then passed as three CTest gates;
   an identical rerun reported `ninja: no work to do.` and passed again.
+- [x] A subsequent fresh native Windows Server 2025 projection accepted the
+  unified libcore probe ownership: W-004 passed 4/4 after adding the BoringSSL
+  fixed-message SHA-256 executable, and W-013 passed 1/1 for the process-wide
+  CRT-fd/Winsock registry linked through `openjdkjvm.dll`. The same source and
+  output trees contained zero reparse points; all generated artifacts stayed
+  outside VCS.
 - [x] The managed gate caught Windows bootstrap names that still requested
   Linux-style `lib*.dll` basenames. ART now requests the generated no-prefix
   DLL names, and the compatibility `dlopen` boundary strictly converts UTF-8
@@ -325,10 +332,11 @@ platform/target-architecture combination declared.
 
 Current evidence remains much narrower than theoretical applicability:
 
-- all 29 native probes have compile evidence only for `windows-x86_64-msvc`;
-- only three probes are registered as runnable CTest gates, also only for
+- all 31 native probes have compile evidence only for `windows-x86_64-msvc`;
+- five native probes are registered as runnable CTest gates, also only for
   `windows-x86_64-msvc`;
-- no unified phase probe is currently registered for any Linux target; and
+- the Linux x86-64 W-004 slice has five runnable managed/command gates, but no
+  native-probe portability claim; and
 - no probe has build or runtime evidence for Windows x86, ARMv7, AArch64, or
   ARM64EC.
 
@@ -575,7 +583,9 @@ an unreviewed module-set or kind change.
 - [ ] Register behavioral commands and expected-result reviewers for every
   current stage; do not mark a compile-only DLL as a passed runtime gate.
 - [ ] Run the newly unified stage set on the authoritative Windows Server 2025
-  host and preserve sanitized evidence.
+  host and preserve sanitized evidence. W-004 and the new W-013 socket-fd gate
+  are accepted; the remaining registered and compile-only stage coverage is
+  still pending as a complete-catalog run.
 
 #### P1: complete parity and mechanical acceptance
 
@@ -767,8 +777,8 @@ translation units. This keeps `vendor/art` clean, requires no source-tree
 symlink, and avoids committing generated or absolute-path-bearing headers.
 
 The test-ownership migration moves the registry from `native/` to the top-level
-`tests/` tree and places all 78 declarations under stable logical ownership.
-All 29 native probes and 47 managed artifacts consume canonical source under
+`tests/` tree and places all 80 declarations under stable logical ownership.
+All 31 native probes and 47 managed artifacts consume canonical source under
 `tests/cases/`; the three managed runtime gates and two Linux command gates use
 the shared shell-free runner under `tests/support/`. Each source case has an
 adjacent result, while the

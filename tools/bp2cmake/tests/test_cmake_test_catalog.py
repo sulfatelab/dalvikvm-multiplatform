@@ -38,9 +38,10 @@ set(_art_bundle_lib "{(tmp_path / 'bundle' / 'lib').as_posix()}")
 add_library(art INTERFACE)
 add_executable(dalvikvm IMPORTED GLOBAL)
 set_target_properties(dalvikvm PROPERTIES IMPORTED_LOCATION "{tmp_path / 'dalvikvm.exe'}")
-foreach(_art_runtime_library IN ITEMS icu_jni javacore openjdk)
+foreach(_art_runtime_library IN ITEMS icu_jni javacore openjdk openjdkjvm)
   add_library(${{_art_runtime_library}} SHARED IMPORTED GLOBAL)
 endforeach()
+add_library(crypto_static INTERFACE)
 add_library(art_windows_cxx INTERFACE)
 add_library(windows_x64_posix_stubs INTERFACE)
 enable_testing()
@@ -60,13 +61,13 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         (binary / "art-tests" / "art_test_catalog.json").read_text(encoding="utf-8")
     )
     assert catalog["target_id"] == "windows-x86_64-msvc"
-    assert len(catalog["probes"]) == 78
-    assert sum(probe["applicable"] for probe in catalog["probes"]) == 76
+    assert len(catalog["probes"]) == 80
+    assert sum(probe["applicable"] for probe in catalog["probes"]) == 78
     assert sum(bool(probe["target_ids"]) for probe in catalog["probes"]) == 19
-    assert sum(not probe["target_ids"] for probe in catalog["probes"]) == 59
+    assert sum(not probe["target_ids"] for probe in catalog["probes"]) == 61
     assert sum(
         probe["execution"] == "target-runnable" for probe in catalog["probes"]
-    ) == 8
+    ) == 10
     assert not any(probe["ctest_registered"] for probe in catalog["probes"])
 
 
@@ -116,7 +117,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         (binary / "art-tests" / "art_test_catalog.json").read_text(encoding="utf-8")
     )
     applicable = [probe for probe in catalog["probes"] if probe["applicable"]]
-    assert len(catalog["probes"]) == 78
+    assert len(catalog["probes"]) == 80
     assert [probe["name"] for probe in applicable] == [
         "managed_imageless_hello",
         "managed_gc_stress",

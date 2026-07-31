@@ -98,7 +98,7 @@ IoProbe.done=ok
 | NIO channels (`Net`, `SocketChannel`, `ServerSocketChannel`, `Datagram*`, `FileChannel`/`FileDispatcher`, `IOUtil`, `EPoll`, `PollArrayWrapper`, streams) | Real AOSP ojluni sources |
 | CRT fd ↔ Winsock + select-based epoll | `compat/src/windows_x64_socket_posix.c` + improved `poll`/`ioctl`/`fcntl` |
 | `linux_close` / async-close / NativeThread | Win bridges under `vendor/libcore/multiplatform/windows/native/` |
-| `JVM_*` I/O + socket helpers | Expanded `openjdkjvm_memory_standalone.c` |
+| `JVM_*` I/O + socket helpers | Unified AOSP `OpenjdkJvm.cc` plus the Windows socket-fd registry sources |
 | NIO.2 `sun.nio.fs` / async ports / UNIXProcess / UnixFileSystem_md | **Excluded** (non-goal / WinNT FS via javacore) |
 | System/Runtime | Still PE stubs (`hello3` / `win_runtime`) |
 
@@ -448,11 +448,12 @@ Rebuilt conscrypt+okhttp boot.jar with security.properties. Wine:
 
 ## W-015 CLOSED — product libopenjdkjvm PE (2026-07-17)
 
-Standalone hybrid `openjdkjvm_memory_standalone.c` is the product soname and
-broad `JVM_*` surface (I/O, sockets, memory heuristics, raw monitors, time, and
-`ActiveProcessorCount`). ART-tree `openjdkjvm_memory_windows.cc` supplies real
-ART heap/GC helpers plus the narrow `ART_LoadNativeLibrary` bridge used by the
-product DLL.
+The standalone hybrid source now remains only as an input to this retained
+legacy verification/package graph; it is not a unified product source. The
+unified target builds AOSP `OpenjdkJvm.cc` plus the Windows socket-fd registry,
+while `openjdkjvm_memory_windows.cc` supplies real ART heap/GC helpers and the
+`ART_LoadNativeLibrary` bridge used by the product DLL. Remove the standalone
+source together with this graph after its remaining package consumers migrate.
 
 ## Native-load ownership correction (2026-07-24)
 

@@ -478,13 +478,20 @@ Summary (details below; do not delete history):
 - **Kind:** workaround
 - **Area:** art / openjdkjvm
 - **Fix / evidence:**
-  - Product PE from `tools/verify/windows_x64_libcore_icu/openjdkjvm_memory_standalone.c`: memory/GC + file I/O + sockets + raw monitors + time (`JVM_*` set used by hybrid openjdk).
+  - The unified `openjdkjvm` target builds the AOSP `OpenjdkJvm.cc` surface,
+    while `vendor/art/openjdkjvm/openjdkjvm_memory_windows.cc` supplies the
+    ART-owned heap/GC and native-load bridge.
   - Added `JVM_ActiveProcessorCount`.
   - Product `JVM_NativeLoad` delegates to `art.dll!ART_LoadNativeLibrary`; the ART-tree helper calls `JavaVMExt::LoadNativeLibrary`, preserving ART library ownership and unresolved JNI lookup.
-  - The standalone DLL remains the product soname and broad `JVM_*` surface; the ART-tree Windows file supplies ART heap/GC exports plus the narrow native-load bridge.
+  - The generated `openjdkjvm.dll` remains the product DSO; no standalone
+    replacement source or second product graph is required.
+  - The old standalone source remains temporarily because the retained
+    libcore/ICU verification and package graph still references it. It is not
+    part of the unified product and must be removed with that graph, not first.
   - It also owns the process-wide Windows x64 socket-fd registry because Libcore.os creates sockets in `libjavacore` while java.net stream natives consume them in `libopenjdk`. Reusing this already required bridge avoids a new product DLL and keeps classification exact across module boundaries.
   - Wine CoreProbe/GoldenApp/NetProbe with staged `libopenjdkjvm` PASS.
-- **Code anchors:** `tools/verify/windows_x64_libcore_icu/openjdkjvm_memory_standalone.c`; stage via `stage_native_modules.sh`
+- **Code anchors:** `vendor/art/openjdkjvm/OpenjdkJvm.cc`;
+  `vendor/art/openjdkjvm/openjdkjvm_memory_windows.cc`; `native/CMakeLists.txt`
 - **Opened:** 2026-07-16
 - **Closed:** 2026-07-17
 
@@ -671,7 +678,9 @@ Summary (details below; do not delete history):
   - `vendor/art/openjdkjvmti/` and `native/CMakeLists.txt` (separate Windows x64 JVMTI plugin)
   - `vendor/art/runtime/{thread-current-inl.h,thread.h,interpreter/interpreter_common.cc}` (PE plugin TLS accessor and Linux-like native interpreter policy)
   - `vendor/art/runtime/jit/jit.cc` (common native compilation policy and opt-in compile-record diagnostics)
-  - `tools/verify/windows_x64_libcore_icu/openjdkjvm_memory_standalone.c` (`JVM_NativeLoad` product export)
+  - `vendor/art/openjdkjvm/OpenjdkJvm.cc` and
+    `vendor/art/openjdkjvm/openjdkjvm_memory_windows.cc` (`JVM_NativeLoad` and
+    `ART_LoadNativeLibrary` product boundary)
   - AOSP history: `d021f1d8475c` FastNative→CriticalNative Math; multipath `f16cd44db5fe` pure-Java ceil/floor; `b9265e7b5da6` CriticalNative register fix; art `7ea144b073` / `4c17423714` interpreter Critical/FastNative bridge
 - **Closed by:** ART `42a03f2ea0`; native Windows evidence under `tools/verify/windows_x64_phase4/evidence/w024_host/`; final Linux/Windows x64 regressions on 2026-07-24
 - **Related:** W-019 (CLOSED temporary Math ABI fix), W-011/W-012 (legacy InterpreterJni fallback), W-025 (JIT memory; threshold-zero proved unrelated)

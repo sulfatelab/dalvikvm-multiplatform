@@ -1,7 +1,12 @@
-# Windows x64 Phase 3 — RESULT
+# Windows libcore smoke — result
 
-**Status:** **COMPLETE** — A4–A7 + Option H + product golden app **PASS on real Windows 10 host** (and wine oracle)  
-**Date:** 2026-07-16  
+**Status:** **COMPLETE** — unified native probes pass on the authoritative
+Windows Server 2025 host; A4–A7 + Option H + product golden app also pass on
+the historical Windows 10 host and Wine oracle
+
+**Latest acceptance:** 2026-07-31
+
+**Original Phase-3 acceptance:** 2026-07-16
 **Plan:** [win32_filesystem.md](../../../win32_filesystem.md) (Option H locked; Windows NIO non-goal)
 
 ## Scope delivered
@@ -25,6 +30,38 @@ Phase 3 libcore bring-up for Windows x64 imageless ART:
 | G0–G11 wine suite | **PASS** | `evidence/all_wine_gates.txt` |
 | G12 host package | **PASS** | `dist/windows_x64_phase3_host` / packager |
 | G12 real Windows host | **PASS** | `evidence/host/RESULT_HOST.txt`, `logs_20260716T205926/` |
+
+## Unified native probe ownership
+
+The fixed-message BoringSSL SHA-256 probe and the process-wide CRT
+file-descriptor/Winsock registry probe now live beside this result and are
+declared by the common test catalog. Both remain typed for the currently
+verified Windows x86-64 MSVC profile and are `target-runnable`; that selector
+may expand to Windows AArch64 or ARM64EC only after each native runtime gate
+passes there. Their build and execution use the unified product targets
+`crypto_static` and `openjdkjvm`, not the retired libcore/ICU product graph.
+
+### Latest unified native acceptance
+
+The authoritative Windows Server 2025 x86-64 host configured a fresh regular-
+file source projection and output tree with Python 3.13.14, CMake 3.31.8,
+Ninja 1.13.2, LLVM 21.1.8 GNU-style Clang drivers, and the official configured
+JDK 21.0.12. No POSIX shell, Make, NMake, PowerShell, WSL, Cygwin, MSVC
+compiler driver, or `clang-cl` participated.
+
+```text
+python tools/build_art.py test --target-id windows-x86_64-msvc --stage w004 --parallel 32
+python tools/build_art.py test --target-id windows-x86_64-msvc --stage w013 --parallel 32
+
+W-004: 4/4 PASS, including windows_crypto_sha_probe
+W-013: 1/1 PASS, windows_socket_fd_registry_probe
+source/output reparse points: 0
+```
+
+The generated binaries, managed artifacts, routine logs, and build trees
+remain outside VCS. W-027 tracks the probe's current `GetTempPathA`,
+`GetTempFileNameA`, and `DeleteFileA` calls together with the broader Win32
+encoding audit; they did not block this ownership/runtime migration.
 
 ### Real Windows host (authoritative G12)
 
@@ -72,7 +109,14 @@ package smoke_package_wine64.sh OVERALL PASS
 - WSL2 as product runtime
 - Full JIT/dex2oat (Phase 5 optional)
 
-## Repro
+## Current reproduction
+
+```text
+python tools/build_art.py test --target-id windows-x86_64-msvc --stage w004 --parallel 32
+python tools/build_art.py test --target-id windows-x86_64-msvc --stage w013 --parallel 32
+```
+
+## Historical Phase-3 reproduction
 
 ```bash
 # Wine
