@@ -2,7 +2,7 @@
 
 **Status:** living tracker  
 **Created:** 2026-07-17  
-**Updated:** 2026-07-30
+**Updated:** 2026-07-31
 **Rule:** Every **temporary workaround** that future work must remove belongs here as **OPEN**.  
 When the proper fix lands, mark the item **CLOSED**, move it into §Closed (sorted), and keep the full history.  
 Do **not** list permanent non-goals as OPEN workarounds—list them under §Non-goals.
@@ -176,6 +176,33 @@ canonical policy is [HOST_GATE_POLICY.md](tools/verify/windows_x64_phase4/HOST_G
 - **Code anchors:** `vendor/art/runtime/oat/oat_file.cc` (`OpenOatFileFromSdm`); `vendor/art/runtime/dex2oat_environment_test.h` (`CreateSecureDexMetadataCompanion`)
 - **Blocked on / design doc:** Stable-handle/cache identity work in [win32_aot_oat.md](win32_aot_oat.md)
 - **Opened:** 2026-07-30
+
+### W-027 — Remove encoding-sensitive Win32 `*A` API calls
+- **State:** OPEN
+- **Kind:** debt / correctness / audit
+- **Area:** Windows compatibility / ART runtime / filesystem / diagnostics
+- **Symptom / why:** Win32 `*A` APIs decode paths, environment values, and host
+  names through the active ANSI code page, while project-facing narrow strings
+  are UTF-8. A build, runtime, dump, or DSO path containing non-ASCII text can
+  therefore be corrupted even when the same path is valid through the wide API.
+- **Current behavior:** The unified managed-runtime gate now converts UTF-8 DSO
+  names with `MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, ...)` and calls
+  `LoadLibraryW`; its null-module lookups use `GetModuleHandleW`. A preliminary
+  source inventory still finds encoding-sensitive `*A` calls for directory
+  enumeration, module/current-directory/full-path discovery, environment
+  access, computer-name lookup, dump-directory creation, and dump-file opening.
+- **Proper fix:** Define one fail-closed UTF-8/UTF-16 boundary helper, replace
+  every encoding-sensitive Win32 `*A` call with its `*W` form, convert returned
+  UTF-16 text back to UTF-8 explicitly, and add a generated/source audit that
+  rejects new `*A` calls whenever a documented `*W` API exists. Byte-oriented
+  APIs with no wide equivalent, such as `GetProcAddress`, are outside this
+  suffix-pair rule and require their own byte-string contract.
+- **Code anchors:** `compat/src/windows_x64_posix_stubs.c`;
+  `vendor/art/runtime/multiplatform/windows/runtime_windows.cc`;
+  `vendor/art/runtime/multiplatform/windows/cet_compat.cc`
+- **Blocked on / design doc:** none; finish the unified build/runtime-gate
+  migration before expanding this into a repository-wide Windows API change.
+- **Opened:** 2026-07-31
 
 ## Product leftovers (not single-line workarounds)
 

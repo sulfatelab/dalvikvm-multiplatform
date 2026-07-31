@@ -223,11 +223,37 @@ ssize_t pwrite(int fd, const void* buf, size_t count, long long offset) {
 }
 
 static char g_dlerror[256];
+
+static wchar_t* mdvm_utf8_to_utf16(const char* value) {
+  int length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, value, -1, NULL, 0);
+  if (length == 0) return NULL;
+  wchar_t* result = (wchar_t*)malloc((size_t)length * sizeof(wchar_t));
+  if (result == NULL) {
+    SetLastError(ERROR_NOT_ENOUGH_MEMORY);
+    return NULL;
+  }
+  if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, value, -1, result, length) == 0) {
+    DWORD error = GetLastError();
+    free(result);
+    SetLastError(error);
+    return NULL;
+  }
+  return result;
+}
+
 void* dlopen(const char* filename, int flag) {
   (void)flag;
-  if (!filename) return GetModuleHandleA(NULL);
-  HMODULE h = LoadLibraryA(filename);
-  if (!h) snprintf(g_dlerror, sizeof(g_dlerror), "LoadLibraryA(%s) failed: %lu", filename, GetLastError());
+  if (!filename) return GetModuleHandleW(NULL);
+  wchar_t* wide_filename = mdvm_utf8_to_utf16(filename);
+  if (wide_filename == NULL) {
+    snprintf(g_dlerror, sizeof(g_dlerror),
+             "UTF-8 to UTF-16 conversion failed for %s: %lu", filename, GetLastError());
+    return NULL;
+  }
+  HMODULE h = LoadLibraryW(wide_filename);
+  DWORD error = h ? ERROR_SUCCESS : GetLastError();
+  free(wide_filename);
+  if (!h) snprintf(g_dlerror, sizeof(g_dlerror), "LoadLibraryW(%s) failed: %lu", filename, error);
   else g_dlerror[0]=0;
   return (void*)h;
 }
@@ -237,7 +263,7 @@ int dlclose(void* handle) {
 }
 void* dlsym(void* handle, const char* symbol) {
   HMODULE h = (HMODULE)handle;
-  if (!h) h = GetModuleHandleA(NULL);
+  if (!h) h = GetModuleHandleW(NULL);
   void* p = (void*)GetProcAddress(h, symbol);
   if (!p) snprintf(g_dlerror, sizeof(g_dlerror), "GetProcAddress(%s) failed", symbol);
   else g_dlerror[0]=0;
@@ -283,7 +309,7 @@ int madvise(void* addr, size_t length, int advice) {
   static DiscardFn discard_fn = NULL;
   static int resolved = 0;
   if (!resolved) {
-    HMODULE k32 = GetModuleHandleA("kernel32.dll");
+    HMODULE k32 = GetModuleHandleW(L"kernel32.dll");
     if (k32) discard_fn = (DiscardFn)GetProcAddress(k32, "DiscardVirtualMemory");
     resolved = 1;
   }

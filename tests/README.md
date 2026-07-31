@@ -101,12 +101,19 @@ and the runtime/compiler ELF load topology through
 `support/runtime_gate.py`. A command gate owns no dummy target binary; its
 virtual target depends on the exact product artifacts that must exist before
 CTest runs it.
-The managed-source slice moved all 47 retained Java probe sources into logical
-cases. The catalog now declares 46 managed JAR artifacts (the paired
+The managed-source slice moved all 48 retained Java probe sources into logical
+cases. The catalog now declares 47 managed JAR artifacts (the paired
 CriticalNative sources intentionally share one JAR), built by
 `support/managed_artifact.py` through CMake/Ninja. The same helper builds the
 target-local boot JAR first, so Android/libcore APIs and ART annotations are
 resolved from the same AOSP boot classes on Linux and Windows build hosts.
+Three W-004 managed declarations are now `target-runnable` on the exact current
+Linux and Windows x86-64 identities. `support/runtime_gate.py` runs imageless
+Hello, allocation/collection stress, and Math CriticalNative with a declared
+native DSO closure, isolated target-local runtime directories, pinned ICU data,
+strict exit/marker checks, timeouts, and sanitized JSON results. Linux also
+registers its show-version and compiler-DSO topology gates, for five W-004
+CTest gates; Windows registers the three managed gates.
 Legacy shell runners and the few retained per-probe CMake entry points use
 these canonical files as temporary compatibility shims; they must be replaced by the
 unified Python/CMake/Ninja path before `tools/verify` can be removed.
@@ -209,10 +216,13 @@ build host can execute the exact target identity.
 ### Managed JARs
 
 A managed declaration uses `TYPE MANAGED`, lists regular Java `SOURCES`, and
-selects targets exactly like a native probe. It is a compile-only catalog item
-until a separate behavioral command and reviewer are registered. One virtual
-stage may therefore contain native DSOs, managed JARs, and command gates with
-different applicability and execution status.
+selects targets exactly like a native probe. It is compile-only by default. A
+managed declaration becomes `target-runnable` only when it also declares a
+shell-free `COMMAND`, exact product/runtime `DEPENDS`, deterministic success
+markers, forbidden markers, timeout, and result location. CTest registers that
+command only when the build host can execute the exact target identity. One
+virtual stage may therefore contain native DSOs, managed JARs, and command
+gates with different applicability and execution status.
 
 Configure JDK 21 only in ignored `.art-build.local.toml`:
 
@@ -239,6 +249,15 @@ logs stay below `out/<target-id>/<build-type>/tests/managed/`. Manifests use
 repository-relative source names and contain no machine absolute paths. The
 builder invokes no shell, rejects symlink/reparse inputs, propagates javac/D8
 failures, and replaces only its named work directories under that output root.
+
+Managed runtime gates must use `support/runtime_gate.py` unless a case has a
+genuinely unique runner. The shared runner invokes `dalvikvm` with `shell=False`,
+creates its runtime root below the exact build output, stages `icudt72l.dat` as
+a regular file, supplies only declared DSO directories, rejects link/reparse
+components, and fails closed on a non-zero exit, timeout, missing marker, or
+forbidden marker. Its `result.json` records target identity, class, exit status,
+marker status, and JAR hashes without recording machine paths or environment
+dumps.
 
 Linkage describes the binary boundary under test. It is independent of whether
 the test is compile-only, run locally, transferred to another machine, or
@@ -460,14 +479,17 @@ out/<target-id>/<build-type>/
   tests/
     bin/
     lib/
-  test-work/
-    <logical-test-id>/
-  results/
-    <logical-test-id>/
-      <run-id>/
+    managed/
+    results/
+      <logical-test-id>/
+        runtime/
         result.json
         stdout.txt
         stderr.txt
+  results/
+    <imported-cross-target-result>/
+      <run-id>/
+        result.json
   stage/
     tests/
   packages/

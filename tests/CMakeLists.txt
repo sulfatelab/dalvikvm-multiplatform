@@ -10,12 +10,17 @@ set(_art_test_cases_root "${CMAKE_CURRENT_LIST_DIR}/cases")
 set(_art_managed_builder "${CMAKE_CURRENT_LIST_DIR}/support/managed_artifact.py")
 set(_art_managed_root "${CMAKE_CURRENT_BINARY_DIR}/managed")
 set(_art_r8_jar "${_art_test_repo_root}/vendor/r8/r8.jar")
+set(_art_icu_data
+    "${_art_test_repo_root}/vendor/icu/icu4c/source/stubdata/icudt72l.dat")
 if(NOT ART_JDK_ROOT)
     message(FATAL_ERROR
         "ART_JDK_ROOT is required; configure through tools/build_art.py")
 endif()
 if(NOT EXISTS "${_art_r8_jar}")
     message(FATAL_ERROR "Pinned D8/R8 tool is missing: ${_art_r8_jar}")
+endif()
+if(NOT EXISTS "${_art_icu_data}")
+    message(FATAL_ERROR "Pinned ICU data is missing: ${_art_icu_data}")
 endif()
 
 set(_art_boot_source_roots
@@ -270,6 +275,10 @@ function(art_add_target_probe)
             message(FATAL_ERROR
                 "Managed probe ${PROBE_NAME} cannot declare native compile/link inputs")
         endif()
+        if(PROBE_EXECUTION STREQUAL "target-runnable" AND NOT PROBE_COMMAND)
+            message(FATAL_ERROR
+                "Runnable managed probe ${PROBE_NAME} requires a shell-free COMMAND")
+        endif()
         if(PROBE_OUTPUT_NAME)
             set(_art_managed_name "${PROBE_OUTPUT_NAME}")
         else()
@@ -371,7 +380,7 @@ function(art_add_target_probe)
 
     if(PROBE_EXECUTION STREQUAL "target-runnable" AND
        ART_ENABLE_TARGET_RUNTIME_TESTS)
-        if(PROBE_TYPE STREQUAL "GATE")
+        if(PROBE_TYPE STREQUAL "GATE" OR PROBE_TYPE STREQUAL "MANAGED")
             add_test(NAME "art.${PROBE_STAGE}.${PROBE_NAME}"
                 COMMAND ${PROBE_COMMAND})
         else()
@@ -462,6 +471,14 @@ set(_art_windows_x86_64_msvc_selector
     TARGET_IDS windows-x86_64-msvc)
 set(_art_linux_x86_64_gnu_selector
     TARGET_IDS linux-x86_64-gnu)
+set(_art_current_native_ids_selector
+    TARGET_IDS linux-x86_64-gnu windows-x86_64-msvc)
+set(_art_managed_runtime_library_args
+    --library-dir "$<TARGET_FILE_DIR:dalvikvm>")
+if(ART_TARGET_PLATFORM STREQUAL "windows")
+    list(APPEND _art_managed_runtime_library_args
+        --library-dir "${ART_TARGET_BUNDLE_ROOT}/lib/libcxx/bin")
+endif()
 
 # W-002: managed-entry and attach/OSR transitions.
 art_add_target_probe(
@@ -580,11 +597,52 @@ art_add_target_probe(
     CONTRACTS jvmti interpreter
     OUTPUT_NAME jvmtiforceprobe)
 art_add_target_probe(
-    NAME managed_gc_stress STAGE w004 TYPE MANAGED EXECUTION compile-only
-    ${_art_windows_current_selector}
+    NAME managed_imageless_hello STAGE w004 TYPE MANAGED EXECUTION target-runnable
+    ${_art_current_native_ids_selector}
+    SOURCES "${_art_test_cases_root}/imageless-runtime/Hello.java"
+    DEPENDS dalvikvm icu_jni javacore openjdk
+    CONTRACTS runtime-load imageless smoke
+    OUTPUT_NAME hello
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_test_repo_root}/tests/support/runtime_gate.py"
+        managed
+        --target-id "${ART_TARGET_ID}"
+        --dalvikvm "$<TARGET_FILE:dalvikvm>"
+        --boot-jar "${_art_boot_jar}"
+        --app-jar "${_art_managed_root}/hello.jar"
+        --main-class Hello
+        --work-root "${CMAKE_CURRENT_BINARY_DIR}/results/imageless-hello"
+        --icu-data "${_art_icu_data}"
+        ${_art_managed_runtime_library_args}
+        --vm-option=-Xint
+        --expect "Hello from dalvikvm!"
+        --expect "main end exception=0"
+        --forbid AssertionError)
+art_add_target_probe(
+    NAME managed_gc_stress STAGE w004 TYPE MANAGED EXECUTION target-runnable
+    ${_art_current_native_ids_selector}
     SOURCES "${_art_test_cases_root}/imageless-runtime/GcStressProbe.java"
+    DEPENDS dalvikvm icu_jni javacore openjdk
     CONTRACTS runtime-load gc stress
-    OUTPUT_NAME gcstressprobe)
+    OUTPUT_NAME gcstressprobe
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_test_repo_root}/tests/support/runtime_gate.py"
+        managed
+        --target-id "${ART_TARGET_ID}"
+        --dalvikvm "$<TARGET_FILE:dalvikvm>"
+        --boot-jar "${_art_boot_jar}"
+        --app-jar "${_art_managed_root}/gcstressprobe.jar"
+        --main-class GcStressProbe
+        --work-root "${CMAKE_CURRENT_BINARY_DIR}/results/gc-stress"
+        --icu-data "${_art_icu_data}"
+        ${_art_managed_runtime_library_args}
+        --vm-option=-Xint
+        --expect "gcstress.ok=true"
+        --expect "GcStressProbe.done=ok"
+        --expect "main end exception=0"
+        --forbid AssertionError)
 foreach(_art_runtime_stress_class HandleLeakProbe PerfSmokeProbe ThreadHeavyProbe)
     string(TOLOWER "${_art_runtime_stress_class}" _art_runtime_stress_name)
     art_add_target_probe(
@@ -597,11 +655,29 @@ foreach(_art_runtime_stress_class HandleLeakProbe PerfSmokeProbe ThreadHeavyProb
         OUTPUT_NAME "${_art_runtime_stress_name}")
 endforeach()
 art_add_target_probe(
-    NAME managed_math_critical STAGE w004 TYPE MANAGED EXECUTION compile-only
-    TARGET_IDS linux-x86_64-gnu windows-x86_64-msvc
+    NAME managed_math_critical STAGE w004 TYPE MANAGED EXECUTION target-runnable
+    ${_art_current_native_ids_selector}
     SOURCES "${_art_test_cases_root}/math-critical/MathCriticalProbe.java"
+    DEPENDS dalvikvm icu_jni javacore openjdk
     CONTRACTS math critical-native
-    OUTPUT_NAME mathcriticalprobe)
+    OUTPUT_NAME mathcriticalprobe
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_test_repo_root}/tests/support/runtime_gate.py"
+        managed
+        --target-id "${ART_TARGET_ID}"
+        --dalvikvm "$<TARGET_FILE:dalvikvm>"
+        --boot-jar "${_art_boot_jar}"
+        --app-jar "${_art_managed_root}/mathcriticalprobe.jar"
+        --main-class MathCriticalProbe
+        --work-root "${CMAKE_CURRENT_BINARY_DIR}/results/math-critical"
+        --icu-data "${_art_icu_data}"
+        ${_art_managed_runtime_library_args}
+        --vm-option=-Xint
+        --expect "MathCriticalProbe native ceil=true floor=true"
+        --expect "MathCriticalProbe OK"
+        --expect "main end exception=0"
+        --forbid AssertionError)
 
 # These managed libcore probes remain Windows-specific until each behavioral
 # contract is reviewed on another exact target.
