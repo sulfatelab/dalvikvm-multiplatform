@@ -91,6 +91,67 @@ def test_native_gate_repeats_without_shell_and_records_sanitized_result(
     assert "repetitions=3" in capsys.readouterr().out
 
 
+def test_native_matrix_runs_named_cases_and_records_sanitized_result(
+    tmp_path, monkeypatch, capsys
+):
+    probe = tmp_path / "probe.exe"
+    probe.write_bytes(b"native probe")
+    matrix = tmp_path / "runtime-matrix.json"
+    matrix.write_text(
+        json.dumps({
+            "schema_version": 1,
+            "cases": [
+                {
+                    "name": "first",
+                    "arguments": ["first"],
+                    "expected_markers": ["probe first OK"],
+                    "repetitions": 2,
+                    "timeout_seconds": 7,
+                },
+                {
+                    "name": "second",
+                    "arguments": ["second"],
+                    "expected_markers": ["probe second OK"],
+                },
+            ],
+        }),
+        encoding="utf-8",
+    )
+    commands = []
+
+    def run(command, **kwargs):
+        commands.append((command, kwargs))
+        return SimpleNamespace(
+            returncode=0,
+            stdout=f"probe {command[-1]} OK\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", run)
+    work = tmp_path / "out" / "results" / "matrix"
+    runtime_gate.run_native_matrix(
+        target_id="windows-x86_64-msvc",
+        probe=probe,
+        work_root=work,
+        library_dirs=[tmp_path],
+        matrix=matrix,
+    )
+
+    assert [command for command, _ in commands] == [
+        [str(probe), "first"],
+        [str(probe), "first"],
+        [str(probe), "second"],
+    ]
+    assert all(options["shell"] is False for _, options in commands)
+    record_text = (work / "result.json").read_text(encoding="utf-8")
+    record = json.loads(record_text)
+    assert record["requested_cases"] == 2
+    assert record["completed_cases"] == 2
+    assert record["matrix"]["name"] == matrix.name
+    assert str(tmp_path) not in record_text
+    assert "cases=2, repetitions=3" in capsys.readouterr().out
+
+
 def test_managed_gate_uses_isolated_runtime_and_records_result(
     tmp_path, monkeypatch, capsys
 ):

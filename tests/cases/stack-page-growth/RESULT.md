@@ -7,7 +7,7 @@ shared `fault_x86_64.S` implementation. Both targets are exact
 | Target | Build | Runtime | Last checked |
 |---|---|---|---|
 | page | verified | verified | 2026-08-01 |
-| growth | verified | pending unified behavioral gate | 2026-08-01 |
+| growth | verified | verified | 2026-08-01 |
 
 The unified cross catalog compiled the same assembly file for both targets
 without a copy, symlink, junction, or generated source alias. AArch64 and
@@ -26,5 +26,12 @@ win32_stack_page_probe OK
 ```
 
 Its sanitized JSON record contains one completed iteration, zero failed
-marker/exit/timeout checks, and no host path. Recursive growth remains a
-separate compile-verified declaration and is not claimed by this result.
+marker/exit/timeout checks, and no host path.
+
+The checked-in runtime matrix runs `baseline`, `protected`, `writable`, and
+`direct` four times each. On the same host all 16/16 iterations passed. The
+first three modes consistently caught `0xc00000fd`; `direct` caught
+`0xc0000005`. Every run reported zero probe failures, a zero worker exit, and
+successful restoration. The matrix, arguments, exact marker contracts, and
+per-case sanitized results are owned beside this source rather than by a
+phase-local shell runner.

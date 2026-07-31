@@ -983,19 +983,52 @@ art_add_target_probe(
         --expect "win32_stack_page_probe OK"
         --timeout 180)
 art_add_target_probe(
-    NAME win32_stack_growth_probe STAGE w014 TYPE EXECUTABLE EXECUTION compile-only
+    NAME win32_stack_growth_probe STAGE w014 TYPE EXECUTABLE
+    EXECUTION target-runnable TIMEOUT 900
     ${_art_windows_x86_64_msvc_selector}
     SOURCES
         "${_art_test_cases_root}/stack-page-growth/growth_probe.cc"
         "${_art_test_cases_root}/stack-page-growth/fault_x86_64.S"
         "${_art_test_repo_root}/vendor/art/runtime/multiplatform/windows/stack_windows.cc"
     INCLUDE_DIRS "${_art_test_repo_root}/vendor/art/runtime/multiplatform/windows"
-    CONTRACTS stack fault PRODUCT_POLICY)
+    CONTRACTS stack fault PRODUCT_POLICY
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_test_repo_root}/tests/support/runtime_gate.py"
+        native-matrix
+        --target-id "${ART_TARGET_ID}"
+        --probe "$<TARGET_FILE:win32_stack_growth_probe>"
+        --work-root
+            "${CMAKE_CURRENT_BINARY_DIR}/results/w014-stack-growth"
+        --library-dir "${CMAKE_BINARY_DIR}"
+        --library-dir "${_art_bundle_lib}/libcxx/bin"
+        --matrix
+            "${_art_test_cases_root}/stack-page-growth/runtime-matrix.json")
 art_add_target_probe(
-    NAME win32_stack_growth_rx_probe STAGE w014 TYPE EXECUTABLE EXECUTION compile-only
+    NAME win32_stack_growth_rx_probe STAGE w014 TYPE EXECUTABLE
+    EXECUTION target-runnable TIMEOUT 120
     ${_art_windows_current_selector}
     SOURCES "${_art_test_cases_root}/stack-executable-memory/probe.c"
-    CONTRACTS stack executable-memory)
+    CONTRACTS stack executable-memory
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_test_repo_root}/tests/support/runtime_gate.py"
+        native
+        --target-id "${ART_TARGET_ID}"
+        --probe "$<TARGET_FILE:win32_stack_growth_rx_probe>"
+        --work-root
+            "${CMAKE_CURRENT_BINARY_DIR}/results/w014-stack-growth-rx"
+        --library-dir "${CMAKE_BINARY_DIR}"
+        --library-dir "${_art_bundle_lib}/libcxx/bin"
+        --expect "region label=before_rx valid=1"
+        --expect "protect=0x20 protect_name=PAGE_EXECUTE_READ"
+        --expect "terminal caught=0xc00000fd observed=0xc00000fd"
+        --expect "marker label=before_rx readable=1 matching=64/64"
+        --expect "recovery reset_attempted=1 reset_ok=1 restore_ok=1"
+        --expect "win32_stack_growth_rx_probe failures=0"
+        --expect "win32_stack_growth_rx_probe OK"
+        --forbid "FAIL "
+        --timeout 60)
 art_add_target_probe(
     NAME win32_stack_pregrow_probe STAGE w014 TYPE EXECUTABLE EXECUTION compile-only
     ${_art_windows_x86_64_msvc_selector}
@@ -1006,13 +1039,29 @@ art_add_target_probe(
     COMPILE_DEFINITIONS ${_art_windows_defines}
     CONTRACTS stack fault)
 art_add_target_probe(
-    NAME win32_cet_policy_probe STAGE w014 TYPE EXECUTABLE EXECUTION compile-only
+    NAME win32_cet_policy_probe STAGE w014 TYPE EXECUTABLE
+    EXECUTION target-runnable TIMEOUT 120
     ${_art_windows_current_selector}
     SOURCES
         "${_art_test_cases_root}/cet-stack-policy/probe.cc"
         "${_art_test_repo_root}/vendor/art/runtime/multiplatform/windows/cet_compat.cc"
     INCLUDE_DIRS "${_art_test_repo_root}/vendor/art/runtime/multiplatform/windows"
-    CONTRACTS cet stack PRODUCT_POLICY)
+    CONTRACTS cet stack PRODUCT_POLICY
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_test_repo_root}/tests/support/runtime_gate.py"
+        native
+        --target-id "${ART_TARGET_ID}"
+        --probe "$<TARGET_FILE:win32_cet_policy_probe>"
+        --work-root
+            "${CMAKE_CURRENT_BINARY_DIR}/results/w014-cet-policy"
+        --library-dir "${CMAKE_BINARY_DIR}"
+        --library-dir "${_art_bundle_lib}/libcxx/bin"
+        --expect "known_incompatible=0x00000000"
+        --expect "WIN32_CET_POLICY_PROBE PASS"
+        --forbid "WIN32_CET_POLICY_PROBE FAIL"
+        --forbid "WIN32_CET_POLICY_PROBE REJECT"
+        --timeout 60)
 art_add_target_probe(
     NAME fs1stackhighwater STAGE w014 TYPE SHARED EXECUTION compile-only
     ${_art_windows_current_selector}

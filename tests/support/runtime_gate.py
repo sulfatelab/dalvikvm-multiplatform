@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import stat
 import struct
@@ -276,6 +277,165 @@ def run_native(
     )
 
 
+def _load_native_matrix(path: Path) -> tuple[Path, list[dict[str, object]]]:
+    path = _regular_file(str(path))
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise GateError(f"invalid native matrix JSON {path.name}: {exc}") from exc
+    if not isinstance(document, dict) or set(document) != {"schema_version", "cases"}:
+        raise GateError(
+            "native matrix must contain exactly schema_version and cases"
+        )
+    if document["schema_version"] != 1:
+        raise GateError(
+            f"unsupported native matrix schema: {document['schema_version']!r}"
+        )
+    raw_cases = document["cases"]
+    if not isinstance(raw_cases, list) or not raw_cases:
+        raise GateError("native matrix cases must be a non-empty list")
+
+    allowed = {
+        "name",
+        "arguments",
+        "expected_exit",
+        "expected_markers",
+        "forbidden_markers",
+        "repetitions",
+        "timeout_seconds",
+    }
+    cases: list[dict[str, object]] = []
+    names: set[str] = set()
+    for index, raw_case in enumerate(raw_cases, start=1):
+        if not isinstance(raw_case, dict) or not set(raw_case) <= allowed:
+            raise GateError(f"native matrix case {index} has unknown fields")
+        name = raw_case.get("name")
+        if not isinstance(name, str) or re.fullmatch(r"[a-z0-9][a-z0-9._-]*", name) is None:
+            raise GateError(f"native matrix case {index} has an invalid name")
+        if name in names:
+            raise GateError(f"native matrix case name is duplicated: {name}")
+        names.add(name)
+
+        arguments = raw_case.get("arguments", [])
+        expected = raw_case.get("expected_markers", [])
+        forbidden = raw_case.get("forbidden_markers", [])
+        if not isinstance(arguments, list) or not all(
+            isinstance(value, str) for value in arguments
+        ):
+            raise GateError(f"native matrix case {name} arguments must be strings")
+        if not isinstance(expected, list) or not expected or not all(
+            isinstance(value, str) and value for value in expected
+        ):
+            raise GateError(
+                f"native matrix case {name} expected_markers must be non-empty strings"
+            )
+        if not isinstance(forbidden, list) or not all(
+            isinstance(value, str) and value for value in forbidden
+        ):
+            raise GateError(
+                f"native matrix case {name} forbidden_markers must be strings"
+            )
+        expected_exit = raw_case.get("expected_exit", 0)
+        repetitions = raw_case.get("repetitions", 1)
+        timeout = raw_case.get("timeout_seconds", 60)
+        for field, value, positive in (
+            ("expected_exit", expected_exit, False),
+            ("repetitions", repetitions, True),
+            ("timeout_seconds", timeout, True),
+        ):
+            if not isinstance(value, int) or isinstance(value, bool) or (
+                positive and value < 1
+            ):
+                qualifier = "a positive integer" if positive else "an integer"
+                raise GateError(
+                    f"native matrix case {name} {field} must be {qualifier}"
+                )
+        cases.append({
+            "name": name,
+            "arguments": arguments,
+            "expected_exit": expected_exit,
+            "expected_markers": expected,
+            "forbidden_markers": forbidden,
+            "repetitions": repetitions,
+            "timeout_seconds": timeout,
+        })
+    return path, cases
+
+
+def run_native_matrix(
+    *,
+    target_id: str,
+    probe: Path,
+    work_root: Path,
+    library_dirs: list[Path],
+    matrix: Path,
+) -> None:
+    probe = _regular_file(str(probe))
+    matrix, cases = _load_native_matrix(matrix)
+    work_root = _managed_path(work_root, allow_missing=True)
+    if work_root.exists() or work_root.is_symlink():
+        _reject_tree_links(work_root)
+        shutil.rmtree(work_root)
+    work_root.mkdir(parents=True)
+
+    records: list[dict[str, object]] = []
+    failure: GateError | None = None
+    for case in cases:
+        name = str(case["name"])
+        try:
+            run_native(
+                target_id=target_id,
+                probe=probe,
+                work_root=work_root / name,
+                library_dirs=library_dirs,
+                probe_args=list(case["arguments"]),
+                expected=list(case["expected_markers"]),
+                forbidden=list(case["forbidden_markers"]),
+                expected_exit=int(case["expected_exit"]),
+                repetitions=int(case["repetitions"]),
+                timeout=int(case["timeout_seconds"]),
+            )
+        except GateError as exc:
+            failure = exc
+        result_path = work_root / name / "result.json"
+        if not result_path.is_file():
+            raise GateError(f"native matrix case {name} produced no result record")
+        records.append({
+            "name": name,
+            "arguments": case["arguments"],
+            "result": json.loads(result_path.read_text(encoding="utf-8")),
+        })
+        if failure is not None:
+            break
+
+    record = {
+        "schema_version": 1,
+        "target_id": target_id,
+        "probe": {"name": probe.name, "sha256": _sha256(probe)},
+        "matrix": {"name": matrix.name, "sha256": _sha256(matrix)},
+        "requested_cases": len(cases),
+        "attempted_cases": len(records),
+        "completed_cases": sum(
+            case["result"]["completed_repetitions"]
+            == case["result"]["requested_repetitions"]
+            for case in records
+        ),
+        "cases": records,
+    }
+    temporary = work_root / "result.json.tmp"
+    temporary.write_text(
+        json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    os.replace(temporary, work_root / "result.json")
+    if failure is not None:
+        raise failure
+    repetitions = sum(int(case["repetitions"]) for case in cases)
+    print(
+        f"{probe.name} matrix passed for {target_id}: "
+        f"cases={len(cases)}, repetitions={repetitions}"
+    )
+
+
 def run_dso_topology(
     runtime: Path,
     compiler: Path,
@@ -451,6 +611,14 @@ def _parser() -> argparse.ArgumentParser:
     native.add_argument("--expected-exit", type=int, default=0)
     native.add_argument("--repeat", type=int, default=1)
     native.add_argument("--timeout", type=int, default=60)
+    native_matrix = subparsers.add_parser("native-matrix")
+    native_matrix.add_argument("--target-id", required=True)
+    native_matrix.add_argument("--probe", type=_regular_file, required=True)
+    native_matrix.add_argument("--work-root", type=Path, required=True)
+    native_matrix.add_argument(
+        "--library-dir", type=Path, action="append", default=[]
+    )
+    native_matrix.add_argument("--matrix", type=_regular_file, required=True)
     managed = subparsers.add_parser("managed")
     managed.add_argument("--target-id", required=True)
     managed.add_argument("--dalvikvm", type=_regular_file, required=True)
@@ -495,6 +663,14 @@ def main(argv: list[str] | None = None) -> int:
                 expected_exit=args.expected_exit,
                 repetitions=args.repeat,
                 timeout=args.timeout,
+            )
+        elif args.command == "native-matrix":
+            run_native_matrix(
+                target_id=args.target_id,
+                probe=args.probe,
+                work_root=args.work_root,
+                library_dirs=args.library_dir,
+                matrix=args.matrix,
             )
         else:
             if args.timeout < 1:

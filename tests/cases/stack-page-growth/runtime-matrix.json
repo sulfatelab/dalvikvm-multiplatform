@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "name": "baseline",
+      "arguments": ["baseline"],
+      "expected_markers": [
+        "stack_growth mode=baseline",
+        "terminal mode=baseline caught=0xc00000fd observed=0xc00000fd",
+        "win32_stack_growth_probe mode=baseline failures=0 worker_exit=0",
+        "win32_stack_growth_probe OK"
+      ],
+      "forbidden_markers": ["FAIL win32_stack_growth_probe"],
+      "repetitions": 4,
+      "timeout_seconds": 45
+    },
+    {
+      "name": "protected",
+      "arguments": ["protected"],
+      "expected_markers": [
+        "stack_growth mode=protected",
+        "fixed_page mode=protected",
+        "installed=1 unprotected=0",
+        "terminal mode=protected caught=0xc00000fd observed=0xc00000fd",
+        "win32_stack_growth_probe mode=protected failures=0 worker_exit=0",
+        "win32_stack_growth_probe OK"
+      ],
+      "forbidden_markers": ["FAIL win32_stack_growth_probe"],
+      "repetitions": 4,
+      "timeout_seconds": 45
+    },
+    {
+      "name": "writable",
+      "arguments": ["writable"],
+      "expected_markers": [
+        "stack_growth mode=writable",
+        "fixed_page mode=writable",
+        "installed=1 unprotected=1",
+        "terminal mode=writable caught=0xc00000fd observed=0xc00000fd",
+        "win32_stack_growth_probe mode=writable failures=0 worker_exit=0",
+        "win32_stack_growth_probe OK"
+      ],
+      "forbidden_markers": ["FAIL win32_stack_growth_probe"],
+      "repetitions": 4,
+      "timeout_seconds": 45
+    },
+    {
+      "name": "direct",
+      "arguments": ["direct"],
+      "expected_markers": [
+        "stack_growth mode=direct",
+        "fixed_page mode=direct",
+        "installed=1 unprotected=0",
+        "terminal mode=direct caught=0xc0000005 observed=0xc0000005",
+        "win32_stack_growth_probe mode=direct failures=0 worker_exit=0",
+        "win32_stack_growth_probe OK"
+      ],
+      "forbidden_markers": ["FAIL win32_stack_growth_probe"],
+      "repetitions": 4,
+      "timeout_seconds": 45
+    }
+  ]
+}
