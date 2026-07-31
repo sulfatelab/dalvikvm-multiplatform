@@ -230,7 +230,8 @@ unconditional barrier. The low-address audit now rejects its return.
 Command:
 
 ```text
-tools/verify/windows_x64_w013/run_non_moving_stress.sh
+python tools/build_art.py test --target-id windows-x86_64-msvc --stage w013 --parallel 32
+python tools/build_art.py test --target-id linux-x86_64-gnu --stage w013 --parallel 32
 ```
 
 The Java probe calls `VMRuntime.newNonMovableArray()` through reflection and
@@ -250,13 +251,20 @@ Windows x64 and Linux address spans were about 14.8 MiB, well beyond the 2-MiB
 startup setting. Both runtimes reported `nonmoving.stable=true`,
 `nonmoving.low=true`, and `nonmoving.ok=true`.
 
+The final unified acceptance keeps the 128 MiB gate on the exact
+`windows-x86_64-msvc` and `linux-x86_64-gnu` identities and the 1024 MiB gate
+on Windows only. A fresh Linux build completed 1,485 Ninja actions, passed 1/1
+in 0.27 seconds, and repeated as a Ninja no-op in 0.28 seconds. The native
+Server 2025 Stage-8 tree remained a Ninja no-op and passed W-013 7/7 in 5.14
+seconds. The legacy dual-target Bash/Wine runner was then removed.
+
 ## Integration verification
 
 ```text
 cmake --build build/windows_x64_phase1 --target art dalvikvm -j16
-tools/verify/windows_x64_w013/run_non_moving_stress.sh
 python tests/support/windows/check_w013_source_policy.py
 python tools/build_art.py test --target-id windows-x86_64-msvc --stage w013 --parallel 32
+python tools/build_art.py test --target-id linux-x86_64-gnu --stage w013 --parallel 32
 tools/verify/windows_x64_phase4/run_jit_smoke.sh
 tools/verify/windows_x64_phase4/run_gcstress.sh
 tools/verify/windows_x64_phase4/run_threadheavy.sh

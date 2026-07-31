@@ -863,7 +863,7 @@ art_add_target_probe(
     CONTRACTS allocator configuration)
 art_add_target_probe(
     NAME managed_w013_non_moving STAGE w013 TYPE MANAGED EXECUTION compile-only
-    ${_art_windows_current_selector}
+    ${_art_current_native_ids_selector}
     SOURCES
         "${_art_test_cases_root}/non-moving-heap/W013NonMovingStressProbe.java"
     CONTRACTS allocator gc stress
@@ -876,10 +876,17 @@ art_add_target_probe(
         "${Python3_EXECUTABLE}"
         "${_art_test_repo_root}/tests/support/windows/check_w013_source_policy.py")
 foreach(_art_w013_heap_mib IN ITEMS 128 1024)
+    # Preserve shared accepted pressure at 128 MiB; 1024 MiB remains the
+    # separately accepted Windows resource-pressure profile.
+    if(_art_w013_heap_mib EQUAL 128)
+        set(_art_w013_non_moving_selector ${_art_current_native_ids_selector})
+    else()
+        set(_art_w013_non_moving_selector ${_art_windows_current_selector})
+    endif()
     art_add_target_probe(
         NAME "managed_w013_non_moving_${_art_w013_heap_mib}m"
         STAGE w013 TYPE GATE EXECUTION target-runnable TIMEOUT 300
-        ${_art_windows_current_selector}
+        ${_art_w013_non_moving_selector}
         DEPENDS managed_w013_non_moving dalvikvm icu_jni javacore openjdk
         CONTRACTS allocator gc stress runtime-load
         COMMAND

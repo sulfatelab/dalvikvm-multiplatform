@@ -63,8 +63,8 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     assert catalog["target_id"] == "windows-x86_64-msvc"
     assert len(catalog["probes"]) == 84
     assert sum(probe["applicable"] for probe in catalog["probes"]) == 82
-    assert sum(bool(probe["target_ids"]) for probe in catalog["probes"]) == 20
-    assert sum(not probe["target_ids"] for probe in catalog["probes"]) == 64
+    assert sum(bool(probe["target_ids"]) for probe in catalog["probes"]) == 22
+    assert sum(not probe["target_ids"] for probe in catalog["probes"]) == 62
     assert sum(
         probe["execution"] == "target-runnable" for probe in catalog["probes"]
     ) == 15
@@ -137,13 +137,32 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "managed_math_critical",
         "art_runtime_show_version",
         "art_compiler_dso_topology",
+        "managed_w013_non_moving",
+        "managed_w013_non_moving_128m",
     ]
-    assert all(probe["stage"] == "w004" for probe in applicable)
-    managed = applicable[:3]
-    gates = applicable[3:]
-    assert all(probe["type"] == "MANAGED" for probe in managed)
-    assert all(probe["execution"] == "target-runnable" for probe in managed)
-    assert all(probe["ctest_registered"] for probe in managed)
-    assert all(probe["type"] == "GATE" for probe in gates)
-    assert all(probe["execution"] == "target-runnable" for probe in gates)
-    assert all(probe["ctest_registered"] for probe in gates)
+    assert [probe["stage"] for probe in applicable] == [
+        "w004",
+        "w004",
+        "w004",
+        "w004",
+        "w004",
+        "w013",
+        "w013",
+    ]
+    runnable = [
+        probe
+        for probe in applicable
+        if probe["execution"] == "target-runnable"
+    ]
+    assert len(runnable) == 6
+    assert all(probe["ctest_registered"] for probe in runnable)
+    artifact = applicable[-2]
+    assert artifact["type"] == "MANAGED"
+    assert artifact["execution"] == "compile-only"
+    assert not artifact["ctest_registered"]
+    gate = applicable[-1]
+    assert gate["type"] == "GATE"
+    assert gate["target_ids"] == [
+        "linux-x86_64-gnu",
+        "windows-x86_64-msvc",
+    ]

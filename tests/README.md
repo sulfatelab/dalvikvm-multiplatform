@@ -119,6 +119,11 @@ native DSO closure, isolated target-local runtime directories, pinned ICU data,
 strict exit/marker checks, timeouts, and sanitized JSON results. Linux also
 registers its show-version and compiler-DSO topology gates, for five W-004
 CTest gates; Windows registers the three managed gates.
+The W-013 non-moving-heap artifact and 128 MiB runtime gate use the same exact
+Linux and Windows x86-64 identities. Its heavier 1024 MiB gate is separately
+Windows-specific. This is intentional per-test applicability: sharing one Java
+source and Python runner does not imply that every resource profile or future
+architecture is supported.
 Legacy shell runners and the few retained per-probe CMake entry points use
 these canonical files as temporary compatibility shims; they must be replaced by the
 unified Python/CMake/Ninja path before `tools/verify` can be removed.

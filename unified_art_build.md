@@ -37,11 +37,11 @@ items are closed.
 | Area | Status | Current position | Exit condition |
 |---|---|---|---|
 | Python frontend | COMPLETE for the initial slice | `generate`, `check-generated`, `configure`, `build`, `test`, and `stage` exist; subprocesses are shell-free; configured JDK 21 is validated and passed to CMake | keep regression coverage current |
-| Linux x86-64 product | COMPLETE for the current W-004 runtime slice | a fresh target-local boot/runtime closure and all five W-004 CTest gates pass: imageless Hello, GC stress, Math CriticalNative, show-version, and compiler-DSO topology; an identical rebuild is a Ninja no-op | add boot-image/security packaging and migrate the remaining behavioral stages |
+| Linux x86-64 product | COMPLETE for the current W-004/W-013 runtime slice | a fresh target-local boot/runtime closure passes all five W-004 gates plus the shared W-013 128 MiB non-moving-heap gate; identical stage rebuilds are Ninja no-ops | add boot-image/security packaging and migrate the remaining behavioral stages |
 | Windows x86-64 product | PARTIAL / experimental | Linux-hosted cross and native Windows Server 2025 product builds pass; fresh native W-004 passes 4/4 and the unified W-013 stage passes 7/7, including allocator, virtual-memory, fatal-contract, socket-fd, source-policy, and two managed heap gates | run the remaining multi-stage catalog and migrate its behavioral tests |
 | Compiler DSO parity | COMPLETE for `art-compiler` | both targets emit a shared compiler DSO; Windows imports `art.dll` and exports `art_compiler_jit_create` | retain exact ABI and no-cycle gates |
 | Full DSO topology parity | PARTIAL | five module kinds and two target-specific module pairs still differ | convert each difference or record a reviewed target exception |
-| Unified phase catalog | PARTIAL | seven virtual stages declare 32 native probes, 47 managed JARs, and five command gates; Windows has 82 applicable items (13 target-runnable plus one host-review), while Linux x86-64 has five applicable/runnable W-004 items | migrate the remaining behavioral runners, portable JNI expansion, and result checks |
+| Unified phase catalog | PARTIAL | seven virtual stages declare 32 native probes, 47 managed JARs, and five command gates; Windows has 82 applicable items (13 target-runnable plus one host-review), while Linux x86-64 has seven applicable items (six runnable and one compile-only artifact) | migrate the remaining behavioral runners, portable JNI expansion, and result checks |
 | Boot/runtime packaging | PARTIAL | the base boot JAR and probe JARs are Python/CMake/Ninja-owned, deterministic, target-local, and fail-fast; managed gates isolate a runtime root and stage pinned ICU data plus the mandatory native boot DSO closure | add boot images, security providers/resources, cacerts, and complete runtime packages |
 | POSIX-free Windows build host | COMPLETE for the current native/managed W-004 and W-013 graphs; PARTIAL end to end | Server 2025 uses configured official JDK 21, Python, CMake, Ninja, and plain Clang drivers; native managed build/runtime and no-op gates pass without POSIX tooling | migrate every retained behavioral gate and run the complete current catalog |
 | Legacy build removal | PARTIAL | active product ownership was demoted, project-owned symlink overlays were removed, and the superseded Linux miniature plus Windows Phase-0/Phase-1 product graphs were deleted; the checked-in Linux graph, libcore product CMake, and split overlay datasets remain | remove or demote every alternative product path after gate migration |
@@ -64,9 +64,10 @@ items are closed.
   the Linux module.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
-  JDK 21 emits an 84-declaration catalog. Imageless Hello, GC stress, Math
-  CriticalNative, show-version, and compiler-DSO topology are the five
-  applicable `linux-x86_64-gnu` declarations, and all five register with CTest.
+  JDK 21 emits an 84-declaration catalog. Seven declarations apply to
+  `linux-x86_64-gnu`: the five runnable W-004 gates, the W-013 non-moving
+  managed artifact, and its runnable 128 MiB gate. Six register with CTest;
+  the managed artifact is compile-only and built as the W-013 gate dependency.
 - [x] Windows-target configuration emits the same 84 declarations and keeps
   82 items applicable: 32 native probes, all 47 managed JAR declarations, and
   three W-013 command gates. Thirteen applicable items are `target-runnable`:
@@ -116,6 +117,14 @@ items are closed.
   to the existing memory policies. The native Stage-8 tree remained a Ninja
   no-op and passed 7/7 in 25.16 seconds on a cold source scan; the reviewer
   completed an immediate repeat in 2.01 seconds.
+- [x] The historical dual-target non-moving runner was retired without losing
+  Linux coverage. The managed artifact and 128 MiB command gate now select the
+  exact `linux-x86_64-gnu` and `windows-x86_64-msvc` identities; the 1024 MiB
+  resource gate remains Windows-only. A fresh 1,485-action Linux build passed
+  W-013 1/1 in 0.27 seconds and repeated as a Ninja no-op in 0.28 seconds. The
+  reconfigured Server 2025 Stage-8 tree was also a Ninja no-op and passed W-013
+  7/7 in 5.14 seconds. All managed results are sanitized, both Windows trees
+  contain zero reparse points, and the host remained responsive.
 - [x] All 48 retained Java probe sources now have logical `tests/cases`
   ownership and adjacent results. The registry emits 47 managed artifacts;
   the old verification tree owns no Java source.
@@ -253,10 +262,10 @@ One historical work stage maps to exactly one virtual target named
 | `w003` | 4 DLLs, 4 managed | 2 exact / 6 typed | 8 compile-only | frame, XMM, CriticalNative/FastNative runtime commands |
 | `w004` | 2 EXEs, 1 DLL, 33 managed, 2 gates | 5 exact / 33 typed | 6 runnable, 32 compile-only | Windows embedding/JVMTI/libcore behavior beyond the accepted Hello/GC/Math/SHA slice |
 | `w010` | 4 EXEs, 3 managed | 1 exact / 6 typed | 7 compile-only | managed-fault, fatal-unwind, debugger, and dump review |
-| `w013` | 4 EXEs, 1 managed, 3 gates | 1 exact / 7 typed | 6 runnable, 1 host-review, 1 compile-only | registered native coverage is complete; assess the remaining historical dual-target non-moving stress runner before retirement |
+| `w013` | 4 EXEs, 1 managed, 3 gates | 3 exact / 5 typed | 6 runnable, 1 host-review, 1 compile-only | registered x86-64 native, managed, and source-policy coverage is complete |
 | `w014` | 7 EXEs, 1 DLL, 1 managed | 3 exact / 6 typed | 2 runnable, 7 compile-only | stack-growth, CET, high-water, and reservation matrices |
 | `w025` | 4 EXEs, 3 DLLs, 3 managed | 6 exact / 4 typed | 10 compile-only | JIT mapping/lifecycle/CFG runtime and host-review gates |
-| Total | 22 EXEs, 10 DLLs, 47 managed, 5 gates | 20 exact / 64 typed | 15 runnable, 1 host-review, 68 compile-only | Windows applies 82 declarations; two exact Linux gates are excluded there |
+| Total | 22 EXEs, 10 DLLs, 47 managed, 5 gates | 22 exact / 62 typed | 15 runnable, 1 host-review, 68 compile-only | Windows applies 82 declarations; Linux x86-64 applies seven |
 
 The shared registry now references zero source files from historical
 verification directories. All 84 declarations own canonical source under
@@ -780,9 +789,10 @@ separate build/runtime verification status. All 32 compiled probes remain
 truthfully limited to `windows-x86_64-msvc`; 24 are compile-only and eight are
 target-runnable. Five command gates avoid dummy binaries: two exact
 `linux-x86_64-gnu` declarations check the runtime version marker and the
-runtime/compiler ELF DSO topology, while two Windows W-013 declarations run
-the same managed non-moving-heap artifact at 128 MiB and 1024 MiB and one
-Windows W-013 host-review checks source policy without target execution. The old
+runtime/compiler ELF DSO topology, one shared exact-ID W-013 declaration runs
+the managed non-moving-heap artifact at 128 MiB on Linux and Windows, one
+Windows W-013 declaration runs it at 1024 MiB, and one Windows W-013
+host-review checks source policy without target execution. The old
 phase directories remain temporary evidence locations while their product
 graph ownership and shell runners are removed.
 
