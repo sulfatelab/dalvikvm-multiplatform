@@ -1,5 +1,8 @@
 # Windows x64 Phase 3 — poll EINVAL on real Windows 10
 
+Status: applied in `tools/windows_x64/jni_stubs/win_net_natives.c`. The rule is
+Windows-platform behavior and is not specific to x86_64.
+
 **Evidence:** host logs 2026-07-16 (`logs-win10-20260716T195646.zip`).
 
 **Symptom:** `ServerSocket.accept` → `libcore.io.Linux.poll` → `ErrnoException: poll failed: EINVAL`.

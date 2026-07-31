@@ -10,7 +10,7 @@ foundational libs (libbase/liblog/.../ICU/fdlibm/boringssl) stay archive-pinned.
 ## What the bump touched
 
 tools/vendor-sync.sh: TAG -> android-16.0.0_r4; r8.jar fetched at the SAME tag
-(was android-u-beta-1). Vendor patches reconciled (see vendor-patches): 0001,
+(was android-u-beta-1). The then-current vendor patch ledger was reconciled: 0001,
 0007, 0008, 0010 OBSOLETE (fixed upstream / dexlayout removed); 0002 guard
 updated for the new `[[maybe_unused]]` form; 0003/0004/0005/0009 still apply.
 New: 0011-0013 host shims (fmt::streamed, libunwindstack, HIDDEN visibility),

@@ -662,7 +662,10 @@ Mirror Linux decisions where semantics match; replace OS-specific ones:
 ### Submodule / patch discipline
 
 - Prefer **compat injection** over editing `vendor/art`.
-- When vendor edit is unavoidable (e.g. `globals.h` target enum), keep a **tiny** `vendor-patches/` entry with clear Windows rationale (same discipline as Linux `FillVRegs`/prelude patches).
+- When a vendor edit is unavoidable (for example a `globals.h` target enum),
+  commit it on the pinned nested `artmp_*` branch with clear Windows rationale.
+  The top-level repository records the gitlink; it does not maintain a second
+  patch queue.
 - Goal remains: Layer 1 absorbs AOSP churn; Windows OS spine stays project-owned.
 
 ---

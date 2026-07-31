@@ -32,7 +32,8 @@ Harness prelude (compat/include/mdvm_toolchain_prelude.h) grew
 <optional>/<cstring>/<climits>/<ctime>/<limits>/<csignal>/<cmath>; applied
 C/CXX-scoped to every generated target via BUILDSYSTEM_TARGETS, minus `base`
 (its posix_strerror_r.cpp #undef _GNU_SOURCE). Tree-wide -Wno-error.
-Vendor source patches (vendor-patches/README.md, re-applied by vendor-sync.sh):
+Historical vendor source patches (then replayed by vendor-sync.sh; now committed
+on the nested ART project branch):
   0001 art_method-inl.h  FillVRegs terminal-overload ambiguity (clang>=17)
   0002 class_linker.cc   bare nullptr_t -> std::nullptr_t
   0003 thread_linux.cc   constexpr kHostAltSigStackSize (MINSIGSTKSZ non-const)

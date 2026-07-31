@@ -1,6 +1,9 @@
 # Windows x64 Phase 3 — System.gc hang fix (ThreadCpuNanoTime + WaitOnAddress)
 
 **Date:** 2026-07-16  
+**Status:** applied in nested ART commit `90e063dfcd`; current nested source is
+authoritative. The APIs and timeout semantics apply to all Windows
+architectures.
 **Symptom:** Explicit `System.gc()` under wine64 CMS hung (often empty app stdout after startup).  
 **Also observed:** `ThreadCpuNanoTime() unimplemented` logs; WaitOnAddress timeout false-without-error on some wine builds.
 
@@ -58,7 +61,7 @@ Key behaviors:
   - else → `errno = EINTR`
 - Keep `WakeByAddressSingle` / `WakeByAddressAll` for WAKE ops.
 
-Representative block (reapply into Windows futex path):
+Historical representative block (the current nested source already contains it):
 
 ```cpp
 #if ART_USE_FUTEXES
@@ -134,7 +137,9 @@ static inline int futex(volatile int *uaddr, int op, int val, const struct times
 #endif  // ART_USE_FUTEXES
 ```
 
-Note: `mutex-inl.h` is header-only for the futex; consumers include it from `mutex.cc` / other TUs. After edit, rebuild affected objects (at least `mutex.cc.obj`) and **relink `art.dll`** (e.g. `bash /tmp/link_art2.sh`).
+Note: `mutex-inl.h` is header-only for the futex; consumers include it from
+`mutex.cc` and other translation units. A current build must let CMake/Ninja
+rebuild those consumers and relink the ART DSO.
 
 ## Verification (wine64, 2026-07-16 post-relink)
 
@@ -151,13 +156,11 @@ Previously GcTiny / forced System.gc hung to timeout before this DLL (art.dll mt
 
 - `Runtime.freeMemory()` / `totalMemory()` may still report 0 under imageless Windows x64; not treated as a hang.
 - Host Windows (non-wine) still pending for GC goldens.
-- Vendor tree is gitignored; keep this note for reapplication after vendor refresh.
+- The nested ART branch owns the implementation; do not reapply this archived
+  excerpt after a vendor refresh. Port or merge the nested commit instead.
 
 ## Repro gate
 
-```bash
-source /home/agent/Projects/windows_x64-dev-env/env.sh
-bash tools/verify/windows_x64_phase3/build_one.sh GcForced
-bash tools/verify/windows_x64_phase3/run_gcforced.sh
-bash tools/verify/windows_x64_phase3/run_goldenapp.sh
-```
+Use the unified test catalog's Phase 3 GC group. The historical Bash commands
+are intentionally not retained as an active recipe because Windows build hosts
+cannot assume a POSIX environment.

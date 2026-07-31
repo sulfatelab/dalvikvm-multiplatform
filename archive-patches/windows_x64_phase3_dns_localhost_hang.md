@@ -1,5 +1,8 @@
 # Windows x64 Phase 3 — DnsProbe hang on real Windows
 
+Status: applied to the current Phase 3 probes. This is retained as a portable
+test-harness rule, not as a product source patch.
+
 **Symptom (host stack):** `select` / `Java_libcore_io_Linux_poll` blocked forever under
 `ServerSocket.accept` → `IoBridge.poll(..., -1)`.
 

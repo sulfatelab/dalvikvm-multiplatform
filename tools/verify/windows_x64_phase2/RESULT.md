@@ -97,5 +97,6 @@ java.version=0
 ## Durability
 
 - PE stubs: `tools/windows_x64/jni_stubs/` (+ `build_combined.sh`)
-- Interpreter JNI helpers (vendor ignored tree): `archive-patches/windows_x64_phase2_interpreter_jni.md`
+- Retired Interpreter JNI bring-up workaround and its current disposition:
+  `archive-patches/windows_x64_phase2_interpreter_jni.md`
 - Port plan: `win32_art_port.md` rev19 Phase 2 DONE

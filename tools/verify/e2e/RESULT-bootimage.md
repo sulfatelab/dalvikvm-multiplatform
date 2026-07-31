@@ -57,7 +57,8 @@ vendor/, built RelWithDebInfo (-O2 -g -DNDEBUG). Archive untouched.
 - tools/bootjar/dex.sh — emitRecordAnnotationsInDex property; verifies Record.
 - tools/bootimage/{build.sh,run.sh} — primary boot image build (omit
   --boot-image, --no-watch-dog) into <isa>/ subdir, and the image-backed run.
-- vendor-patches/README.md — patches documented through 0010.
+- the then-current vendor patch ledger — patches documented through 0010; the
+  applied forms now live in nested ART history.
 
 ## Expected (NOT defects)
 

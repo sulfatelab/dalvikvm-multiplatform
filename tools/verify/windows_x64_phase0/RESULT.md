@@ -51,7 +51,9 @@ Under `compat/include/` + `compat/src/windows_x64_posix_stubs.c`:
 | vendor `art/libartbase/base/mem_map.{h,cc}` | `#undef ZeroMemory` on Windows |
 | vendor `art/libartbase/base/unix_file/fd_file.cc` | `FdReadOffset=off64_t` on Windows |
 
-Record durable patches under `vendor-patches/` / `archive-patches` as follow-up.
+At this checkpoint the follow-up was to record durable patches. Those changes
+are now committed on the nested project branches; `archive-patches/` retains
+diagnostic notes only.
 
 ### Reproduce
 

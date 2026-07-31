@@ -1,6 +1,9 @@
 # Windows x64 Phase 3 — classpath list separator (`;`)
 
-Vendor tree is gitignored; re-apply if reset.
+Status: applied in nested ART commit `90e063dfcd`; do not reapply this note.
+
+Although discovered on x86_64, this is a Windows platform rule and applies to
+every Windows architecture and ABI.
 
 ## Constant
 `vendor/art/libartbase/base/globals.h` — `kClassPathListSeparator` is `';` when `ART_TARGET_WINDOWS`.

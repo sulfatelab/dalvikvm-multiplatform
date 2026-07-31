@@ -1,7 +1,14 @@
 # Windows x64 MemMap low-4G allocator: VirtualQuery free-region search
 
 **Date:** 2026-07-16  
-**File:** `vendor/art/libartbase/base/mem_map_windows.cc` (gitignored vendor tree)
+**Status:** superseded; do not reapply
+**Historical file:** `vendor/art/libartbase/base/mem_map_windows.cc`
+
+Nested ART commit `2fa301a13b` replaced this scan with Windows 10
+`VirtualAlloc2` address requirements and explicit mapping policy. That current
+implementation is authoritative for all Windows architectures. The scan below
+is useful only to explain the original failure or to study a hypothetical
+pre-Windows-10 fallback, which is outside this project's supported baseline.
 
 ## Problem
 
@@ -21,15 +28,6 @@ For anonymous non-fixed maps that need the low 4GiB:
 1. Walk the low 4GiB with `VirtualQuery`.
 2. On `MEM_FREE` regions, align to allocation granularity and try `VirtualAlloc` at the first hole that fits.
 3. Fallback: `VirtualAlloc(NULL, ...)` then reject if the result is not entirely below 4GiB.
-
-## Rebuild (targeted)
-
-```bash
-# compile only mem_map_windows.cc.obj (see agent notes / manual clang++ flags)
-# then:
-llvm-lib /OUT:build/windows_x64_phase1/artbase.lib <artbase objs including updated mem_map_windows>
-bash /tmp/link_art2.sh   # or equivalent art.dll link
-```
 
 ## Evidence
 

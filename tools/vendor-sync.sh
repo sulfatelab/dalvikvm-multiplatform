@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # dalvikvm-multiplatform helper: seed/refresh nested vendor pins from AOSP tags.
 # Prefer artmp_* branches + gitlinks in normal workflow; this script is a bootstrap/repair tool.
-# Fetch art + libcore at a coherent AOSP snapshot into vendor/, then apply the
-# host-toolchain patches recorded in //vendor-patches/README.md. Reproducible:
+# Fetch art + libcore at a coherent AOSP snapshot into vendor/, then replay the
+# legacy bootstrap compatibility edits embedded below. The authoritative forms
+# are commits on the nested artmp_* branches; there is no top-level patch queue.
+# Reproducible:
 # re-run after deleting vendor/art or vendor/libcore. The archive is NEVER used
 # for art/libcore once this runs (see native/generate.sh --exclude-top art).
 set -euo pipefail
@@ -52,7 +54,7 @@ if [ ! -f "$NHH/utils.h" ]; then
   done
 fi
 
-echo ">> applying vendor patches (see vendor-patches/README.md)"
+echo ">> replaying legacy bootstrap compatibility edits"
 
 # (Former patch 0001 — art_method-inl.h FillVRegs terminal-overload ambiguity —
 # became OBSOLETE at android-16.0.0_r4. Upstream rewrote FillVRegs to use a
