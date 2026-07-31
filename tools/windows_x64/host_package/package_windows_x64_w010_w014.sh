@@ -42,7 +42,7 @@ osr_unwind_summary="$(
 )"
 WINEDEBUG="$WINEDEBUG" "$REPO/tools/verify/windows_x64_phase4/run_w010_managed_fault_probe.sh"
 explicit_stack_output="$(
-  python3 "$REPO/tools/verify/windows_x64_phase1/check_win32_explicit_stack_checks.py" \
+  python3 "$REPO/tests/support/windows/check_win32_explicit_stack_checks.py" \
     --win-build "$BUILD" \
     --linux-build "$LINUX_BUILD"
 )"
@@ -53,7 +53,7 @@ WINEDEBUG="$WINEDEBUG" "$REPO/tools/verify/windows_x64_phase4/run_jit_fatal_unwi
 WINEDEBUG="$WINEDEBUG" "$REPO/tools/verify/windows_x64_phase4/run_osr_fatal_unwind.sh"
 
 cet_output="$(
-  python3 "$REPO/tools/verify/windows_x64_phase1/check_win32_cet_contract.py" \
+  python3 "$REPO/tests/support/windows/check_win32_cet_contract.py" \
     --build "$BUILD"
 )"
 printf '%s\n' "$cet_output"
@@ -87,7 +87,7 @@ done
 "$REPO/tools/windows_x64/host_package/package_windows_x64_phase3.sh" "$OUT"
 
 boundary_unwind_output="$(
-  python3 "$REPO/tools/verify/windows_x64_phase1/check_win32_boundary_unwind.py" \
+  python3 "$REPO/tests/support/windows/check_win32_boundary_unwind.py" \
     --art-dll "$OUT/art.dll"
 )"
 printf '%s\n' "$boundary_unwind_output"
@@ -219,7 +219,7 @@ PY
   )
 }
 
-python3 "$REPO/tools/verify/windows_x64_phase1/check_win32_cet_contract.py" \
+python3 "$REPO/tests/support/windows/check_win32_cet_contract.py" \
   --build "$BUILD" \
   --pe-root "$OUT"
 

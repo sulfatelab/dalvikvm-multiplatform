@@ -10,7 +10,7 @@ if ! cmp -s "$BUILD/art.dll" "$BUILD/run/art.dll"; then
   echo "staged run/art.dll is stale; copy the current build artifact before testing" >&2
   exit 1
 fi
-python3 "$REPO/tools/verify/windows_x64_phase1/check_win32_boundary_unwind.py" \
+python3 "$REPO/tests/support/windows/check_win32_boundary_unwind.py" \
   --art-dll "$BUILD/run/art.dll"
 cd "$BUILD"
 export ANDROID_ROOT=run ANDROID_ART_ROOT=run ANDROID_I18N_ROOT=run ANDROID_DATA=run/data ICU_DATA=run/icu WINEDEBUG="${WINEDEBUG:--all}"

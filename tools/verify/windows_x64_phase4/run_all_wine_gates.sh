@@ -16,14 +16,14 @@ done
 cmake --build "$BUILD" --target art dalvikvm -j"${JOBS:-32}"
 cp -a "$BUILD/art.dll" "$BUILD/run/art.dll"
 run P4_W004_RUNTIME_LOAD python3 \
-  "$REPO/tools/verify/windows_x64_phase1/check_w004_runtime_load.py" --build "$BUILD"
+  "$REPO/tests/support/windows/check_w004_runtime_load.py" --build "$BUILD"
 run P4_W002_MANAGED_ENTRIES python3 \
-  "$REPO/tools/verify/windows_x64_phase1/check_w002_managed_entries.py" --build "$BUILD"
+  "$REPO/tests/support/windows/check_w002_managed_entries.py" --build "$BUILD"
 run P4_W003_QUICK_BOUNDARIES python3 \
-  "$REPO/tools/verify/windows_x64_phase1/check_w003_quick_boundaries.py" \
+  "$REPO/tests/support/windows/check_w003_quick_boundaries.py" \
   --win-build "$BUILD" --linux-build "$LINUX_BUILD"
 run P4_W010_EXPLICIT_STACK_CHECKS python3 \
-  "$REPO/tools/verify/windows_x64_phase1/check_win32_explicit_stack_checks.py" \
+  "$REPO/tests/support/windows/check_win32_explicit_stack_checks.py" \
   --repo "$REPO" --win-build "$BUILD" --linux-build "$LINUX_BUILD"
 run P4_W010_OSR_STATIC_UNWIND bash "$ROOT/run_osr_unwind_probe.sh"
 run P4_W003_FRAME_FAMILIES env \

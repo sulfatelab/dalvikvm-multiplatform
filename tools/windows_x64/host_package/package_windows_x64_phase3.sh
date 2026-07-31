@@ -194,7 +194,7 @@ bash tools/windows_x64/host_package/smoke_package_wine64.sh
 ```
 MD
 
-python3 "$REPO/tools/verify/windows_x64_phase1/check_win32_cet_contract.py" \
+python3 "$REPO/tests/support/windows/check_win32_cet_contract.py" \
   --build "$BUILD" \
   --pe-root "$OUT"
 

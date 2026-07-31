@@ -137,7 +137,7 @@ def main() -> int:
     parser.add_argument(
         "--build",
         type=Path,
-        default=repo / "build/windows_x64_phase1",
+        default=repo / "out/windows-x86_64-msvc/RelWithDebInfo",
         help="configured Windows x64 build directory",
     )
     args = parser.parse_args()

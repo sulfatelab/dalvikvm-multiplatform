@@ -36,7 +36,7 @@ cmake -S "$REPO/tools/verify/windows_x64_phase1" \
   -DMDVM_FS1_STACK_HIGH_WATER=ON
 cmake --build "$BUILD" --target art dalvikvm -j"$JOBS"
 
-python3 "$REPO/tools/verify/windows_x64_phase1/check_win32_explicit_stack_checks.py" \
+python3 "$REPO/tests/support/windows/check_win32_explicit_stack_checks.py" \
   --repo "$REPO" --win-build "$PRODUCT_BUILD"
 python3 "$REPO/tools/verify/windows_x64_phase4/check_fs1_stack_high_water_structure.py" \
   --repo "$REPO" --product-build "$PRODUCT_BUILD" --probe-build "$BUILD"

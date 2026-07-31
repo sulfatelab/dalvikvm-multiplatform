@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify the narrow Windows x64 explicit-stack-check source contract."""
+"""Verify the unified Windows x64 explicit-stack-check source contract."""
 
 from __future__ import annotations
 

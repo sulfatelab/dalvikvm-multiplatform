@@ -53,7 +53,7 @@ jit2_default_capacity_mib=64
 jit2_maximum_capacity_mib=1024
 EOF
 
-python3 "$REPO/tools/verify/windows_x64_phase1/check_win32_cet_contract.py" \
+python3 "$REPO/tests/support/windows/check_win32_cet_contract.py" \
   --build "$BUILD" --pe-root "$OUT"
 
 write_manifests() {

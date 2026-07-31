@@ -34,7 +34,7 @@ dlmalloc_commit=$(git -C "$REPO/vendor/external/dlmalloc" rev-parse HEAD)
 windows_x64_build=$BUILD
 EOF
 
-python3 "$REPO/tools/verify/windows_x64_phase1/check_win32_cet_contract.py" \
+python3 "$REPO/tests/support/windows/check_win32_cet_contract.py" \
   --build "$BUILD" \
   --pe-root "$OUT"
 

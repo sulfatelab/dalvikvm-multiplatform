@@ -603,7 +603,7 @@ restoring a call helper.
 
 **Stage W004-B — structural artifact gate: COMPLETE**
 
-`tools/verify/windows_x64_phase1/check_w004_runtime_load.py` is integrated into the
+`tests/support/windows/check_w004_runtime_load.py` is integrated into the
 Phase 4 aggregate and fails unless all of these hold:
 
 1. `art.dll` exports the existing `Runtime::instance_` data symbol and

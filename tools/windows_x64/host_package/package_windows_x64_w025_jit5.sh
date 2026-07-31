@@ -145,7 +145,7 @@ PY
 
 clean_runtime_outputs
 write_manifests
-python3 -B "$REPO/tools/verify/windows_x64_phase1/check_win32_cet_contract.py" \
+python3 -B "$REPO/tests/support/windows/check_win32_cet_contract.py" \
   --build "$BUILD" --pe-root "$OUT"
 python3 -B "$REPO/tools/verify/windows_x64_w025/check_w025_jit5_host_package.py" "$OUT"
 

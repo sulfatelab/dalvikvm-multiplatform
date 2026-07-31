@@ -395,13 +395,13 @@ def main() -> int:
     parser.add_argument(
         "--win-build",
         type=Path,
-        default=repo / "build/windows_x64_phase1",
+        default=repo / "out/windows-x86_64-msvc/RelWithDebInfo",
         help="configured Windows x64 build directory",
     )
     parser.add_argument(
         "--linux-build",
         type=Path,
-        default=repo / "build/native",
+        default=repo / "out/linux-x86_64-gnu/RelWithDebInfo",
         help="configured Linux build directory",
     )
     args = parser.parse_args()

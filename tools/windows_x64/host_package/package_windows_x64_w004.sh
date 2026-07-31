@@ -11,7 +11,7 @@ WINEDEBUG="${WINEDEBUG:--all}"
 cmake --build "$BUILD" --target art openjdkjvmti -j"$JOBS"
 
 structural_output="$(
-  python3 "$REPO/tools/verify/windows_x64_phase1/check_w004_runtime_load.py" \
+  python3 "$REPO/tests/support/windows/check_w004_runtime_load.py" \
     --build "$BUILD"
 )"
 printf '%s\n' "$structural_output"
@@ -153,7 +153,7 @@ PY
   )
 }
 
-python3 "$REPO/tools/verify/windows_x64_phase1/check_win32_cet_contract.py" \
+python3 "$REPO/tests/support/windows/check_win32_cet_contract.py" \
   --build "$BUILD" \
   --pe-root "$OUT"
 

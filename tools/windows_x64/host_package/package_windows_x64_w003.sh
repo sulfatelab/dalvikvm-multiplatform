@@ -14,7 +14,7 @@ WINEDEBUG="${WINEDEBUG:--all}"
 cmake --build "$PRODUCT_BUILD" --target art dalvikvm -j"$JOBS"
 
 structural_output="$(
-  python3 "$REPO/tools/verify/windows_x64_phase1/check_w003_quick_boundaries.py" \
+  python3 "$REPO/tests/support/windows/check_w003_quick_boundaries.py" \
     --win-build "$PRODUCT_BUILD" --linux-build "$REPO/build/native"
 )"
 printf '%s\n' "$structural_output"
@@ -176,7 +176,7 @@ PY
   )
 }
 
-python3 "$REPO/tools/verify/windows_x64_phase1/check_win32_cet_contract.py" \
+python3 "$REPO/tests/support/windows/check_win32_cet_contract.py" \
   --build "$PRODUCT_BUILD" \
   --pe-root "$OUT"
 

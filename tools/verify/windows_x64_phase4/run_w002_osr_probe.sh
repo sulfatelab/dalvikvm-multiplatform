@@ -9,7 +9,7 @@ REPEATS="${REPEATS:-2}"
 TIMEOUT="${TIMEOUT:-120}"
 
 bash "$REPO/tools/verify/windows_x64_phase4/build_one.sh" W002OsrProbe
-python3 "$REPO/tools/verify/windows_x64_phase1/check_w002_managed_entries.py" --build "$BUILD"
+python3 "$REPO/tests/support/windows/check_w002_managed_entries.py" --build "$BUILD"
 
 run_one() {
   local interpreter_mode="$1"

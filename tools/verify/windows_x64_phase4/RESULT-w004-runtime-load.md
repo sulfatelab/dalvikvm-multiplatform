@@ -36,7 +36,7 @@ copied into low-address dynamic JIT code, whose address may be outside signed
 
 ## Structural gate
 
-`tools/verify/windows_x64_phase1/check_w004_runtime_load.py` checks the source,
+`tests/support/windows/check_w004_runtime_load.py` checks the source,
 objects, final PE artifacts, and Ninja dependency graph. The current result is:
 
 ```text

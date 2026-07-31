@@ -140,11 +140,12 @@ items are closed.
   result remains evidence, not a supported reproduction command.
 - [x] The Windows Phase-1 CMake entry point, generated 17-module graph, and
   closure snapshot were removed after the unified product and probe graph
-  subsumed them. The reusable Python PE/source auditors remain temporarily;
-  the W-024 source audit is now Python-owned under `tests/support` and covered
-  by the host suite. It checks the actual retired-workaround contract instead
-  of the obsolete whole-file equality rule that rejected accepted guarded
-  FS-1 stack-high-water instrumentation.
+  subsumed them. Its six reusable Python PE/source auditors moved to
+  `tests/support/windows` with canonical unified-output defaults. The W-024
+  source audit is now Python-owned under `tests/support` and covered by the
+  host suite. It checks the actual retired-workaround contract instead of the
+  obsolete whole-file equality rule that rejected accepted guarded FS-1
+  stack-high-water instrumentation.
 - [x] Native Windows `check-generated` passes for the 32-module, 260-Blueprint
   graph, and a second identical full product build reports
   `ninja: no work to do.`
@@ -589,8 +590,9 @@ an unreviewed module-set or kind change.
   consuming them.
 - [x] Remove the Phase-0 product CMake graph, Bash generator, and generated
   source snapshots; retain its historical result record.
-- [x] Remove the Phase-1 product CMake graph and move its historical result out
-  of `tools/verify`; retain reusable PE/source auditors temporarily.
+- [x] Remove the Phase-1 product CMake graph, move its historical result out of
+  `tools/verify`, and relocate its reusable PE/source auditors to
+  `tests/support/windows`.
 - [ ] Remove the unproducible libcore/ICU `sources.cmake` and alternative
   CMake graph after the remaining package flows use unified product outputs.
 - [ ] Consolidate `overlay/port_policy.py` and

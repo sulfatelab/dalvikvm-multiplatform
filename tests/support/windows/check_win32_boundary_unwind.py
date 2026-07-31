@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Audit PE unwind metadata for Win32 ART native/managed boundary stubs."""
+"""Audit PE unwind metadata for unified ART native/managed boundary stubs."""
 
 from __future__ import annotations
 

@@ -55,7 +55,7 @@ jit3_comparison_cycles=12
 jit3_repeat_cycles=8
 EOF
 
-python3 "$REPO/tools/verify/windows_x64_phase1/check_win32_cet_contract.py" \
+python3 "$REPO/tests/support/windows/check_win32_cet_contract.py" \
   --build "$BUILD" --pe-root "$OUT"
 
 write_manifests() {

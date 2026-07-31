@@ -373,7 +373,7 @@ Summary (details below; do not delete history):
 - **Important scope:** Dynamically generated JIT code does not use this macro. Do not reuse this same-image RIP-relative sequence for the low-4-GiB JIT cache, which may be more than signed 32-bit reach from `art.dll`; that remains W-025 territory.
 - **Rejected permanent designs:** Retaining/hardening the call helper; importing `art.dll` from itself; caching `Runtime*` in `Thread`. A stable C assembly label on the existing member remains the first fallback if maintaining the MS-mangled spelling becomes unacceptable; an exported `Runtime**` address cell is second fallback.
 - **Evidence:** [RESULT-w004-runtime-load.md](tools/verify/windows_x64_phase4/RESULT-w004-runtime-load.md), [W004_HOST_CHECKLIST.md](tools/verify/windows_x64_phase4/W004_HOST_CHECKLIST.md), and [native acceptance](tools/verify/windows_x64_phase4/evidence/w004_host/ACCEPTANCE.md)
-- **Code anchors:** `vendor/art/runtime/arch/x86_64/asm_support_x86_64.S` (`LOAD_RUNTIME_INSTANCE`); `native/CMakeLists.txt`; `tools/verify/windows_x64_phase1/check_w004_runtime_load.py`; `tools/windows_x64/host_package/package_windows_x64_w004.sh`
+- **Code anchors:** `vendor/art/runtime/arch/x86_64/asm_support_x86_64.S` (`LOAD_RUNTIME_INSTANCE`); `native/CMakeLists.txt`; `tests/support/windows/check_w004_runtime_load.py`; `tools/windows_x64/host_package/package_windows_x64_w004.sh`
 - **Opened:** 2026-07-16
 - **Closed:** 2026-07-25 — implementation plus structural, Wine, Linux, and native Windows acceptance complete
 

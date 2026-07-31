@@ -14,7 +14,7 @@ if [[ ! -f "$BUILD/art.dll" || ! -f "$RUN/art.dll" ]] ||
 fi
 
 bash "$REPO/tools/verify/windows_x64_phase4/build_one.sh" CrashNativeProbe
-python3 "$REPO/tools/verify/windows_x64_phase1/check_win32_boundary_unwind.py" \
+python3 "$REPO/tests/support/windows/check_win32_boundary_unwind.py" \
   --art-dll "$BUILD/art.dll"
 mkdir -p "$RUN/crash"
 

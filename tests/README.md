@@ -69,6 +69,11 @@ contract. Avoid splitting one JNI test between unrelated language-first trees.
 stays in that case. A user-facing build, provisioning, or audit command belongs
 under `tools/`, not `tests/support/`.
 
+Target-specific shared artifact reviewers may use one additional directory,
+such as `support/windows/`, when they validate a platform ABI across several
+logical cases. They must consume the unified output directory and must not own
+or configure a second product graph.
+
 `stages/` contains no product source. Its optional `RESULT.md` summarizes a
 cross-test milestone when a per-case result cannot express the complete stage
 conclusion. Stage membership itself remains catalog metadata.
@@ -117,6 +122,10 @@ CTest gates; Windows registers the three managed gates.
 Legacy shell runners and the few retained per-probe CMake entry points use
 these canonical files as temporary compatibility shims; they must be replaced by the
 unified Python/CMake/Ninja path before `tools/verify` can be removed.
+The six shared Windows x86-64 source/object/PE reviewers formerly stored beside
+the retired Phase-1 product graph now live under `support/windows/`. Their
+defaults use canonical `out/<target-id>/<build-type>` paths; transitional host
+package scripts pass explicit directories until those packages are retired.
 
 Until `catalog.py` generation replaces the declarations, add or migrate test
 targets through the common API in `tests/CMakeLists.txt`. Do not add another

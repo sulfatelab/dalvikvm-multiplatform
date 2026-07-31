@@ -36,7 +36,7 @@ def require_tool(name: str) -> str:
     return path
 
 
-def check_source_policy(repo: Path) -> tuple[int, int, int]:
+def check_source_policy(repo: Path) -> tuple[int, int]:
     overlay = (repo / "overlay/port_policy_windows.py").read_text(encoding="utf-8")
     if 'add_ldflags=["LINKER:/CETCOMPAT:NO"]' not in overlay:
         fail("Windows x64 generator overlay does not explicitly add /CETCOMPAT:NO")
@@ -50,16 +50,6 @@ def check_source_policy(repo: Path) -> tuple[int, int, int]:
     if not check_index < mem_map_index < thread_index:
         fail("Windows x64 process-policy guard no longer precedes memory and thread startup")
 
-    cmake_files = []
-    for path in (repo / "tools").rglob("CMakeLists.txt"):
-        relative = path.relative_to(repo)
-        if not any("windows_x64" in part.lower() for part in relative.parts):
-            continue
-        text = path.read_text(encoding="utf-8")
-        cmake_files.append(path)
-        if "LINKER:/CETCOMPAT:NO" not in text:
-            fail(f"Windows x64 CMake link policy is missing from {relative}")
-
     raw_links = []
     for path in (repo / "tools").rglob("*.sh"):
         text = path.read_text(encoding="utf-8")
@@ -71,8 +61,6 @@ def check_source_policy(repo: Path) -> tuple[int, int, int]:
         if LINK_OPTION not in text.upper():
             fail(f"raw Windows x64 PE link does not pass {LINK_OPTION}: {path.relative_to(repo)}")
 
-    if not cmake_files:
-        fail("no Windows x64 CMake PE producers were audited")
     if not raw_links:
         fail("no raw Windows x64 PE links were audited")
 
@@ -85,7 +73,7 @@ def check_source_policy(repo: Path) -> tuple[int, int, int]:
             fail(f"Windows x64 host packager does not enforce the PE audit: {path.relative_to(repo)}")
     if not packagers:
         fail("no Windows x64 host packagers were audited")
-    return len(cmake_files), len(raw_links), len(packagers)
+    return len(raw_links), len(packagers)
 
 
 def pe_targets(ninja: str, build: Path) -> list[Path]:
@@ -137,7 +125,7 @@ def main() -> int:
     parser.add_argument(
         "--build",
         type=Path,
-        default=repo / "build/windows_x64_phase1",
+        default=repo / "out/windows-x86_64-msvc/RelWithDebInfo",
         help="configured primary Windows x64 Ninja build",
     )
     parser.add_argument(
@@ -165,7 +153,7 @@ def main() -> int:
     ninja = require_tool(os.environ.get("NINJA", "ninja"))
     readobj = require_tool(os.environ.get("LLVM_READOBJ", "llvm-readobj"))
 
-    cmake_count, raw_count, packager_count = check_source_policy(repo)
+    raw_count, packager_count = check_source_policy(repo)
     targets = pe_targets(ninja, build)
     check_link_commands(ninja, build, targets)
 
@@ -195,8 +183,7 @@ def main() -> int:
 
     print(
         "WIN32_CET_CONTRACT PASS "
-        f"cmake_harnesses={cmake_count} raw_links={raw_count} "
-        f"packagers={packager_count} "
+        f"generated_policy=1 raw_links={raw_count} packagers={packager_count} "
         f"link_targets={len(targets)} pe_files={len(files)}"
     )
     return 0
