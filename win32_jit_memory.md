@@ -1099,7 +1099,7 @@ completed JIT-1 through JIT-5 gates.
 | JNI XMM argument moves | `vendor/art/compiler/utils/x86_64/jni_macro_assembler_x86_64.cc`; `assembler_x86_64_test.cc` |
 | Native JIT gate | `vendor/art/runtime/jit/jit.cc` |
 | dlmalloc configuration | `vendor/art/runtime/gc/allocator/art-dlmalloc.cc` |
-| PE asm-defines generation | `tools/bp2cmake/bp2cmake/codegen.py`; `tools/verify/windows_x64_phase1/CMakeLists.txt` |
+| PE asm-defines generation | `tools/bp2cmake/bp2cmake/codegen.py`; `native/CMakeLists.txt` |
 
 ## 16. External API references
 

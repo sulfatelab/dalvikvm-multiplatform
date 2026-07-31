@@ -688,7 +688,7 @@ Each phase has a kill-or-continue gate. This is the execution roadmap when imple
 - `thread_windows` / `runtime_windows` / `monitor_windows` / `sigchain` stubs; PE asm + WaitOnAddress futex path.
 - Linked `dalvikvm.exe` + `art.dll` (+ deps); JNI default library is `art.dll` on Windows.
 - **Gate:** `dalvikvm -showversion` (A2) — **PASSED** under `wine64` → `ART version 2.1.0 x86_64`.
-- Details: `tools/verify/windows_x64_phase1/RESULT.md`.
+- Historical details: `docs/history/windows_x64_phase1_result.md`.
 
 ### Phase 2 — Interpreter Hello (2–4 months) — **DONE (2026-07-16, wine64 A3)**
 

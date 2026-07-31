@@ -373,7 +373,7 @@ Summary (details below; do not delete history):
 - **Important scope:** Dynamically generated JIT code does not use this macro. Do not reuse this same-image RIP-relative sequence for the low-4-GiB JIT cache, which may be more than signed 32-bit reach from `art.dll`; that remains W-025 territory.
 - **Rejected permanent designs:** Retaining/hardening the call helper; importing `art.dll` from itself; caching `Runtime*` in `Thread`. A stable C assembly label on the existing member remains the first fallback if maintaining the MS-mangled spelling becomes unacceptable; an exported `Runtime**` address cell is second fallback.
 - **Evidence:** [RESULT-w004-runtime-load.md](tools/verify/windows_x64_phase4/RESULT-w004-runtime-load.md), [W004_HOST_CHECKLIST.md](tools/verify/windows_x64_phase4/W004_HOST_CHECKLIST.md), and [native acceptance](tools/verify/windows_x64_phase4/evidence/w004_host/ACCEPTANCE.md)
-- **Code anchors:** `vendor/art/runtime/arch/x86_64/asm_support_x86_64.S` (`LOAD_RUNTIME_INSTANCE`); `tools/verify/windows_x64_phase1/CMakeLists.txt`; `tools/verify/windows_x64_phase1/check_w004_runtime_load.py`; `tools/windows_x64/host_package/package_windows_x64_w004.sh`
+- **Code anchors:** `vendor/art/runtime/arch/x86_64/asm_support_x86_64.S` (`LOAD_RUNTIME_INSTANCE`); `native/CMakeLists.txt`; `tools/verify/windows_x64_phase1/check_w004_runtime_load.py`; `tools/windows_x64/host_package/package_windows_x64_w004.sh`
 - **Opened:** 2026-07-16
 - **Closed:** 2026-07-25 — implementation plus structural, Wine, Linux, and native Windows acceptance complete
 
@@ -668,7 +668,7 @@ Summary (details below; do not delete history):
   - `tools/verify/windows_x64_phase4/{run_math_critical_probe.sh,src/MathCriticalProbe.java,RESULT-math-critical.md}`
   - `tools/verify/windows_x64_phase4/RESULT-interpreter-jni-fallback.md` (accepted Wine and native-Windows tripwire reachability audit)
   - `tools/verify/windows_x64_phase4/W024_HOST_CHECKLIST.md` (native Windows 10 acceptance and returned-evidence procedure)
-  - `vendor/art/openjdkjvmti/` and `tools/verify/windows_x64_phase1/CMakeLists.txt` (separate Windows x64 JVMTI plugin)
+  - `vendor/art/openjdkjvmti/` and `native/CMakeLists.txt` (separate Windows x64 JVMTI plugin)
   - `vendor/art/runtime/{thread-current-inl.h,thread.h,interpreter/interpreter_common.cc}` (PE plugin TLS accessor and Linux-like native interpreter policy)
   - `vendor/art/runtime/jit/jit.cc` (common native compilation policy and opt-in compile-record diagnostics)
   - `tools/verify/windows_x64_libcore_icu/openjdkjvm_memory_standalone.c` (`JVM_NativeLoad` product export)

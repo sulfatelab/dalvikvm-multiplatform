@@ -68,7 +68,7 @@ relocations in generated nterp assembly. CMake's clang ASM rule declared a
 depfile but did not pass flags that produced one, so changing
 `asm_support_x86_64.S` did not reliably rebuild all consumers.
 
-`tools/verify/windows_x64_phase1/CMakeLists.txt` now gives these five objects explicit
+The unified `native/CMakeLists.txt` gives these five objects explicit
 dependencies on the shared x86-64 assembly support sources:
 
 - `memcmp16_x86_64.S`;

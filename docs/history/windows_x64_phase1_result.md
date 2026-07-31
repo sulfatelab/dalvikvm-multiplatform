@@ -1,4 +1,4 @@
-# Windows x64 Phase 1 — Skeleton VM — RESULT
+# Windows x64 Phase 1 — historical skeleton VM result
 
 Date: 2026-07-16  
 Gate (win32_art_port.md Phase 1 / acceptance **A2**):  
@@ -9,14 +9,15 @@ Gate (win32_art_port.md Phase 1 / acceptance **A2**):
 Cross-built on Linux (`agent01`) with:
 
 - LLVM clang/clang++ + lld 21 (triple `x86_64-pc-windows-msvc`)
-- `/home/agent/Projects/windows_x64-dev-env` (Windows SDK via xwin, libc++, compiler-rt)
-- Harness: `tools/verify/windows_x64_phase1/` + `overlay/port_policy_windows.py`
+- a local target bundle (Windows SDK, libc++, and compiler-rt; absolute binding
+  was machine-local and is intentionally not retained)
+- Retired harness: `tools/verify/windows_x64_phase1/` + `overlay/port_policy_windows.py`
 - No MSVC `cl`/`clang-cl`, no MinGW, no WSL product path
 
 ### Gate command / output
 
 ```bash
-source /home/agent/Projects/windows_x64-dev-env/env.sh
+source <retired-target-bundle>/env.sh
 # after build + stage c++.dll next to PE
 cd build/windows_x64_phase1
 cp -f $WINDOWS_X64_DEV_ENV/lib/libcxx/lib/c++.dll .
@@ -64,11 +65,14 @@ is not retained in the repository.
 | Linux ldflags (`-z max-page-size`) | Stripped in port policy + harness |
 | Missing POSIX symbols | Stubs for mremap/msync/fcntl/realpath/pthread_getname_np, etc. |
 
-### Reproduce
+### Historical reproduction command
+
+The following command records the retired harness and is not a supported build
+entry point. Use `tools/build_art.py` for current generation and builds.
 
 ```bash
-source /home/agent/Projects/windows_x64-dev-env/env.sh
-cd /home/agent/Projects/dalvikvm-multiplatform
+source <retired-target-bundle>/env.sh
+cd <repository-root>
 
 cmake -S tools/verify/windows_x64_phase1 -B build/windows_x64_phase1 -G Ninja \
   -DCMAKE_TOOLCHAIN_FILE=$WINDOWS_X64_CMAKE_TOOLCHAIN \
@@ -93,7 +97,7 @@ WINEDEBUG=-all wine64 ./dalvikvm.exe -showversion
 
 | Path | Role |
 |------|------|
-| `tools/verify/windows_x64_phase1/` | CMake harness |
+| retired `tools/verify/windows_x64_phase1/` graph | CMake harness |
 | `overlay/port_policy_windows.py` | Windows Layer 2 |
 | `compat/include/*`, `compat/src/windows_x64_posix_stubs.c` | POSIX/CRT bridge |
 | `vendor/art/runtime/multiplatform/windows/*` | thread/runtime/monitor/sigchain stubs |

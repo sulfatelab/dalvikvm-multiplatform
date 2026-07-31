@@ -44,7 +44,7 @@ items are closed.
 | Unified phase catalog | PARTIAL | seven virtual stages declare 29 native probes, 47 managed JARs, and two command gates; Windows has 76 applicable items and six runnable registrations, while Linux x86-64 has five applicable/runnable W-004 items | migrate behavioral runners, portable JNI expansion, and result checks |
 | Boot/runtime packaging | PARTIAL | the base boot JAR and probe JARs are Python/CMake/Ninja-owned, deterministic, target-local, and fail-fast; managed gates isolate a runtime root and stage pinned ICU data plus the mandatory native boot DSO closure | add boot images, security providers/resources, cacerts, and complete runtime packages |
 | POSIX-free Windows build host | COMPLETE for the current native/managed W-004 graph; PARTIAL end to end | Server 2025 uses configured official JDK 21, Python, CMake, Ninja, and plain Clang drivers; native managed build/runtime and no-op gates pass without POSIX tooling | migrate every retained behavioral gate and run the complete current catalog |
-| Legacy build removal | PARTIAL | active product ownership was demoted, project-owned symlink overlays were removed, and the superseded Linux miniature plus Windows Phase-0 product graphs were deleted; old generators, generated snapshots, Windows Phase-1/libcore product CMake, and split overlay datasets remain | remove or demote every alternative product path after gate migration |
+| Legacy build removal | PARTIAL | active product ownership was demoted, project-owned symlink overlays were removed, and the superseded Linux miniature plus Windows Phase-0/Phase-1 product graphs were deleted; the checked-in Linux graph, libcore product CMake, and split overlay datasets remain | remove or demote every alternative product path after gate migration |
 | CI/acceptance automation | NOT STARTED | no in-repository CI workflow owns the acceptance matrix | fresh-build, no-op, graph, command, artifact, and native-host gates run automatically |
 | Additional architectures | BLOCKED by capability gates | all 17 canonical identities are registered; only `linux-x86_64-gnu` and experimental `windows-x86_64-msvc` generate | admit each profile only after its architecture and runtime gates pass |
 | Windows AOT/OAT | BLOCKED / separate track | compiler DSO parity does not provide Windows OAT production or loading | satisfy `win32_aot_oat.md`; do not imply capability from `art-compiler.dll` |
@@ -138,6 +138,13 @@ items are closed.
   and checked-in generated aconfig headers were removed after the unified
   Windows product graph subsumed that foundational link gate. Its historical
   result remains evidence, not a supported reproduction command.
+- [x] The Windows Phase-1 CMake entry point, generated 17-module graph, and
+  closure snapshot were removed after the unified product and probe graph
+  subsumed them. The reusable Python PE/source auditors remain temporarily;
+  the W-024 source audit is now Python-owned under `tests/support` and covered
+  by the host suite. It checks the actual retired-workaround contract instead
+  of the obsolete whole-file equality rule that rejected accepted guarded
+  FS-1 stack-high-water instrumentation.
 - [x] Native Windows `check-generated` passes for the 32-module, 260-Blueprint
   graph, and a second identical full product build reports
   `ninja: no work to do.`
@@ -582,8 +589,10 @@ an unreviewed module-set or kind change.
   consuming them.
 - [x] Remove the Phase-0 product CMake graph, Bash generator, and generated
   source snapshots; retain its historical result record.
-- [ ] Remove the Phase-1 product CMake graph and the unproducible libcore/ICU
-  `sources.cmake`; retain probe sources and result records.
+- [x] Remove the Phase-1 product CMake graph and move its historical result out
+  of `tools/verify`; retain reusable PE/source auditors temporarily.
+- [ ] Remove the unproducible libcore/ICU `sources.cmake` and alternative
+  CMake graph after the remaining package flows use unified product outputs.
 - [ ] Consolidate `overlay/port_policy.py` and
   `overlay/port_policy_windows.py` into common policy plus explicit target
   deltas behind `make_overlay(profile)`.
@@ -631,12 +640,11 @@ an unreviewed module-set or kind change.
 ### Legacy inventory blocking Phase 5 removal
 
 The retained alternative build descriptions are concentrated in the checked-in
-Linux graph, Windows Phase-1 graph and CMake entry point, libcore/ICU snapshot,
-and split overlay datasets. The eight early Linux isolation/miniature graphs
-and the Windows Phase-0 graph have been removed. The remaining descriptions
-are not invoked by `tools/build_art.py`, but remain runnable and can drift.
-Removal is blocked only by missing unified gate ownership, not by product graph
-generation.
+Linux graph, the libcore/ICU snapshot and CMake entry point, and split overlay
+datasets. The eight early Linux isolation/miniature graphs and both Windows
+Phase-0/Phase-1 graphs have been removed. The remaining descriptions are not
+invoked by `tools/build_art.py`, but remain runnable and can drift. Removal is
+blocked only by missing unified gate ownership, not by product graph generation.
 
 The repository also has no checked-in CI workflow. External or manual evidence
 does not replace a repeatable in-repository acceptance entry point.
@@ -1182,12 +1190,11 @@ The historical Windows phase files are no longer a product entry point:
   foundational graph, and generated aconfig headers proved the first Windows
   `libartbase` link. They were deleted after the unified frontend subsumed the
   same graph; the adjacent historical result is retained as evidence only.
-- [`tools/verify/windows_x64_phase1/phase1.cmake`](tools/verify/windows_x64_phase1/phase1.cmake)
-  contains 17 generated modules, but there is no Phase-1 generator script that
-  reproduces it.
-- [`tools/verify/windows_x64_phase1/CMakeLists.txt`](tools/verify/windows_x64_phase1/CMakeLists.txt)
-  mixes the product graph, target environment, compatibility injections,
-  staging, and 23 verification/probe executables in one large file.
+- The retired Phase-1 snapshot contained 17 generated modules but had no
+  reproducing generator. Its CMake entry point mixed the product graph, target
+  environment, compatibility injections, staging, and 23 probes. Both were
+  deleted after the unified graph took ownership; reusable Python artifact
+  auditors remain temporarily while packaging migration continues.
 - The historical Phase-1 snapshot made `artbase`, `dexfile`, `profile`,
   `elffile`, and the compiler component static, folded compiler objects into
   `art.dll`, and did not emit a standalone `art-compiler.dll`. The active
@@ -2271,8 +2278,6 @@ After all acceptance gates pass, remove or demote the following as product
 inputs:
 
 - `native/generate.sh` and the checked-in `native/generated/dalvikvm.cmake`;
-- checked-in `windows_x64_phase1/phase1.cmake` snapshot;
-- product graph logic in the Phase-1 verification CMake file;
 - the unproducible `windows_x64_libcore_icu/sources.cmake` snapshot;
 - `overlay/port_policy.py` and `overlay/port_policy_windows.py` after their
   policies are merged;
