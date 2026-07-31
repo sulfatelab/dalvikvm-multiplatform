@@ -243,8 +243,10 @@ function(art_add_target_probe)
         set(build_status not-applicable)
         set(runtime_status not-applicable)
     endif()
-    if(applicable AND PROBE_EXECUTION STREQUAL "target-runnable" AND
-       ART_ENABLE_TARGET_RUNTIME_TESTS)
+    if(applicable AND
+       (PROBE_EXECUTION STREQUAL "host-review" OR
+        (PROBE_EXECUTION STREQUAL "target-runnable" AND
+         ART_ENABLE_TARGET_RUNTIME_TESTS)))
         set(ctest_registered_json true)
     else()
         set(ctest_registered_json false)
@@ -392,9 +394,17 @@ function(art_add_target_probe)
     endif()
     add_dependencies("art-test-stage-${PROBE_STAGE}" "${PROBE_NAME}")
 
-    if(PROBE_EXECUTION STREQUAL "target-runnable" AND
-       ART_ENABLE_TARGET_RUNTIME_TESTS)
-        if(PROBE_TYPE STREQUAL "GATE" OR PROBE_TYPE STREQUAL "MANAGED")
+    if(PROBE_EXECUTION STREQUAL "host-review" OR
+       (PROBE_EXECUTION STREQUAL "target-runnable" AND
+        ART_ENABLE_TARGET_RUNTIME_TESTS))
+        if(PROBE_EXECUTION STREQUAL "host-review")
+            if(NOT PROBE_TYPE STREQUAL "GATE")
+                message(FATAL_ERROR
+                    "Host-review probe ${PROBE_NAME} must be a command gate")
+            endif()
+            add_test(NAME "art.${PROBE_STAGE}.${PROBE_NAME}"
+                COMMAND ${PROBE_COMMAND})
+        elseif(PROBE_TYPE STREQUAL "GATE" OR PROBE_TYPE STREQUAL "MANAGED")
             add_test(NAME "art.${PROBE_STAGE}.${PROBE_NAME}"
                 COMMAND ${PROBE_COMMAND})
         else()
@@ -845,6 +855,13 @@ art_add_target_probe(
         "${_art_test_cases_root}/non-moving-heap/W013NonMovingStressProbe.java"
     CONTRACTS allocator gc stress
     OUTPUT_NAME w013nonmovingstressprobe)
+art_add_target_probe(
+    NAME windows_w013_source_policy STAGE w013 TYPE GATE EXECUTION host-review
+    ${_art_windows_current_selector}
+    CONTRACTS allocator virtual-memory source-policy
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_test_repo_root}/tests/support/windows/check_w013_source_policy.py")
 foreach(_art_w013_heap_mib IN ITEMS 128 1024)
     art_add_target_probe(
         NAME "managed_w013_non_moving_${_art_w013_heap_mib}m"

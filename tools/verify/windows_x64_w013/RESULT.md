@@ -106,11 +106,15 @@ Landed behavior:
 - aligned allocation, `SetSize()`, and `AlignBy()` avoid partial
   `MEM_RELEASE`.
 
-Focused probe command:
+Current unified reproduction:
 
 ```text
-tools/verify/windows_x64_w013/run_mem_map_policy_probe.sh
+python tools/build_art.py test --target-id windows-x86_64-msvc --stage w013 --parallel 32
+python tests/support/windows/check_w013_source_policy.py
 ```
+
+The former mixed Bash build/audit/Wine runner was retired after the unified
+native gate and shell-free host reviewer accepted its maintained contracts.
 
 Observed under Wine:
 
@@ -193,7 +197,7 @@ Landed behavior:
 Focused audit command:
 
 ```text
-tools/verify/windows_x64_w013/run_low_4gb_policy_probe.sh
+python tests/support/windows/check_w013_source_policy.py
 ```
 
 Observed:
@@ -243,9 +247,9 @@ startup setting. Both runtimes reported `nonmoving.stable=true`,
 cmake --build build/windows_x64_phase1 --target art dalvikvm -j16
 tools/verify/windows_x64_w013/run_dlmalloc_config_probe.sh
 tools/verify/windows_x64_w013/run_mspace_owner_probe.sh
-tools/verify/windows_x64_w013/run_mem_map_policy_probe.sh
-tools/verify/windows_x64_w013/run_low_4gb_policy_probe.sh
 tools/verify/windows_x64_w013/run_non_moving_stress.sh
+python tests/support/windows/check_w013_source_policy.py
+python tools/build_art.py test --target-id windows-x86_64-msvc --stage w013 --parallel 32
 tools/verify/windows_x64_phase4/run_jit_smoke.sh
 tools/verify/windows_x64_phase4/run_gcstress.sh
 tools/verify/windows_x64_phase4/run_threadheavy.sh

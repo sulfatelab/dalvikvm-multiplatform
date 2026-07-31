@@ -61,10 +61,10 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         (binary / "art-tests" / "art_test_catalog.json").read_text(encoding="utf-8")
     )
     assert catalog["target_id"] == "windows-x86_64-msvc"
-    assert len(catalog["probes"]) == 83
-    assert sum(probe["applicable"] for probe in catalog["probes"]) == 81
+    assert len(catalog["probes"]) == 84
+    assert sum(probe["applicable"] for probe in catalog["probes"]) == 82
     assert sum(bool(probe["target_ids"]) for probe in catalog["probes"]) == 20
-    assert sum(not probe["target_ids"] for probe in catalog["probes"]) == 63
+    assert sum(not probe["target_ids"] for probe in catalog["probes"]) == 64
     assert sum(
         probe["execution"] == "target-runnable" for probe in catalog["probes"]
     ) == 15
@@ -79,7 +79,9 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "managed_w013_non_moving_128m": 300,
         "managed_w013_non_moving_1024m": 300,
     }
-    assert not any(probe["ctest_registered"] for probe in catalog["probes"])
+    assert [
+        probe["name"] for probe in catalog["probes"] if probe["ctest_registered"]
+    ] == ["windows_w013_source_policy"]
 
 
 def test_linux_catalog_registers_runtime_and_dso_command_gates(tmp_path):
@@ -128,7 +130,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         (binary / "art-tests" / "art_test_catalog.json").read_text(encoding="utf-8")
     )
     applicable = [probe for probe in catalog["probes"] if probe["applicable"]]
-    assert len(catalog["probes"]) == 83
+    assert len(catalog["probes"]) == 84
     assert [probe["name"] for probe in applicable] == [
         "managed_imageless_hello",
         "managed_gc_stress",

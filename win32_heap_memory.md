@@ -511,9 +511,10 @@ same Phase-2 pattern around the allocation-time class write barrier;
 ART `1509b1f95e` removes its range-check/log/skip branch and restores the common
 unconditional barrier there as well.
 
-`tools/verify/windows_x64_w013/run_low_4gb_policy_probe.sh` rejects the old forced-low
+`tests/support/windows/check_w013_source_policy.py` rejects the old forced-low
 branches, rejects both Windows-specific write-barrier shortcuts, and pins the
-remaining required-low source inventory. The product non-moving probe churns
+remaining required-low source inventory without requiring a shell or external
+search tool. The product non-moving probe churns
 75,497,472 bytes of sub-LOS arrays on both Windows x64/Wine and Linux with stable low
 addresses and post-GC regrowth. Windows x64 `-j16` build, JIT smoke 12/12, GCStress,
 ThreadHeavy, HandleLeak, Linux `-j16` build, imageless Hello, and Linux
