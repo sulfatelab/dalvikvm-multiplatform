@@ -90,6 +90,11 @@ Each case owns its native and managed source plus an adjacent `RESULT.md`. The
 stage analysis links the case-specific results without physically grouping the
 source by stage. The XMM sentinel remains explicitly x86-64-only; moving it did
 not broaden its selector to AArch64 or ARM64EC.
+Two Linux x86-64 command gates in `w004` now exercise `dalvikvm -showversion`
+and the runtime/compiler ELF load topology through
+`support/runtime_gate.py`. A command gate owns no dummy target binary; its
+virtual target depends on the exact product artifacts that must exist before
+CTest runs it.
 Legacy shell runners and per-probe CMake entry points still reference these
 canonical files as temporary compatibility shims; they must be replaced by the
 unified Python/CMake/Ninja path before `tools/verify` can be removed.
@@ -136,7 +141,7 @@ Every logical test declaration records:
 |---|---|
 | logical ID | stable lowercase hyphenated test name |
 | stage | one virtual group in canonical `wNNN` form |
-| output kind | executable or shared library |
+| output kind | executable, shared library, or command gate |
 | linkage | `standalone`, `art-dso`, or `jni-dso` |
 | sources | common sources plus any exact architecture variants |
 | selectors | platform/architecture/ABI intersection or exact target IDs |
@@ -172,6 +177,22 @@ An excluded test must not silently disappear.
 
 : A target shared library loaded by managed/JNI test code. Direct ART linkage
   is not implied; any ART dependency must still be declared explicitly.
+
+### Command gates
+
+A command gate validates existing product outputs without compiling a dummy
+probe. It declares `TYPE GATE`, a shell-free argument-list `COMMAND`, and
+explicit product `DEPENDS`. It participates in `art-tests`, its one virtual
+stage target, the applicability catalog, labels, and separate build/runtime
+status exactly like a compiled probe. Shared runner logic belongs under
+`tests/support/`; maintained acceptance records remain in the corresponding
+`tests/cases/<logical-id>/` directories.
+
+Use command gates only for artifact, loader, topology, package, or reviewer
+contracts that genuinely need no target source. A C/C++ behavior probe remains
+an executable or shared library. Every native command gate must use
+`target-runnable` and is registered only when the frontend proves that the
+build host can execute the exact target identity.
 
 Linkage describes the binary boundary under test. It is independent of whether
 the test is compile-only, run locally, transferred to another machine, or
@@ -347,13 +368,13 @@ python tools/build_art.py configure --target-id windows-x86_64-msvc
 Build and run the applicable catalog scope:
 
 ```text
-python tools/build_art.py test --target-id windows-x86_64-msvc
+python tools/build_art.py test --target-id windows-x86_64-msvc --parallel 32
 ```
 
 Select one virtual stage:
 
 ```text
-python tools/build_art.py test --target-id windows-x86_64-msvc --stage w014
+python tools/build_art.py test --target-id windows-x86_64-msvc --stage w014 --parallel 32
 ```
 
 Use `--build-type Debug` or `--build-type RelWithDebInfo` when the non-default

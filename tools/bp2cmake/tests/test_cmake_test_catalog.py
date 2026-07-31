@@ -54,11 +54,64 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         (binary / "art-tests" / "art_test_catalog.json").read_text(encoding="utf-8")
     )
     assert catalog["target_id"] == "windows-x86_64-msvc"
-    assert len(catalog["probes"]) == 29
+    assert len(catalog["probes"]) == 31
     assert sum(probe["applicable"] for probe in catalog["probes"]) == 29
-    assert sum(bool(probe["target_ids"]) for probe in catalog["probes"]) == 10
+    assert sum(bool(probe["target_ids"]) for probe in catalog["probes"]) == 12
     assert sum(not probe["target_ids"] for probe in catalog["probes"]) == 19
     assert sum(
         probe["execution"] == "target-runnable" for probe in catalog["probes"]
-    ) == 3
+    ) == 5
     assert not any(probe["ctest_registered"] for probe in catalog["probes"])
+
+
+def test_linux_catalog_registers_runtime_and_dso_command_gates(tmp_path):
+    cmake = shutil.which("cmake")
+    if cmake is None:
+        pytest.skip("CMake is unavailable")
+
+    repo = Path(__file__).resolve().parents[3]
+    source = tmp_path / "source"
+    binary = tmp_path / "build"
+    source.mkdir()
+    profile = source / "target_profile.cmake"
+    profile.write_text(
+        resolve_target("linux-x86_64-gnu").to_cmake(), encoding="utf-8"
+    )
+    cmake_lists = f"""
+cmake_minimum_required(VERSION 3.16)
+project(ArtLinuxTestCatalogFixture C CXX ASM)
+include("{profile.as_posix()}")
+set(ART_ENABLE_TARGET_RUNTIME_TESTS ON)
+add_executable(dalvikvm IMPORTED GLOBAL)
+set_target_properties(dalvikvm PROPERTIES IMPORTED_LOCATION "{tmp_path / 'dalvikvm'}")
+add_library(art SHARED IMPORTED GLOBAL)
+set_target_properties(art PROPERTIES IMPORTED_LOCATION "{tmp_path / 'libart.so'}")
+add_library(art-compiler SHARED IMPORTED GLOBAL)
+set_target_properties(art-compiler PROPERTIES
+    IMPORTED_LOCATION "{tmp_path / 'libart-compiler.so'}")
+enable_testing()
+add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
+"""
+    (source / "CMakeLists.txt").write_text(cmake_lists, encoding="utf-8")
+
+    result = subprocess.run(
+        [cmake, "-S", str(source), "-B", str(binary), "-G", "Ninja"],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    catalog = json.loads(
+        (binary / "art-tests" / "art_test_catalog.json").read_text(encoding="utf-8")
+    )
+    applicable = [probe for probe in catalog["probes"] if probe["applicable"]]
+    assert len(catalog["probes"]) == 31
+    assert [probe["name"] for probe in applicable] == [
+        "art_runtime_show_version",
+        "art_compiler_dso_topology",
+    ]
+    assert all(probe["stage"] == "w004" for probe in applicable)
+    assert all(probe["type"] == "GATE" for probe in applicable)
+    assert all(probe["execution"] == "target-runnable" for probe in applicable)
+    assert all(probe["ctest_registered"] for probe in applicable)

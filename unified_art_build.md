@@ -37,11 +37,11 @@ items are closed.
 | Area | Status | Current position | Exit condition |
 |---|---|---|---|
 | Python frontend | COMPLETE for the initial slice | `generate`, `check-generated`, `configure`, `build`, `test`, and `stage` exist; subprocesses are shell-free | keep regression coverage current |
-| Linux x86-64 product | PARTIAL | a fresh full product build, 28-artifact stage, and native runtime version smoke pass | register runnable Linux CTest gates so the documented `test` command succeeds |
+| Linux x86-64 product | COMPLETE for native smoke/topology | a fresh full product build, 28-artifact stage, and two unified native CTest gates pass | add managed boot-class-path behavior in the packaging stage |
 | Windows x86-64 product | PARTIAL / experimental | Linux-hosted cross and native Windows Server 2025 builds both complete the full product graph; the native host also passes the current catalog, stage, load, topology, reparse-point, deterministic-generation, and no-op gates | automate the complete artifact/topology/runtime gate set and migrate the remaining behavioral tests |
 | Compiler DSO parity | COMPLETE for `art-compiler` | both targets emit a shared compiler DSO; Windows imports `art.dll` and exports `art_compiler_jit_create` | retain exact ABI and no-cycle gates |
 | Full DSO topology parity | PARTIAL | five module kinds and two target-specific module pairs still differ | convert each difference or record a reviewed target exception |
-| Unified phase catalog | PARTIAL | seven virtual stages declare 29 typed probes; all are currently applicable only to `windows-x86_64-msvc`, with three runnable CTest gates and a per-target status catalog | migrate behavioral runners, managed probes, portable JNI probes, and result checks |
+| Unified phase catalog | PARTIAL | seven virtual stages declare 29 compiled probes plus two command gates; Windows has 29 applicable probes and Linux x86-64 has two applicable runtime gates | migrate behavioral runners, managed probes, portable JNI probes, and result checks |
 | Boot/runtime packaging | NOT STARTED in the unified frontend | boot JAR, boot image, run assets, cacerts, and host packages remain shell-driven | Python/CMake/Ninja-owned, binary-directory-local, fail-fast stages |
 | POSIX-free Windows build host | COMPLETE for the current native graph, test catalog, and stage; PARTIAL end to end | configure, full product build, current CTest gates, and staging pass through native Python/CMake/Ninja/LLVM on Server 2025 without Bash/WSL/Cygwin; managed packaging and legacy behavioral runners remain shell-driven | migrate managed packaging and every retained behavioral gate to the same native-host contract |
 | Legacy build removal | PARTIAL | active product ownership was demoted and project-owned symlink overlays were removed; old generators, generated snapshots, phase product CMake, and split overlay datasets remain | remove or demote every alternative product path after gate migration |
@@ -52,8 +52,8 @@ items are closed.
 ### Latest verification baseline (2026-07-31)
 
 - [x] `PYTHONPATH=tools/bp2cmake python3 -m pytest tools/bp2cmake/tests tests/host -q`:
-  106 passed, including generated PE-header, top-level test-catalog, and VCS
-  binary-audit coverage.
+  111 passed, including generated PE-header, Linux/Windows test-catalog,
+  shell-free runtime-gate, parallel-frontend, and VCS binary-audit coverage.
 - [x] Fresh generation loads the same 260 Blueprint files for both targets and
   emits 33 generated modules for `linux-x86_64-gnu` versus 32 for
   `windows-x86_64-msvc`; Windows supplies `sigchain` as the reviewed
@@ -61,10 +61,11 @@ items are closed.
   the Linux module.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, and Ninja emits a
-  29-declaration catalog with zero applicable probes and zero CTest gates.
-- [x] A minimal Windows-profile CMake configuration emits 29 applicable
-  probes: 10 exact-ID selectors, 19 broad typed selectors, and three
-  `target-runnable` probes.
+  31-declaration catalog with two exact-ID command gates applicable to
+  `linux-x86_64-gnu`; both are registered with CTest on the native host.
+- [x] A minimal Windows-profile CMake configuration emits the same 31
+  declarations and keeps only the original 29 probes applicable: 10 exact-ID
+  selectors, 19 broad typed selectors, and three `target-runnable` probes.
 - [x] Linux `art-compiler` completed a fresh 701-action build after the
   identity migration and emits `libart-compiler.so` with dynamic ART
   dependencies.
@@ -117,8 +118,10 @@ items are closed.
   NMake, GCC, G++, MinGW, `cl.exe`, `clang-cl`, direct `ld.lld`, or direct
   `lld-link` invocation occurs; links inside the native wrappers still invoke
   the configured plain Clang driver with `-shared` and `-fuse-ld=lld`.
-- [ ] The documented Linux `test` command currently fails: the Linux catalog
-  registers zero CTest tests and `--no-tests=error` correctly returns failure.
+- [x] The documented Linux `test` command builds its applicable product
+  dependencies and passes two CTest gates: exact `dalvikvm -showversion`, plus
+  Python-owned ELF DSO load/topology validation requiring
+  `libart-compiler.so -> libart.so` and forbidding the reverse edge.
 
 ### Unified stage migration coverage
 
@@ -129,12 +132,12 @@ One historical work stage maps to exactly one virtual target named
 |---|---:|---|---|---|
 | `w002` | 1 EXE, 1 DLL | 1 exact / 1 typed | 1 runnable, 1 compile-only | managed attach/OSR package and reviewers |
 | `w003` | 4 DLLs | 1 exact / 3 typed | 4 compile-only | frame, XMM, CriticalNative/FastNative managed runners |
-| `w004` | 1 EXE, 1 DLL | 0 exact / 2 typed | 2 compile-only | embedding, runtime-load, and JVMTI behavioral gates |
+| `w004` | 1 EXE, 1 DLL, 2 gates | 2 exact / 2 typed | 2 runnable, 2 compile-only | Windows embedding/JVMTI behavior; managed runtime start |
 | `w010` | 4 EXEs | 1 exact / 3 typed | 4 compile-only | managed-fault, fatal-unwind, debugger, and dump review |
 | `w013` | 2 EXEs | 0 exact / 2 typed | 2 compile-only | dlmalloc configuration and non-moving heap stress |
 | `w014` | 7 EXEs, 1 DLL | 3 exact / 5 typed | 2 runnable, 6 compile-only | stack-growth, CET, high-water, and reservation matrices |
 | `w025` | 4 EXEs, 3 DLLs | 4 exact / 3 typed | 7 compile-only | JIT mapping/lifecycle/CFG managed and host-review gates |
-| Total | 19 EXEs, 10 DLLs | 10 exact / 19 typed | 3 runnable, 26 compile-only | compile ownership is ahead of behavioral ownership |
+| Total | 19 EXEs, 10 DLLs, 2 gates | 12 exact / 19 typed | 5 runnable, 26 compile-only | compile ownership is ahead of managed behavioral ownership |
 
 The shared registry references 27 source files from historical verification
 directories. All four W-003 native probe declarations now consume canonical
@@ -640,10 +643,13 @@ targets declare typed platform, target-architecture, target-ABI, capability,
 exact-ID, and execution selectors. The stage target is a build group, not a
 second product graph. CMake writes `tests/art_test_catalog.json` with every
 declaration, failed-selector reason, applicability, CTest registration, and
-separate build/runtime verification status. All 29 current probes remain
+separate build/runtime verification status. All 29 compiled probes remain
 truthfully limited to `windows-x86_64-msvc`; 26 are compile-only and three are
-target-runnable. The old phase source directories remain temporary source and
-evidence locations while their product graph ownership is removed.
+target-runnable. Two additional command gates are exact
+`linux-x86_64-gnu` declarations: one checks the runtime version marker, and
+one loads and parses the runtime/compiler ELF DSO topology without an external
+object-inspection utility. The old phase source directories remain temporary
+source and evidence locations while their product graph ownership is removed.
 
 The Windows overlay now emits `art-compiler` as `SHARED` and links it to
 `art` and `art-disassembler`, matching the Linux topology. The native entry

@@ -77,9 +77,10 @@ def _parser() -> argparse.ArgumentParser:
         sub.add_argument("--target-id", required=True)
         sub.add_argument("--build-type", choices=BUILD_TYPES, default=DEFAULT_BUILD_TYPE)
         sub.add_argument("--output-root", type=Path)
+        if command in ("build", "test"):
+            sub.add_argument("--parallel", type=int)
         if command == "build":
             sub.add_argument("--cmake-target")
-            sub.add_argument("--parallel", type=int)
         if command == "test":
             sub.add_argument("--label", action="append", default=[])
             sub.add_argument(
@@ -118,7 +119,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "build":
             _build(target, binary_dir, local, args.cmake_target, args.parallel)
         elif args.command == "test":
-            _test(binary_dir, local, args.label, args.stage)
+            _test(binary_dir, local, args.label, args.stage, args.parallel)
         elif args.command == "stage":
             _stage(target, binary_dir, local)
         return 0
@@ -323,6 +324,7 @@ def _test(
     local: LocalBuildConfig,
     labels: list[str],
     stages: list[str] | None = None,
+    parallel: int | None = None,
 ) -> None:
     _require_configured(binary_dir)
     cmake = _resolve_tools(local, need_compiler=False)["cmake"]
@@ -330,6 +332,16 @@ def _test(
     target_id = str(catalog["target_id"])
     stages = list(dict.fromkeys(stages or []))
     stage_labels = [_stage_label(stage) for stage in stages]
+    if parallel is not None and parallel < 1:
+        raise BuildFrontendError("--parallel must be positive")
+
+    def build_test_target(name: str) -> None:
+        command = [str(cmake), "--build", str(binary_dir)]
+        if parallel is not None:
+            command.extend(("--parallel", str(parallel)))
+        command.extend(("--target", name))
+        _run_checked(command)
+
     for stage in stages:
         declared = [probe for probe in probes if probe["stage"] == stage]
         if not declared:
@@ -342,15 +354,7 @@ def _test(
                 f"test stage {stage} has zero applicable probes for target {target_id}; "
                 f"all {len(declared)} declarations were excluded by their selectors"
             )
-        _run_checked(
-            [
-                str(cmake),
-                "--build",
-                str(binary_dir),
-                "--target",
-                f"art-test-stage-{stage}",
-            ]
-        )
+        build_test_target(f"art-test-stage-{stage}")
         for probe in applicable:
             probe["build_verified"] = True
             probe["build_status"] = "verified"
@@ -365,15 +369,7 @@ def _test(
             raise BuildFrontendError(
                 f"target {target_id} has zero applicable probes in the selected test scope"
             )
-        _run_checked(
-            [
-                str(cmake),
-                "--build",
-                str(binary_dir),
-                "--target",
-                "art-tests",
-            ]
-        )
+        build_test_target("art-tests")
         for probe in applicable_selected:
             probe["build_verified"] = True
             probe["build_status"] = "verified"

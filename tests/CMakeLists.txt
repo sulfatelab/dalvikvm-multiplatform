@@ -44,7 +44,7 @@ function(art_add_target_probe)
     set(multi_value_args
         SOURCES INCLUDE_DIRS LINK_LIBRARIES COMPILE_OPTIONS COMPILE_DEFINITIONS
         LINK_OPTIONS CONTRACTS DEPENDS PLATFORMS TARGET_ARCHES TARGET_ABIS
-        TARGET_IDS CAPABILITIES)
+        TARGET_IDS CAPABILITIES COMMAND)
     cmake_parse_arguments(PROBE "${options}" "${one_value_args}" "${multi_value_args}" ${ARGN})
 
     foreach(required NAME STAGE TYPE EXECUTION)
@@ -174,46 +174,59 @@ function(art_add_target_probe)
     if(NOT applicable)
         return()
     endif()
-    if(NOT TARGET art-test-target-policy)
-        message(FATAL_ERROR
-            "${PROBE_NAME} is applicable but no target test policy is defined")
-    endif()
-
-    if(PROBE_TYPE STREQUAL "EXECUTABLE")
-        add_executable("${PROBE_NAME}" EXCLUDE_FROM_ALL ${PROBE_SOURCES})
-    elseif(PROBE_TYPE STREQUAL "SHARED")
-        add_library("${PROBE_NAME}" SHARED EXCLUDE_FROM_ALL ${PROBE_SOURCES})
+    if(PROBE_TYPE STREQUAL "GATE")
+        if(NOT PROBE_COMMAND)
+            message(FATAL_ERROR "Command gate ${PROBE_NAME} has no COMMAND")
+        endif()
+        if(PROBE_SOURCES OR PROBE_INCLUDE_DIRS OR PROBE_LINK_LIBRARIES OR
+           PROBE_COMPILE_OPTIONS OR PROBE_COMPILE_DEFINITIONS OR
+           PROBE_LINK_OPTIONS OR PROBE_PRODUCT_POLICY OR
+           PROBE_WINDOWS_EXPORT_ALL_SYMBOLS OR PROBE_OUTPUT_NAME OR PROBE_PREFIX)
+            message(FATAL_ERROR
+                "Command gate ${PROBE_NAME} cannot declare compile or link inputs")
+        endif()
+        add_custom_target("${PROBE_NAME}")
     else()
-        message(FATAL_ERROR "Unsupported ART target probe type: ${PROBE_TYPE}")
-    endif()
+        if(NOT TARGET art-test-target-policy)
+            message(FATAL_ERROR
+                "${PROBE_NAME} is applicable but no target test policy is defined")
+        endif()
+        if(PROBE_TYPE STREQUAL "EXECUTABLE")
+            add_executable("${PROBE_NAME}" EXCLUDE_FROM_ALL ${PROBE_SOURCES})
+        elseif(PROBE_TYPE STREQUAL "SHARED")
+            add_library("${PROBE_NAME}" SHARED EXCLUDE_FROM_ALL ${PROBE_SOURCES})
+        else()
+            message(FATAL_ERROR "Unsupported ART target probe type: ${PROBE_TYPE}")
+        endif()
 
-    if(PROBE_INCLUDE_DIRS)
-        target_include_directories("${PROBE_NAME}" PRIVATE ${PROBE_INCLUDE_DIRS})
-    endif()
-    if(PROBE_LINK_LIBRARIES)
-        target_link_libraries("${PROBE_NAME}" PRIVATE ${PROBE_LINK_LIBRARIES})
-    endif()
-    if(PROBE_COMPILE_OPTIONS)
-        target_compile_options("${PROBE_NAME}" PRIVATE ${PROBE_COMPILE_OPTIONS})
-    endif()
-    if(PROBE_COMPILE_DEFINITIONS)
-        target_compile_definitions("${PROBE_NAME}" PRIVATE ${PROBE_COMPILE_DEFINITIONS})
-    endif()
-    if(PROBE_LINK_OPTIONS)
-        target_link_options("${PROBE_NAME}" PRIVATE ${PROBE_LINK_OPTIONS})
-    endif()
-    target_link_libraries("${PROBE_NAME}" PRIVATE art-test-target-policy)
-    if(PROBE_PRODUCT_POLICY)
-        target_link_libraries("${PROBE_NAME}" PRIVATE art-test-product-policy)
-    endif()
-    if(DEFINED PROBE_OUTPUT_NAME)
-        set_target_properties("${PROBE_NAME}" PROPERTIES OUTPUT_NAME "${PROBE_OUTPUT_NAME}")
-    endif()
-    if(DEFINED PROBE_PREFIX)
-        set_target_properties("${PROBE_NAME}" PROPERTIES PREFIX "${PROBE_PREFIX}")
-    endif()
-    if(PROBE_WINDOWS_EXPORT_ALL_SYMBOLS)
-        set_target_properties("${PROBE_NAME}" PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+        if(PROBE_INCLUDE_DIRS)
+            target_include_directories("${PROBE_NAME}" PRIVATE ${PROBE_INCLUDE_DIRS})
+        endif()
+        if(PROBE_LINK_LIBRARIES)
+            target_link_libraries("${PROBE_NAME}" PRIVATE ${PROBE_LINK_LIBRARIES})
+        endif()
+        if(PROBE_COMPILE_OPTIONS)
+            target_compile_options("${PROBE_NAME}" PRIVATE ${PROBE_COMPILE_OPTIONS})
+        endif()
+        if(PROBE_COMPILE_DEFINITIONS)
+            target_compile_definitions("${PROBE_NAME}" PRIVATE ${PROBE_COMPILE_DEFINITIONS})
+        endif()
+        if(PROBE_LINK_OPTIONS)
+            target_link_options("${PROBE_NAME}" PRIVATE ${PROBE_LINK_OPTIONS})
+        endif()
+        target_link_libraries("${PROBE_NAME}" PRIVATE art-test-target-policy)
+        if(PROBE_PRODUCT_POLICY)
+            target_link_libraries("${PROBE_NAME}" PRIVATE art-test-product-policy)
+        endif()
+        if(DEFINED PROBE_OUTPUT_NAME)
+            set_target_properties("${PROBE_NAME}" PROPERTIES OUTPUT_NAME "${PROBE_OUTPUT_NAME}")
+        endif()
+        if(DEFINED PROBE_PREFIX)
+            set_target_properties("${PROBE_NAME}" PROPERTIES PREFIX "${PROBE_PREFIX}")
+        endif()
+        if(PROBE_WINDOWS_EXPORT_ALL_SYMBOLS)
+            set_target_properties("${PROBE_NAME}" PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+        endif()
     endif()
 
     set(labels
@@ -233,13 +246,18 @@ function(art_add_target_probe)
 
     if(PROBE_EXECUTION STREQUAL "target-runnable" AND
        ART_ENABLE_TARGET_RUNTIME_TESTS)
-        # Keep target runtime files explicit and outside the host environment:
-        # generated ART DLLs live in CMAKE_BINARY_DIR and the pinned libc++ DLL
-        # lives in the regular-file target bundle.
-        add_test(NAME "art.${PROBE_STAGE}.${PROBE_NAME}"
-            COMMAND "${CMAKE_COMMAND}" -E env
-                "PATH=${CMAKE_BINARY_DIR};${_art_bundle_lib}/libcxx/bin;$ENV{PATH}"
-                "$<TARGET_FILE:${PROBE_NAME}>")
+        if(PROBE_TYPE STREQUAL "GATE")
+            add_test(NAME "art.${PROBE_STAGE}.${PROBE_NAME}"
+                COMMAND ${PROBE_COMMAND})
+        else()
+            # Keep target runtime files explicit and outside the host environment:
+            # generated ART DLLs live in CMAKE_BINARY_DIR and the pinned libc++ DLL
+            # lives in the regular-file target bundle.
+            add_test(NAME "art.${PROBE_STAGE}.${PROBE_NAME}"
+                COMMAND "${CMAKE_COMMAND}" -E env
+                    "PATH=${CMAKE_BINARY_DIR};${_art_bundle_lib}/libcxx/bin;$ENV{PATH}"
+                    "$<TARGET_FILE:${PROBE_NAME}>")
+        endif()
         set_tests_properties("art.${PROBE_STAGE}.${PROBE_NAME}" PROPERTIES
             LABELS "${labels}"
             WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
@@ -316,6 +334,8 @@ set(_art_windows_current_selector
     PLATFORMS windows TARGET_ARCHES x86_64 TARGET_ABIS msvc)
 set(_art_windows_x86_64_msvc_selector
     TARGET_IDS windows-x86_64-msvc)
+set(_art_linux_x86_64_gnu_selector
+    TARGET_IDS linux-x86_64-gnu)
 
 # W-002: managed-entry and attach/OSR transitions.
 art_add_target_probe(
@@ -389,6 +409,34 @@ art_add_target_probe(
     LINK_OPTIONS "${_art_no_cet}"
     CONTRACTS jvmti interpreter
     OUTPUT_NAME libjvmtiforceprobe WINDOWS_EXPORT_ALL_SYMBOLS)
+art_add_target_probe(
+    NAME art_runtime_show_version STAGE w004 TYPE GATE
+    EXECUTION target-runnable ${_art_linux_x86_64_gnu_selector}
+    DEPENDS dalvikvm
+    CONTRACTS runtime-load smoke
+    COMMAND
+        "${CMAKE_COMMAND}" -E env
+        "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}:$ENV{LD_LIBRARY_PATH}"
+        "${Python3_EXECUTABLE}"
+        "${_art_test_repo_root}/tests/support/runtime_gate.py"
+        show-version
+        --dalvikvm "$<TARGET_FILE:dalvikvm>"
+        --expect "ART version 2.1.0 x86_64")
+art_add_target_probe(
+    NAME art_compiler_dso_topology STAGE w004 TYPE GATE
+    EXECUTION target-runnable ${_art_linux_x86_64_gnu_selector}
+    DEPENDS art art-compiler
+    CONTRACTS runtime-load dso-topology compiler
+    COMMAND
+        "${CMAKE_COMMAND}" -E env
+        "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}:$ENV{LD_LIBRARY_PATH}"
+        "${Python3_EXECUTABLE}"
+        "${_art_test_repo_root}/tests/support/runtime_gate.py"
+        dso-topology
+        --runtime "$<TARGET_FILE:art>"
+        --compiler "$<TARGET_FILE:art-compiler>"
+        --compiler-needed libart.so
+        --runtime-forbidden libart-compiler.so)
 
 # W-010: exception dispatch, fault records, sigchain, and debugger interaction.
 art_add_target_probe(

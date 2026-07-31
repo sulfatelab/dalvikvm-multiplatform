@@ -757,7 +757,7 @@ Summary (details below; do not delete history):
 - **Area:** linux-host
 - **Gap:** ~~After repo migration, host Linux verified `dalvikvm -showversion` only~~ **scripted gate landed**.
 - **Exit criteria:** One scripted imageless Hello (or RESULT) on multiplatform `main`.
-- **Fix:** `tools/verify/linux_hello/run_imageless_hello.sh` + `RESULT.md` PASS on `build/native/dalvikvm` imageless `-Xint` Hello using the same shared multipath `boot.jar` bytes staged for Windows x64; ELF selects `UnixFileSystem` at runtime.
+- **Fix:** The historical PASS is retained in `tests/cases/imageless-runtime/RESULT.md`: imageless `-Xint` Hello used the same shared multipath `boot.jar` bytes staged for Windows x64, and ELF selected `UnixFileSystem` at runtime. The stale shell runner was retired; current managed coverage is explicitly pending the unified Java/D8 pipeline.
 - **Opened:** 2026-07-17
 - **Closed:** 2026-07-17
 

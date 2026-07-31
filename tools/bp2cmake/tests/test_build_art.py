@@ -118,6 +118,34 @@ def test_without_stage_builds_all_probes_and_records_runtime_status(
     assert catalog["probes"][0]["runtime_status"] == "verified"
 
 
+def test_test_command_forwards_parallel_limit(tmp_path, monkeypatch):
+    binary_dir = _configured_build(tmp_path)
+    tool_dir = tmp_path / "tools"
+    tool_dir.mkdir()
+    cmake = tool_dir / "cmake"
+    ctest = tool_dir / "ctest"
+    cmake.write_text("", encoding="utf-8")
+    ctest.write_text("", encoding="utf-8")
+    commands = []
+
+    monkeypatch.setattr(
+        build_art,
+        "_resolve_tools",
+        lambda _local, *, need_compiler: {"cmake": cmake, "ninja": tool_dir / "ninja"},
+    )
+    monkeypatch.setattr(build_art, "_run_checked", lambda command: commands.append(command))
+
+    build_art._test(binary_dir, LocalBuildConfig(), [], [], 32)
+
+    assert commands[0][-5:] == [
+        str(binary_dir),
+        "--parallel",
+        "32",
+        "--target",
+        "art-tests",
+    ]
+
+
 def test_stage_selector_reports_zero_applicable_probes(tmp_path, monkeypatch):
     binary_dir = _configured_build(tmp_path)
     catalog_path = binary_dir / "tests" / "art_test_catalog.json"

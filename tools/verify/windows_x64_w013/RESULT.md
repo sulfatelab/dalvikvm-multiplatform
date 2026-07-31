@@ -251,8 +251,8 @@ tools/verify/windows_x64_phase4/run_gcstress.sh
 tools/verify/windows_x64_phase4/run_threadheavy.sh
 tools/verify/windows_x64_phase4/run_handleleak.sh
 cmake --build build/native --target art dalvikvm -j16
-tools/verify/linux_hello/run_imageless_hello.sh
-tools/verify/linux_hello/run_gcstress.sh
+retired Linux shell runners; historical Hello result moved to
+tests/cases/imageless-runtime/RESULT.md and unified managed gates remain pending
 ```
 
 Results:
