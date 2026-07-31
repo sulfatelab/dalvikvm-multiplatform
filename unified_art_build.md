@@ -38,12 +38,12 @@ items are closed.
 |---|---|---|---|
 | Python frontend | COMPLETE for the initial slice | `generate`, `check-generated`, `configure`, `build`, `test`, and `stage` exist; subprocesses are shell-free | keep regression coverage current |
 | Linux x86-64 product | PARTIAL | a fresh full product build, 28-artifact stage, and native runtime version smoke pass | register runnable Linux CTest gates so the documented `test` command succeeds |
-| Windows x86-64 product | PARTIAL / experimental | the Linux-hosted cross build completes the full product graph, including the runtime, compiler, dex2oat, and libcore DSOs; the native Windows Server 2025 build has passed the earlier compiler/test slice | repeat the full product build natively and automate the complete artifact/topology/runtime gate set |
+| Windows x86-64 product | PARTIAL / experimental | Linux-hosted cross and native Windows Server 2025 builds both complete the full product graph; the native host also passes the current catalog, stage, load, topology, reparse-point, deterministic-generation, and no-op gates | automate the complete artifact/topology/runtime gate set and migrate the remaining behavioral tests |
 | Compiler DSO parity | COMPLETE for `art-compiler` | both targets emit a shared compiler DSO; Windows imports `art.dll` and exports `art_compiler_jit_create` | retain exact ABI and no-cycle gates |
 | Full DSO topology parity | PARTIAL | five module kinds and two target-specific module pairs still differ | convert each difference or record a reviewed target exception |
 | Unified phase catalog | PARTIAL | seven virtual stages declare 29 typed probes; all are currently applicable only to `windows-x86_64-msvc`, with three runnable CTest gates and a per-target status catalog | migrate behavioral runners, managed probes, portable JNI probes, and result checks |
 | Boot/runtime packaging | NOT STARTED in the unified frontend | boot JAR, boot image, run assets, cacerts, and host packages remain shell-driven | Python/CMake/Ninja-owned, binary-directory-local, fail-fast stages |
-| POSIX-free Windows build host | COMPLETE for native compilation, PARTIAL end to end | native product compilation needs no POSIX layer; packaging and most gates still use shell scripts | complete build, test, and staging on Windows without Bash/WSL/Cygwin |
+| POSIX-free Windows build host | COMPLETE for the current native graph, test catalog, and stage; PARTIAL end to end | configure, full product build, current CTest gates, and staging pass through native Python/CMake/Ninja/LLVM on Server 2025 without Bash/WSL/Cygwin; managed packaging and legacy behavioral runners remain shell-driven | migrate managed packaging and every retained behavioral gate to the same native-host contract |
 | Legacy build removal | PARTIAL | active product ownership was demoted and project-owned symlink overlays were removed; old generators, generated snapshots, phase product CMake, and split overlay datasets remain | remove or demote every alternative product path after gate migration |
 | CI/acceptance automation | NOT STARTED | no in-repository CI workflow owns the acceptance matrix | fresh-build, no-op, graph, command, artifact, and native-host gates run automatically |
 | Additional architectures | BLOCKED by capability gates | all 17 canonical identities are registered; only `linux-x86_64-gnu` and experimental `windows-x86_64-msvc` generate | admit each profile only after its architecture and runtime gates pass |
@@ -74,23 +74,34 @@ items are closed.
   `ART version 2.1.0 x86_64`.
 - [x] A second identical Linux `art-compiler` build reports
   `ninja: no work to do.`
-- [x] Native Windows Server 2025 x86-64 freshly builds the canonical
-  `windows-x86_64-msvc` graph in 714 actions with LLVM 21.1.8, CMake 3.31.8,
-  Ninja 1.13.2, and Python 3.13.14.
-- [x] The no-stage Windows `test` command builds all 19 executable probes and
-  10 probe DLLs in 68 actions, then passes all three registered runnable gates.
+- [x] At main-repository commit `22026b9`, native Windows Server 2025 x86-64
+  freshly configures and builds all 1825 actions in the canonical
+  `windows-x86_64-msvc` product graph with `--parallel 32`, LLVM 21.1.8,
+  CMake 3.31.8, Ninja 1.13.2, and Python 3.13.14. The source projection and
+  installed tools use space-free regular paths; archive timestamps ahead of
+  the VM clock were normalized before the clean acceptance run.
+- [x] The native no-stage Windows `test` command builds every applicable
+  catalog target and passes all three registered runnable gates: W-002
+  OSR/unwind plus the W-014 pthread-once and thread-stack probes.
 - [x] The resulting Windows catalog records 29 applicable/build-verified
   probes, three runtime-verified probes, and 26 compile-only probes with
   `runtime_status=not-required`.
-- [x] Windows `check-generated` passes and a second identical
-  `art-compiler` build reports `ninja: no work to do.`
+- [x] Native Windows `check-generated` passes for the 32-module, 260-Blueprint
+  graph, and a second identical full product build reports
+  `ninja: no work to do.`
 - [x] A clean Linux-hosted `windows-x86_64-msvc` cross build completed all
   1825 Ninja actions with `--parallel 32`. It links `art.dll`,
   `art-compiler.dll`, `art-dex2oat.dll`, `dex2oat.exe`, `javacore.dll`,
   `openjdk.dll`, and `openjdkjvm.dll`; this is a build/link result and does not
   claim Windows AOT/OAT runtime capability.
-- [x] Windows staging records 14 regular-file artifacts, contains no reparse
-  points, and passes the staged DLL load/export smoke.
+- [x] Native Windows staging records 27 hashed regular-file artifacts plus its
+  JSON manifest. A non-following scan finds zero reparse points in the complete
+  build tree, and Python `ctypes` loads both staged `art.dll` and
+  `art-compiler.dll` from the staged dependency closure.
+- [x] Native LLVM object inspection reports COFF x86-64, dynamic-base,
+  high-entropy-VA, and NX-compatible `art-compiler.dll`; it imports `art.dll`,
+  exports `art_compiler_jit_create`, and `art.dll` has no reverse import of the
+  compiler DLL.
 - [x] The current cross-built Windows stage records 27 regular-file artifacts
   and the Linux stage records 28; non-following scans find no symlinks in
   either build or stage tree.
@@ -99,8 +110,13 @@ items are closed.
   `vendor/r8/r8.jar` binary-tool exception; the former tracked Phase 3 evidence
   ZIP now lives under ignored `out/` storage and its accepted SHA-256 remains in
   the text record.
-- [x] Audited Ninja commands contain no Bash, Make, NMake, GCC, MinGW,
-  `cl.exe`, `clang-cl`, or clang-mingw invocation.
+- [x] All 1825 native Windows Ninja commands were audited. Their outer
+  executables are 1099 plain `clang++.exe` commands, 645 plain `clang.exe`
+  commands, and 81 CMake-generated native `cmd.exe` wrappers for archive,
+  export-table, link, or Python-codegen sequences. No POSIX shell, Make,
+  NMake, GCC, G++, MinGW, `cl.exe`, `clang-cl`, direct `ld.lld`, or direct
+  `lld-link` invocation occurs; links inside the native wrappers still invoke
+  the configured plain Clang driver with `-shared` and `-fuse-ld=lld`.
 - [ ] The documented Linux `test` command currently fails: the Linux catalog
   registers zero CTest tests and `--no-tests=error` correctly returns failure.
 
