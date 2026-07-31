@@ -146,6 +146,9 @@ items are closed.
   host suite. It checks the actual retired-workaround contract instead of the
   obsolete whole-file equality rule that rejected accepted guarded FS-1
   stack-high-water instrumentation.
+- [x] The six documentation-only Linux E2E bring-up records moved from
+  `tools/verify/e2e` to flat, clearly historical names under `docs/history`;
+  their obsolete harness commands are not test entry points.
 - [x] Native Windows `check-generated` passes for the 32-module, 260-Blueprint
   graph, and a second identical full product build reports
   `ninja: no work to do.`

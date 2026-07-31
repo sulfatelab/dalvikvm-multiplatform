@@ -140,7 +140,8 @@ link edge), and the
 **javacorenatives** group (`libjavacore`, `libopenjdk`, + ICU/crypto/expat JNI)
 wasn't converted yet. Without it, libcore `native` methods (e.g.
 `Class.getNameNative`) were unregistered, so the first exception's `toString`
-recurred to a StackOverflow → SIGSEGV. See `tools/verify/e2e/RESULT.md`.
+recurred to a StackOverflow → SIGSEGV. See
+`docs/history/linux_e2e_initial_result.md`.
 
 That blocker was later resolved: the current Linux product executes the shared
 boot.jar, and the Windows product loads real PE `libjavacore`, `libopenjdk`,
@@ -584,5 +585,4 @@ smoke have since been completed.
 - Java build: `../MinDalvikVM-Archive/javalib/build.gradle.kts`
 - Reusable helpers: `../MinDalvikVM-Archive/buildSrc/src/main/`
 - Submodule list + URLs: `../MinDalvikVM-Archive/.gitmodules`
-
 

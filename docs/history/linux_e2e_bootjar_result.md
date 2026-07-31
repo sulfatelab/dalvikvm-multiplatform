@@ -1,4 +1,4 @@
-# boot.jar rebuilt from vendor/libcore (beta-4) — result + String ClassSize finding
+# Historical beta-4 boot-JAR result and String ClassSize finding
 
 Date: 2026-06-20. VM: bumped libart (beta-4, RelWithDebInfo). Archive untouched.
 

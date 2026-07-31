@@ -1,4 +1,4 @@
-# art+libcore bump to android-u-beta-4-gpl — result
+# Historical ART + libcore bump to android-u-beta-4-gpl
 
 Date: 2026-06-20. RelWithDebInfo, clang-21. Archive NOT touched.
 
@@ -49,7 +49,7 @@ Running Hello.main() now reaches ART's OWN coherence check and aborts cleanly
   ... Make sure that libcore and art projects match.
   (String objectSize=779 expected by beta-4 libart vs 771 in the old boot.jar)
 
-The /tmp/vm boot.jar is still the archive's 2023 output.jar (built from the OLD
+The historical runtime-root boot.jar was still the archive's 2023 output.jar (built from the OLD
 libcore), so its dex class layouts don't match beta-4 libart. This is ART's
 intended "rebuild boot.jar to match" check -- the native bump is correct; the
 Java boot classpath now needs rebuilding from vendor/libcore (beta-4) via the

@@ -1,4 +1,4 @@
-# art + libcore bump: android-u-beta-4-gpl -> android-16.0.0_r4
+# Historical ART + libcore bump to android-16.0.0_r4
 
 Date: 2026-06-21 (updated 2026-07-14). Bumps the vendored AOSP snapshot forward ~3 major versions
 (Android 14 U beta, Jun 2023 -> Android 16 stable r4, Oct 2025), the project's
@@ -85,13 +85,13 @@ default-member-init `size_ = 0u`. Wired into `tools/vendor-sync.sh`.
 
 ```sh
 bash tools/bootjar/build.sh && bash tools/bootjar/dex.sh
-# stage boot.jar + hello.jar + ICU under /tmp/vm/run (see tools/bootimage/run.sh)
-ANDROID_ROOT=/tmp/vm/run ANDROID_ART_ROOT=/tmp/vm/run ANDROID_I18N_ROOT=/tmp/vm/run \
-ANDROID_DATA=/tmp/vm/run/data ICU_DATA=/tmp/vm/run/icu LD_LIBRARY_PATH=build/native \
+# historical staging used one local runtime root (see tools/bootimage/run.sh)
+ANDROID_ROOT=<runtime-root> ANDROID_ART_ROOT=<runtime-root> ANDROID_I18N_ROOT=<runtime-root> \
+ANDROID_DATA=<runtime-root>/data ICU_DATA=<runtime-root>/icu LD_LIBRARY_PATH=build/native \
   build/native/dalvikvm \
-    -Xbootclasspath:/tmp/vm/run/boot.jar -Xbootclasspath-locations:/tmp/vm/run/boot.jar \
+    -Xbootclasspath:<runtime-root>/boot.jar -Xbootclasspath-locations:<runtime-root>/boot.jar \
     -Ximage:/nonexistent-no-boot-image \
-    -cp /tmp/vm/run/hello.jar Hello
+    -cp <runtime-root>/hello.jar Hello
 ```
 
 Optional next: `tools/bootimage/build.sh` + `run.sh` for the fast image-backed path.

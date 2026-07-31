@@ -949,7 +949,8 @@ broader JIT-memory hardening remains W-025 and is maintained in
 - `vendor/art/runtime/base/mutex.h` — futex gated on `__linux__`  
 - `vendor/art/build/Android.bp` — runtime disabled on Windows upstream  
 - `vendor/libcore/multiplatform/windows/` — Windows libcore Java/native implementation
-- `tools/verify/e2e/RESULT.md` — Linux e2e baseline for oracle tests
+- `docs/history/linux_e2e_initial_result.md` — historical Linux E2E baseline
+  for oracle tests
 - `/home/agent/Projects/windows_x64-dev-env/README.md` — Windows x64 cross-dev environment (clang/lld, xwin SDK, libc++, compiler-rt)
 - `/home/agent/Projects/llvm-runtimes-windows_x64/README.md` — libc++ cross-build notes
 - `/home/agent/Projects/llvm-windows-msvc/` — official LLVM Windows package cache (compiler-rt source)  

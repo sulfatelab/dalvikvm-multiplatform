@@ -1,4 +1,4 @@
-# End-to-end run: execute Java bytecode on the converter-built dalvikvm
+# Historical Linux E2E bring-up
 
 Validates the ultimate goal (`command-example.txt` pattern): the `dalvikvm` built
 entirely from `Android.bp` via bp2cmake actually runs a Java program against the
@@ -12,7 +12,7 @@ boot class library.
   2023 prebuilt is reused as-is.
 - ICU data: `javalib/external/icu/icu4c/source/stubdata/icudt72l.dat`.
 - test app: `Hello.java` -> `javac --release 8` -> `d8 --min-api 31` -> hello.jar
-  (classes.dex). d8 from `~/Android/Sdk/cmdline-tools/latest/bin/d8`.
+  (classes.dex). D8 came from the machine-local Android SDK binding.
 
 ## Run
 
@@ -31,4 +31,4 @@ dex directly. This is correct but slow on first init (no JIT image; cold
 interpret of all of libcore boot init). A boot image would need dex2oat (not yet
 converted).
 
-See RESULT.md for the observed outcome.
+See `linux_e2e_initial_result.md` for the observed outcome.

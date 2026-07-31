@@ -1,4 +1,4 @@
-# End-to-end run — result: full native stack built; blocked on libart<->libcore skew
+# Historical Linux E2E result: native stack built, libart/libcore skew found
 
 Date: 2026-06-20 (updated). VM: converter-built dalvikvm, RelWithDebInfo, clang-21.
 
@@ -52,5 +52,6 @@ SO check on glibc), worth investigating separately. Reported via notify-human.
 
 ## Reproduce
 
-generate (native/generate.sh passes libcore/ICU/fdlibm extra roots) ->
-cmake RelWithDebInfo -> ninja -> /tmp/vm staging -> dalvikvm -cp hello.jar Hello.
+generate (native/generate.sh passed libcore/ICU/fdlibm extra roots) ->
+cmake RelWithDebInfo -> ninja -> isolated runtime staging ->
+dalvikvm -cp hello.jar Hello.

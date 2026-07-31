@@ -1,4 +1,4 @@
-# dex2oat boot image — end-to-end SUCCESS (2026-06-21)
+# Historical dex2oat boot-image E2E result (2026-06-21)
 
 A Java program now runs on the bp2cmake-converted GNU/Linux dalvikvm, backed by
 a dex2oat-built boot image. VM: bumped art+libcore (android-u-beta-4-gpl) in
