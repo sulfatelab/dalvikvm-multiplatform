@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "name": "implicit-e9",
+      "arguments": ["implicit", "e9"],
+      "expected_markers": [
+        "ready mode=implicit target_policy=e9",
+        "selected_offset=0x6000",
+        "terminal caught=0xc0000005 observed=0xc0000005 access_type=0",
+        "region label=in_filter valid=1",
+        "protect=0x1 protect_name=PAGE_NOACCESS",
+        "recovery installed=1 restore_ok=1 setup_error=0 restore_error=0 worker_exit=0",
+        "win32_stack_pregrow_probe mode=implicit target_policy=e9 failures=0",
+        "win32_stack_pregrow_probe OK"
+      ],
+      "forbidden_markers": ["FAIL "],
+      "repetitions": 30,
+      "timeout_seconds": 30
+    },
+    {
+      "name": "native-collision-e9",
+      "arguments": ["native", "e9"],
+      "expected_markers": [
+        "native_collision target_policy=e9 child_exit=0xc0000005 expected=0xc0000005",
+        "win32_stack_pregrow_probe mode=native expected_fatal_collision=1",
+        "win32_stack_pregrow_probe OK"
+      ],
+      "forbidden_markers": ["FAIL "],
+      "timeout_seconds": 30
+    },
+    {
+      "name": "attach-detach-e9",
+      "arguments": ["attach-detach", "e9"],
+      "expected_markers": [
+        "ready mode=attach-detach target_policy=e9",
+        "terminal caught=0x00000000 observed=0x00000000",
+        "region label=after_restore valid=1",
+        "protect=0x4 protect_name=PAGE_READWRITE",
+        "recovery installed=1 restore_ok=1 setup_error=0 restore_error=0 worker_exit=0",
+        "win32_stack_pregrow_probe mode=attach-detach target_policy=e9 failures=0",
+        "win32_stack_pregrow_probe OK"
+      ],
+      "forbidden_markers": ["FAIL "],
+      "repetitions": 5,
+      "timeout_seconds": 30
+    },
+    {
+      "name": "commit-scale-1",
+      "arguments": ["commit-scale", "e9", "--threads=1"],
+      "expected_markers": [
+        "commit_scale target_policy=e9 threads=1 created=1",
+        "stack_commit_sum=2093056 failures=0",
+        "win32_stack_pregrow_probe mode=commit-scale OK"
+      ],
+      "forbidden_markers": ["FAIL "],
+      "timeout_seconds": 30
+    },
+    {
+      "name": "commit-scale-10",
+      "arguments": ["commit-scale", "e9", "--threads=10"],
+      "expected_markers": [
+        "commit_scale target_policy=e9 threads=10 created=10",
+        "stack_commit_sum=20930560 failures=0",
+        "win32_stack_pregrow_probe mode=commit-scale OK"
+      ],
+      "forbidden_markers": ["FAIL "],
+      "timeout_seconds": 30
+    },
+    {
+      "name": "commit-scale-100",
+      "arguments": ["commit-scale", "e9", "--threads=100"],
+      "expected_markers": [
+        "commit_scale target_policy=e9 threads=100 created=100",
+        "stack_commit_sum=209305600 failures=0",
+        "win32_stack_pregrow_probe mode=commit-scale OK"
+      ],
+      "forbidden_markers": ["FAIL "],
+      "timeout_seconds": 30
+    }
+  ]
+}

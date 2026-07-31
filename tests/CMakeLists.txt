@@ -1030,14 +1030,27 @@ art_add_target_probe(
         --forbid "FAIL "
         --timeout 60)
 art_add_target_probe(
-    NAME win32_stack_pregrow_probe STAGE w014 TYPE EXECUTABLE EXECUTION compile-only
+    NAME win32_stack_pregrow_probe STAGE w014 TYPE EXECUTABLE
+    EXECUTION target-runnable TIMEOUT 1200
     ${_art_windows_x86_64_msvc_selector}
     SOURCES
         "${_art_test_cases_root}/stack-pregrow/probe.c"
         "${_art_test_cases_root}/stack-pregrow/implicit_fault_x86_64.S"
     LINK_LIBRARIES psapi
     COMPILE_DEFINITIONS ${_art_windows_defines}
-    CONTRACTS stack fault)
+    CONTRACTS stack fault
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_test_repo_root}/tests/support/runtime_gate.py"
+        native-matrix
+        --target-id "${ART_TARGET_ID}"
+        --probe "$<TARGET_FILE:win32_stack_pregrow_probe>"
+        --work-root
+            "${CMAKE_CURRENT_BINARY_DIR}/results/w014-stack-pregrow"
+        --library-dir "${CMAKE_BINARY_DIR}"
+        --library-dir "${_art_bundle_lib}/libcxx/bin"
+        --matrix
+            "${_art_test_cases_root}/stack-pregrow/runtime-matrix.json")
 art_add_target_probe(
     NAME win32_cet_policy_probe STAGE w014 TYPE EXECUTABLE
     EXECUTION target-runnable TIMEOUT 120

@@ -67,7 +67,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     assert sum(not probe["target_ids"] for probe in catalog["probes"]) == 62
     assert sum(
         probe["execution"] == "target-runnable" for probe in catalog["probes"]
-    ) == 19
+    ) == 20
     assert {
         probe["name"]: probe["timeout_seconds"]
         for probe in catalog["probes"]
@@ -83,6 +83,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "win32_stack_page_probe": 240,
         "win32_stack_growth_probe": 900,
         "win32_stack_growth_rx_probe": 120,
+        "win32_stack_pregrow_probe": 1200,
         "win32_cet_policy_probe": 120,
     }
     assert [

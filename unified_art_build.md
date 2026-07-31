@@ -142,6 +142,13 @@ items are closed.
   zero known incompatible fields. The authoritative Server 2025 Stage-8 tree
   passed all six current W-014 gates in 2.47 seconds with a Ninja no-op, zero
   result path leaks, and zero source/output reparse points.
+- [x] The exact x86-64 W-014 pre-growth diagnostic is now a unified native
+  matrix: implicit E9 passed 30/30, native collision produced the expected
+  `0xc0000005` child exit, attach/detach passed 5/5, and the 1/10/100-thread
+  commit-scale cases preserved the exact 2,093,056-byte per-worker cost. All
+  39/39 process runs passed. The complete current W-014 stage passed 7/7 in
+  3.81 seconds with a Ninja no-op, sanitized records, zero reparse points, and
+  responsive `lsass` and `sshd`.
 - [x] All 48 retained Java probe sources now have logical `tests/cases`
   ownership and adjacent results. The registry emits 47 managed artifacts;
   the old verification tree owns no Java source.
@@ -280,9 +287,9 @@ One historical work stage maps to exactly one virtual target named
 | `w004` | 2 EXEs, 1 DLL, 33 managed, 2 gates | 5 exact / 33 typed | 6 runnable, 32 compile-only | Windows embedding/JVMTI/libcore behavior beyond the accepted Hello/GC/Math/SHA slice |
 | `w010` | 4 EXEs, 3 managed | 1 exact / 6 typed | 7 compile-only | managed-fault, fatal-unwind, debugger, and dump review |
 | `w013` | 4 EXEs, 1 managed, 3 gates | 3 exact / 5 typed | 6 runnable, 1 host-review, 1 compile-only | registered x86-64 native, managed, and source-policy coverage is complete |
-| `w014` | 7 EXEs, 1 DLL, 1 managed | 3 exact / 6 typed | 6 runnable, 3 compile-only | pre-growth and managed stack-high-water matrices |
+| `w014` | 7 EXEs, 1 DLL, 1 managed | 3 exact / 6 typed | 7 runnable, 2 compile-only | managed JNI stack-high-water gate |
 | `w025` | 4 EXEs, 3 DLLs, 3 managed | 6 exact / 4 typed | 10 compile-only | JIT mapping/lifecycle/CFG runtime and host-review gates |
-| Total | 22 EXEs, 10 DLLs, 47 managed, 5 gates | 22 exact / 62 typed | 19 runnable, 1 host-review, 64 compile-only | Windows applies 82 declarations; Linux x86-64 applies seven |
+| Total | 22 EXEs, 10 DLLs, 47 managed, 5 gates | 22 exact / 62 typed | 20 runnable, 1 host-review, 63 compile-only | Windows applies 82 declarations; Linux x86-64 applies seven |
 
 The shared registry now references zero source files from historical
 verification directories. All 84 declarations own canonical source under
