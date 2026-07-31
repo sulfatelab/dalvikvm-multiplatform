@@ -44,7 +44,7 @@ items are closed.
 | Unified phase catalog | PARTIAL | seven virtual stages declare 29 native probes, 47 managed JARs, and two command gates; Windows has 76 applicable items and six runnable registrations, while Linux x86-64 has five applicable/runnable W-004 items | migrate behavioral runners, portable JNI expansion, and result checks |
 | Boot/runtime packaging | PARTIAL | the base boot JAR and probe JARs are Python/CMake/Ninja-owned, deterministic, target-local, and fail-fast; managed gates isolate a runtime root and stage pinned ICU data plus the mandatory native boot DSO closure | add boot images, security providers/resources, cacerts, and complete runtime packages |
 | POSIX-free Windows build host | COMPLETE for the current native/managed W-004 graph; PARTIAL end to end | Server 2025 uses configured official JDK 21, Python, CMake, Ninja, and plain Clang drivers; native managed build/runtime and no-op gates pass without POSIX tooling | migrate every retained behavioral gate and run the complete current catalog |
-| Legacy build removal | PARTIAL | active product ownership was demoted and project-owned symlink overlays were removed; old generators, generated snapshots, phase product CMake, and split overlay datasets remain | remove or demote every alternative product path after gate migration |
+| Legacy build removal | PARTIAL | active product ownership was demoted, project-owned symlink overlays were removed, and eight superseded Linux miniature product graphs were deleted; old generators, generated snapshots, Windows phase product CMake, and split overlay datasets remain | remove or demote every alternative product path after gate migration |
 | CI/acceptance automation | NOT STARTED | no in-repository CI workflow owns the acceptance matrix | fresh-build, no-op, graph, command, artifact, and native-host gates run automatically |
 | Additional architectures | BLOCKED by capability gates | all 17 canonical identities are registered; only `linux-x86_64-gnu` and experimental `windows-x86_64-msvc` generate | admit each profile only after its architecture and runtime gates pass |
 | Windows AOT/OAT | BLOCKED / separate track | compiler DSO parity does not provide Windows OAT production or loading | satisfy `win32_aot_oat.md`; do not imply capability from `art-compiler.dll` |
@@ -129,6 +129,11 @@ items are closed.
   fresh source projection and complete W-004 build tree. The three result JSON
   files record exit zero, no missing/forbidden markers, target ID and JAR
   hashes, while containing no build-host absolute paths.
+- [x] The eight early Linux converter bring-up harnesses under `tools/verify`
+  were removed after the unified graph, show-version gate, and maintained
+  historical scope document subsumed their product and evidence roles. Their
+  checked-in generated CMake snapshots and isolation stubs are no longer
+  alternative build entry points.
 - [x] Native Windows `check-generated` passes for the 32-module, 260-Blueprint
   graph, and a second identical full product build reports
   `ninja: no work to do.`
@@ -619,11 +624,12 @@ an unreviewed module-set or kind change.
 
 ### Legacy inventory blocking Phase 5 removal
 
-The retained alternative build descriptions comprise roughly 8,067 lines
-across the checked-in Linux graph, Phase-0/Phase-1 graphs and CMake entry
-points, libcore/ICU snapshot, and split overlay datasets. They are not invoked
-by `tools/build_art.py`, but remain runnable and can drift. Removal is blocked
-only by missing unified gate ownership, not by product graph generation.
+The retained alternative build descriptions are concentrated in the checked-in
+Linux graph, Windows Phase-0/Phase-1 graphs and CMake entry points, libcore/ICU
+snapshot, and split overlay datasets. The eight early Linux isolation and
+miniature product graphs have been removed. The remaining descriptions are not
+invoked by `tools/build_art.py`, but remain runnable and can drift. Removal is
+blocked only by missing unified gate ownership, not by product graph generation.
 
 The repository also has no checked-in CI workflow. External or manual evidence
 does not replace a repeatable in-repository acceptance entry point.

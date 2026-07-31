@@ -505,7 +505,7 @@ endif()
 # --- Toolchain-drift shims (2023 sources vs clang-21; harness-level only) ----
 # These compensate for source/toolchain drift and disappear when submodules are
 # bumped to current AOSP. NONE of this is in the converter or the overlay. See
-# tools/verify/runtime/RESULT.md and the toolchain-drift notes.
+# bp2cmake_linux_scope.md and the toolchain-drift notes.
 if(ART_TARGET_PLATFORM STREQUAL "windows")
     set(_PRELUDE "${MDVM_COMPAT_INCLUDE_DIR}/mdvm_windows_x64_prelude.h")
     set(_art_windows_system_compile_options)

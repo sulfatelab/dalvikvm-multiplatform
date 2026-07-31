@@ -27,8 +27,9 @@ and current Windows/Linux status is tracked by the root platform documents.
 - **Foundational layer DONE and validated**: all 8 libs the archive builds
   before `art/` — `libbase`, `liblog`, `libnativehelper`, `libprocinfo`,
   `libziparchive`, `libtinyxml2`, `liblzma`, `libcpu_features` — are converted
-  from `.bp`, compile, and link together (real liblog, no stub). See
-  `tools/verify/foundational/RESULT.md`. Generated CMake already fixes two
+  from `.bp`, compile, and link together (real liblog, no stub). The retired
+  one-library and foundational miniature CMake graphs established this result;
+  the unified graph later subsumed them. Generated CMake already fixes two
   archive bugs (dropped `errors_unix.cpp`; warning flags only on C TUs).
 - **Project-owned `//compat`** include root established for vendored shim
   headers replacing absent Android deps (first: `gtest/gtest_prod.h`). Distinct
@@ -53,9 +54,9 @@ and current Windows/Linux status is tracked by the root platform documents.
   limit) propagate to consumers.
 - **Validated**: `libartpalette.so` (no codegen) and `libartbase.so` (2.9 MB,
   3 generated `operator_out.cc`, full dep chain incl. host libcap) both build
-  and link. See `tools/verify/{artpalette,artbase}/RESULT.md`.
-- **13-module combined graph builds** (`tools/verify/artcore/`): 8 foundational
-  + `libartpalette`, `libartbase`, `libdexfile`, `libelffile`, `libprofile`.
+  and link in the retired focused harnesses.
+- **13-module combined graph built**: 8 foundational libraries plus
+  `libartpalette`, `libartbase`, `libdexfile`, `libelffile`, and `libprofile`.
   `libprofile.so` links the full converted closure. PUBLIC-define propagation
   confirmed (dexfile gets artbase's art.go defines via the link, unrestated).
 
@@ -69,7 +70,9 @@ the converter + codegen driver, and the VM RUNS:
 
 - `dalvikvm` (PIE, 136 KB) links the full 19-module graph; `libart.so` builds
   with 237 srcs + 30 operator_out + mterp_x86_64.S + asm_defines.h + 5 .S
-  entrypoint objects. See `tools/verify/runtime/RESULT.md`.
+  entrypoint objects. This document retains the useful result from the retired
+  runtime miniature graph; current acceptance is owned by the unified frontend
+  and `tests/cases/art-runtime-show-version/`.
 - The Python codegen driver (operator_out via emitter custom-commands;
   mterp + asm_defines via the driver at configure time) all works in the real
   build.
@@ -581,6 +584,5 @@ smoke have since been completed.
 - Java build: `../MinDalvikVM-Archive/javalib/build.gradle.kts`
 - Reusable helpers: `../MinDalvikVM-Archive/buildSrc/src/main/`
 - Submodule list + URLs: `../MinDalvikVM-Archive/.gitmodules`
-
 
 
