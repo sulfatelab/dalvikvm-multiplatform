@@ -7,6 +7,85 @@ option(ART_ENABLE_TARGET_RUNTIME_TESTS
 
 get_filename_component(_art_test_repo_root "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
 set(_art_test_cases_root "${CMAKE_CURRENT_LIST_DIR}/cases")
+set(_art_managed_builder "${CMAKE_CURRENT_LIST_DIR}/support/managed_artifact.py")
+set(_art_managed_root "${CMAKE_CURRENT_BINARY_DIR}/managed")
+set(_art_r8_jar "${_art_test_repo_root}/vendor/r8/r8.jar")
+if(NOT ART_JDK_ROOT)
+    message(FATAL_ERROR
+        "ART_JDK_ROOT is required; configure through tools/build_art.py")
+endif()
+if(NOT EXISTS "${_art_r8_jar}")
+    message(FATAL_ERROR "Pinned D8/R8 tool is missing: ${_art_r8_jar}")
+endif()
+
+set(_art_boot_source_roots
+    "${_art_test_repo_root}/vendor/libcore/ojluni/src/main/java"
+    "${_art_test_repo_root}/vendor/libcore/libart/src/main/java"
+    "${_art_test_repo_root}/vendor/libcore/dalvik/src/main/java"
+    "${_art_test_repo_root}/vendor/libcore/luni/src/main/java"
+    "${_art_test_repo_root}/vendor/libcore/xml/src/main/java"
+    "${_art_test_repo_root}/vendor/libcore/json/src/main/java"
+    "${_art_test_repo_root}/vendor/icu/android_icu4j/src/main/java"
+    "${_art_test_repo_root}/vendor/icu/android_icu4j/libcore_bridge/src/java"
+    "${_art_test_repo_root}/compat/java-stubs")
+set(_art_boot_sources)
+foreach(_art_boot_source_root IN LISTS _art_boot_source_roots)
+    file(GLOB_RECURSE _art_boot_source_tree CONFIGURE_DEPENDS
+        "${_art_boot_source_root}/*.java")
+    list(APPEND _art_boot_sources ${_art_boot_source_tree})
+endforeach()
+set(_art_boot_aconfig
+    "${_art_test_repo_root}/vendor/libcore/libcore.aconfig"
+    "${_art_test_repo_root}/vendor/art/build/flags/art-flags.aconfig"
+    "${_art_test_repo_root}/vendor/art/build/flags/art-rw-flags.aconfig")
+set(_art_boot_jar "${_art_managed_root}/boot.jar")
+set(_art_boot_manifest "${_art_managed_root}/boot.manifest.json")
+set(_art_boot_classes "${_art_managed_root}/classes/boot")
+add_custom_command(
+    OUTPUT "${_art_boot_jar}" "${_art_boot_manifest}"
+    BYPRODUCTS
+        "${_art_managed_root}/inputs/boot.classes.jar"
+        "${_art_managed_root}/arguments/boot.sources.args"
+        "${_art_managed_root}/logs/boot.javac.log"
+        "${_art_managed_root}/logs/boot.d8.log"
+    COMMAND "${Python3_EXECUTABLE}" "${_art_managed_builder}"
+        --jdk-root "${ART_JDK_ROOT}"
+        --r8-jar "${_art_r8_jar}"
+        --source-root "${_art_test_repo_root}"
+        --output-root "${_art_managed_root}"
+        --name boot
+        --source-tree "${_art_test_repo_root}/vendor/libcore/ojluni/src/main/java"
+        --source-tree "${_art_test_repo_root}/vendor/libcore/libart/src/main/java"
+        --source-tree "${_art_test_repo_root}/vendor/libcore/dalvik/src/main/java"
+        --source-tree "${_art_test_repo_root}/vendor/libcore/luni/src/main/java"
+        --source-tree "${_art_test_repo_root}/vendor/libcore/xml/src/main/java"
+        --source-tree "${_art_test_repo_root}/vendor/libcore/json/src/main/java"
+        --source-tree "${_art_test_repo_root}/vendor/icu/android_icu4j/src/main/java"
+        --source-tree "${_art_test_repo_root}/vendor/icu/android_icu4j/libcore_bridge/src/java"
+        --source-tree "${_art_test_repo_root}/compat/java-stubs"
+        --exclude vendor/libcore/luni/src/main/java/libcore/net/http/Dns.java
+        --exclude vendor/libcore/luni/src/main/java/libcore/net/http/HttpURLConnectionFactory.java
+        --exclude vendor/libcore/libart/src/main/java/java/lang/AndroidHardcodedSystemProperties.java
+        --aconfig "${_art_test_repo_root}/vendor/libcore/libcore.aconfig"
+        --aconfig "${_art_test_repo_root}/vendor/art/build/flags/art-flags.aconfig"
+        --aconfig "${_art_test_repo_root}/vendor/art/build/flags/art-rw-flags.aconfig"
+        --patch-module "${_art_test_repo_root}/vendor/libcore/ojluni/src/main/java"
+        --javac-option=-g:none
+        --javac-option=-encoding
+        --javac-option=UTF-8
+        --javac-option=-XDstringConcat=inline
+        --javac-option=-nowarn
+        --javac-option=-proc:none
+        --android-platform-build
+    DEPENDS
+        "${_art_managed_builder}"
+        "${_art_r8_jar}"
+        ${_art_boot_sources}
+        ${_art_boot_aconfig}
+    COMMENT "Building target-neutral ART boot.jar with configured JDK 21 and D8"
+    VERBATIM)
+add_custom_target(art-managed-boot-jar
+    DEPENDS "${_art_boot_jar}" "${_art_boot_manifest}")
 
 function(art_define_test_stage stage)
     if(NOT stage MATCHES "^w[0-9][0-9][0-9]$")
@@ -181,6 +260,57 @@ function(art_add_target_probe)
                 "Command gate ${PROBE_NAME} cannot declare compile or link inputs")
         endif()
         add_custom_target("${PROBE_NAME}")
+    elseif(PROBE_TYPE STREQUAL "MANAGED")
+        if(NOT PROBE_SOURCES)
+            message(FATAL_ERROR "Managed probe ${PROBE_NAME} has no Java sources")
+        endif()
+        if(PROBE_INCLUDE_DIRS OR PROBE_LINK_LIBRARIES OR PROBE_COMPILE_OPTIONS OR
+           PROBE_COMPILE_DEFINITIONS OR PROBE_LINK_OPTIONS OR PROBE_PRODUCT_POLICY OR
+           PROBE_WINDOWS_EXPORT_ALL_SYMBOLS OR PROBE_PREFIX)
+            message(FATAL_ERROR
+                "Managed probe ${PROBE_NAME} cannot declare native compile/link inputs")
+        endif()
+        if(PROBE_OUTPUT_NAME)
+            set(_art_managed_name "${PROBE_OUTPUT_NAME}")
+        else()
+            set(_art_managed_name "${PROBE_NAME}")
+        endif()
+        set(_art_managed_sources)
+        foreach(_art_managed_source IN LISTS PROBE_SOURCES)
+            list(APPEND _art_managed_sources --source "${_art_managed_source}")
+        endforeach()
+        set(_art_managed_jar "${_art_managed_root}/${_art_managed_name}.jar")
+        set(_art_managed_manifest
+            "${_art_managed_root}/${_art_managed_name}.manifest.json")
+        add_custom_command(
+            OUTPUT "${_art_managed_jar}" "${_art_managed_manifest}"
+            BYPRODUCTS
+                "${_art_managed_root}/inputs/${_art_managed_name}.classes.jar"
+                "${_art_managed_root}/arguments/${_art_managed_name}.sources.args"
+                "${_art_managed_root}/logs/${_art_managed_name}.javac.log"
+                "${_art_managed_root}/logs/${_art_managed_name}.d8.log"
+            COMMAND "${Python3_EXECUTABLE}" "${_art_managed_builder}"
+                --jdk-root "${ART_JDK_ROOT}"
+                --r8-jar "${_art_r8_jar}"
+                --source-root "${_art_test_repo_root}"
+                --output-root "${_art_managed_root}"
+                --name "${_art_managed_name}"
+                --boot-classpath "${_art_boot_classes}"
+                ${_art_managed_sources}
+            DEPENDS
+                art-managed-boot-jar
+                "${_art_managed_builder}"
+                "${_art_r8_jar}"
+                ${PROBE_SOURCES}
+            COMMENT "Building managed ART probe ${PROBE_NAME}"
+            COMMAND_EXPAND_LISTS
+            VERBATIM)
+        add_custom_target("${PROBE_NAME}"
+            DEPENDS "${_art_managed_jar}" "${_art_managed_manifest}")
+        add_dependencies("${PROBE_NAME}" art-managed-boot-jar)
+        add_dependencies(art-managed-tests "${PROBE_NAME}")
+        set_property(TARGET "${PROBE_NAME}" PROPERTY ART_MANAGED_JAR
+            "${_art_managed_jar}")
     else()
         if(NOT TARGET art-test-target-policy)
             message(FATAL_ERROR
@@ -260,6 +390,7 @@ function(art_add_target_probe)
 endfunction()
 
 add_custom_target(art-tests)
+add_custom_target(art-managed-tests)
 foreach(stage w002 w003 w004 w010 w013 w014 w025)
     art_define_test_stage("${stage}")
 endforeach()
@@ -347,6 +478,18 @@ art_add_target_probe(
     SOURCES "${_art_test_cases_root}/osr-unwind/probe.cc"
     DEPENDS art
     CONTRACTS osr unwind PRODUCT_POLICY)
+art_add_target_probe(
+    NAME managed_w002_attach STAGE w002 TYPE MANAGED EXECUTION compile-only
+    ${_art_windows_current_selector}
+    SOURCES "${_art_test_cases_root}/attached-thread-entry/W002AttachProbe.java"
+    CONTRACTS jni attach
+    OUTPUT_NAME w002attachprobe)
+art_add_target_probe(
+    NAME managed_w002_osr STAGE w002 TYPE MANAGED EXECUTION compile-only
+    ${_art_windows_x86_64_msvc_selector}
+    SOURCES "${_art_test_cases_root}/osr-unwind/W002OsrProbe.java"
+    CONTRACTS osr unwind
+    OUTPUT_NAME w002osrprobe)
 
 # W-003: quick-frame and native ABI preservation. The first two C sources are
 # portability candidates, but remain Windows x86-64 MSVC until separately
@@ -385,6 +528,32 @@ art_add_target_probe(
     LINK_OPTIONS "${_art_no_cet}"
     CONTRACTS jni native-abi xmm
     PREFIX lib WINDOWS_EXPORT_ALL_SYMBOLS)
+art_add_target_probe(
+    NAME managed_critical_native STAGE w003 TYPE MANAGED EXECUTION compile-only
+    ${_art_windows_current_selector}
+    SOURCES
+        "${_art_test_cases_root}/jni-critical-native/CriticalNativeProbe.java"
+        "${_art_test_cases_root}/jni-critical-native/CriticalNativeDlsymProbe.java"
+    CONTRACTS jni native-abi
+    OUTPUT_NAME criticalnativeprobe)
+art_add_target_probe(
+    NAME managed_native_abi STAGE w003 TYPE MANAGED EXECUTION compile-only
+    ${_art_windows_current_selector}
+    SOURCES "${_art_test_cases_root}/jni-native-abi/FastNativeAbiProbe.java"
+    CONTRACTS jni native-abi
+    OUTPUT_NAME fastnativeabiprobe)
+art_add_target_probe(
+    NAME managed_w003_frame STAGE w003 TYPE MANAGED EXECUTION compile-only
+    ${_art_windows_current_selector}
+    SOURCES "${_art_test_cases_root}/w003-frame-probe/W003FrameProbe.java"
+    CONTRACTS jni stack
+    OUTPUT_NAME w003frameprobe)
+art_add_target_probe(
+    NAME managed_w003_xmm_sentinel STAGE w003 TYPE MANAGED EXECUTION compile-only
+    ${_art_windows_x86_64_msvc_selector}
+    SOURCES "${_art_test_cases_root}/w003-xmm-sentinel/W003XmmSentinelProbe.java"
+    CONTRACTS jni native-abi xmm
+    OUTPUT_NAME w003xmmsentinelprobe)
 
 # W-004: runtime embedding and forced-interpreter/JVMTI transitions.
 art_add_target_probe(
@@ -404,6 +573,55 @@ art_add_target_probe(
     LINK_OPTIONS "${_art_no_cet}"
     CONTRACTS jvmti interpreter
     OUTPUT_NAME libjvmtiforceprobe WINDOWS_EXPORT_ALL_SYMBOLS)
+art_add_target_probe(
+    NAME managed_jvmti_force STAGE w004 TYPE MANAGED EXECUTION compile-only
+    ${_art_windows_current_selector}
+    SOURCES "${_art_test_cases_root}/jvmti-force/JvmtiForceProbe.java"
+    CONTRACTS jvmti interpreter
+    OUTPUT_NAME jvmtiforceprobe)
+art_add_target_probe(
+    NAME managed_gc_stress STAGE w004 TYPE MANAGED EXECUTION compile-only
+    ${_art_windows_current_selector}
+    SOURCES "${_art_test_cases_root}/imageless-runtime/GcStressProbe.java"
+    CONTRACTS runtime-load gc stress
+    OUTPUT_NAME gcstressprobe)
+foreach(_art_runtime_stress_class HandleLeakProbe PerfSmokeProbe ThreadHeavyProbe)
+    string(TOLOWER "${_art_runtime_stress_class}" _art_runtime_stress_name)
+    art_add_target_probe(
+        NAME "managed_${_art_runtime_stress_name}" STAGE w004
+        TYPE MANAGED EXECUTION compile-only
+        ${_art_windows_current_selector}
+        SOURCES
+            "${_art_test_cases_root}/managed-runtime-stress/${_art_runtime_stress_class}.java"
+        CONTRACTS runtime-load stress
+        OUTPUT_NAME "${_art_runtime_stress_name}")
+endforeach()
+art_add_target_probe(
+    NAME managed_math_critical STAGE w004 TYPE MANAGED EXECUTION compile-only
+    TARGET_IDS linux-x86_64-gnu windows-x86_64-msvc
+    SOURCES "${_art_test_cases_root}/math-critical/MathCriticalProbe.java"
+    CONTRACTS math critical-native
+    OUTPUT_NAME mathcriticalprobe)
+
+# These managed libcore probes remain Windows-specific until each behavioral
+# contract is reviewed on another exact target.
+set(_art_windows_libcore_managed_classes
+    AbsPathProbe AsyncCloseProbe BnProbe CoreProbe DnsProbe ExecProbe
+    GcForced GcProbe GoldenApp InterruptProbe IoProbe Ipv6Probe LocaleProbe
+    NetProbe OsConstantsProbe OsErrnoProbe PathProbe PropsProbe RtMem
+    SocketAddressProbe SslProviderProbe ThreadStressProbe ThrowProbe UdpProbe
+    XmlProbe ZipProbe)
+foreach(_art_libcore_class IN LISTS _art_windows_libcore_managed_classes)
+    string(TOLOWER "${_art_libcore_class}" _art_libcore_name)
+    art_add_target_probe(
+        NAME "managed_${_art_libcore_name}" STAGE w004
+        TYPE MANAGED EXECUTION compile-only
+        ${_art_windows_current_selector}
+        SOURCES
+            "${_art_test_cases_root}/windows-libcore-smoke/${_art_libcore_class}.java"
+        CONTRACTS libcore runtime-load
+        OUTPUT_NAME "${_art_libcore_name}")
+endforeach()
 art_add_target_probe(
     NAME art_runtime_show_version STAGE w004 TYPE GATE
     EXECUTION target-runnable ${_art_linux_x86_64_gnu_selector}
@@ -462,6 +680,23 @@ art_add_target_probe(
     ${_art_windows_current_selector}
     SOURCES "${_art_test_cases_root}/debugger-fault/probe.cc"
     CONTRACTS debugger fault PRODUCT_POLICY)
+foreach(_art_fatal_class CrashAbortProbe CrashNativeProbe)
+    string(TOLOWER "${_art_fatal_class}" _art_fatal_name)
+    art_add_target_probe(
+        NAME "managed_${_art_fatal_name}" STAGE w010
+        TYPE MANAGED EXECUTION compile-only
+        ${_art_windows_current_selector}
+        SOURCES "${_art_test_cases_root}/fatal-runtime/${_art_fatal_class}.java"
+        CONTRACTS fault fatal-unwind
+        OUTPUT_NAME "${_art_fatal_name}")
+endforeach()
+art_add_target_probe(
+    NAME managed_w010_fault_recovery STAGE w010 TYPE MANAGED EXECUTION compile-only
+    ${_art_windows_current_selector}
+    SOURCES
+        "${_art_test_cases_root}/managed-fault-recovery/W010ManagedFaultProbe.java"
+    CONTRACTS fault managed-recovery
+    OUTPUT_NAME w010managedfaultprobe)
 
 # W-013: ART-owned Windows virtual-memory and allocator contracts.
 art_add_target_probe(
@@ -483,6 +718,13 @@ art_add_target_probe(
         "${MDVM_NATIVE_SRC_ROOT_DIR}/external/dlmalloc"
     LINK_LIBRARIES artbase base log
     CONTRACTS allocator virtual-memory PRODUCT_POLICY)
+art_add_target_probe(
+    NAME managed_w013_non_moving STAGE w013 TYPE MANAGED EXECUTION compile-only
+    ${_art_windows_current_selector}
+    SOURCES
+        "${_art_test_cases_root}/non-moving-heap/W013NonMovingStressProbe.java"
+    CONTRACTS allocator gc stress
+    OUTPUT_NAME w013nonmovingstressprobe)
 
 # W-014: native thread-stack, guard-page, CET, and stack high-water contracts.
 art_add_target_probe(
@@ -543,6 +785,13 @@ art_add_target_probe(
     LINK_OPTIONS "${_art_no_cet}"
     CONTRACTS stack jni
     PREFIX lib WINDOWS_EXPORT_ALL_SYMBOLS)
+art_add_target_probe(
+    NAME managed_fs1_stack_high_water STAGE w014 TYPE MANAGED EXECUTION compile-only
+    ${_art_windows_current_selector}
+    SOURCES
+        "${_art_test_cases_root}/stack-high-water/FS1StackHighWaterProbe.java"
+    CONTRACTS stack jni
+    OUTPUT_NAME fs1stackhighwaterprobe)
 
 # W-025: JIT section policy and PE unwind registration/lifecycle.
 art_add_target_probe(
@@ -599,6 +848,27 @@ art_add_target_probe(
     COMPILE_DEFINITIONS ART_CONSUMING_LIBART
     CONTRACTS jit virtual-memory
     PREFIX lib OUTPUT_NAME w025jitmappingprobe WINDOWS_EXPORT_ALL_SYMBOLS PRODUCT_POLICY)
+art_add_target_probe(
+    NAME managed_jit_unwind_lifecycle STAGE w025 TYPE MANAGED EXECUTION compile-only
+    ${_art_windows_x86_64_msvc_selector}
+    SOURCES
+        "${_art_test_cases_root}/jit-unwind-lifecycle/JitUnwindLifecycleProbe.java"
+    CONTRACTS jit unwind
+    OUTPUT_NAME jitunwindlifecycleprobe)
+art_add_target_probe(
+    NAME managed_w025_jit_lifecycle_stress STAGE w025
+    TYPE MANAGED EXECUTION compile-only
+    ${_art_windows_x86_64_msvc_selector}
+    SOURCES
+        "${_art_test_cases_root}/jit-lifecycle-stress/W025JitLifecycleStressProbe.java"
+    CONTRACTS jit unwind stress
+    OUTPUT_NAME w025jitlifecyclestressprobe)
+art_add_target_probe(
+    NAME managed_w025_jit_mapping STAGE w025 TYPE MANAGED EXECUTION compile-only
+    ${_art_windows_current_selector}
+    SOURCES "${_art_test_cases_root}/jit-mapping/W025JitMappingProbe.java"
+    CONTRACTS jit virtual-memory
+    OUTPUT_NAME w025jitmappingprobe)
 art_add_target_probe(
     NAME windows_x64_w025_section_policy_probe STAGE w025 TYPE EXECUTABLE
     EXECUTION compile-only ${_art_windows_current_selector}

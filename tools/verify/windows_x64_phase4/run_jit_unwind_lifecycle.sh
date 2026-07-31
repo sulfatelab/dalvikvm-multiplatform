@@ -22,7 +22,7 @@ temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/jit-unwind-lifecycle.XXXXXX")"
 trap 'rm -rf "$temp_dir"' EXIT
 mkdir -p "$temp_dir/classes" "$temp_dir/dex"
 "$JAVAC" -d "$temp_dir/classes" \
-  "$REPO/tools/verify/windows_x64_phase4/src/JitUnwindLifecycleProbe.java"
+  "$REPO/tests/cases/jit-unwind-lifecycle/JitUnwindLifecycleProbe.java"
 java -Dcom.android.tools.r8.emitRecordAnnotationsInDex=1 \
   -cp "$R8JAR" com.android.tools.r8.D8 \
   --release --min-api 31 --output "$temp_dir/dex" \

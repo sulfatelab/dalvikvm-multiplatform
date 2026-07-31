@@ -36,14 +36,14 @@ items are closed.
 
 | Area | Status | Current position | Exit condition |
 |---|---|---|---|
-| Python frontend | COMPLETE for the initial slice | `generate`, `check-generated`, `configure`, `build`, `test`, and `stage` exist; subprocesses are shell-free | keep regression coverage current |
-| Linux x86-64 product | COMPLETE for native smoke/topology | a fresh full product build, 28-artifact stage, and two unified native CTest gates pass | add managed boot-class-path behavior in the packaging stage |
+| Python frontend | COMPLETE for the initial slice | `generate`, `check-generated`, `configure`, `build`, `test`, and `stage` exist; subprocesses are shell-free; configured JDK 21 is validated and passed to CMake | keep regression coverage current |
+| Linux x86-64 product | COMPLETE for native smoke/topology | a fresh full product build, 28-artifact stage, two unified native CTest gates, and the target-local managed boot/math build pass | add imageless Hello/GC runtime behavior in the packaging stage |
 | Windows x86-64 product | PARTIAL / experimental | Linux-hosted cross and native Windows Server 2025 builds both complete the full product graph; the native host also passes the current catalog, stage, load, topology, reparse-point, deterministic-generation, and no-op gates | automate the complete artifact/topology/runtime gate set and migrate the remaining behavioral tests |
 | Compiler DSO parity | COMPLETE for `art-compiler` | both targets emit a shared compiler DSO; Windows imports `art.dll` and exports `art_compiler_jit_create` | retain exact ABI and no-cycle gates |
 | Full DSO topology parity | PARTIAL | five module kinds and two target-specific module pairs still differ | convert each difference or record a reviewed target exception |
-| Unified phase catalog | PARTIAL | seven virtual stages declare 29 compiled probes plus two command gates; Windows has 29 applicable probes and Linux x86-64 has two applicable runtime gates | migrate behavioral runners, managed probes, portable JNI probes, and result checks |
-| Boot/runtime packaging | NOT STARTED in the unified frontend | boot JAR, boot image, run assets, cacerts, and host packages remain shell-driven | Python/CMake/Ninja-owned, binary-directory-local, fail-fast stages |
-| POSIX-free Windows build host | COMPLETE for the current native graph, test catalog, and stage; PARTIAL end to end | configure, full product build, current CTest gates, and staging pass through native Python/CMake/Ninja/LLVM on Server 2025 without Bash/WSL/Cygwin; managed packaging and legacy behavioral runners remain shell-driven | migrate managed packaging and every retained behavioral gate to the same native-host contract |
+| Unified phase catalog | PARTIAL | seven virtual stages declare 29 native probes, 46 managed JARs, and two command gates; Windows has 75 applicable items and Linux x86-64 has one managed item plus two runtime gates | migrate behavioral runners, portable JNI expansion, and result checks |
+| Boot/runtime packaging | PARTIAL | the base boot JAR and all probe JARs are Python/CMake/Ninja-owned, deterministic, target-local, and fail-fast; boot image, security providers/resources, ICU data, cacerts, and runtime packages remain | add the remaining runtime assets and behavioral staging without shared `/tmp` state |
+| POSIX-free Windows build host | COMPLETE for the current native graph, test catalog, and stage; PARTIAL end to end | Linux-hosted Windows managed packaging now passes without shell orchestration; native Server 2025 validation and retained behavioral runners remain | validate JDK 21 plus managed targets natively, then migrate every retained behavioral gate |
 | Legacy build removal | PARTIAL | active product ownership was demoted and project-owned symlink overlays were removed; old generators, generated snapshots, phase product CMake, and split overlay datasets remain | remove or demote every alternative product path after gate migration |
 | CI/acceptance automation | NOT STARTED | no in-repository CI workflow owns the acceptance matrix | fresh-build, no-op, graph, command, artifact, and native-host gates run automatically |
 | Additional architectures | BLOCKED by capability gates | all 17 canonical identities are registered; only `linux-x86_64-gnu` and experimental `windows-x86_64-msvc` generate | admit each profile only after its architecture and runtime gates pass |
@@ -52,24 +52,36 @@ items are closed.
 ### Latest verification baseline (2026-07-31)
 
 - [x] `PYTHONPATH=tools/bp2cmake python3 -m pytest tools/bp2cmake/tests tests/host -q`:
-  112 passed, including generated PE-header, Linux/Windows test-catalog,
-  shell-free runtime-gate, parallel-frontend, and VCS binary-audit coverage.
+  121 passed, including generated PE-header, Linux/Windows test-catalog,
+  shell-free runtime/managed-artifact gates, parallel-frontend, JDK validation,
+  deterministic JAR, Windows-path, and VCS binary/source-ownership coverage.
 - [x] Fresh generation loads the same 260 Blueprint files for both targets and
   emits 33 generated modules for `linux-x86_64-gnu` versus 32 for
   `windows-x86_64-msvc`; Windows supplies `sigchain` as the reviewed
   platform-source target in the common native entry point instead of emitting
   the Linux module.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
-- [x] Fresh Linux configuration with Clang 21, CMake, and Ninja emits a
-  31-declaration catalog with two exact-ID command gates applicable to
-  `linux-x86_64-gnu`; both are registered with CTest on the native host.
-- [x] A minimal Windows-profile CMake configuration emits the same 31
-  declarations and keeps only the original 29 probes applicable: 10 exact-ID
-  selectors, 19 broad typed selectors, and three `target-runnable` probes.
+- [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
+  JDK 21 emits a 77-declaration catalog. One common managed math artifact and
+  two exact-ID command gates apply to `linux-x86_64-gnu`; only the gates are
+  registered with CTest.
+- [x] A minimal Windows-profile CMake configuration emits the same 77
+  declarations and keeps 75 items applicable: 29 native probes and all 46
+  managed JAR declarations. Three native probes remain `target-runnable`.
 - [x] All 27 catalog-owned native/assembly sources formerly under
   `tools/verify` now have logical `tests/cases` ownership and adjacent results.
   A 68-action `windows-x86_64-msvc` cross rebuild compiled and linked all 29
   applicable probes from their new regular-file paths with `--parallel 32`.
+- [x] All 47 retained Java probe sources now have logical `tests/cases`
+  ownership and adjacent results. The registry emits 46 managed artifacts;
+  the old verification tree owns no Java source.
+- [x] The shell-free managed builder compiled 2,919 boot sources into 5,849
+  classes and a DEX boot JAR using official JDK 21 plus the pinned in-tree D8.
+  A clean Linux-hosted Windows target build produced all 46 applicable managed
+  JARs, and its second identical `art-managed-tests` build was a Ninja no-op.
+- [x] The same CMake path built the target-local boot JAR and common managed
+  math probe for `linux-x86_64-gnu`; all generated classes, DEX/JAR files,
+  manifests, argument files, and logs remained below the exact target output.
 - [x] Linux `art-compiler` completed a fresh 701-action build after the
   identity migration and emits `libart-compiler.so` with dynamic ART
   dependencies.
@@ -88,9 +100,10 @@ items are closed.
 - [x] The native no-stage Windows `test` command builds every applicable
   catalog target and passes all three registered runnable gates: W-002
   OSR/unwind plus the W-014 pthread-once and thread-stack probes.
-- [x] The resulting Windows catalog records 29 applicable/build-verified
-  probes, three runtime-verified probes, and 26 compile-only probes with
-  `runtime_status=not-required`.
+- [x] Before managed-artifact expansion, that native Windows acceptance
+  recorded 29 applicable/build-verified probes, three runtime-verified probes,
+  and 26 compile-only probes with `runtime_status=not-required`. Native
+  revalidation of the current 75-item applicable catalog remains pending.
 - [x] Native Windows `check-generated` passes for the 32-module, 260-Blueprint
   graph, and a second identical full product build reports
   `ninja: no work to do.`
@@ -134,25 +147,23 @@ One historical work stage maps to exactly one virtual target named
 
 | Stage | Current build catalog | Exact-ID / typed selectors | Execution modes | Remaining semantic coverage |
 |---|---:|---|---|---|
-| `w002` | 1 EXE, 1 DLL | 1 exact / 1 typed | 1 runnable, 1 compile-only | managed attach/OSR package and reviewers |
-| `w003` | 4 DLLs | 1 exact / 3 typed | 4 compile-only | frame, XMM, CriticalNative/FastNative managed runners |
-| `w004` | 1 EXE, 1 DLL, 2 gates | 2 exact / 2 typed | 2 runnable, 2 compile-only | Windows embedding/JVMTI behavior; managed runtime start |
-| `w010` | 4 EXEs | 1 exact / 3 typed | 4 compile-only | managed-fault, fatal-unwind, debugger, and dump review |
-| `w013` | 2 EXEs | 0 exact / 2 typed | 2 compile-only | dlmalloc configuration and non-moving heap stress |
-| `w014` | 7 EXEs, 1 DLL | 3 exact / 5 typed | 2 runnable, 6 compile-only | stack-growth, CET, high-water, and reservation matrices |
-| `w025` | 4 EXEs, 3 DLLs | 4 exact / 3 typed | 7 compile-only | JIT mapping/lifecycle/CFG managed and host-review gates |
-| Total | 19 EXEs, 10 DLLs, 2 gates | 12 exact / 19 typed | 5 runnable, 26 compile-only | compile ownership is ahead of managed behavioral ownership |
+| `w002` | 1 EXE, 1 DLL, 2 managed | 2 exact / 2 typed | 1 runnable, 3 compile-only | managed attach/OSR runtime commands and reviewers |
+| `w003` | 4 DLLs, 4 managed | 2 exact / 6 typed | 8 compile-only | frame, XMM, CriticalNative/FastNative runtime commands |
+| `w004` | 1 EXE, 1 DLL, 32 managed, 2 gates | 3 exact / 33 typed | 2 runnable, 34 compile-only | Windows embedding/JVMTI/libcore behavior; imageless Hello/GC |
+| `w010` | 4 EXEs, 3 managed | 1 exact / 6 typed | 7 compile-only | managed-fault, fatal-unwind, debugger, and dump review |
+| `w013` | 2 EXEs, 1 managed | 0 exact / 3 typed | 3 compile-only | dlmalloc configuration and non-moving heap runtime stress |
+| `w014` | 7 EXEs, 1 DLL, 1 managed | 3 exact / 6 typed | 2 runnable, 7 compile-only | stack-growth, CET, high-water, and reservation matrices |
+| `w025` | 4 EXEs, 3 DLLs, 3 managed | 6 exact / 4 typed | 10 compile-only | JIT mapping/lifecycle/CFG runtime and host-review gates |
+| Total | 19 EXEs, 10 DLLs, 46 managed, 2 gates | 17 exact / 60 typed | 5 runnable, 72 compile-only | build ownership is ahead of behavioral ownership |
 
 The shared registry now references zero source files from historical
-verification directories. All 31 declarations own either canonical source
-under `tests/cases/` or a shell-free runner under `tests/support/`; native case
-results are adjacent, and shared stage analysis remains under `tests/stages/`.
-Another
-47 C, C++, assembly, or Java probe sources remain outside
-the registry, including all 26 Phase-3 Java probes, most Phase-4 managed
-probes, W013 non-moving stress, W025 managed lifecycle/mapping, and the three
-libcore/ICU native smokes. The relevant verification directories still contain
-70 shell scripts, 11 PowerShell scripts, and 35 Python scripts. Python checkers
+verification directories. All 77 declarations own canonical source under
+`tests/cases/` or a shell-free runner under `tests/support/`; all 27 native
+source cases and all 47 Java sources have adjacent results, and shared stage
+analysis remains under `tests/stages/`. The old verification tree now contains
+zero Java sources and six uncatalogued native sources, including the three
+libcore/ICU native smokes. It still contains 71 shell scripts, 11 PowerShell
+scripts, and 38 Python scripts. Python checkers
 and reviewers may remain, but the unified frontend must invoke them through a
 declared stage instead of a phase-local product build.
 
@@ -498,11 +509,11 @@ an unreviewed module-set or kind change.
   assume their exact Linux and Windows target-architecture sets.
 - [ ] Add Linux CTest registrations for show-version, imageless Hello, GC
   stress, DSO loading, and compiler-DSO topology.
-- [ ] Replace shell-only boot-JAR construction with a fail-fast Python stage
+- [x] Replace shell-only base boot-JAR construction with a fail-fast Python stage
   using configured JDK/R8 paths and binary-directory-local outputs.
 - [ ] Add boot image, ICU data, security assets/cacerts, and runtime package
   staging to the frontend without `/tmp` or shared cross-target state.
-- [ ] Convert Phase-3 Java and Phase-4 managed probe compilation/D8 packaging
+- [x] Convert Phase-3 Java and Phase-4 managed probe compilation/D8 packaging
   into declared CMake/Ninja custom commands implemented by Python helpers.
 - [ ] Register behavioral commands and expected-result reviewers for every
   current stage; do not mark a compile-only DLL as a passed runtime gate.
@@ -693,13 +704,15 @@ translation units. This keeps `vendor/art` clean, requires no source-tree
 symlink, and avoids committing generated or absolute-path-bearing headers.
 
 The test-ownership migration moves the registry from `native/` to the top-level
-`tests/` tree and places every one of its 31 declarations under stable logical
-ownership. All 29 compiled probes consume canonical native/assembly source
-under `tests/cases/`; the two Linux runtime gates use the shared shell-free
-runner under `tests/support/`. Each source case has an adjacent result, while
-the W-003 cross-case analysis remains stage-owned without relocating source by
-stage. Legacy per-probe CMake entry points and shell runners temporarily
-reference canonical source; they no longer own copies. A portable VCS
+`tests/` tree and places all 77 declarations under stable logical ownership.
+All 29 native probes and 46 managed artifacts consume canonical source under
+`tests/cases/`; the two Linux runtime gates use the shared shell-free runner
+under `tests/support/`. Each source case has an adjacent result, while the
+W-003 cross-case analysis remains stage-owned without relocating source by
+stage. The base boot JAR and probe JARs are ordinary target-local Ninja outputs
+from configured JDK 21 and pinned D8. Legacy per-probe CMake entry points and
+shell runners temporarily reference canonical source; they no longer own
+copies. A portable VCS
 audit rejects tracked product/test binaries and archives
 while retaining the one named `vendor/r8/r8.jar` D8/R8 exception. The old Phase
 3 returned ZIP is retained under ignored `out/` storage, and its tracked result

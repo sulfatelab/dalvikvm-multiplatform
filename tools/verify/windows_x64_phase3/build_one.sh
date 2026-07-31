@@ -7,7 +7,7 @@ JAVAC="${JAVAC:-/usr/lib/jvm/java-21-openjdk-amd64/bin/javac}"
 R8JAR="${R8JAR:-$REPO/vendor/r8/r8.jar}"
 D8=(java -Dcom.android.tools.r8.emitRecordAnnotationsInDex=1 -cp "$R8JAR" com.android.tools.r8.D8)
 OUT="$REPO/tools/verify/windows_x64_phase3/bin"
-SRC="$REPO/tools/verify/windows_x64_phase3/src/${CLS}.java"
+SRC="$REPO/tests/cases/windows-libcore-smoke/${CLS}.java"
 rm -rf "$OUT/${CLS}_classes" "$OUT/${CLS}_dex"
 mkdir -p "$OUT/${CLS}_classes" "$OUT/${CLS}_dex"
 # Optional BOOTCP (class dir) for probes using android.*/libcore.*

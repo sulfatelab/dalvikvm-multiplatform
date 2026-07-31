@@ -18,13 +18,16 @@ def test_absent_local_config_is_empty(tmp_path):
 
 def test_loads_valid_path_bindings(tmp_path):
     llvm = tmp_path / "llvm"
+    jdk = tmp_path / "jdk"
     bundle = tmp_path / "windows-bundle"
     llvm.mkdir()
+    jdk.mkdir()
     bundle.mkdir()
     output = tmp_path / "out-does-not-exist"
     (tmp_path / ".art-build.local.toml").write_text(
         "[tools]\n"
         f"llvm_root = {_literal(llvm)}\n"
+        f"jdk_root = {_literal(jdk)}\n"
         "[build]\n"
         f"output_root = {_literal(output)}\n"
         '[targets."windows-x86_64-msvc"]\n'
@@ -34,6 +37,7 @@ def test_loads_valid_path_bindings(tmp_path):
 
     config = load_local_config(tmp_path)
     assert config.tools["llvm_root"] == llvm
+    assert config.tools["jdk_root"] == jdk
     assert config.output_root == output
     assert config.target_bindings("windows-x86_64-msvc")["bundle_root"] == bundle
 

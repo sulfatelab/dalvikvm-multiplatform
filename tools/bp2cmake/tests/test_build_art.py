@@ -251,6 +251,9 @@ def test_windows_configure_uses_target_bundle_and_clang_target(tmp_path, monkeyp
         "_resolve_llvm_resource_compiler",
         lambda _local: llvm_rc,
     )
+    jdk = tmp_path / "jdk-21"
+    (jdk / "bin").mkdir(parents=True)
+    monkeypatch.setattr(build_art, "_resolve_jdk", lambda _local: jdk)
     commands = []
     monkeypatch.setattr(build_art, "_run_checked", lambda command: commands.append(command))
 
@@ -265,6 +268,7 @@ def test_windows_configure_uses_target_bundle_and_clang_target(tmp_path, monkeyp
     assert "-DCMAKE_SYSTEM_NAME=Windows" in commands[0]
     assert "-DCMAKE_CXX_COMPILER_TARGET=x86_64-pc-windows-msvc" in commands[0]
     assert f"-DCMAKE_RC_COMPILER={llvm_rc.as_posix()}" in commands[0]
+    assert f"-DART_JDK_ROOT={jdk}" in commands[0]
     assert any(arg.startswith("-DART_TARGET_BUNDLE_ROOT=") for arg in commands[0])
     assert "-DART_ENABLE_TARGET_RUNTIME_TESTS=OFF" in commands[0]
 
@@ -288,6 +292,57 @@ def test_resolve_tools_rejects_clangxx_symlink(tmp_path):
 
     with pytest.raises(LocalConfigError, match="link/reparse component"):
         build_art._resolve_tools(local, need_compiler=True)
+
+
+def test_resolve_jdk_requires_regular_jdk21_tools(tmp_path, monkeypatch):
+    jdk = tmp_path / "jdk-21"
+    binary = jdk / "bin"
+    binary.mkdir(parents=True)
+    (binary / "java").write_bytes(b"")
+    (binary / "javac").write_bytes(b"")
+    calls = []
+
+    def run(command, **kwargs):
+        calls.append((command, kwargs))
+        version = (
+            'openjdk version "21.0.11"\n'
+            if Path(command[0]).name == "java"
+            else "javac 21.0.11\n"
+        )
+        return subprocess.CompletedProcess(command, 0, stdout=version, stderr="")
+
+    monkeypatch.setattr(build_art.subprocess, "run", run)
+    resolved = build_art._resolve_jdk(LocalBuildConfig(tools={"jdk_root": jdk}))
+
+    assert resolved == jdk
+    assert calls[0][0] == [str(binary / "java"), "-version"]
+    assert calls[1][0] == [str(binary / "javac"), "-version"]
+    assert calls[0][1]["shell"] is False
+
+
+def test_resolve_jdk_rejects_wrong_major(tmp_path, monkeypatch):
+    jdk = tmp_path / "jdk-25"
+    binary = jdk / "bin"
+    binary.mkdir(parents=True)
+    (binary / "java").write_bytes(b"")
+    (binary / "javac").write_bytes(b"")
+    monkeypatch.setattr(
+        build_art.subprocess,
+        "run",
+        lambda command, **kwargs: subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=(
+                'openjdk version "25.0.3"\n'
+                if Path(command[0]).name == "java"
+                else "javac 25.0.3\n"
+            ),
+            stderr="",
+        ),
+    )
+
+    with pytest.raises(build_art.BuildFrontendError, match="JDK 21"):
+        build_art._resolve_jdk(LocalBuildConfig(tools={"jdk_root": jdk}))
 
 
 @pytest.mark.parametrize(

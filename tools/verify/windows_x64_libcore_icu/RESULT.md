@@ -377,7 +377,7 @@ CoreProbe.done=ok
 NetProbe.done=ok
 ```
 
-Probes: `tools/verify/windows_x64_phase3/src/{Bn,Xml}Probe.java` via `build_one.sh` / `run_one.sh`.
+Probes: `tests/cases/windows-libcore-smoke/{Bn,Xml}Probe.java` via the historical `build_one.sh` / `run_one.sh` path.
 `libjavacore.dll` ~335K after L-001 (was ~92K at B0).
 
 ## L-001 AsynchronousCloseMonitor (2026-07-17)

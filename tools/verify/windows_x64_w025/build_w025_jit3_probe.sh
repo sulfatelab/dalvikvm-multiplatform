@@ -7,7 +7,7 @@ RUN="$BUILD/run"
 JAVAC="${JAVAC:-/usr/lib/jvm/java-21-openjdk-amd64/bin/javac}"
 JAR="${JAR:-/usr/lib/jvm/java-21-openjdk-amd64/bin/jar}"
 R8JAR="${R8JAR:-$REPO/vendor/r8/r8.jar}"
-SOURCE="$REPO/tools/verify/windows_x64_w025/src/W025JitLifecycleStressProbe.java"
+SOURCE="$REPO/tests/cases/jit-lifecycle-stress/W025JitLifecycleStressProbe.java"
 
 cmake --build "$BUILD" --target w025jitlifecyclestressprobe -j"${JOBS:-32}"
 

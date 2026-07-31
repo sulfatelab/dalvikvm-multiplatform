@@ -5,7 +5,7 @@ JAVAC="${JAVAC:-/usr/lib/jvm/java-21-openjdk-amd64/bin/javac}"
 R8JAR="${R8JAR:-$REPO/vendor/r8/r8.jar}"
 D8=(java -Dcom.android.tools.r8.emitRecordAnnotationsInDex=1 -cp "$R8JAR" com.android.tools.r8.D8)
 OUT="$REPO/tools/verify/windows_x64_phase3/bin"
-SRC="$REPO/tools/verify/windows_x64_phase3/src/CoreProbe.java"
+SRC="$REPO/tests/cases/windows-libcore-smoke/CoreProbe.java"
 rm -rf "$OUT/coreclasses" "$OUT/coredex"
 mkdir -p "$OUT/coreclasses" "$OUT/coredex"
 "$JAVAC" -d "$OUT/coreclasses" "$SRC"

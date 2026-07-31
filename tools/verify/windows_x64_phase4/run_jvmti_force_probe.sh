@@ -40,7 +40,7 @@ mkdir -p "$JAVA_TMP/classes" "$JAVA_TMP/dex"
 "$JAVAC" -d "$JAVA_TMP/classes" \
   "$REPO/vendor/libcore/dalvik/src/main/java/dalvik/annotation/optimization/FastNative.java" \
   "$REPO/vendor/libcore/dalvik/src/main/java/dalvik/annotation/optimization/CriticalNative.java" \
-  "$REPO/tools/verify/windows_x64_phase4/src/JvmtiForceProbe.java"
+  "$REPO/tests/cases/jvmti-force/JvmtiForceProbe.java"
 mapfile -t CLASS_FILES < <(find "$JAVA_TMP/classes" -name '*.class' | sort)
 java -Dcom.android.tools.r8.emitRecordAnnotationsInDex=1 \
   -cp "$R8JAR" com.android.tools.r8.D8 \

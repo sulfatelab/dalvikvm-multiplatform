@@ -740,7 +740,7 @@ Summary (details below; do not delete history):
   - Gate: `tools/verify/windows_x64_phase3/run_l003_wine.sh` — OVERALL PASS
 - **Exit criteria:** Process/UDP/locale/zip/IPv6 gates documented + wine green **met**.
 - **Non-goals / host residual:** TCP IPv4-mapped dual-stack under wine; full ICU Collator resources; zip STORED empty-dir edges beyond DEFLATED multi-entry.
-- **Code anchors:** `win_process_natives.c`, `win_net_natives.c`, `ZipFile.java` (Win CEN), `FileInputStream.c` available0, historical `interpreter.cc` 12-slot fallback, probes under `tools/verify/windows_x64_phase3/src/`
+- **Code anchors:** `win_process_natives.c`, `win_net_natives.c`, `ZipFile.java` (Win CEN), `FileInputStream.c` available0, historical `interpreter.cc` 12-slot fallback, probes under `tests/cases/windows-libcore-smoke/`
 - **Opened:** 2026-07-17
 - **Closed:** 2026-07-17
 

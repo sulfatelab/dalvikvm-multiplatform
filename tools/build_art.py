@@ -237,6 +237,9 @@ def _configure(
     local: LocalBuildConfig,
 ) -> None:
     tools = _resolve_tools(local, need_compiler=True)
+    jdk = _resolve_jdk(local)
+    tools["java"] = jdk / "bin" / ("java.exe" if os.name == "nt" else "java")
+    tools["javac"] = jdk / "bin" / ("javac.exe" if os.name == "nt" else "javac")
     if target.target_platform == "windows":
         tools["llvm-rc"] = _resolve_llvm_resource_compiler(local)
     bindings = _target_bindings(target, local)
@@ -260,6 +263,7 @@ def _configure(
         f"-DCMAKE_ASM_COMPILER_TARGET={target.target_triple}",
         f"-DCMAKE_SYSTEM_NAME={target.cmake_system_name}",
         f"-DPython3_EXECUTABLE={_python_executable()}",
+        f"-DART_JDK_ROOT={jdk}",
         f"-DART_PROFILE_FILE={generated / 'target_profile.cmake'}",
         f"-DART_GRAPH_FILE={generated / 'art_graph.cmake'}",
         "-DART_ENABLE_TARGET_RUNTIME_TESTS="
@@ -662,6 +666,43 @@ def _resolve_llvm_resource_compiler(local: LocalBuildConfig) -> Path:
     return resolved
 
 
+def _resolve_jdk(local: LocalBuildConfig) -> Path:
+    root = local.tools.get("jdk_root")
+    if root is None:
+        raise BuildFrontendError(
+            "JDK 21 is required; set tools.jdk_root in .art-build.local.toml"
+        )
+    root = validate_managed_path(root)
+    suffix = ".exe" if os.name == "nt" else ""
+    java = validate_managed_path(root / "bin" / f"java{suffix}")
+    javac = validate_managed_path(root / "bin" / f"javac{suffix}")
+    if java.name not in ("java", "java.exe") or javac.name not in ("javac", "javac.exe"):
+        raise BuildFrontendError(f"plain JDK java/javac executables required below {root}")
+    versions = {}
+    for name, executable in (("java", java), ("javac", javac)):
+        result = subprocess.run(
+            [str(executable), "-version"],
+            text=True,
+            capture_output=True,
+            check=False,
+            shell=False,
+        )
+        versions[name] = (result.stdout + result.stderr).strip()
+        if result.returncode:
+            raise BuildFrontendError(
+                f"JDK 21 {name} failed at {executable} with exit code {result.returncode}"
+            )
+    if re.search(r"\b(?:openjdk|java) version \"21(?:\.|\")", versions["java"]) is None:
+        raise BuildFrontendError(
+            f"JDK 21 java required at {root}; got {versions['java'] or 'no version output'}"
+        )
+    if re.search(r"\bjavac 21(?:\.|\s|$)", versions["javac"]) is None:
+        raise BuildFrontendError(
+            f"JDK 21 javac required at {root}; got {versions['javac'] or 'no version output'}"
+        )
+    return root
+
+
 def _target_bindings(target: TargetProfile, local: LocalBuildConfig) -> dict[str, Path]:
     bindings = local.target_bindings(target.target_id)
     for path in bindings.values():
@@ -771,16 +812,53 @@ def _init_local_config() -> int:
     validate_managed_path(
         llvm_root / "bin" / ("clang++.exe" if os.name == "nt" else "clang++")
     )
+    jdk_root = _discover_jdk21_root()
     content = (
         "# Machine-local paths only. This file is ignored by Git.\n"
         "[tools]\n"
         f"cmake = {json.dumps(str(cmake))}\n"
         f"ninja = {json.dumps(str(ninja))}\n"
         f"llvm_root = {json.dumps(str(llvm_root))}\n"
+        f"jdk_root = {json.dumps(str(jdk_root))}\n"
     )
     _write_text_atomic(path, content)
     print(f"created {path}")
     return 0
+
+
+def _discover_jdk21_root() -> Path:
+    candidates: list[Path] = []
+    java_home = os.environ.get("JAVA_HOME")
+    if java_home:
+        candidates.append(Path(java_home))
+    javac_name = "javac.exe" if os.name == "nt" else "javac"
+    discovered = shutil.which(javac_name)
+    if discovered:
+        candidates.append(Path(discovered).resolve().parent.parent)
+    if os.name == "nt":
+        for variable in ("ProgramW6432", "ProgramFiles"):
+            program_files = os.environ.get(variable)
+            if program_files:
+                candidates.extend(sorted((Path(program_files) / "Java").glob("jdk-21*")))
+        candidates.extend((Path("C:/Java/jdk-21"), Path("C:/JDK/jdk-21")))
+    else:
+        candidates.extend(sorted(Path("/usr/lib/jvm").glob("*21*")))
+
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = os.path.normcase(str(candidate))
+        if key in seen:
+            continue
+        seen.add(key)
+        try:
+            local = LocalBuildConfig(tools={"jdk_root": candidate})
+            return _resolve_jdk(local)
+        except (BuildFrontendError, LocalConfigError, OSError):
+            continue
+    raise BuildFrontendError(
+        "cannot discover a regular-file JDK 21; install an official JDK in a "
+        "space-free path or create .art-build.local.toml manually"
+    )
 
 
 def _write_json_atomic(path: Path, value: dict[str, object]) -> None:

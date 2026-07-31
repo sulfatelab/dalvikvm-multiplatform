@@ -101,6 +101,12 @@ and the runtime/compiler ELF load topology through
 `support/runtime_gate.py`. A command gate owns no dummy target binary; its
 virtual target depends on the exact product artifacts that must exist before
 CTest runs it.
+The managed-source slice moved all 47 retained Java probe sources into logical
+cases. The catalog now declares 46 managed JAR artifacts (the paired
+CriticalNative sources intentionally share one JAR), built by
+`support/managed_artifact.py` through CMake/Ninja. The same helper builds the
+target-local boot JAR first, so Android/libcore APIs and ART annotations are
+resolved from the same AOSP boot classes on Linux and Windows build hosts.
 Legacy shell runners and the few retained per-probe CMake entry points use
 these canonical files as temporary compatibility shims; they must be replaced by the
 unified Python/CMake/Ninja path before `tools/verify` can be removed.
@@ -147,7 +153,7 @@ Every logical test declaration records:
 |---|---|
 | logical ID | stable lowercase hyphenated test name |
 | stage | one virtual group in canonical `wNNN` form |
-| output kind | executable, shared library, or command gate |
+| output kind | executable, shared library, managed JAR, or command gate |
 | linkage | `standalone`, `art-dso`, or `jni-dso` |
 | sources | common sources plus any exact architecture variants |
 | selectors | platform/architecture/ABI intersection or exact target IDs |
@@ -199,6 +205,40 @@ contracts that genuinely need no target source. A C/C++ behavior probe remains
 an executable or shared library. Every native command gate must use
 `target-runnable` and is registered only when the frontend proves that the
 build host can execute the exact target identity.
+
+### Managed JARs
+
+A managed declaration uses `TYPE MANAGED`, lists regular Java `SOURCES`, and
+selects targets exactly like a native probe. It is a compile-only catalog item
+until a separate behavioral command and reviewer are registered. One virtual
+stage may therefore contain native DSOs, managed JARs, and command gates with
+different applicability and execution status.
+
+Configure JDK 21 only in ignored `.art-build.local.toml`:
+
+```toml
+[tools]
+jdk_root = "<absolute regular path to an official JDK 21>"
+```
+
+The frontend validates regular `java` and `javac` executables and the exact
+major version, then passes `ART_JDK_ROOT` to CMake. Do not add that absolute
+path to CMake source, a tracked preset, a result, or a manifest.
+
+`art-managed-boot-jar` compiles the selected libcore/ICU source closure,
+generates aconfig Java sources, and invokes the pinned `vendor/r8/r8.jar`.
+Each applicable managed probe depends on those boot classes. The aggregate
+`art-managed-tests` target builds only applicable managed artifacts:
+
+```text
+python tools/build_art.py build --target-id windows-x86_64-msvc --cmake-target art-managed-tests --parallel 32
+```
+
+All classes, DEX files, deterministic JARs, argument files, manifests, and
+logs stay below `out/<target-id>/<build-type>/tests/managed/`. Manifests use
+repository-relative source names and contain no machine absolute paths. The
+builder invokes no shell, rejects symlink/reparse inputs, propagates javac/D8
+failures, and replaces only its named work directories under that output root.
 
 Linkage describes the binary boundary under test. It is independent of whether
 the test is compile-only, run locally, transferred to another machine, or

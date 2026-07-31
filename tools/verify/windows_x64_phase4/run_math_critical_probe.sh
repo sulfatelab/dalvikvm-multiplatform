@@ -39,7 +39,7 @@ trap 'rm -rf "$JAVA_TMP" "$LINUX_RUN"' EXIT
 mkdir -p "$JAVA_TMP/classes" "$JAVA_TMP/dex" "$LINUX_RUN/data" "$LINUX_RUN/icu"
 
 "$JAVAC" --release 8 -Xlint:-options -d "$JAVA_TMP/classes" \
-  "$REPO/tools/verify/windows_x64_phase4/src/MathCriticalProbe.java"
+  "$REPO/tests/cases/math-critical/MathCriticalProbe.java"
 java -Dcom.android.tools.r8.emitRecordAnnotationsInDex=1 \
   -cp "$R8JAR" com.android.tools.r8.D8 \
   --release --min-api 31 --output "$JAVA_TMP/dex" \
