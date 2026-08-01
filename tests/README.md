@@ -265,6 +265,9 @@ W-003/W-004/W-025 native acceptance superseded that bundle. The direct runtime
 singleton design, structural contract, incremental dependency fix, immutable
 archive identities, and historical 28/28 acceptance now form one
 `stages/w004/ANALYSIS.md`; current behavior is the unified W-004 stage.
+The old Phase-4 pthread-once note was folded into its canonical case result:
+the diagnosis, three-state publication fix, historical controls, and current
+native `--parallel 16` reproduction now live beside the probe source.
 The unreferenced W-025 JIT-2/JIT-3 source preflights and the broken JIT-4
 preflight were removed as well. The unified W-025 reviewer owns their current
 mapping, lifecycle, nterp floating-point, JIT-control, PE-import/export, and

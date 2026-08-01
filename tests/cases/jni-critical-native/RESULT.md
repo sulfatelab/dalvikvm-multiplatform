@@ -214,7 +214,7 @@ The same ART build also passed:
 The final repeated matrix initially exposed an unrelated pre-existing
 `pthread_once` early-return race in the parent compatibility layer. That race
 was fixed and given a separate 32-thread stress test; see
-`../../../tools/verify/windows_x64_phase4/RESULT-pthread-once.md`. No
+`../pthread-once/RESULT.md`. No
 CriticalNative workaround was added for it.
 
 Related files:

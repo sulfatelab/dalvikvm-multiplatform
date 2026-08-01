@@ -593,6 +593,11 @@ items are closed.
   issued/returned identities, and historical 28/28 acceptance. Current native
   reproduction is the unified 26-gate W-004 stage at `--parallel 16`; the
   Linux-hosted cross reviewer uses `--parallel 32`.
+- [x] The duplicate Phase-4 pthread-once focused note was merged into the
+  canonical `tests/cases/pthread-once/RESULT.md`. Its original JNI-cache race
+  diagnosis, three-state publication fix, historical controls, and current
+  native W-014 reproduction remain readable beside the source; the obsolete
+  `tools/verify` copy is removed.
 - [x] `art.dll` no longer uses `WINDOWS_EXPORT_ALL_SYMBOLS`. Before the change,
   a Debug scan found 80,318 candidate exports and exceeded PE's 65,535-entry
   limit, while RelWithDebInfo exposed 17,112. ART's existing `EXPORT` boundary

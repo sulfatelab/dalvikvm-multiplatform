@@ -432,7 +432,7 @@ Summary (details below; do not delete history):
   - Wine: `dalvikvm -showversion`, CoreProbe, NetProbe, GoldenApp PASS after ART rebuild; 32-thread `pthread_once` stress 10/10; JIT-enabled NetProbe 10/10; final JIT matrix 14/14.
 - **Residual (not OPEN product work):** fork/ptrace/sendfile/tgkill etc. remain ENOSYS; further shrink only when a product path needs them.
 - **Code anchors:** `compat/src/windows_x64_posix_stubs.c`, `compat/include/pthread.h`
-- **Focused result:** `tools/verify/windows_x64_phase4/RESULT-pthread-once.md`
+- **Focused result:** `tests/cases/pthread-once/RESULT.md`
 - **Opened:** 2026-07-16 (Phase 0/1)
 - **Closed:** 2026-07-17
 - **Updated:** 2026-07-24 — fixed `pthread_once` early-return race exposed by repeated JIT NetProbe
