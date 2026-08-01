@@ -64,7 +64,8 @@ transitions, GC/thread/handle stress, and ten independent default-JIT starts.
 Trace and forbidden-log scans passed; the recursive dump scan returned
 `NO_DMP_FILES`.
 
-`review_w004_host_result.py` independently accepted the portable returned ZIP:
+The then-current independent package reviewer accepted the portable returned
+ZIP:
 
 ```text
 W-004 native host result review: PASS cases=22 aggregate_pass=28 failures=0 archive_sha256=63c8068028a184ffd432c65ac29005216189139fc8d9df36b0c043b6e34e3534

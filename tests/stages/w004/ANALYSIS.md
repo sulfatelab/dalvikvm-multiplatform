@@ -1,4 +1,4 @@
-# W-004 direct Runtime singleton load
+# W-004 direct Runtime singleton load analysis
 
 **Status:** PASS; W-004 CLOSED
 
@@ -79,7 +79,7 @@ dependencies on the shared x86-64 assembly support sources:
 
 Clean and incremental builds now produce the same direct-load objects.
 
-## Build verification
+## Historical build verification
 
 Both focused and complete Windows x64 builds passed with parallelism 32:
 
@@ -114,6 +114,19 @@ Linux controls also passed:
 - imageless Hello using the shared boot class path; and
 - GC stress.
 
+## Unified stage acceptance
+
+The maintained Windows acceptance path is shell-free unified `stage:w004`.
+Windows Server 2025 x86-64 passes all 26 gates, including the live
+source/object/PE/dependency reviewer described above, with `--parallel 16` on
+the 16 GiB VM. Its immediate repeat reports `ninja: no work to do` and passes
+26/26 again. A Linux-hosted Windows cross build passes the same structural
+reviewer with `--parallel 32` and repeats as a Ninja no-op. Current runs use:
+
+```text
+python tools/build_art.py test --target-id windows-x86_64-msvc --stage w004 --parallel 16
+```
+
 ## Historical native Windows closure
 
 Native Windows acceptance passed on Windows 10 Enterprise LTSC x64 build
@@ -123,16 +136,15 @@ The standalone package producer and its repository-side PowerShell runner were
 retired after their maintained behavior passed through unified W-003, W-004,
 and W-025 on Windows Server 2025, with Ninja no-op repeats. New acceptance runs
 use `tools/build_art.py test`; the package checker, independent reviewer,
-checklist, hashes, and returned text remain only for interpreting the already
-issued archive. The unreferenced package-only Wine rechecker was removed.
+checklist, and duplicate checksum/acceptance files are retired. The
+unreferenced package-only Wine rechecker was removed.
 
 The package contains the shipped product artifacts, focused
 quick/nterp/JIT/native-ABI/GC/thread probes, and a structural report generated
 on Linux. LLVM inspection tools are not required on the Windows host. The
 historical embedded PowerShell runner required Windows 10 RS4 build 17134 or
 later, verified all packaged SHA-256 values and report/artifact hash agreement,
-then ran the complete host matrix and recursive dump scan. See
-[`W004_HOST_CHECKLIST.md`](W004_HOST_CHECKLIST.md).
+then ran the complete host matrix and recursive dump scan.
 
 Local package verification passes:
 
@@ -156,5 +168,13 @@ starts. Independent review confirmed exact ABI values and compilation counts.
 Fatal/access-violation and trace-cleanup scans pass; the recursive dump scan
 reports `NO_DMP_FILES`.
 
-Full accepted evidence:
-[`evidence/w004_host/ACCEPTANCE.md`](evidence/w004_host/ACCEPTANCE.md).
+The issued package SHA-256 is
+`b365c2c9b320a5b11f8a150182027f54497db3059d73a129df803b50c026bd37`;
+the returned evidence archive has SHA-256
+`f720c0ed7ccc7aeda3dbe2c5502797f82b1c58d128460ee23515d3245bea8f6d`.
+Its build information, manifest, checksums, and structural report are
+byte-identical to the issued metadata. The issued root was commit
+`c42a52550947268936a98e120e69e53d025c0e62` with ART commit
+`34a2c1ec9200e7ddb4ab20d6bb55237f2c0f8e63`; returned archives remain outside
+VCS. These identities and the accepted result above are the durable historical
+evidence.

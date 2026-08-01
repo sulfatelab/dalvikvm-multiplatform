@@ -645,17 +645,17 @@ The Windows x64 graph rebuilt successfully with `-j32`. Acceptance on agent01 pa
 | Linux GC stress | PASS |
 
 Full details are in
-`tools/verify/windows_x64_phase4/RESULT-w004-runtime-load.md`.
+`tests/stages/w004/ANALYSIS.md`.
 
 **Stage W004-D — historical native Windows closure: COMPLETE**
 
 The standalone package producer and repository-side PowerShell runner were
 retired after unified W-003, W-004, and W-025 passed natively on Windows Server
 2025 and repeated as Ninja no-ops. New acceptance uses the unified frontend.
-The historical package checker validates the inspected DLL hashes, manifest,
-PE export/import contract, and absence of the helper; the independent
-returned-result reviewer remains for the already issued archive. The
-unreferenced package-only Wine rechecker was removed.
+The historical package checker and returned-result reviewer validated the
+inspected DLL hashes, manifest, PE export/import contract, absence of the
+helper, and already issued archive before both were retired. The unreferenced
+package-only Wine rechecker was also removed.
 
 The historical Windows 10+ PowerShell runner verified package hashes, ran both dual and
 J-1 native paths, performs ten repeated starts, scans all logs for fatal/access-
@@ -663,9 +663,8 @@ violation markers, and recursively scans for crash dumps. On Windows 10 build
 19044 the returned result contains 28 PASS records, zero failures, and
 `OVERALL PASS`; all 22 children exit zero without timeouts, and the dump scan
 reports `NO_DMP_FILES`. Returned package metadata and the structural report
-match the issued package byte for byte. Procedure and evidence:
-`tools/verify/windows_x64_phase4/W004_HOST_CHECKLIST.md` and
-`tools/verify/windows_x64_phase4/evidence/w004_host/ACCEPTANCE.md`.
+match the issued package byte for byte. The immutable identities and accepted
+result are retained in `tests/stages/w004/ANALYSIS.md`.
 
 #### 6.7.7 Rollback and review rules
 

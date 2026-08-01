@@ -585,6 +585,14 @@ items are closed.
   duplicate compact acceptance are now removed; the stage-owned analysis
   retains the issued/returned identities, source commits, metadata-integrity
   result, and native 19/19 acceptance beside the canonical frame/XMM results.
+- [x] W-004's remaining composite-package checker, returned-ZIP reviewer,
+  host checklist, and duplicate checksum/acceptance files were retired after
+  unified W-003/W-004/W-025 native acceptance superseded the bundle. One
+  sanitized `tests/stages/w004/ANALYSIS.md` retains the direct Runtime
+  singleton design, live structural contract, incremental dependency repair,
+  issued/returned identities, and historical 28/28 acceptance. Current native
+  reproduction is the unified 26-gate W-004 stage at `--parallel 16`; the
+  Linux-hosted cross reviewer uses `--parallel 32`.
 - [x] `art.dll` no longer uses `WINDOWS_EXPORT_ALL_SYMBOLS`. Before the change,
   a Debug scan found 80,318 candidate exports and exceeded PE's 65,535-entry
   limit, while RelWithDebInfo exposed 17,112. ART's existing `EXPORT` boundary
