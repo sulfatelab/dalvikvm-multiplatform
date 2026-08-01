@@ -271,7 +271,34 @@ def test_windows_configure_uses_target_bundle_and_clang_target(tmp_path, monkeyp
     assert f"-DCMAKE_RC_COMPILER={llvm_rc.as_posix()}" in commands[0]
     assert f"-DART_JDK_ROOT={jdk}" in commands[0]
     assert any(arg.startswith("-DART_TARGET_BUNDLE_ROOT=") for arg in commands[0])
+    assert "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL" in commands[0]
     assert "-DART_ENABLE_TARGET_RUNTIME_TESTS=OFF" in commands[0]
+    assert "-DART_TEST_VARIANT=product" in commands[0]
+
+
+def test_test_variant_has_distinct_output_and_cannot_be_staged(tmp_path):
+    target = build_art.resolve_target("windows-x86_64-msvc")
+    binary = build_art._binary_dir(
+        tmp_path, target, "RelWithDebInfo", "win32-stack-high-water"
+    )
+    assert binary == (
+        tmp_path
+        / "windows-x86_64-msvc"
+        / "RelWithDebInfo-win32-stack-high-water"
+    )
+    build_art._validate_build_variant(
+        target, "win32-stack-high-water", "configure"
+    )
+    with pytest.raises(build_art.BuildFrontendError, match="cannot be staged"):
+        build_art._validate_build_variant(
+            target, "win32-stack-high-water", "stage"
+        )
+    with pytest.raises(build_art.BuildFrontendError, match="exact"):
+        build_art._validate_build_variant(
+            build_art.resolve_target("linux-x86_64-gnu"),
+            "win32-stack-high-water",
+            "configure",
+        )
 
 
 def test_resolve_tools_rejects_clangxx_symlink(tmp_path):

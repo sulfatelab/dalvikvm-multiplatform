@@ -72,6 +72,40 @@ def test_operator_out():
         assert '#include "arch/instruction_set.h"' in text
 
 
+def test_operator_out_accepts_art_visibility_export(tmp_path):
+    if not HAVE_ART:
+        return
+    fixture_root = tmp_path / "fixture"
+    header = fixture_root / "sample.h"
+    fixture_root.mkdir()
+    header.write_text(
+        "namespace art ART_VISIBILITY_EXPORT {\n"
+        "class ART_VISIBILITY_EXPORT Outer {\n"
+        " public:\n"
+        "  enum class ART_VISIBILITY_EXPORT Mode {\n"
+        "    kReady,\n"
+        "  };\n"
+        "};\n"
+        "}  // namespace art\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            os.path.join(ART_ROOT, "art", "tools", "generate_operator_out.py"),
+            str(fixture_root),
+            str(header),
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "namespace art {" in result.stdout
+    assert "operator<<(std::ostream& os, Outer::Mode rhs)" in result.stdout
+    assert "case Outer::Mode::kReady" in result.stdout
+
+
 def test_mterp():
     if not (HAVE_ARCHIVE and HAVE_ART):
         return

@@ -477,6 +477,7 @@ def run_managed(
     forbidden: list[str],
     expected_exit: int,
     timeout: int,
+    environment_overrides: dict[str, str] | None = None,
 ) -> None:
     dalvikvm = _regular_file(str(dalvikvm))
     boot_jar = _regular_file(str(boot_jar))
@@ -530,6 +531,12 @@ def run_managed(
         environment["LD_LIBRARY_PATH"] = os.pathsep.join(
             str(path) for path in library_dirs
         )
+    for name, value in (environment_overrides or {}).items():
+        if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) is None:
+            raise GateError(f"invalid managed environment variable name: {name!r}")
+        if not isinstance(value, str) or "\0" in value:
+            raise GateError(f"invalid managed environment value for {name}")
+        environment[name] = value
     try:
         result = subprocess.run(
             command,

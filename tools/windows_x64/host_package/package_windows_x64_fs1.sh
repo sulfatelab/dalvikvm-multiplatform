@@ -45,8 +45,10 @@ copy_runtime Debug "$DEBUG_BUILD"
 
 cp -a "$REPO/tools/verify/windows_x64_phase4/host/RUN_FS1_STACK_HIGH_WATER_HOST.ps1" \
   "$OUT/scripts/"
-cp -a "$REPO/tools/verify/windows_x64_phase4/check_fs1_stack_high_water.py" \
-  "$OUT/scripts/"
+cp -a "$REPO/tests/support/windows/fs1_stack_high_water_check.py" \
+  "$OUT/scripts/check_fs1_stack_high_water.py"
+cp -a "$REPO/tests/support/windows/fs1_stack_high_water_structure.py" \
+  "$OUT/scripts/fs1_stack_high_water_structure.py"
 
 cat >"$OUT/BUILD_INFO.txt" <<EOF
 created=$(date '+%Y-%m-%d %H:%M:%S %z')

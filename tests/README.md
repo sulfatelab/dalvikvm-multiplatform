@@ -131,6 +131,13 @@ The six shared Windows x86-64 source/object/PE reviewers formerly stored beside
 the retired Phase-1 product graph now live under `support/windows/`. Their
 defaults use canonical `out/<target-id>/<build-type>` paths; transitional host
 package scripts pass explicit directories until those packages are retired.
+The W-014 FS-1 stack-high-water case now uses the exact test-only build variant
+`win32-stack-high-water`. That variant has its own fingerprinted output
+directory, cannot be staged as a product, and changes the managed case from
+compile-only to target-runnable. Its shell-free runtime gate runs switch,
+nterp, and JIT modes, while a `host-review` gate inspects the generated offsets
+and target objects for allocation-free direct stack sampling. Product builds
+keep both FS-1 declarations compile-only and receive no instrumentation macro.
 
 Until `catalog.py` generation replaces the declarations, add or migrate test
 targets through the common API in `tests/CMakeLists.txt`. Do not add another

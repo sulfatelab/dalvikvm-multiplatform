@@ -1083,13 +1083,76 @@ art_add_target_probe(
     LINK_OPTIONS "${_art_no_cet}"
     CONTRACTS stack jni
     PREFIX lib WINDOWS_EXPORT_ALL_SYMBOLS)
+get_filename_component(_art_fs1_llvm_bin "${CMAKE_CXX_COMPILER}" DIRECTORY)
+if(ART_TEST_VARIANT STREQUAL "win32-stack-high-water")
+    set(_art_fs1_structure_execution host-review)
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        set(_art_fs1_reserve 40960)
+        set(_art_fs1_process_timeout 300)
+        set(_art_fs1_ctest_timeout 1200)
+    else()
+        set(_art_fs1_reserve 8192)
+        set(_art_fs1_process_timeout 180)
+        set(_art_fs1_ctest_timeout 900)
+    endif()
+else()
+    set(_art_fs1_structure_execution compile-only)
+endif()
 art_add_target_probe(
-    NAME managed_fs1_stack_high_water STAGE w014 TYPE MANAGED EXECUTION compile-only
+    NAME win32_fs1_stack_high_water_structure STAGE w014 TYPE GATE
+    EXECUTION "${_art_fs1_structure_execution}"
     ${_art_windows_current_selector}
-    SOURCES
-        "${_art_test_cases_root}/stack-high-water/FS1StackHighWaterProbe.java"
-    CONTRACTS stack jni
-    OUTPUT_NAME fs1stackhighwaterprobe)
+    DEPENDS art
+    CONTRACTS stack codegen source-policy
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_test_repo_root}/tests/support/windows/fs1_stack_high_water_structure.py"
+        --repo "${_art_test_repo_root}"
+        --probe-build "${CMAKE_BINARY_DIR}"
+        --llvm-readobj
+            "${_art_fs1_llvm_bin}/llvm-readobj${CMAKE_EXECUTABLE_SUFFIX}"
+        --llvm-objdump
+            "${_art_fs1_llvm_bin}/llvm-objdump${CMAKE_EXECUTABLE_SUFFIX}")
+if(ART_TEST_VARIANT STREQUAL "win32-stack-high-water")
+    art_add_target_probe(
+        NAME managed_fs1_stack_high_water STAGE w014 TYPE MANAGED
+        EXECUTION target-runnable TIMEOUT "${_art_fs1_ctest_timeout}"
+        ${_art_windows_current_selector}
+        SOURCES
+            "${_art_test_cases_root}/stack-high-water/FS1StackHighWaterProbe.java"
+        CONTRACTS stack jni
+        OUTPUT_NAME fs1stackhighwaterprobe
+        DEPENDS
+            fs1stackhighwater dalvikvm icu_jni javacore openjdk
+        COMMAND
+            "${Python3_EXECUTABLE}"
+            "${_art_test_repo_root}/tests/support/windows/fs1_stack_high_water_gate.py"
+            --target-id "${ART_TARGET_ID}"
+            --dalvikvm "$<TARGET_FILE:dalvikvm>"
+            --boot-jar "${_art_boot_jar}"
+            --app-jar
+                "${_art_managed_root}/fs1stackhighwaterprobe.jar"
+            --work-root
+                "${CMAKE_CURRENT_BINARY_DIR}/results/w014-stack-high-water"
+            --icu-data "${_art_icu_data}"
+            --jni-dir "$<TARGET_FILE_DIR:fs1stackhighwater>"
+            --library-dir "$<TARGET_FILE_DIR:dalvikvm>"
+            --library-dir "${_art_bundle_lib}/libcxx/bin"
+            --validator
+                "${_art_test_repo_root}/tests/support/windows/fs1_stack_high_water_check.py"
+            --art-reserve "${_art_fs1_reserve}"
+            --timeout "${_art_fs1_process_timeout}")
+else()
+    art_add_target_probe(
+        NAME managed_fs1_stack_high_water STAGE w014 TYPE MANAGED
+        EXECUTION compile-only
+        ${_art_windows_current_selector}
+        SOURCES
+            "${_art_test_cases_root}/stack-high-water/FS1StackHighWaterProbe.java"
+        CONTRACTS stack jni
+        OUTPUT_NAME fs1stackhighwaterprobe
+        DEPENDS fs1stackhighwater)
+endif()
 
 # W-025: JIT section policy and PE unwind registration/lifecycle.
 art_add_target_probe(

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate one FS-1 stack-overflow high-water runtime log."""
+"""Validate one unified FS-1 stack-overflow high-water runtime log."""
 
 from __future__ import annotations
 

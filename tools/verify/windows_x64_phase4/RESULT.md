@@ -14,7 +14,7 @@ is the authoritative native gate; the separate Windows 10/second-host repeat
 is skipped by policy. Reservation-correlation, negative-exception, and
 debugger-quality dump-stack coverage remain optional follow-ups. FS-5
 conditionally closes the pending bridge tail.
-**Date:** 2026-07-30
+**Date:** 2026-08-01
 **Depends on:** Phase 3 complete (historical real Win10 G12 goldens)
 
 **Current lab policy:** All future native Windows gates use Windows Server
@@ -61,7 +61,7 @@ historical evidence only. See [HOST_GATE_POLICY.md](HOST_GATE_POLICY.md).
 | W-010/W-014 native package preflight | **PASS under Wine** | `package_windows_x64_w010_w014.sh` (E9 30-record acceptance runner plus separate historical stack-growth/UEF diagnostics) |
 | W-010/W-014 isolated failure diagnostics | **PASS on native build 19044** | runs 3-4: fixed-page SOE invalidated; UEF replacement ruled out; JNI hardware/raised AVs miss UEF while the JNI-created native worker reaches UEF/dump, isolating traversal through managed/GenericJNI frames. |
 | W-010/W-014 complete E9 native host matrix | **PASS, 30/30 on build 26100** | guarantee-aware excluded-low accounting; switch/nterp/JIT managed SOE; zero handled dumps; five valid static/JIT/OSR fatal dumps |
-| FS-1 Release/Debug stack high-water | **PASS on Wine and native build 26100** | `run_fs1_stack_high_water.sh`; switch/nterp/JIT, four complete records each; native Release minimum margin 6784 bytes, Debug quick minimum 37168 bytes; no dumps |
+| FS-1 RelWithDebInfo/Debug stack high-water | **PASS in unified native Stage-8 and historical package on build 26100** | unified `win32-stack-high-water` variant: switch/nterp/JIT, four complete records each; current RelWithDebInfo minimum margin 6448 bytes, Debug quick minimum 37120 bytes; no dumps; structural reviewer passed |
 | FS-2 native debugger/CET/embedding/exception-XMM matrix | **PASS on native build 26100** | `evidence/fs2_w010_w014_native/ACCEPTANCE.md`; first-chance JIT NPE continue, explicit SOE no AV, nine incompatible CET rejections plus safe-policy acceptance, JNI UEF teardown, and 2x nterp/switch/JIT exception-XMM runs |
 | Full suite | **PASS** | `run_all_wine_gates.sh` |
 
@@ -95,7 +95,7 @@ PASS native_crash_aborts
 | W-010 dynamic-JIT PE unwind | `runtime/multiplatform/windows/jit_unwind_windows.*`; `runtime/jit/{jit_code_cache,jit_memory_region}.*`; `run_jit_unwind_{info,registry,lifecycle}.sh`; `run_jit_fatal_unwind.sh` |
 | W-010 static OSR PE unwind | `quick_entrypoints_x86_64.S`; `tests/cases/osr-unwind/probe.cc`; `run_osr_unwind_probe.sh`; `check_win32_boundary_unwind.py` |
 | W-010/W-014 native Stage E package and diagnostics | `package_windows_x64_w010_w014.sh`; `host/RUN_W010_W014_HOST.ps1`; `host/RUN_W010_W014_DIAGNOSTICS.ps1`; `check_w010_w014_host_package.py`; `review_w010_w014_host_result.py`; `W010_W014_HOST_CHECKLIST.md`; `W010_W014_DIAGNOSTICS.md` |
-| FS-1 stack high-water probe/package/evidence | `run_fs1_stack_high_water.sh`; `check_fs1_stack_high_water*.py`; `host/RUN_FS1_STACK_HIGH_WATER_HOST.ps1`; `package_windows_x64_fs1.sh`; `evidence/fs1_stack_high_water/ACCEPTANCE.md` |
+| FS-1 stack high-water probe/package/evidence | unified sources under `tests/cases/stack-high-water`; shell-free gates and structural reviewer under `tests/support/windows`; retained `run_fs1_stack_high_water.sh`; `host/RUN_FS1_STACK_HIGH_WATER_HOST.ps1`; `package_windows_x64_fs1.sh`; `evidence/fs1_stack_high_water/ACCEPTANCE.md` |
 | FS-2 debugger/CET/embedding/exception-XMM probes and evidence | `tests/cases/debugger-fault/probe.cc`; `tests/cases/cet-stack-policy/probe.cc`; `tests/cases/art-embedding/probe.cc`; `host/RUN_W010_W014_HOST.ps1`; `evidence/fs2_w010_w014_native/ACCEPTANCE.md` |
 
 ## Host
@@ -317,6 +317,20 @@ pthread page probes both report `before=0 configured=16384 minimum=16384`.
 See `evidence/w010_w014_e9/ACCEPTANCE.md`.
 
 ## FS-1 native stack high-water acceptance
+
+The unified Stage-8 revalidation uses the exact test-only
+`win32-stack-high-water` variant and the common CMake/Ninja graph. Both Debug
+and RelWithDebInfo passed all nine W-014 CTests on Windows Server 2025 build
+26100, including the migrated structural reviewer; both immediate reruns were
+Ninja no-ops and passed again. Current minimum native margins are 70848/37120/
+37248 bytes for Debug switch/nterp/JIT and 6448/7568/7632 bytes for
+RelWithDebInfo. Each mode emitted four complete records with exit zero and no
+dump. The source projection and both output trees contained zero reparse
+points. Explicit source-level `art.dll` exports reduced Debug from 80,318
+auto-export candidates to 1,938 real exports; RelWithDebInfo has 1,939.
+
+The following package record is retained as the earlier independent native
+acceptance:
 
 The 53,459,106-byte archive with SHA-256
 `22195128d460eef6fe260b79f25e792a2af5303546fadacc7ad188038c09bfbe`

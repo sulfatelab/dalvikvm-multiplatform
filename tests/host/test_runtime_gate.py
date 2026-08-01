@@ -14,6 +14,17 @@ assert _SPEC is not None and _SPEC.loader is not None
 runtime_gate = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(runtime_gate)
 
+_FS1_GATE_PATH = (
+    Path(__file__).parents[1]
+    / "support"
+    / "windows"
+    / "fs1_stack_high_water_gate.py"
+)
+_FS1_SPEC = importlib.util.spec_from_file_location("art_fs1_gate", _FS1_GATE_PATH)
+assert _FS1_SPEC is not None and _FS1_SPEC.loader is not None
+fs1_gate = importlib.util.module_from_spec(_FS1_SPEC)
+_FS1_SPEC.loader.exec_module(fs1_gate)
+
 
 def test_elf_needed_reads_host_python_without_external_tools():
     executable = Path(sys.executable).resolve()
@@ -152,6 +163,72 @@ def test_native_matrix_runs_named_cases_and_records_sanitized_result(
     assert "cases=2, repetitions=3" in capsys.readouterr().out
 
 
+def test_fs1_gate_runs_three_managed_modes_and_validator_without_shell(
+    tmp_path, monkeypatch, capsys
+):
+    files = {}
+    for name in ("dalvikvm.exe", "boot.jar", "probe.jar", "icudt72l.dat", "check.py"):
+        path = tmp_path / name
+        path.write_bytes(name.encode())
+        files[name] = path
+    jni_dir = tmp_path / "jni"
+    jni_dir.mkdir()
+    calls = []
+
+    def run_managed(**kwargs):
+        calls.append(kwargs)
+        case_root = kwargs["work_root"]
+        case_root.mkdir(parents=True)
+        (case_root / "stdout.txt").write_text(
+            f"FS1StackHighWaterProbe OK mode={kwargs['main_args'][0]} main=2 child=2\n",
+            encoding="utf-8",
+        )
+        (case_root / "stderr.txt").write_text("", encoding="utf-8")
+        (case_root / "result.json").write_text(
+            json.dumps({"target_id": kwargs["target_id"]}) + "\n",
+            encoding="utf-8",
+        )
+
+    validator_calls = []
+
+    def validate(command, **kwargs):
+        validator_calls.append((command, kwargs))
+        return SimpleNamespace(returncode=0, stdout="validation PASS\n", stderr="")
+
+    monkeypatch.setattr(fs1_gate.runtime_gate, "run_managed", run_managed)
+    monkeypatch.setattr(fs1_gate.subprocess, "run", validate)
+    work = tmp_path / "out" / "fs1"
+    fs1_gate.run_gate(
+        target_id="windows-x86_64-msvc",
+        dalvikvm=files["dalvikvm.exe"],
+        boot_jar=files["boot.jar"],
+        app_jar=files["probe.jar"],
+        work_root=work,
+        icu_data=files["icudt72l.dat"],
+        jni_dir=jni_dir,
+        library_dirs=[tmp_path],
+        validator=files["check.py"],
+        art_reserve=8192,
+        timeout=30,
+    )
+
+    assert [call["main_args"] for call in calls] == [
+        ["switch"],
+        ["nterp"],
+        ["jit"],
+    ]
+    assert calls[0]["environment_overrides"]["ART_WINDOWS_X64_NTERP"] == "0"
+    assert calls[1]["environment_overrides"]["ART_WINDOWS_X64_NTERP"] == "1"
+    assert calls[2]["environment_overrides"]["ART_WINDOWS_X64_JIT"] == "1"
+    assert all(options["shell"] is False for _, options in validator_calls)
+    record_text = (work / "result.json").read_text(encoding="utf-8")
+    record = json.loads(record_text)
+    assert record["completed_modes"] == 3
+    assert record["dump_files"] == []
+    assert str(tmp_path) not in record_text
+    assert "modes=3, art_reserve=8192, dumps=0" in capsys.readouterr().out
+
+
 def test_managed_gate_uses_isolated_runtime_and_records_result(
     tmp_path, monkeypatch, capsys
 ):
@@ -194,6 +271,7 @@ def test_managed_gate_uses_isolated_runtime_and_records_result(
         forbidden=["AssertionError"],
         expected_exit=0,
         timeout=30,
+        environment_overrides={"ART_TEST_MODE": "switch"},
     )
 
     command, options = commands[0]
@@ -201,6 +279,7 @@ def test_managed_gate_uses_isolated_runtime_and_records_result(
     assert "-Xint" in command
     assert options["shell"] is False
     assert options["env"]["ANDROID_ROOT"] == str(work / "runtime")
+    assert options["env"]["ART_TEST_MODE"] == "switch"
     assert (work / "runtime" / "icu" / "icudt72l.dat").read_bytes() == b"icu"
     result = (work / "result.json").read_text(encoding="utf-8")
     assert '"target_id": "linux-x86_64-gnu"' in result

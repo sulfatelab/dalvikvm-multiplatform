@@ -31,6 +31,7 @@ from bp2cmake.target import TARGET_PROFILES, TargetError, TargetProfile, resolve
 
 DEFAULT_BUILD_TYPE = "RelWithDebInfo"
 BUILD_TYPES = ("RelWithDebInfo", "Debug")
+BUILD_VARIANTS = ("product", "win32-stack-high-water")
 ROOT_MODULES = (
     "dalvikvm",
     "dex2oat",
@@ -76,6 +77,7 @@ def _parser() -> argparse.ArgumentParser:
         sub = subparsers.add_parser(command)
         sub.add_argument("--target-id", required=True)
         sub.add_argument("--build-type", choices=BUILD_TYPES, default=DEFAULT_BUILD_TYPE)
+        sub.add_argument("--variant", choices=BUILD_VARIANTS, default="product")
         sub.add_argument("--output-root", type=Path)
         if command in ("build", "test"):
             sub.add_argument("--parallel", type=int)
@@ -102,9 +104,10 @@ def main(argv: list[str] | None = None) -> int:
 
         target = resolve_target(args.target_id)
         target.require_generation()
+        _validate_build_variant(target, args.variant, args.command)
         local = load_local_config(REPO_ROOT)
         output_root = _resolve_output_root(args.output_root, local)
-        binary_dir = output_root / target.target_id / args.build_type
+        binary_dir = _binary_dir(output_root, target, args.build_type, args.variant)
         validate_managed_path(binary_dir, allow_missing=True)
 
         if args.command in ("generate", "check-generated", "configure"):
@@ -115,7 +118,7 @@ def main(argv: list[str] | None = None) -> int:
                 check=args.command == "check-generated",
             )
         if args.command == "configure":
-            _configure(target, args.build_type, binary_dir, local)
+            _configure(target, args.build_type, binary_dir, local, args.variant)
         elif args.command == "build":
             _build(target, binary_dir, local, args.cmake_target, args.parallel)
         elif args.command == "test":
@@ -145,6 +148,31 @@ def _resolve_output_root(explicit: Path | None, local: LocalBuildConfig) -> Path
         output_root = REPO_ROOT / "out"
     validate_managed_path(output_root, allow_missing=True)
     return output_root
+
+
+def _binary_dir(
+    output_root: Path,
+    target: TargetProfile,
+    build_type: str,
+    variant: str,
+) -> Path:
+    configuration = build_type if variant == "product" else f"{build_type}-{variant}"
+    return output_root / target.target_id / configuration
+
+
+def _validate_build_variant(
+    target: TargetProfile, variant: str, command: str
+) -> None:
+    if variant == "product":
+        return
+    if variant == "win32-stack-high-water" and target.target_id != "windows-x86_64-msvc":
+        raise BuildFrontendError(
+            "win32-stack-high-water is an exact windows-x86_64-msvc test variant"
+        )
+    if command == "stage":
+        raise BuildFrontendError(
+            f"test-only build variant {variant} cannot be staged as a product"
+        )
 
 
 def _generate(
@@ -235,6 +263,7 @@ def _configure(
     build_type: str,
     binary_dir: Path,
     local: LocalBuildConfig,
+    variant: str = "product",
 ) -> None:
     tools = _resolve_tools(local, need_compiler=True)
     jdk = _resolve_jdk(local)
@@ -243,7 +272,7 @@ def _configure(
     if target.target_platform == "windows":
         tools["llvm-rc"] = _resolve_llvm_resource_compiler(local)
     bindings = _target_bindings(target, local)
-    fingerprint = _build_fingerprint(target, build_type, tools)
+    fingerprint = _build_fingerprint(target, build_type, variant, tools)
     manifest_path = binary_dir / "build_manifest.json"
     generated = binary_dir / "generated"
     command = [
@@ -269,6 +298,7 @@ def _configure(
         f"-DART_GRAPH_FILE={generated / 'art_graph.cmake'}",
         "-DART_ENABLE_TARGET_RUNTIME_TESTS="
         + ("ON" if _host_can_run_target(target) else "OFF"),
+        f"-DART_TEST_VARIANT={variant}",
     ]
     if target.target_platform == "windows":
         bundle = bindings.get("bundle_root")
@@ -280,8 +310,10 @@ def _configure(
         command.extend((
             f"-DART_TARGET_BUNDLE_ROOT={bundle}",
             f"-DCMAKE_RC_COMPILER={tools['llvm-rc'].as_posix()}",
-            "-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY",
         ))
+        if target.target_abi == "msvc":
+            command.append("-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL")
+        command.append("-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY")
     elif platform.system().lower() == "windows" and "sysroot" not in bindings:
         raise BuildFrontendError(
             "Windows-hosted Linux targets require targets."
@@ -747,7 +779,10 @@ def _python_executable() -> Path:
 
 
 def _build_fingerprint(
-    target: TargetProfile, build_type: str, tools: dict[str, Path]
+    target: TargetProfile,
+    build_type: str,
+    variant: str,
+    tools: dict[str, Path],
 ) -> dict[str, object]:
     return {
         "schema_version": 1,
@@ -759,6 +794,7 @@ def _build_fingerprint(
         "target_id": target.target_id,
         "target_triple": target.target_triple,
         "build_type": build_type,
+        "build_variant": variant,
         "tools": {name: str(path) for name, path in sorted(tools.items())},
     }
 

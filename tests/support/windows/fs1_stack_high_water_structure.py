@@ -21,7 +21,12 @@ def run(*args: str) -> str:
     return result.stdout
 
 
-def require_tool(name: str) -> str:
+def require_tool(name: str, explicit: Path | None = None) -> str:
+    if explicit is not None:
+        tool = str(explicit.resolve())
+        if not explicit.is_file():
+            fail(f"configured tool does not exist: {explicit}")
+        return tool
     tool = shutil.which(name)
     if tool is None:
         fail(f"missing tool {name}")
@@ -50,30 +55,34 @@ def instruction_text(line: str) -> str | None:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo", type=Path, required=True)
-    parser.add_argument("--product-build", type=Path, required=True)
+    parser.add_argument("--product-build", type=Path)
     parser.add_argument("--probe-build", type=Path, required=True)
+    parser.add_argument("--llvm-readobj", type=Path)
+    parser.add_argument("--llvm-objdump", type=Path)
     args = parser.parse_args()
 
     repo = args.repo.resolve()
-    product = args.product_build.resolve()
+    product = args.product_build.resolve() if args.product_build else None
     probe = args.probe_build.resolve()
-    readobj = require_tool("llvm-readobj")
-    objdump = require_tool("llvm-objdump")
+    readobj = require_tool("llvm-readobj", args.llvm_readobj)
+    objdump = require_tool("llvm-objdump", args.llvm_objdump)
 
     symbol = "artWin32DumpStackOverflowHighWater"
-    product_exports = run(readobj, "--coff-exports", str(product / "art.dll"))
     probe_exports = run(readobj, "--coff-exports", str(probe / "art.dll"))
-    if f"Name: {symbol}" in product_exports:
-        fail(f"product art.dll unexpectedly exports {symbol}")
+    if product is not None:
+        product_exports = run(readobj, "--coff-exports", str(product / "art.dll"))
+        if f"Name: {symbol}" in product_exports:
+            fail(f"product art.dll unexpectedly exports {symbol}")
     if f"Name: {symbol}" not in probe_exports:
         fail(f"instrumented art.dll does not export {symbol}")
 
-    product_defines_path = product / "gensrc/art/asm/include/asm_defines.h"
     probe_defines_path = probe / "gensrc/art/asm/include/asm_defines.h"
-    product_defines = product_defines_path.read_text(encoding="utf-8")
     defines = probe_defines_path.read_text(encoding="utf-8")
-    if "THREAD_WIN32_STACK_HIGH_WATER_" in product_defines:
-        fail("product asm definitions contain FS-1 offsets")
+    if product is not None:
+        product_defines_path = product / "gensrc/art/asm/include/asm_defines.h"
+        product_defines = product_defines_path.read_text(encoding="utf-8")
+        if "THREAD_WIN32_STACK_HIGH_WATER_" in product_defines:
+            fail("product asm definitions contain FS-1 offsets")
 
     stack_end = read_define(defines, "THREAD_STACK_END_OFFSET")
     throw_entry = read_define(defines, "THREAD_THROW_STACK_OVERFLOW_ENTRYPOINT_OFFSET")

@@ -40,8 +40,9 @@ items are closed.
 | Linux x86-64 product | COMPLETE for the current W-004/W-013 runtime slice | a fresh target-local boot/runtime closure passes all five W-004 gates plus the shared W-013 128 MiB non-moving-heap gate; identical stage rebuilds are Ninja no-ops | add boot-image/security packaging and migrate the remaining behavioral stages |
 | Windows x86-64 product | PARTIAL / experimental | Linux-hosted cross and native Windows Server 2025 product builds pass; fresh native W-004 passes 4/4 and the unified W-013 stage passes 7/7, including allocator, virtual-memory, fatal-contract, socket-fd, source-policy, and two managed heap gates | run the remaining multi-stage catalog and migrate its behavioral tests |
 | Compiler DSO parity | COMPLETE for `art-compiler` | both targets emit a shared compiler DSO; Windows imports `art.dll` and exports `art_compiler_jit_create` | retain exact ABI and no-cycle gates |
+| Windows runtime DSO exports | COMPLETE for current x86-64 closure | `art.dll` uses explicit source annotations, not CMake auto-export; Debug and RelWithDebInfo stay below PE's 65,535-entry limit and pass W-014/FS-1 | grow a reviewed ABI allowlist as more consumers migrate |
 | Full DSO topology parity | PARTIAL | five module kinds and two target-specific module pairs still differ | convert each difference or record a reviewed target exception |
-| Unified phase catalog | PARTIAL | seven virtual stages declare 32 native probes, 47 managed JARs, and five command gates; Windows has 82 applicable items (13 target-runnable plus one host-review), while Linux x86-64 has seven applicable items (six runnable and one compile-only artifact) | migrate the remaining behavioral runners, portable JNI expansion, and result checks |
+| Unified phase catalog | PARTIAL | seven virtual stages declare 32 native probes, 47 managed JARs, and six command gates; Windows has 83 applicable items (13 target-runnable plus one host-review in the product variant), while Linux x86-64 has seven applicable items (six runnable and one compile-only artifact) | migrate the remaining behavioral runners, portable JNI expansion, and result checks |
 | Boot/runtime packaging | PARTIAL | the base boot JAR and probe JARs are Python/CMake/Ninja-owned, deterministic, target-local, and fail-fast; managed gates isolate a runtime root and stage pinned ICU data plus the mandatory native boot DSO closure | add boot images, security providers/resources, cacerts, and complete runtime packages |
 | POSIX-free Windows build host | COMPLETE for the current native/managed W-004 and W-013 graphs; PARTIAL end to end | Server 2025 uses configured official JDK 21, Python, CMake, Ninja, and plain Clang drivers; native managed build/runtime and no-op gates pass without POSIX tooling | migrate every retained behavioral gate and run the complete current catalog |
 | Legacy build removal | PARTIAL | active product ownership was demoted, project-owned symlink overlays were removed, and the superseded Linux miniature plus Windows Phase-0/Phase-1 product graphs were deleted; the checked-in Linux graph, libcore product CMake, and split overlay datasets remain | remove or demote every alternative product path after gate migration |
@@ -52,7 +53,7 @@ items are closed.
 ### Latest verification baseline (2026-08-01)
 
 - [x] `PYTHONPATH=tools/bp2cmake python3 -m pytest tools/bp2cmake/tests tests/host -q`:
-  134 passed, including generated PE-header, Linux/Windows test-catalog,
+  141 passed, including generated PE-header, Linux/Windows test-catalog,
   shell-free runtime/managed-artifact gates, parallel-frontend, JDK validation,
   deterministic JAR, Windows-path/DSO-name, reviewer ownership, W-013
   source-policy and fatal-contract orchestration, W-024 cleanup, and VCS
@@ -64,17 +65,42 @@ items are closed.
   the Linux module.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
-  JDK 21 emits an 84-declaration catalog. Seven declarations apply to
+  JDK 21 emits an 85-declaration catalog. Seven declarations apply to
   `linux-x86_64-gnu`: the five runnable W-004 gates, the W-013 non-moving
   managed artifact, and its runnable 128 MiB gate. Six register with CTest;
   the managed artifact is compile-only and built as the W-013 gate dependency.
-- [x] Windows-target configuration emits the same 84 declarations and keeps
-  82 items applicable: 32 native probes, all 47 managed JAR declarations, and
-  three W-013 command gates. Thirteen applicable items are `target-runnable`:
+- [x] Windows-target configuration emits the same 85 declarations and keeps
+  83 items applicable: 32 native probes, all 47 managed JAR declarations, and
+  six command gates across the catalog. Thirteen product-variant items are `target-runnable`:
   eight native probes, three common managed runtime probes, and the two W-013
   managed command gates. The W-013 source-policy gate is a separately
   registered `host-review`. The complete runnable and host-review W-013 slice
   is accepted on the authoritative native host.
+- [x] FS-1 is now an exact `windows-x86_64-msvc` test-only build variant with a
+  fingerprinted output directory. Product staging rejects the variant and the
+  product graph receives no instrumentation macro. The variant applies the
+  macro consistently to C, C++, and generated assembly, runs the managed
+  switch/nterp/JIT matrix through Python without a shell, and registers the
+  migrated allocation-free/direct-store object reviewer as a W-014
+  `host-review` gate. Debug and RelWithDebInfo each passed 9/9 on Windows
+  Server 2025; both immediate repeats were Ninja no-ops and passed 9/9 again.
+  Each mode produced four complete records, zero exit, positive native margin,
+  sanitized aggregate JSON, and no dump. The source and both output trees had
+  zero reparse points.
+- [x] `art.dll` no longer uses `WINDOWS_EXPORT_ALL_SYMBOLS`. Before the change,
+  a Debug scan found 80,318 candidate exports and exceeded PE's 65,535-entry
+  limit, while RelWithDebInfo exposed 17,112. ART's existing `EXPORT` boundary
+  now maps to producer `dllexport`; namespace/enum visibility uses the PE-safe
+  `ART_VISIBILITY_EXPORT`, `Thread` keeps `self_tls_` private and exports only
+  its required callable/data boundary, and three optimized inline template
+  specializations have one Windows-only producer translation unit. Native
+  inspection reports 1,938 Debug and 1,939 RelWithDebInfo `art.dll` exports.
+  `art-compiler.dll` retains its reviewed DEF allowlist; other generated DSOs
+  retain auto-export until their own explicit ABI is reviewed.
+- [x] Every MSVC-ABI build type now selects the release dynamic CRT
+  (`MultiThreadedDLL`). This preserves Debug optimization/assertion behavior
+  without depending on Visual Studio's private `msvcrtd.lib`; the native CMake
+  entry point rejects a mismatched CRT cache.
 - [x] All 32 catalog-owned native/assembly probe declarations have logical
   `tests/cases` ownership across 29 source-owning cases with adjacent results.
   The latest clean `windows-x86_64-msvc` cross graph compiled and linked both
@@ -287,12 +313,12 @@ One historical work stage maps to exactly one virtual target named
 | `w004` | 2 EXEs, 1 DLL, 33 managed, 2 gates | 5 exact / 33 typed | 6 runnable, 32 compile-only | Windows embedding/JVMTI/libcore behavior beyond the accepted Hello/GC/Math/SHA slice |
 | `w010` | 4 EXEs, 3 managed | 1 exact / 6 typed | 7 compile-only | managed-fault, fatal-unwind, debugger, and dump review |
 | `w013` | 4 EXEs, 1 managed, 3 gates | 3 exact / 5 typed | 6 runnable, 1 host-review, 1 compile-only | registered x86-64 native, managed, and source-policy coverage is complete |
-| `w014` | 7 EXEs, 1 DLL, 1 managed | 3 exact / 6 typed | 7 runnable, 2 compile-only | managed JNI stack-high-water gate |
+| `w014` | 7 EXEs, 1 DLL, 1 managed, 1 gate | 3 exact / 7 typed | product: 7 runnable, 3 compile-only; FS-1 variant: 8 runnable, 1 host-review, 1 compile-only | registered FS-1 coverage is complete for Windows x86-64 |
 | `w025` | 4 EXEs, 3 DLLs, 3 managed | 6 exact / 4 typed | 10 compile-only | JIT mapping/lifecycle/CFG runtime and host-review gates |
-| Total | 22 EXEs, 10 DLLs, 47 managed, 5 gates | 22 exact / 62 typed | 20 runnable, 1 host-review, 63 compile-only | Windows applies 82 declarations; Linux x86-64 applies seven |
+| Total | 22 EXEs, 10 DLLs, 47 managed, 6 gates | 22 exact / 63 typed | product: 20 runnable, 1 host-review, 64 compile-only | Windows applies 83 declarations; Linux x86-64 applies seven |
 
 The shared registry now references zero source files from historical
-verification directories. All 84 declarations own canonical source under
+verification directories. All 85 declarations own canonical source under
 `tests/cases/` or a shell-free runner under `tests/support/`; all 29 native
 source cases and all 48 Java sources have adjacent results, and shared stage
 analysis remains under `tests/stages/`. The old verification tree now contains
@@ -2247,6 +2273,34 @@ The Windows ABI gate should use LLVM inspection tools to verify:
   and
 - loading/unloading the DLL does not rely on unresolved symbols supplied by a
   probe executable.
+
+### Explicit `art.dll` PE export contract
+
+`art.dll` itself must not use `WINDOWS_EXPORT_ALL_SYMBOLS`. PE permits at most
+65,535 exported entries, and an unoptimized ART build exposes tens of thousands
+of inline/template COMDAT implementation symbols when CMake scans every object.
+The measured pre-refactor candidates were 80,318 in Debug and 17,112 in
+RelWithDebInfo, so optimization level changed the accidental ABI and Debug did
+not link.
+
+The maintained boundary uses ART's source annotations:
+
+- while building `art.dll`, `EXPORT` is `__declspec(dllexport)`;
+- consumers select `dllimport` through the existing `LIBART_PE_*` boundary;
+- namespaces and enums use `ART_VISIBILITY_EXPORT`, which remains ELF
+  visibility on non-Windows and is deliberately empty on PE;
+- `Thread` is not a whole-class PE export because its `thread_local self_tls_`
+  must remain DLL-private; only the required methods and static data are
+  annotated; and
+- optimized inline specializations that become DLL-owned have one explicit
+  Windows translation-unit owner so Debug and RelWithDebInfo link identically.
+
+The current accepted counts are 1,938 Debug exports and 1,939 RelWithDebInfo
+exports. The one-entry difference is reviewed optimization/configuration
+surface, not a return to whole-object auto-export. Regression tests keep both
+`art` and `art-compiler` outside the generic CMake auto-export loop, exercise
+operator-out parsing of `ART_VISIBILITY_EXPORT`, and ensure `Thread::self_tls_`
+remains unannotated.
 
 ### Longer-term topology optimization
 

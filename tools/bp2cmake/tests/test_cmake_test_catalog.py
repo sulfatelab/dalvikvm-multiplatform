@@ -61,10 +61,10 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         (binary / "art-tests" / "art_test_catalog.json").read_text(encoding="utf-8")
     )
     assert catalog["target_id"] == "windows-x86_64-msvc"
-    assert len(catalog["probes"]) == 84
-    assert sum(probe["applicable"] for probe in catalog["probes"]) == 82
+    assert len(catalog["probes"]) == 85
+    assert sum(probe["applicable"] for probe in catalog["probes"]) == 83
     assert sum(bool(probe["target_ids"]) for probe in catalog["probes"]) == 22
-    assert sum(not probe["target_ids"] for probe in catalog["probes"]) == 62
+    assert sum(not probe["target_ids"] for probe in catalog["probes"]) == 63
     assert sum(
         probe["execution"] == "target-runnable" for probe in catalog["probes"]
     ) == 20
@@ -89,6 +89,43 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     assert [
         probe["name"] for probe in catalog["probes"] if probe["ctest_registered"]
     ] == ["windows_w013_source_policy"]
+
+    variant_binary = tmp_path / "variant-build"
+    (source / "CMakeLists.txt").write_text(
+        cmake_lists.replace(
+            "set(ART_ENABLE_TARGET_RUNTIME_TESTS OFF)",
+            "set(ART_ENABLE_TARGET_RUNTIME_TESTS ON)\n"
+            "set(ART_TEST_VARIANT win32-stack-high-water)",
+        ),
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [cmake, "-S", str(source), "-B", str(variant_binary), "-G", "Ninja"],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    variant_catalog = json.loads(
+        (variant_binary / "art-tests" / "art_test_catalog.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    fs1 = next(
+        probe
+        for probe in variant_catalog["probes"]
+        if probe["name"] == "managed_fs1_stack_high_water"
+    )
+    assert fs1["execution"] == "target-runnable"
+    assert fs1["timeout_seconds"] == 900
+    assert fs1["ctest_registered"] is True
+    fs1_structure = next(
+        probe
+        for probe in variant_catalog["probes"]
+        if probe["name"] == "win32_fs1_stack_high_water_structure"
+    )
+    assert fs1_structure["execution"] == "host-review"
+    assert fs1_structure["ctest_registered"] is True
 
 
 def test_linux_catalog_registers_runtime_and_dso_command_gates(tmp_path):
@@ -137,7 +174,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         (binary / "art-tests" / "art_test_catalog.json").read_text(encoding="utf-8")
     )
     applicable = [probe for probe in catalog["probes"] if probe["applicable"]]
-    assert len(catalog["probes"]) == 84
+    assert len(catalog["probes"]) == 85
     assert [probe["name"] for probe in applicable] == [
         "managed_imageless_hello",
         "managed_gc_stress",

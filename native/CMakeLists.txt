@@ -18,6 +18,18 @@ if(NOT ART_PROFILE_FILE)
         "ART_PROFILE_FILE is required; configure through tools/build_art.py")
 endif()
 include("${ART_PROFILE_FILE}")
+set(ART_TEST_VARIANT "product" CACHE STRING
+    "Build identity: product or an explicit test-only instrumentation variant")
+set_property(CACHE ART_TEST_VARIANT PROPERTY STRINGS
+    product win32-stack-high-water)
+if(NOT ART_TEST_VARIANT MATCHES "^(product|win32-stack-high-water)$")
+    message(FATAL_ERROR "Unknown ART_TEST_VARIANT: ${ART_TEST_VARIANT}")
+endif()
+if(ART_TEST_VARIANT STREQUAL "win32-stack-high-water" AND
+   NOT ART_TARGET_ID STREQUAL "windows-x86_64-msvc")
+    message(FATAL_ERROR
+        "win32-stack-high-water is an exact windows-x86_64-msvc test variant")
+endif()
 if(NOT ART_TARGET_PLATFORM MATCHES "^(linux|windows)$")
     message(FATAL_ERROR
         "The native product entry point admits Linux and Windows targets; "
@@ -53,6 +65,12 @@ endif()
 if(NOT CMAKE_C_COMPILER_FRONTEND_VARIANT STREQUAL "GNU" OR
    NOT CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "GNU")
     message(FATAL_ERROR "ART requires Clang's GNU-style driver frontend")
+endif()
+if(ART_TARGET_ABI STREQUAL "msvc" AND
+   NOT CMAKE_MSVC_RUNTIME_LIBRARY STREQUAL "MultiThreadedDLL")
+    message(FATAL_ERROR
+        "MSVC-ABI targets require the release dynamic CRT in every build type; "
+        "configure through tools/build_art.py")
 endif()
 get_filename_component(_art_c_compiler_name "${CMAKE_C_COMPILER}" NAME)
 get_filename_component(_art_cxx_compiler_name "${CMAKE_CXX_COMPILER}" NAME)
@@ -155,6 +173,9 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
             list(APPEND _art_codegen_options --target-include "${_art_codegen_include}")
         endif()
     endforeach()
+endif()
+if(ART_TEST_VARIANT STREQUAL "win32-stack-high-water")
+    list(APPEND _art_codegen_options --asm-define ART_WIN32_STACK_HIGH_WATER=1)
 endif()
 set(_art_codegen_kinds aconfig mterp asm_defines)
 if(ART_TARGET_PLATFORM STREQUAL "windows")
@@ -486,6 +507,7 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
         OUTPUT_NAME "art-compiler"
         WINDOWS_EXPORT_ALL_SYMBOLS OFF)
     target_sources(art-compiler PRIVATE "${_repo}/compat/src/art_compiler_exports.cc")
+    target_sources(art PRIVATE "${_repo}/compat/src/art_pe_inline_exports.cc")
     target_include_directories(art-compiler PRIVATE "${MDVM_ART_ROOT_DIR}/art/compiler")
     # Select the PE import side of ART's existing LIBART_PE_* boundary.  This
     # also makes Thread::Current() call the exported accessor instead of
@@ -548,6 +570,11 @@ set_source_files_properties(${_DEX_CC}
 get_property(_all_targets DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" PROPERTY BUILDSYSTEM_TARGETS)
 foreach(_t IN LISTS _all_targets)
     get_target_property(_ttype ${_t} TYPE)
+    if(ART_TEST_VARIANT STREQUAL "win32-stack-high-water" AND
+       NOT _ttype STREQUAL "UTILITY" AND
+       NOT _ttype STREQUAL "INTERFACE_LIBRARY")
+        target_compile_definitions(${_t} PRIVATE ART_WIN32_STACK_HIGH_WATER=1)
+    endif()
     # Skip `base` (libbase): it has its own per-file shims above, and a blanket
     # -include would pull <features.h> into posix_strerror_r.cpp BEFORE its
     # deliberate `#undef _GNU_SOURCE`, breaking its POSIX strerror_r selection.
@@ -621,10 +648,13 @@ foreach(_t IN LISTS _all_targets)
         target_link_libraries(${_t} windows_x64_posix_stubs ws2_32 synchronization)
     endif()
     if(ART_TARGET_PLATFORM STREQUAL "windows" AND
-       _ttype STREQUAL "SHARED_LIBRARY" AND NOT _t STREQUAL "art-compiler")
+       _ttype STREQUAL "SHARED_LIBRARY" AND
+       NOT _t STREQUAL "art" AND NOT _t STREQUAL "art-compiler")
         # Windows import libraries are required by downstream generated
-        # targets (for example base -> log).  The compiler DSO is the sole
-        # exception: it has the reviewed DEF allowlist above.
+        # targets (for example base -> log).  art.dll uses the source-level
+        # EXPORT/LIBART_PE_* ABI so Debug-only inline/template COMDAT symbols
+        # cannot overflow PE's export table.  The compiler DSO has the
+        # reviewed DEF allowlist above.
         set_target_properties(${_t} PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
     endif()
     if(_ttype STREQUAL "EXECUTABLE")
