@@ -1,6 +1,17 @@
 {
   "schema_version": 1,
   "cases": {
+    "AbsPathProbe": {
+      "expected_markers": [
+        "path.separator=;",
+        "file.separator=\\",
+        "AbsPathProbe.fails=0",
+        "AbsPathProbe.done=ok",
+        "Hello.load=ok"
+      ],
+      "mode": "absolute-path",
+      "timeout_seconds": 120
+    },
     "CoreProbe": {
       "expected_markers": [
         "arraycopy=true",
@@ -77,6 +88,17 @@
         "OsErrnoProbe.fails=0",
         "OsErrnoProbe.done=ok"
       ],
+      "timeout_seconds": 120
+    },
+    "PathProbe": {
+      "expected_markers": [
+        "path.separator=;",
+        "file.separator=\\",
+        "File.fs=java.io.WinNTFileSystem",
+        "existsHello=true",
+        "Hello.load=ok"
+      ],
+      "mode": "path",
       "timeout_seconds": 120
     },
     "PropsProbe": {

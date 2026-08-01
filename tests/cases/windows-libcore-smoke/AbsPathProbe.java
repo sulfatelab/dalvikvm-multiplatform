@@ -3,8 +3,8 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 
 /**
- * Option H absolute-path / classpath acceptance (P2–P5, P8–P9c) under wine64.
- * Expects hello.jar staged at C:\art_phase3\abs_dir\hello.jar (wine drive_c).
+ * Option H absolute-path / classpath acceptance (P2–P5, P8–P9c).
+ * The shell-free runner passes the regular-file hello.jar staging path.
  */
 public class AbsPathProbe {
   static int fails = 0;
@@ -14,6 +14,9 @@ public class AbsPathProbe {
   }
 
   public static void main(String[] args) throws Exception {
+    if (args.length != 1) {
+      throw new IllegalArgumentException("expected absolute hello.jar path");
+    }
     System.out.println("path.separator=" + System.getProperty("path.separator"));
     System.out.println("file.separator=" + System.getProperty("file.separator"));
     System.out.println("java.class.path=" + System.getProperty("java.class.path"));
@@ -37,11 +40,12 @@ public class AbsPathProbe {
     check("P5b_not_posix_root", !absUp.startsWith("/file") && !absUp.startsWith("//?/"));
 
     // P2–P4 style File absolute math
-    String[] absSamples = {
-      "C:\\art_phase3\\abs_dir\\hello.jar",
-      "C:/art_phase3/abs_dir/hello.jar",
-      "C:\\art_phase3\\abs_dir/hello.jar"
-    };
+    File stagedHello = new File(args[0]);
+    String backslashPath = stagedHello.getAbsolutePath();
+    String forwardPath = backslashPath.replace('\\', '/');
+    int finalSeparator = backslashPath.lastIndexOf('\\');
+    String mixedPath = backslashPath.substring(0, finalSeparator) + "/hello.jar";
+    String[] absSamples = {backslashPath, forwardPath, mixedPath};
     for (String s : absSamples) {
       File af = new File(s);
       check("abs_isAbsolute:" + s, af.isAbsolute());
@@ -52,7 +56,7 @@ public class AbsPathProbe {
     }
 
     // P7-ish roundtrip under C:
-    File tmpDir = new File("C:\\art_phase3\\tmp_io");
+    File tmpDir = new File(stagedHello.getParentFile(), "tmp_io");
     check("mkdir_c", tmpDir.mkdirs() || tmpDir.isDirectory());
     File tmp = new File(tmpDir, "round.txt");
     byte[] payload = "abs-io-ok".getBytes("UTF-8");

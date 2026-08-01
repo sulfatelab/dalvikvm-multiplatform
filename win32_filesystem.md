@@ -518,7 +518,7 @@ private static boolean isDriveLetter(char c) {
 }
 ```
 
-Gate: `tools/verify/windows_x64_phase3/run_probe.sh` asserts drive/mixed/UNC absolute + multi-jar `;`.
+Gate: `art.w004.managed_pathprobe` asserts drive/mixed/UNC absolute paths and a multi-JAR `;` classpath through the unified shell-free runner.
 
 *Rev 6 — Option H accepted on Wine and native Windows; Windows NIO still
 non-goal.*

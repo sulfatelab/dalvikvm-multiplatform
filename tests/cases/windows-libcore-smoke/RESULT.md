@@ -49,20 +49,22 @@ Ninja 1.13.2, LLVM 21.1.8 GNU-style Clang drivers, and the official configured
 JDK 21.0.12. No POSIX shell, Make, NMake, PowerShell, WSL, Cygwin, MSVC
 compiler driver, or `clang-cl` participated.
 
-Thirteen accepted Phase-3 behaviors are now target-runnable through the common
+Fifteen accepted Phase-3 behaviors are now target-runnable through the common
 W-004 catalog and one case-local Python runner with a checked-in JSON contract
 matrix. Core/charset/monitor, DNS, ordinary and forced GC, GoldenApp,
 interruption, file I/O, TCP loopback, errno/UTF-8 paths, properties/clocks,
 runtime memory, thread stress, and the expected-nonzero uncaught-exception path
-all run without Bash, Wine, PowerShell, or a package handoff. Path/AbsPath and
-the separate L-003 matrix remain compile-only pending their next migration
-slice.
+all run without Bash, Wine, PowerShell, or a package handoff. PathProbe and
+AbsPathProbe add eight shell-free subcases covering multi-JAR semicolon
+classpath, structured drive/mixed/UNC paths, three absolute JAR path forms,
+and two required colon-separator failures. The separate L-003 matrix remains
+compile-only pending its next migration slice.
 
 ```text
 python tools/build_art.py test --target-id windows-x86_64-msvc --stage w004 --parallel 16
 
-W-004: 19/19 PASS in 25.15 seconds
-repeat: ninja: no work to do; 19/19 PASS in 21.44 seconds
+W-004: 21/21 PASS in 27.79 seconds
+repeat: ninja: no work to do; 21/21 PASS in 27.97 seconds
 Linux-hosted Windows cross reviewer: PASS with --parallel 32
 ```
 
@@ -72,7 +74,7 @@ recursed. The maintained bridge now converts the Java address to `sockaddr`,
 maps bionic name-info flag values to Winsock values, and calls Unicode
 `GetNameInfoW`; the rebuilt `javacore.dll` passes DNS resolution and loopback
 payload acceptance. The superseded Phase-3 Bash producers and runners for
-these 13 cases were removed after native acceptance.
+these migrated cases were removed after native acceptance.
 
 The generated binaries, managed artifacts, routine logs, and build trees
 remain outside VCS. W-027 tracks the probe's current `GetTempPathA`,

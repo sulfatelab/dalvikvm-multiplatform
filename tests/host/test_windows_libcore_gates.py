@@ -23,6 +23,7 @@ runner = _load_runner()
 def test_windows_libcore_runtime_matrix_matches_promoted_cases():
     matrix = runner.load_matrix()
     assert set(matrix) == {
+        "AbsPathProbe",
         "CoreProbe",
         "DnsProbe",
         "GcForced",
@@ -32,12 +33,15 @@ def test_windows_libcore_runtime_matrix_matches_promoted_cases():
         "IoProbe",
         "NetProbe",
         "OsErrnoProbe",
+        "PathProbe",
         "PropsProbe",
         "RtMem",
         "ThreadStressProbe",
         "ThrowProbe",
     }
     assert matrix["ThrowProbe"]["require_nonzero"] is True
+    assert matrix["PathProbe"]["mode"] == "path"
+    assert matrix["AbsPathProbe"]["mode"] == "absolute-path"
     assert all(case["expected_markers"] for case in matrix.values())
     assert all("AssertionError" in case["forbidden_markers"] for case in matrix.values())
 
@@ -99,3 +103,25 @@ def test_windows_getnameinfo_uses_unicode_winsock_without_java_recursion():
     assert "java_addr_to_sockaddr(" in implementation
     assert "getHostAddress" not in implementation
     assert "GetNameInfoA(" not in implementation
+
+
+def test_path_probe_block_review_is_scoped_per_sample():
+    output = """
+---
+in=C:\\x
+path=C:\\x
+prefixLength=3
+isAbsolute=true
+---
+in=C:\\User/admin/.ssh/x
+path=C:\\User\\admin\\.ssh\\x
+isAbsolute=true
+---
+in=\\\\server\\share\\a
+path=\\\\server\\share\\a
+isAbsolute=true
+"""
+    assert runner._path_probe_block_failures(output) == []
+    assert runner._path_probe_block_failures(output.replace("prefixLength=3", "")) == [
+        "drive"
+    ]

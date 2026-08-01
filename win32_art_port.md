@@ -716,14 +716,14 @@ Each phase has a kill-or-continue gate. This is the execution roadmap when imple
 - A5 forced GC: `System.gc()` hang fixed (`GetThreadTimes` ThreadCpuNanoTime + WaitOnAddress ETIMEDOUT); current gate `art.w004.managed_gcforced`.
 - See `tools/verify/windows_x64_phase3/RESULT.md` and
   `docs/windows-port-notes/windows_x64_phase3_system_gc_hang_fix.md`.
-- Path gates (same day): `File.isAbsolute("C:\\…")` **PASS**, mixed/UNC **PASS**, multi-jar `-cp a;b` **PASS** under wine64 (`tools/verify/windows_x64_phase3/run_probe.sh`).
+- Path gates: `File.isAbsolute("C:\\…")`, mixed/UNC, and multi-JAR `-cp a;b` **PASS** natively as `art.w004.managed_pathprobe`.
 - **Pitfall:** imageless ART has `Character.isLetter('C')==false` (no ICU props). `WinNTFileSystem` must use ASCII `isDriveLetter`, not `Character.isLetter`.
 - **Shell pitfall:** bash splits on `;` — multi-jar `-cp` must be passed via argv list (Python subprocess), not a shell string.
 - File I/O (P7): `FileInputStream`/`FileOutputStream` round-trip **PASS** (`art.w004.managed_ioprobe`); PE FD must run `<init>` for `releaseLock`.
 - A4 core: arraycopy/UTF-8/reflect/threads monitors **PASS** (`art.w004.managed_coreprobe`).
 - A7 classic loopback `ServerSocket`/`Socket` payload echo **PASS** (`art.w004.managed_netprobe`); NIO.2 still non-goal.
 - A5/A6/GoldenApp + forced System.gc **PASS** on native Windows through the unified W-004 stage.
-- Absolute C: jar load P2–P4/P8 + P5 parent/name + P9c colon **PASS** (`run_abspathprobe.sh`).
+- Absolute C: JAR load P2–P4/P8, P5 parent/name, and P9c colon rejection **PASS** natively as `art.w004.managed_abspathprobe`.
 - Runtime free/total/maxMemory **PASS** (`art.w004.managed_rtmem`) via art `JVM_*` exports + PE Runtime natives.
 - Props/time/`java.version=1.8.0` and Os errno + UTF-8 paths **PASS** through the unified W-004 stage.
 - Host smoke package staged: `dist/windows_x64_phase3_host` via `tools/windows_x64/host_package/package_windows_x64_phase3.sh`.

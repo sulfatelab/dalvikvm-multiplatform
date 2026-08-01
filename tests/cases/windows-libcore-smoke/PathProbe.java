@@ -1,10 +1,5 @@
 /**
- * Windows x64 Option H path/classpath probe for imageless ART under wine64/host.
- *
- * Build (dex jar):
- *   tools/verify/windows_x64_phase3/build_probe.sh
- * Run:
- *   tools/verify/windows_x64_phase3/run_probe.sh
+ * Windows Option H path/classpath probe for imageless ART.
  *
  * Pass criteria (stdout):
  *   path.separator=;

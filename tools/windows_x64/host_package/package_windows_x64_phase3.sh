@@ -187,7 +187,7 @@ Product ships real PE natives with **one soname each** (`stage_native_modules.sh
 
 The historical Wine result remains evidence. Current agent acceptance uses the
 shell-free unified W-004 CTest stage; this package is retained only for the
-not-yet-migrated G12/Path/AbsPath host evidence.
+historical G12 and not-yet-migrated L-003/extra libcore evidence.
 
 ## Package integrity (Linux agent)
 

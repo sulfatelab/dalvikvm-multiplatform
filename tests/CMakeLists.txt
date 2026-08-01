@@ -885,13 +885,14 @@ art_add_target_probe(
 # These managed libcore probes remain Windows-specific until each behavioral
 # contract is reviewed on another exact target.
 set(_art_windows_libcore_managed_classes
-    AbsPathProbe AsyncCloseProbe BnProbe CoreProbe DnsProbe ExecProbe
+    PathProbe AbsPathProbe AsyncCloseProbe BnProbe CoreProbe DnsProbe ExecProbe
     GcForced GcProbe GoldenApp InterruptProbe IoProbe Ipv6Probe LocaleProbe
-    NetProbe OsConstantsProbe OsErrnoProbe PathProbe PropsProbe RtMem
+    NetProbe OsConstantsProbe OsErrnoProbe PropsProbe RtMem
     SocketAddressProbe SslProviderProbe ThreadStressProbe ThrowProbe UdpProbe
     XmlProbe ZipProbe)
 set(_art_windows_libcore_runnable_classes
-    CoreProbe DnsProbe GcForced GcProbe GoldenApp InterruptProbe IoProbe
+    PathProbe AbsPathProbe CoreProbe DnsProbe GcForced GcProbe GoldenApp
+    InterruptProbe IoProbe
     NetProbe OsErrnoProbe PropsProbe RtMem ThreadStressProbe ThrowProbe)
 foreach(_art_libcore_class IN LISTS _art_windows_libcore_managed_classes)
     string(TOLOWER "${_art_libcore_class}" _art_libcore_name)
@@ -902,9 +903,24 @@ foreach(_art_libcore_class IN LISTS _art_windows_libcore_managed_classes)
         set(_art_libcore_runtime_arguments)
     else()
         set(_art_libcore_execution target-runnable)
+        set(_art_libcore_additional_dependencies)
+        set(_art_libcore_additional_command_arguments)
+        if(_art_libcore_class STREQUAL "PathProbe")
+            list(APPEND _art_libcore_additional_dependencies
+                managed_imageless_hello)
+            list(APPEND _art_libcore_additional_command_arguments
+                --hello-jar "${_art_managed_root}/hello.jar")
+        elseif(_art_libcore_class STREQUAL "AbsPathProbe")
+            list(APPEND _art_libcore_additional_dependencies
+                managed_imageless_hello managed_pathprobe)
+            list(APPEND _art_libcore_additional_command_arguments
+                --hello-jar "${_art_managed_root}/hello.jar"
+                --path-jar "${_art_managed_root}/pathprobe.jar")
+        endif()
         set(_art_libcore_runtime_arguments
             TIMEOUT 600
             DEPENDS dalvikvm icu_jni javacore openjdk
+                ${_art_libcore_additional_dependencies}
             COMMAND
                 "${Python3_EXECUTABLE}"
                 "${_art_test_cases_root}/windows-libcore-smoke/run.py"
@@ -917,6 +933,8 @@ foreach(_art_libcore_class IN LISTS _art_windows_libcore_managed_classes)
                     "${CMAKE_CURRENT_BINARY_DIR}/results/libcore-${_art_libcore_name}"
                 --icu-data "${_art_icu_data}"
                 ${_art_managed_runtime_library_args})
+        list(APPEND _art_libcore_runtime_arguments
+            ${_art_libcore_additional_command_arguments})
     endif()
     art_add_target_probe(
         NAME "managed_${_art_libcore_name}" STAGE w004
