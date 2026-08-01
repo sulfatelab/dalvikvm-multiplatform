@@ -180,18 +180,15 @@ after their maintained semantics moved to unified W-010/W-025 declarations.
 | W-010/W-014 complete E9 native host matrix | **PASS, 30/30 on build 26100** | guarantee-aware excluded-low accounting; switch/nterp/JIT managed SOE; zero handled dumps; five valid static/JIT/OSR fatal dumps |
 | FS-1 RelWithDebInfo/Debug stack high-water | **PASS in unified native Stage-8 and historical package on build 26100** | unified `win32-stack-high-water` variant: switch/nterp/JIT, four complete records each; current RelWithDebInfo minimum margin 6448 bytes, Debug quick minimum 37120 bytes; no dumps; structural reviewer passed |
 | FS-2 native debugger/CET/embedding/exception-XMM matrix | **PASS on native build 26100** | `../../../docs/history/windows_x64_fs2_w010_w014_result.md`; first-chance JIT NPE continue, explicit SOE no AV, nine incompatible CET rejections plus safe-policy acceptance, JNI UEF teardown, and 2x nterp/switch/JIT exception-XMM runs |
-| Historical full Wine suite | **PASS** | retained `evidence/all_wine_gates.txt`; the aggregate runner is retired and maintained coverage uses unified native CTest |
+| Historical full Wine suite | **PASS** | all seven Phase-4 gates passed; the aggregate runner is retired and maintained coverage uses unified native CTest |
 
-Evidence: `evidence/all_wine_gates.txt`, `evidence/crashnative.txt`
-
-### Native crash evidence (wine)
-
-```text
-ART Win32 VEH: exception 0xc0000005 ...
-ART Win32 UEF: exception 0xc0000005 ...
-ART Win32 crash: minidump written to .../run/crash/art-....dmp
-PASS native_crash_aborts
-```
+The removed raw Wine transcripts recorded the following durable historical
+facts: GC stress, heavy-thread, handle-leak, and performance markers passed;
+the Java abort case exited nonzero as required; the native access violation
+reached both VEH and UEF and created a valid `MDMP` minidump; and GoldenApp
+passed. The transcripts duplicated these facts, embedded machine-specific
+absolute paths, and are not a maintained reproduction path. Unified W-004
+and W-010 now own the corresponding executable contracts.
 
 ## Landed code
 
@@ -580,7 +577,9 @@ windows_x64-dev-env + wine64 10.0.
 | P4_G6 GoldenApp | PASS |
 | Suite | **PASS all wine Phase 4 gates** |
 
-Evidence: `evidence/all_wine_gates.txt`
+The raw aggregate and crash transcripts were removed because they serialized
+machine-specific paths and duplicated the retained result above. This section
+is historical context; maintained reproduction uses unified W-004 and W-010.
 
 ## W-004 runtime-load re-run (2026-07-25)
 

@@ -926,6 +926,12 @@ items are closed.
   acceptance. Historical text evidence remains readable; crash, JIT, and OSR
   leaf diagnostics are retained until their own remaining ownership is
   resolved.
+- [x] The four raw Phase-4 aggregate/crash Wine transcripts were removed after
+  their durable facts were reduced into the historical result. They duplicated
+  unified W-004/W-010 coverage and serialized machine-specific absolute paths;
+  the retained summary records the complete suite pass, stress/performance
+  markers, expected-nonzero Java abort, VEH/UEF native fault path, valid
+  minidump creation, and GoldenApp pass.
 - [x] W-010 now owns seven shell-free target-runnable gates in the unified
   catalog: the four-mode UEF matrix, eight-case fault-record adapter, live
   sigchain ordering/frame-SEH probe, two-mode managed-fault debugger, managed
