@@ -58,6 +58,7 @@ def test_windows_platform_prelude_has_reviewed_target_scope():
         "procinfo",
         "sigchain",
         "unwindstack",
+        "windows_x64_posix_stubs",
         "ziparchive",
     )
 

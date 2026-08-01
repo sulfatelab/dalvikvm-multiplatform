@@ -259,6 +259,16 @@ items are closed.
   required 32/32/16 job limits and repeated as Ninja no-ops. Cross and native
   compile databases agree at 1,816 commands with the `sigchain` command
   prelude-free, both CET contracts pass 58/58, and all 184 host tests pass.
+- [x] The one-source `windows_x64_posix_stubs` compatibility library now
+  compiles without the ART prelude on both build hosts. Its implementation
+  directly includes the Windows SDK, CRT, and project POSIX wrapper headers it
+  consumes; no compatibility declaration had to be widened. Forced-prelude
+  compile commands fell from 705 to 704. The full static-library consumer
+  closure linked on both Windows hosts, while Linux and both Windows products
+  passed at the required 32/32/16 job limits and repeated as Ninja no-ops.
+  Cross and native compile databases agree at 1,816 commands with the stubs
+  command prelude-free, both CET contracts pass 58/58, and all 184 host tests
+  pass.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to
