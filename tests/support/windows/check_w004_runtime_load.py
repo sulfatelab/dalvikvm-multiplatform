@@ -123,9 +123,12 @@ def check_object(
 
 
 def check_build_dependencies(ninja: str, build: Path, objects: list[Path], repo: Path) -> None:
-    support = str(repo / "vendor/art/runtime/arch/x86_64/asm_support_x86_64.S")
+    # Ninja's query output uses forward slashes even when the native Windows
+    # client was given a backslash path.  Compare its canonical spelling so
+    # the same reviewer works on Linux cross hosts and Windows build hosts.
+    support = (repo / "vendor/art/runtime/arch/x86_64/asm_support_x86_64.S").as_posix()
     for path in objects:
-        target = str(path.relative_to(build))
+        target = path.relative_to(build).as_posix()
         query = run(ninja, "-C", str(build), "-t", "query", target)
         if support not in query:
             fail(f"incremental build dependency is missing for {target}")

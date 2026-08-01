@@ -64,7 +64,7 @@ def main() -> int:
     active_scripts = (
         "tests/support/windows/w003_managed_gate.py",
         "tests/CMakeLists.txt",
-        "tools/verify/windows_x64_phase4/run_jvmti_force_probe.sh",
+        "tests/cases/jvmti-force/run.py",
         "tools/verify/windows_x64_phase4/run_math_critical_probe.sh",
         "tests/support/windows/w002_managed_entry_gate.py",
         "tests/CMakeLists.txt",

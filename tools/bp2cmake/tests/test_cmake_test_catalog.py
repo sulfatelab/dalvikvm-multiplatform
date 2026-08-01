@@ -43,6 +43,8 @@ set_target_properties(dalvikvm PROPERTIES IMPORTED_LOCATION "{tmp_path / 'dalvik
 foreach(_art_runtime_library IN ITEMS icu_jni javacore openjdk openjdkjvm)
   add_library(${{_art_runtime_library}} SHARED IMPORTED GLOBAL)
 endforeach()
+add_library(openjdkjvmti SHARED IMPORTED GLOBAL)
+set_target_properties(openjdkjvmti PROPERTIES IMPORTED_LOCATION "{tmp_path / 'openjdkjvmti.dll'}")
 add_library(crypto_static INTERFACE)
 add_library(art_windows_cxx INTERFACE)
 add_library(windows_x64_posix_stubs INTERFACE)
@@ -63,9 +65,9 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         (binary / "art-tests" / "art_test_catalog.json").read_text(encoding="utf-8")
     )
     assert catalog["target_id"] == "windows-x86_64-msvc"
-    assert len(catalog["probes"]) == 87
-    assert sum(probe["applicable"] for probe in catalog["probes"]) == 85
-    assert sum(bool(probe["target_ids"]) for probe in catalog["probes"]) == 24
+    assert len(catalog["probes"]) == 88
+    assert sum(probe["applicable"] for probe in catalog["probes"]) == 86
+    assert sum(bool(probe["target_ids"]) for probe in catalog["probes"]) == 25
     assert sum(not probe["target_ids"] for probe in catalog["probes"]) == 63
     w002_attach = next(
         probe for probe in catalog["probes"] if probe["name"] == "managed_w002_attach"
@@ -95,7 +97,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     assert w003_structure["ctest_registered"] is True
     assert sum(
         probe["execution"] == "target-runnable" for probe in catalog["probes"]
-    ) == 25
+    ) == 26
     assert {
         probe["name"]: probe["timeout_seconds"]
         for probe in catalog["probes"]
@@ -106,6 +108,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "managed_critical_native": 1200,
         "managed_native_abi": 900,
         "managed_w003_xmm_sentinel": 1200,
+        "managed_jvmti_force": 1200,
         "windows_x64_w013_mem_map_probe": 60,
         "windows_x64_w013_mspace_owner_probe": 60,
         "windows_x64_w013_dlmalloc_config_probe": 60,
@@ -124,6 +127,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     ] == [
         "windows_w002_managed_entry_structure",
         "windows_w003_quick_boundary_structure",
+        "windows_w004_runtime_load_structure",
         "windows_w013_source_policy",
     ]
 
@@ -243,7 +247,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         (binary / "art-tests" / "art_test_catalog.json").read_text(encoding="utf-8")
     )
     applicable = [probe for probe in catalog["probes"] if probe["applicable"]]
-    assert len(catalog["probes"]) == 87
+    assert len(catalog["probes"]) == 88
     assert [probe["name"] for probe in applicable] == [
         "managed_imageless_hello",
         "managed_gc_stress",

@@ -199,10 +199,10 @@ The same ART build also passed:
 - Windows x64 `art` and `dalvikvm` build;
 - unified `managed_native_abi`: default 7/7 mixed/high-FP normal/FastNative checks
   across rebinding and method-tracing phases with no extra target compilation;
-- `../../../tools/verify/windows_x64_phase4/run_jvmti_force_probe.sh`: 3/3
-  dual-view and 3/3 J-1 forced-interpreter
-  transitions over registered and unresolved normal, FastNative, and
-  CriticalNative calls;
+- the now-retired Phase-4 JVMTI runner: 3/3 dual-view and 3/3 J-1
+  forced-interpreter transitions over registered and unresolved normal,
+  FastNative, and CriticalNative calls; current reproduction uses the unified
+  `../jvmti-force/run.py` gate and only the supported fail-closed J-2 path;
 - `../../../tools/verify/windows_x64_phase4/run_jit_smoke.sh`: 12/12,
   including default-silent compile diagnostics;
 - `../../../tools/verify/windows_x64_phase4/run_jit_matrix.sh`: 14/14;

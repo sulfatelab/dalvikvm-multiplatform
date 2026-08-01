@@ -7,11 +7,10 @@ BUILD="${BUILD:-$REPO/build/windows_x64_phase1}"
 UNIFIED_BUILD="${UNIFIED_BUILD:-$REPO/out/windows-x86_64-msvc/RelWithDebInfo}"
 OUT="${1:-$REPO/dist/windows_x64_w004_host}"
 JOBS="${JOBS:-16}"
-WINEDEBUG="${WINEDEBUG:--all}"
 
-cmake --build "$BUILD" --target art openjdkjvmti -j"$JOBS"
+cmake --build "$BUILD" --target art -j"$JOBS"
 cmake --build "$UNIFIED_BUILD" --parallel "$JOBS" --target \
-  managed_critical_native managed_native_abi
+  managed_critical_native managed_native_abi managed_jvmti_force
 
 cp -a "$UNIFIED_BUILD/tests/libcriticalnativeprobe.dll" \
   "$BUILD/libcriticalnativeprobe.dll"
@@ -23,15 +22,19 @@ cp -a "$UNIFIED_BUILD/tests/managed/criticalnativeprobe.jar" \
   "$BUILD/run/criticalnativeprobe.jar"
 cp -a "$UNIFIED_BUILD/tests/managed/fastnativeabiprobe.jar" \
   "$BUILD/run/fastnativeabiprobe.jar"
+cp -a "$UNIFIED_BUILD/openjdkjvmti.dll" "$BUILD/openjdkjvmti.dll"
+cp -a "$UNIFIED_BUILD/tests/libjvmtiforceprobe.dll" \
+  "$BUILD/libjvmtiforceprobe.dll"
+cp -a "$UNIFIED_BUILD/tests/libjvmtiforceprobe.dll" \
+  "$BUILD/jvmtiforceprobe.dll"
+cp -a "$UNIFIED_BUILD/tests/managed/jvmtiforceprobe.jar" \
+  "$BUILD/run/jvmtiforceprobe.jar"
 
 structural_output="$(
   python3 "$REPO/tests/support/windows/check_w004_runtime_load.py" \
     --build "$BUILD"
 )"
 printf '%s\n' "$structural_output"
-
-REPEATS=1 WINEDEBUG="$WINEDEBUG" \
-  "$REPO/tools/verify/windows_x64_phase4/run_jvmti_force_probe.sh"
 
 required_build_files=(
   "$BUILD/dalvikvm.exe"

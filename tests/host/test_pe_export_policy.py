@@ -50,6 +50,18 @@ def test_optimized_pe_inline_specializations_have_one_explicit_owner():
     assert "Object::SetField32<false, true, kVerifyNone, false>" in source
 
 
+def test_jvmti_uses_a_bounded_source_level_art_export_boundary():
+    cmake = (REPO_ROOT / "native" / "CMakeLists.txt").read_text(encoding="utf-8")
+    codegen = (
+        REPO_ROOT / "tools" / "bp2cmake" / "bp2cmake" / "codegen.py"
+    ).read_text(encoding="utf-8")
+    assert "art/runtime/thread.h" in codegen
+    assert "art/runtime/art_method.h" in codegen
+    assert codegen.count("EXPORT LIBART_PE_API") == 23
+    assert '"LINKER:/EXPORT:mspace_malloc"' in cmake
+    assert '"LINKER:/EXPORT:mspace_usable_size"' in cmake
+
+
 def test_w003_variant_links_internal_counters_but_exports_only_probe_api():
     cmake = (REPO_ROOT / "native" / "CMakeLists.txt").read_text(encoding="utf-8")
     quick = (

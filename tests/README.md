@@ -112,13 +112,18 @@ CriticalNative sources intentionally share one JAR), built by
 `support/managed_artifact.py` through CMake/Ninja. The same helper builds the
 target-local boot JAR first, so Android/libcore APIs and ART annotations are
 resolved from the same AOSP boot classes on Linux and Windows build hosts.
-Three W-004 managed declarations are now `target-runnable` on the exact current
+Three W-004 managed declarations are `target-runnable` on the exact current
 Linux and Windows x86-64 identities. `support/runtime_gate.py` runs imageless
 Hello, allocation/collection stress, and Math CriticalNative with a declared
 native DSO closure, isolated target-local runtime directories, pinned ICU data,
 strict exit/marker checks, timeouts, and sanitized JSON results. Linux also
 registers its show-version and compiler-DSO topology gates, for five W-004
-CTest gates; Windows registers the three managed gates.
+CTest gates. Windows adds its BoringSSL SHA executable plus the exact
+`windows-x86_64-msvc` JVMTI managed gate and runtime-load/assembly-dependency
+reviewer, for six native W-004 gates. The JVMTI runner, native agent, managed
+source, and result live together under `cases/jvmti-force/`; its current
+selector is deliberately not generalized to another Windows architecture or
+ABI.
 The W-013 non-moving-heap artifact and 128 MiB runtime gate use the same exact
 Linux and Windows x86-64 identities. Its heavier 1024 MiB gate is separately
 Windows-specific. This is intentional per-test applicability: sharing one Java
@@ -127,8 +132,10 @@ architecture is supported.
 Remaining legacy shell runners and retained per-probe CMake entry points use
 canonical files as temporary compatibility shims; they must be replaced by the
 unified Python/CMake/Ninja path before `tools/verify` can be removed. W-003 has
-already removed its four standalone CMake graphs, shell runners, and package
-producer after unified native acceptance.
+removed its four standalone CMake graphs, shell runners, and package producer;
+W-004 has likewise removed the standalone JVMTI CMake/Bash orchestration after
+unified native acceptance. Retained aggregate package flows acquire the JVMTI
+DLL/JAR inputs from an explicitly configured unified build.
 The six shared Windows x86-64 source/object/PE reviewers formerly stored beside
 the retired Phase-1 product graph now live under `support/windows/`. Their
 defaults use canonical `out/<target-id>/<build-type>` paths; transitional host

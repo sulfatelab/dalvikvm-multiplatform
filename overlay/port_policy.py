@@ -371,6 +371,9 @@ OVERLAY = Overlay(
             add_gensrc_includes=["art/asm/include"],         # asm_defines.h
             add_gensrc_sources=["art/asm/mterp/mterp_x86_64.S"],
         ),
+        "libopenjdkjvmti": ModulePolicy(
+            kind="shared",
+        ),
 
         # === javacorenatives (libcore JNI + ICU + crypto) ==================
         # The VM mandatorily dlopens libicu_jni, libjavacore, libopenjdk at

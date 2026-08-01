@@ -47,6 +47,12 @@ assert _W003_SPEC is not None and _W003_SPEC.loader is not None
 w003_gate = importlib.util.module_from_spec(_W003_SPEC)
 _W003_SPEC.loader.exec_module(w003_gate)
 
+_JVMTI_GATE_PATH = Path(__file__).parents[1] / "cases" / "jvmti-force" / "run.py"
+_JVMTI_SPEC = importlib.util.spec_from_file_location("art_jvmti_gate", _JVMTI_GATE_PATH)
+assert _JVMTI_SPEC is not None and _JVMTI_SPEC.loader is not None
+jvmti_gate = importlib.util.module_from_spec(_JVMTI_SPEC)
+_JVMTI_SPEC.loader.exec_module(jvmti_gate)
+
 
 def test_elf_needed_reads_host_python_without_external_tools():
     executable = Path(sys.executable).resolve()
@@ -317,6 +323,81 @@ def test_w003_frame_gate_runs_four_modes_twice_and_records_sanitized_result(
     assert result["dump_files"] == []
     assert str(tmp_path) not in result_text
     assert "repetitions=2, runs=8, dumps=0" in capsys.readouterr().out
+
+
+def test_jvmti_force_gate_repeats_and_records_sanitized_result(
+    tmp_path, monkeypatch, capsys
+):
+    files = {}
+    for name in (
+        "dalvikvm.exe",
+        "boot.jar",
+        "probe.jar",
+        "agent.dll",
+        "plugin.dll",
+        "icudt.dat",
+    ):
+        path = tmp_path / name
+        path.write_bytes(name.encode())
+        files[name] = path
+    calls = []
+
+    def run_managed(**kwargs):
+        calls.append(kwargs)
+        case_root = kwargs["work_root"]
+        output = [
+            f"JvmtiForceProbe {phase} {jvmti_gate._VALUES}"
+            for phase in ("before", "during", "after")
+        ]
+        output.extend(
+            [
+                "JvmtiForceProbe steps before=0 during=20 disabled=25 final=25",
+                "success=1 method=double JvmtiForceProbe.normalRegistered(",
+                "success=1 method=double JvmtiForceProbe.fastRegistered(",
+                "JvmtiForceProbe OK",
+                "main end exception=0",
+            ]
+        )
+        (case_root / "stdout.txt").write_text("\n".join(output), encoding="utf-8")
+        (case_root / "stderr.txt").write_text("", encoding="utf-8")
+        (case_root / "result.json").write_text(
+            json.dumps({"target_id": kwargs["target_id"]}) + "\n",
+            encoding="utf-8",
+        )
+
+    monkeypatch.setattr(jvmti_gate.runtime_gate, "run_managed", run_managed)
+    work = tmp_path / "out" / "jvmti-force"
+    jvmti_gate.run_gate(
+        target_id="windows-x86_64-msvc",
+        dalvikvm=files["dalvikvm.exe"],
+        boot_jar=files["boot.jar"],
+        app_jar=files["probe.jar"],
+        agent=files["agent.dll"],
+        plugin=files["plugin.dll"],
+        work_root=work,
+        icu_data=files["icudt.dat"],
+        library_dirs=[tmp_path],
+        repetitions=3,
+        timeout=30,
+    )
+
+    assert len(calls) == 3
+    assert all("-Xplugin:openjdkjvmti.dll" in call["vm_options"] for call in calls)
+    assert all(
+        call["environment_overrides"]["ART_WINDOWS_X64_JIT_FILTER"]
+        == "JvmtiForceProbe"
+        for call in calls
+    )
+    assert all(
+        (call["work_root"] / "libjvmtiforceprobe.dll").is_file()
+        for call in calls
+    )
+    result_text = (work / "result.json").read_text(encoding="utf-8")
+    result = json.loads(result_text)
+    assert result["completed_runs"] == 3
+    assert result["dump_files"] == []
+    assert str(tmp_path) not in result_text
+    assert "runs=3, compiled_targets=2, dumps=0" in capsys.readouterr().out
 
 
 def test_w002_contract_keeps_osr_return_path_mode_specific():

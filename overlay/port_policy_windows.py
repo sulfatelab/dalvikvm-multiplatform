@@ -314,6 +314,12 @@ OVERLAY = Overlay(
             add_gensrc_includes=["art/asm/include", "art/aconfig/include"],
             add_gensrc_sources=["art/asm/mterp/mterp_x86_64.S"],
         ),
+        "libopenjdkjvmti": ModulePolicy(
+            kind="shared",
+            force_enabled=True,
+            add_cflags=_WIN_CFLAGS,
+            add_defines=["ART_CONSUMING_LIBART", "_CRT_SECURE_NO_WARNINGS"],
+        ),
         "dalvikvm": ModulePolicy(
             kind="executable", force_enabled=True,
             absorb_whole_static=False,

@@ -426,6 +426,23 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
             "${_art_windows_runtime}/runtime_windows.cc"
             "${_art_windows_runtime}/monitor_windows.cc"
             "${_art_windows_openjdk}/openjdkjvm_memory_windows.cc")
+
+        # CMake's Clang ASM rule declares a depfile without asking Clang to
+        # populate it.  Record the shared support inputs explicitly so a
+        # header/assembly edit cannot leave stale x86_64 runtime objects in an
+        # otherwise incremental Ninja build.
+        set(_art_x86_64_asm_support_deps
+            "${MDVM_ART_ROOT_DIR}/art/runtime/arch/x86_64/asm_support_x86_64.S"
+            "${MDVM_ART_ROOT_DIR}/art/runtime/arch/x86_64/asm_support_x86_64.h"
+            "${MDVM_ART_ROOT_DIR}/art/runtime/interpreter/cfi_asm_support.h"
+            "${MDVM_ART_ROOT_DIR}/art/runtime/asm_support.h")
+        set_property(SOURCE
+            "${MDVM_ART_ROOT_DIR}/art/runtime/arch/x86_64/memcmp16_x86_64.S"
+            "${MDVM_ART_ROOT_DIR}/art/runtime/arch/x86_64/native_entrypoints_x86_64.S"
+            "${MDVM_ART_ROOT_DIR}/art/runtime/arch/x86_64/jni_entrypoints_x86_64.S"
+            "${MDVM_ART_ROOT_DIR}/art/runtime/arch/x86_64/quick_entrypoints_x86_64.S"
+            "${MDVM_GENSRC_DIR}/art/asm/mterp/mterp_x86_64.S"
+            APPEND PROPERTY OBJECT_DEPENDS "${_art_x86_64_asm_support_deps}")
     endif()
     if(TARGET openjdkjvm)
         # Keep socket-fd ownership process-wide. libjavacore, libopenjdk, NIO,
@@ -547,6 +564,13 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
     endforeach()
 else()
     set(_PRELUDE "${MDVM_COMPAT_INCLUDE_DIR}/mdvm_toolchain_prelude.h")
+    if(TARGET openjdkjvmti)
+        # The pinned JVMTI sources assume bionic's global nullptr_t and predate
+        # glibc 2.38's strlcpy. Keep that host-toolchain drift isolated to the
+        # one DSO instead of changing the nested vendor source.
+        target_compile_options(openjdkjvmti PRIVATE
+            "$<$<COMPILE_LANGUAGE:CXX>:SHELL:-include ${MDVM_COMPAT_INCLUDE_DIR}/mdvm_openjdkjvmti_linux_prelude.h>")
+    endif()
 endif()
 
 # Per-file: files that need an extra include / warning demotion. Force-includes
@@ -715,6 +739,23 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
         "${MDVM_ART_ROOT_DIR}/art/dex2oat/dex2oat.cc"
         APPEND PROPERTY COMPILE_OPTIONS
             "-include;${_art_windows_runtime_options_header}")
+
+    # The PE product boundary stays source-level and bounded.  Only the two
+    # defining translation units see the JVMTI-specific header overlays; the
+    # plugin's ordinary function references resolve through art.lib.  The two
+    # C dlmalloc entry points are instantiated by inline ART allocation paths
+    # in libopenjdkjvmti and therefore need equally explicit exports.
+    set_property(SOURCE
+        "${MDVM_ART_ROOT_DIR}/art/runtime/thread.cc"
+        APPEND PROPERTY COMPILE_OPTIONS
+            "-include;${MDVM_GENSRC_DIR}/art/windows-pe-headers/art/runtime/thread.h")
+    set_property(SOURCE
+        "${MDVM_ART_ROOT_DIR}/art/runtime/art_method.cc"
+        APPEND PROPERTY COMPILE_OPTIONS
+            "-include;${MDVM_GENSRC_DIR}/art/windows-pe-headers/art/runtime/art_method.h")
+    target_link_options(art PRIVATE
+        "LINKER:/EXPORT:mspace_malloc"
+        "LINKER:/EXPORT:mspace_usable_size")
 endif()
 foreach(_t art dalvikvm)
     if(TARGET ${_t} AND ART_TARGET_PLATFORM STREQUAL "linux")

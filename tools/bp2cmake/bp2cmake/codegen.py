@@ -338,6 +338,127 @@ def gen_aconfig(cfg: CodegenConfig) -> list[str]:
 # Keep these target-only annotations out of the nested vendor checkout: stage
 # complete, include-guard-compatible header overlays under gensrc instead.
 WINDOWS_PE_HEADER_REPLACEMENTS: dict[str, list[tuple[str, str]]] = {
+    # libopenjdkjvmti is a real runtime plugin on both ELF and PE.  ART's PE
+    # export table is intentionally explicit, so annotate only the out-of-line
+    # runtime methods used by that plugin instead of re-enabling CMake's
+    # unbounded WINDOWS_EXPORT_ALL_SYMBOLS policy for art.dll.
+    "art/runtime/thread.h": [
+        (
+            "  static Thread* Attach(const char* thread_name, bool as_daemon, jobject thread_peer);",
+            "  EXPORT LIBART_PE_API static Thread* Attach("
+            "const char* thread_name, bool as_daemon, jobject thread_peer);",
+        ),
+        (
+            "  DumpOrder Dump(std::ostream& os,\n"
+            "                 bool dump_native_stack = true,\n"
+            "                 bool force_dump_stack = false) const",
+            "  EXPORT LIBART_PE_API DumpOrder Dump(std::ostream& os,\n"
+            "                 bool dump_native_stack = true,\n"
+            "                 bool force_dump_stack = false) const",
+        ),
+        (
+            "  bool RequestSynchronousCheckpoint(Closure* function,",
+            "  EXPORT LIBART_PE_API bool RequestSynchronousCheckpoint(Closure* function,",
+        ),
+        (
+            "  void FullSuspendCheck(bool implicit = false)",
+            "  EXPORT LIBART_PE_API void FullSuspendCheck(bool implicit = false)",
+        ),
+        (
+            "  static int NicenessToPriority(int niceness);",
+            "  EXPORT LIBART_PE_API static int NicenessToPriority(int niceness);",
+        ),
+        (
+            "  int GetNativeNiceness() const;",
+            "  EXPORT LIBART_PE_API int GetNativeNiceness() const;",
+        ),
+        (
+            "  void SetThreadName(const char* name) REQUIRES_SHARED(Locks::mutator_lock_);",
+            "  EXPORT LIBART_PE_API void SetThreadName(const char* name) "
+            "REQUIRES_SHARED(Locks::mutator_lock_);",
+        ),
+        (
+            "  mirror::Object* GetPeerFromOtherThread() REQUIRES_SHARED(Locks::mutator_lock_);",
+            "  EXPORT LIBART_PE_API mirror::Object* GetPeerFromOtherThread() "
+            "REQUIRES_SHARED(Locks::mutator_lock_);",
+        ),
+        (
+            "  mirror::Object* LockedGetPeerFromOtherThread(ThreadExitFlag* tef)",
+            "  EXPORT LIBART_PE_API mirror::Object* "
+            "LockedGetPeerFromOtherThread(ThreadExitFlag* tef)",
+        ),
+        (
+            "  bool IsStillStarting() const;",
+            "  EXPORT LIBART_PE_API bool IsStillStarting() const;",
+        ),
+        (
+            "  void AssertPendingException() const;",
+            "  EXPORT LIBART_PE_API void AssertPendingException() const;",
+        ),
+        (
+            "  void AssertPendingOOMException() const REQUIRES_SHARED(Locks::mutator_lock_);",
+            "  EXPORT LIBART_PE_API void AssertPendingOOMException() const "
+            "REQUIRES_SHARED(Locks::mutator_lock_);",
+        ),
+        (
+            "  void AssertNoPendingException() const;",
+            "  EXPORT LIBART_PE_API void AssertNoPendingException() const;",
+        ),
+        (
+            "  void SetException(ObjPtr<mirror::Throwable> new_exception) "
+            "REQUIRES_SHARED(Locks::mutator_lock_);",
+            "  EXPORT LIBART_PE_API void SetException("
+            "ObjPtr<mirror::Throwable> new_exception) "
+            "REQUIRES_SHARED(Locks::mutator_lock_);",
+        ),
+        (
+            "  void SetAsyncException(ObjPtr<mirror::Throwable> new_exception)",
+            "  EXPORT LIBART_PE_API void SetAsyncException("
+            "ObjPtr<mirror::Throwable> new_exception)",
+        ),
+        (
+            "  ArtMethod* GetCurrentMethod(uint32_t* dex_pc,",
+            "  EXPORT LIBART_PE_API ArtMethod* GetCurrentMethod(uint32_t* dex_pc,",
+        ),
+        (
+            "  void ThrowOutOfMemoryError(const char* msg) REQUIRES_SHARED(Locks::mutator_lock_)",
+            "  EXPORT LIBART_PE_API void ThrowOutOfMemoryError(const char* msg) "
+            "REQUIRES_SHARED(Locks::mutator_lock_)",
+        ),
+        (
+            "  void Notify() REQUIRES(!wait_mutex_);",
+            "  EXPORT LIBART_PE_API void Notify() REQUIRES(!wait_mutex_);",
+        ),
+        (
+            "  ShadowFrame* FindOrCreateDebuggerShadowFrame(size_t frame_id,",
+            "  EXPORT LIBART_PE_API ShadowFrame* "
+            "FindOrCreateDebuggerShadowFrame(size_t frame_id,",
+        ),
+        (
+            "  TLSData* GetCustomTLS(const char* key) REQUIRES(!Locks::custom_tls_lock_);",
+            "  EXPORT LIBART_PE_API TLSData* GetCustomTLS(const char* key) "
+            "REQUIRES(!Locks::custom_tls_lock_);",
+        ),
+        (
+            "  void SetCustomTLS(const char* key, TLSData* data) "
+            "REQUIRES(!Locks::custom_tls_lock_);",
+            "  EXPORT LIBART_PE_API void SetCustomTLS(const char* key, TLSData* data) "
+            "REQUIRES(!Locks::custom_tls_lock_);",
+        ),
+        (
+            "  bool IsSystemDaemon() const REQUIRES_SHARED(Locks::mutator_lock_);",
+            "  EXPORT LIBART_PE_API bool IsSystemDaemon() const "
+            "REQUIRES_SHARED(Locks::mutator_lock_);",
+        ),
+    ],
+    "art/runtime/art_method.h": [
+        (
+            "  ObjPtr<mirror::DexCache> GetObsoleteDexCache() "
+            "REQUIRES_SHARED(Locks::mutator_lock_);",
+            "  EXPORT LIBART_PE_API ObjPtr<mirror::DexCache> GetObsoleteDexCache() "
+            "REQUIRES_SHARED(Locks::mutator_lock_);",
+        ),
+    ],
     "art/runtime/runtime_options.h": [
         (
             "#define RUNTIME_OPTIONS_KEY(Type, Name, ...) static const Key<Type> (Name);",

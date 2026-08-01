@@ -42,10 +42,10 @@ def audit_w024_cleanup(repo_root: Path = REPO_ROOT) -> list[str]:
         product_graph,
         repo_root / "tools" / "verify" / "windows_x64_phase4" / "run_jit_smoke.sh",
         repo_root
-        / "tools"
-        / "verify"
-        / "windows_x64_phase4"
-        / "run_jvmti_force_probe.sh",
+        / "tests"
+        / "cases"
+        / "jvmti-force"
+        / "run.py",
         repo_root
         / "tools"
         / "verify"

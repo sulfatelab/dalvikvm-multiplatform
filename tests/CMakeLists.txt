@@ -764,11 +764,41 @@ art_add_target_probe(
     CONTRACTS jvmti interpreter
     OUTPUT_NAME libjvmtiforceprobe WINDOWS_EXPORT_ALL_SYMBOLS)
 art_add_target_probe(
-    NAME managed_jvmti_force STAGE w004 TYPE MANAGED EXECUTION compile-only
+    NAME managed_jvmti_force STAGE w004 TYPE MANAGED EXECUTION target-runnable
+    TIMEOUT 1200
     ${_art_windows_current_selector}
     SOURCES "${_art_test_cases_root}/jvmti-force/JvmtiForceProbe.java"
+    DEPENDS jvmtiforceprobe dalvikvm icu_jni javacore openjdk openjdkjvmti
     CONTRACTS jvmti interpreter
-    OUTPUT_NAME jvmtiforceprobe)
+    OUTPUT_NAME jvmtiforceprobe
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_test_cases_root}/jvmti-force/run.py"
+        --target-id "${ART_TARGET_ID}"
+        --dalvikvm "$<TARGET_FILE:dalvikvm>"
+        --boot-jar "${_art_boot_jar}"
+        --app-jar "${_art_managed_root}/jvmtiforceprobe.jar"
+        --agent "$<TARGET_FILE:jvmtiforceprobe>"
+        --plugin "$<TARGET_FILE:openjdkjvmti>"
+        --work-root "${CMAKE_CURRENT_BINARY_DIR}/results/jvmti-force"
+        --icu-data "${_art_icu_data}"
+        ${_art_managed_runtime_library_args}
+        --repeat 3
+        --timeout 180)
+art_add_target_probe(
+    NAME windows_w004_runtime_load_structure STAGE w004 TYPE GATE
+    EXECUTION host-review
+    ${_art_windows_x86_64_msvc_selector}
+    DEPENDS art openjdkjvmti
+    CONTRACTS runtime-load jvmti codegen source-policy
+    COMMAND
+        "${CMAKE_COMMAND}" -E env
+        "LLVM_READOBJ=${ART_LLVM_READOBJ}"
+        "LLVM_OBJDUMP=${ART_LLVM_OBJDUMP}"
+        "NINJA=${CMAKE_MAKE_PROGRAM}"
+        "${Python3_EXECUTABLE}"
+        "${_art_test_repo_root}/tests/support/windows/check_w004_runtime_load.py"
+        --build "${CMAKE_BINARY_DIR}")
 art_add_target_probe(
     NAME managed_imageless_hello STAGE w004 TYPE MANAGED EXECUTION target-runnable
     ${_art_current_native_ids_selector}

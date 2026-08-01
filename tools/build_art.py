@@ -43,6 +43,7 @@ ROOT_MODULES = (
     "libjavacore",
     "libopenjdk",
     "libicu_jni",
+    "libopenjdkjvmti",
 )
 
 
