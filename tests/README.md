@@ -182,8 +182,11 @@ translation-unit graph. Its scanner reads `compile_commands.json`, de-duplicates
 sources, strips comments and literals, distinguishes JNI `Call*MethodA` from
 Win32 suffix-`A` APIs, and fails on either a known ANSI call or an unclassified
 suffix-`A` family. The active 1,441-source graph has zero ANSI calls, source
-files, or API families. The Linux-hosted Windows-cross stage passes; native
-Windows acceptance remains pending.
+files, or API families. The Linux-hosted Windows-cross stage passes. Native
+Windows Server 2025 now passes W-027 as part of the complete 66/66 catalog;
+the first run completed in 12.38 seconds and the no-op repeat in 12.33 seconds.
+The complete catalog contains 59 target-runnable gates and seven host reviewers,
+and its repeated `art-tests` build reports `ninja: no work to do`.
 Remaining legacy shell runners and retained per-probe CMake entry points use
 canonical files as temporary compatibility shims; they must be replaced by the
 unified Python/CMake/Ninja path before `tools/verify` can be removed. W-003 has

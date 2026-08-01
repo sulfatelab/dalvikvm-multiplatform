@@ -1421,10 +1421,10 @@ an unreviewed module-set or kind change.
   into declared CMake/Ninja custom commands implemented by Python helpers.
 - [ ] Register behavioral commands and expected-result reviewers for every
   current stage; do not mark a compile-only DLL as a passed runtime gate.
-- [ ] Run the newly unified stage set on the authoritative Windows Server 2025
-  host and preserve sanitized evidence. W-004 and the complete runnable W-013
-  stage are accepted; the remaining stage coverage is still pending as a
-  complete-catalog run.
+- [x] Run the newly unified stage set on the authoritative Windows Server 2025
+  host and preserve sanitized evidence. The complete product catalog passes
+  twice at 66/66, with 59 target-runnable gates and seven host reviewers; its
+  repeated `art-tests` build is a Ninja no-op.
 
 #### P1: complete parity and mechanical acceptance
 
