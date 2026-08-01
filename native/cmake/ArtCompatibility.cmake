@@ -103,25 +103,13 @@ if(ART_TARGET_PLATFORM STREQUAL "linux")
         APPEND PROPERTY COMPILE_OPTIONS "-include;stdint.h")
 endif()
 if(ART_TARGET_PLATFORM STREQUAL "windows")
-    # art-dex2oat embeds BoringSSL's crypto sources directly. BoringSSL owns
-    # its Windows portability; only ART's 19 dex2oat sources and one generated
-    # operator-out source consume the ART compatibility prelude.
-    get_target_property(_art_dex2oat_sources art-dex2oat SOURCES)
-    set(_art_dex2oat_compat_sources)
-    foreach(_art_dex2oat_source IN LISTS _art_dex2oat_sources)
-        if(NOT _art_dex2oat_source MATCHES "/external/boringssl/")
-            list(APPEND _art_dex2oat_compat_sources "${_art_dex2oat_source}")
-        endif()
-    endforeach()
-    list(LENGTH _art_dex2oat_compat_sources _art_dex2oat_compat_source_count)
-    if(NOT _art_dex2oat_compat_source_count EQUAL 20)
-        message(FATAL_ERROR
-            "Review art-dex2oat Windows prelude scope: expected 20 ART sources, "
-            "got ${_art_dex2oat_compat_source_count}")
-    endif()
-    set_property(SOURCE ${_art_dex2oat_compat_sources}
-        APPEND PROPERTY COMPILE_OPTIONS "-include;${_PRELUDE}")
-
+    # The pinned OatKeyValueStore's unqualified friend lookup binds to the
+    # wrong namespace under MS compatibility. Keep that workaround on its one
+    # consumer instead of forcing the broad ART prelude into all dex2oat TUs.
+    set_property(SOURCE
+        ${MDVM_NATIVE_SRC_ROOT_DIR}/art/dex2oat/linker/oat_writer.cc
+        APPEND PROPERTY COMPILE_OPTIONS
+            "-include;${MDVM_COMPAT_INCLUDE_DIR}/mdvm_windows_oat_writer_compat.h")
     # libziparchive includes the Windows CRT stdio surface directly. Keep its
     # 64-bit POSIX spellings on the dependency target instead of inheriting
     # them from ART's forced compatibility prelude.

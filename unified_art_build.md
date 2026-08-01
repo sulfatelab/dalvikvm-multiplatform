@@ -55,7 +55,7 @@ items are closed.
 ### Latest verification baseline (2026-08-01)
 
 - [x] `PYTHONPATH=tools/bp2cmake python3 -m pytest tools/bp2cmake/tests tests/host -q`:
-  185 passed, including generated PE-header, Linux/Windows test-catalog,
+  186 passed, including generated PE-header, Linux/Windows test-catalog,
   shell-free runtime/managed-artifact gates, parallel-frontend, JDK validation,
   deterministic JAR, Windows-path/DSO-name, reviewer ownership, W-010
   nonzero/fault/debugger/fatal-dump orchestration, W-013 source-policy,
@@ -298,6 +298,19 @@ items are closed.
   no-ops. Cross and native compile databases agree at 1,816 commands with all
   18 `base` commands prelude-free, both CET contracts pass 58/58, and all 185
   host tests pass.
+- [x] The 20 ART-side `art-dex2oat` sources now compile without the broad ART
+  prelude, matching the 224 embedded BoringSSL sources that were already
+  independent. The project `malloc.h` wrapper owns the Windows `mallinfo`
+  fallback, while only `oat_writer.cc` receives a narrow namespace-lookup shim
+  for the pinned source's MS-compatible friend declaration. Forced-prelude
+  compile commands fell from 671 to 651. Clean-equivalent validation rebuilt
+  706 Linux closure actions plus ten downstream links, 534 Windows-cross
+  closure actions plus 108 downstream product actions, and 659 native-Windows
+  actions at the required 32/32/16 job limits; all three products then repeated
+  as Ninja no-ops. Cross and native compile databases agree at 1,816 commands:
+  all 244 `art-dex2oat` commands are broad-prelude-free and exactly one carries
+  the narrow OatWriter shim. Both CET contracts pass 58/58, and all 186 host
+  tests pass.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to

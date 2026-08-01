@@ -182,43 +182,6 @@ typedef long suseconds_t;
 /* If art redefine macros later, this may need to be after their define.
  * Provide a softer helper used if we redefine. */
 
-#if defined(MDVM_WINDOWS_DEX2OAT_COMPAT)
-/*
- * MS-compatible unqualified friend lookup otherwise binds OatKeyValueStore's
- * friend to art::OatWriter instead of the later art::linker::OatWriter.
- */
-#ifdef __cplusplus
-namespace art {
-namespace linker {
-class OatWriter;
-}  // namespace linker
-}  // namespace art
-extern "C" {
-#endif
-
-struct mallinfo {
-  int arena;
-  int ordblks;
-  int smblks;
-  int hblks;
-  int hblkhd;
-  int usmblks;
-  int fsmblks;
-  int uordblks;
-  int fordblks;
-  int keepcost;
-};
-
-static inline struct mallinfo mallinfo(void) {
-  const struct mallinfo info = {0};
-  return info;
-}
-
-#ifdef __cplusplus
-}  // extern "C"
-#endif
-#endif
-
 /* XSI strerror_r for Windows CRT. */
 #ifdef __cplusplus
 extern "C" {

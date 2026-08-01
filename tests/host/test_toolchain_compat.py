@@ -77,9 +77,7 @@ def test_windows_platform_prelude_has_reviewed_target_scope():
     ):
         assert definition in cmake
     assert "_t IN_LIST _art_windows_prelude_free_targets" in cmake
-    assert "get_target_property(_art_dex2oat_sources art-dex2oat SOURCES)" in cmake
-    assert 'MATCHES "/external/boringssl/"' in cmake
-    assert "_art_dex2oat_compat_source_count EQUAL 20" in cmake
+    assert "get_target_property(_art_dex2oat_sources art-dex2oat SOURCES)" not in cmake
     assert (
         "${MDVM_NATIVE_SRC_ROOT_DIR}/libbase/hex.cpp\n"
         '    PROPERTIES COMPILE_OPTIONS "-include;stdint.h")'
@@ -110,6 +108,29 @@ def test_windows_sdk_macro_hygiene_is_header_owned():
     assert "#define strncasecmp _strnicmp" in strings
     assert "#define strcasecmp _stricmp" not in prelude
     assert "#define strncasecmp _strnicmp" not in prelude
+
+
+def test_windows_dex2oat_compatibility_is_header_and_source_scoped():
+    cmake = (
+        REPO_ROOT / "native" / "cmake" / "ArtCompatibility.cmake"
+    ).read_text(encoding="utf-8")
+    malloc = (REPO_ROOT / "compat" / "include" / "malloc.h").read_text(
+        encoding="utf-8"
+    )
+    oat_writer = (
+        REPO_ROOT / "compat" / "include" / "mdvm_windows_oat_writer_compat.h"
+    ).read_text(encoding="utf-8")
+    prelude = (
+        REPO_ROOT / "compat" / "include" / "mdvm_windows_x64_prelude.h"
+    ).read_text(encoding="utf-8")
+
+    assert "struct mallinfo" in malloc
+    assert "MDVM_WINDOWS_DEX2OAT_COMPAT" in malloc
+    assert "class OatWriter;" in oat_writer
+    assert "struct mallinfo" not in prelude
+    assert "class OatWriter;" not in prelude
+    assert cmake.count("mdvm_windows_oat_writer_compat.h") == 1
+    assert "art/dex2oat/linker/oat_writer.cc" in cmake
 
 
 def test_windows_openjdkjvm_uses_explicit_source_and_header_contracts():
