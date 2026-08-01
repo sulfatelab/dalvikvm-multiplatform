@@ -51,6 +51,11 @@ def test_target_generation_writes_relocatable_graph_and_manifest(tmp_path):
     assert str(source) not in graph_text
 
     graph_manifest = json.loads(manifest.read_text(encoding="utf-8"))
+    assert graph_manifest["schema_version"] == 2
+    assert graph_manifest["blueprint_scan_policy"] == {
+        "excluded_path_components": [],
+        "excluded_top_levels": {},
+    }
     assert graph_manifest["target"]["target_id"] == "linux-x86_64-gnu"
     assert graph_manifest["target"]["target_platform"] == "linux"
     assert graph_manifest["target"]["target_arch"] == "x86_64"

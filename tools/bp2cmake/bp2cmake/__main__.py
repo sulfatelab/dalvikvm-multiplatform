@@ -14,7 +14,7 @@ from .closure import dependency_closure
 from .config import Config
 from .emitter import Emitter
 from .evaluator import Evaluator
-from .overlay import load_overlay, load_overlay_factory
+from .overlay import BlueprintScanPolicy, load_overlay, load_overlay_factory
 from .target import TargetError, TargetProfile, resolve_target
 
 
@@ -40,17 +40,15 @@ def _load_root(
     names: tuple[str, ...],
     *,
     label: str = "",
-    exclude_top: tuple[str, ...] = (),
+    scan_policy: BlueprintScanPolicy,
     input_records: list[dict[str, str]],
 ) -> int:
     """Load Blueprint inputs and record only stable root-relative identities."""
     loaded = 0
     for blueprint in _find_bp_files(root_dir, names):
         rel = os.path.relpath(blueprint, root_dir)
-        parts = rel.split(os.sep)
-        if any(part in ("test", "tests", "fuzz", "benchmark", "sample") for part in parts):
-            continue
-        if parts and parts[0] in exclude_top:
+        parts = tuple(rel.split(os.sep))
+        if scan_policy.excludes(root_var, parts):
             continue
         try:
             evaluator.add_path(blueprint, source_root=root_dir, root_var=root_var)
@@ -89,7 +87,6 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--extra-root", action="append", default=[], metavar="DIR:CMAKEVAR"
     )
-    parser.add_argument("--exclude-top", action="append", default=[], metavar="NAME")
     parser.add_argument(
         "--os", choices=["linux_glibc", "windows"], help="legacy target OS"
     )
@@ -157,7 +154,7 @@ def _generate(
         args.root,
         "MDVM_NATIVE_SRC_ROOT_DIR",
         ("Android.bp", "sources.bp"),
-        exclude_top=tuple(args.exclude_top),
+        scan_policy=overlay.blueprint_scan,
         input_records=input_records,
     )
 
@@ -172,6 +169,7 @@ def _generate(
             variable,
             ("blueprint-allbp",),
             label=f"[{variable}] ",
+            scan_policy=overlay.blueprint_scan,
             input_records=input_records,
         )
 
@@ -200,12 +198,13 @@ def _generate(
 
     graph_digest = hashlib.sha256(output.encode("utf-8")).hexdigest()
     manifest = {
-        "schema_version": 1,
+        "schema_version": 2,
         "target": target.to_dict() if target else {
             "legacy_os": config.os,
             "legacy_arch": config.arch,
             "pointer_bits": config.bitness,
         },
+        "blueprint_scan_policy": overlay.blueprint_scan.to_dict(),
         "root_variables": sorted(root_paths),
         "blueprint_inputs": sorted(
             input_records, key=lambda item: (item["root_variable"], item["path"])

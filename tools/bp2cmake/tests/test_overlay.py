@@ -5,7 +5,13 @@ import pytest
 from bp2cmake.config import Config
 from bp2cmake.emitter import Emitter
 from bp2cmake.evaluator import Evaluator
-from bp2cmake.overlay import GlobalPolicy, ModulePolicy, Overlay, load_overlay_factory
+from bp2cmake.overlay import (
+    BlueprintScanPolicy,
+    GlobalPolicy,
+    ModulePolicy,
+    Overlay,
+    load_overlay_factory,
+)
 from bp2cmake.target import resolve_target
 
 
@@ -31,6 +37,20 @@ def test_global_ldflags_reach_linked_targets_but_not_static_archives():
     assert "target_link_options(shared PRIVATE LINKER:/CETCOMPAT:NO)" in shared
     assert "CETCOMPAT" not in static
     assert "target_link_options(program PRIVATE LINKER:/CETCOMPAT:NO)" in program
+
+
+def test_blueprint_scan_policy_is_path_free_and_root_typed():
+    policy = BlueprintScanPolicy(
+        excluded_path_components=("tests", "fuzz"),
+        excluded_top_levels=(("ROOT", ("nested",)),),
+    )
+    assert policy.excludes("ROOT", ("nested", "Android.bp"))
+    assert not policy.excludes("OTHER", ("nested", "Android.bp"))
+    assert policy.excludes("OTHER", ("module", "tests", "Android.bp"))
+    assert policy.to_dict() == {
+        "excluded_path_components": ["tests", "fuzz"],
+        "excluded_top_levels": {"ROOT": ["nested"]},
+    }
 
 
 def test_gensrc_command_uses_shell_free_capture_helper():
@@ -102,6 +122,13 @@ def test_unified_overlay_factory_selects_current_target_policy():
     assert len(linux.modules) == 38
     assert len(windows.modules) == 31
     assert linux.global_policy.host_libs == windows.global_policy.host_libs
+    assert linux.blueprint_scan == windows.blueprint_scan
+    assert linux.blueprint_scan.excludes(
+        "MDVM_NATIVE_SRC_ROOT_DIR", ("art", "Android.bp")
+    )
+    assert not linux.blueprint_scan.excludes(
+        "MDVM_ART_ROOT_DIR", ("art", "Android.bp")
+    )
     assert linux.global_policy.add_ldflags == []
     assert windows.global_policy.add_ldflags == ["LINKER:/CETCOMPAT:NO"]
     assert linux.policy_for("libart-compiler").kind == "shared"

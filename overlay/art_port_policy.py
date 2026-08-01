@@ -12,7 +12,7 @@ target deltas so future architecture admission cannot inherit them silently.
 
 from __future__ import annotations
 
-from bp2cmake.overlay import GlobalPolicy, ModulePolicy, Overlay
+from bp2cmake.overlay import BlueprintScanPolicy, GlobalPolicy, ModulePolicy, Overlay
 from bp2cmake.target import TargetProfile
 
 
@@ -53,6 +53,11 @@ _COMMON_NAME_MAP = {
     "libnativehelper": "nativehelper",
     "libexpat": "expat",
 }
+
+_PRODUCT_BLUEPRINT_SCAN = BlueprintScanPolicy(
+    excluded_path_components=("test", "tests", "fuzz", "benchmark", "sample"),
+    excluded_top_levels=(("MDVM_NATIVE_SRC_ROOT_DIR", ("art",)),),
+)
 
 
 def _global_policy(profile: TargetProfile) -> GlobalPolicy:
@@ -569,4 +574,5 @@ def make_overlay(profile: TargetProfile) -> Overlay:
     return Overlay(
         global_policy=_global_policy(profile),
         modules=_module_policies(delta),
+        blueprint_scan=_PRODUCT_BLUEPRINT_SCAN,
     )

@@ -93,6 +93,37 @@ class ModulePolicy:
     force_enabled: bool = False
 
 
+@dataclass(frozen=True)
+class BlueprintScanPolicy:
+    """Path-free product policy controlling which Blueprint files are loaded.
+
+    Top-level exclusions are keyed by the stable root variable rather than a
+    host path. This lets one physical vendor tree serve more than one logical
+    source root without global CLI filters or absolute-path policy.
+    """
+
+    excluded_path_components: tuple[str, ...] = ()
+    excluded_top_levels: tuple[tuple[str, tuple[str, ...]], ...] = ()
+
+    def excludes(self, root_variable: str, relative_parts: tuple[str, ...]) -> bool:
+        if any(part in self.excluded_path_components for part in relative_parts):
+            return True
+        if not relative_parts:
+            return False
+        for variable, names in self.excluded_top_levels:
+            if variable == root_variable:
+                return relative_parts[0] in names
+        return False
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "excluded_path_components": list(self.excluded_path_components),
+            "excluded_top_levels": {
+                variable: list(names) for variable, names in self.excluded_top_levels
+            },
+        }
+
+
 @dataclass
 class GlobalPolicy:
     """Cross-cutting decisions applied to every module."""
@@ -133,6 +164,7 @@ class GlobalPolicy:
 class Overlay:
     global_policy: GlobalPolicy = field(default_factory=GlobalPolicy)
     modules: dict[str, ModulePolicy] = field(default_factory=dict)
+    blueprint_scan: BlueprintScanPolicy = field(default_factory=BlueprintScanPolicy)
 
     def policy_for(self, name: str) -> ModulePolicy:
         return self.modules.get(name, ModulePolicy())
@@ -211,6 +243,7 @@ def load_overlay(path: str) -> Overlay:
         "Overlay": Overlay,
         "GlobalPolicy": GlobalPolicy,
         "ModulePolicy": ModulePolicy,
+        "BlueprintScanPolicy": BlueprintScanPolicy,
     }
     with open(path) as f:
         code = compile(f.read(), path, "exec")

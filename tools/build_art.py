@@ -201,8 +201,6 @@ def _generate(
         "bp2cmake",
         "--root",
         str(REPO_ROOT / "vendor"),
-        "--exclude-top",
-        "art",
         "--overlay-factory",
         str(REPO_ROOT / "overlay" / "art_port_policy.py"),
         "--target-id",

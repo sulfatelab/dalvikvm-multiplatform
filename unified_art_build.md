@@ -66,6 +66,11 @@ items are closed.
   `windows-x86_64-msvc`. Both graphs emit the separate `openjdkjvmti` DSO;
   Linux additionally emits `sigchain`, while Windows supplies the reviewed
   platform-source `sigchain` target from the common native entry point.
+- [x] Blueprint discovery no longer has hard-coded global path filtering or an
+  `--exclude-top` product argument. The unified overlay carries one typed,
+  path-free scan policy keyed by stable logical root variables. Graph-manifest
+  schema 2 records the resolved component/top-level exclusions; regenerating
+  both targets preserved the 260-input and 34/33-module graphs.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to
@@ -1019,8 +1024,9 @@ an unreviewed module-set or kind change.
   deltas behind `make_overlay(profile)`; both resolved policies remained
   exactly equal to their reviewed predecessors before the fixed files were
   deleted.
-- [ ] Move converter scan exclusions from global CLI behavior into typed
-  target/product policy.
+- [x] Move converter scan exclusions from global CLI behavior into typed
+  target/product policy and serialize the resolved policy in each graph
+  manifest.
 - [ ] Split the maintained product CMake into focused codegen, platform import,
   compatibility, test, and staging modules without creating target-specific
   product entry points.
@@ -1670,8 +1676,10 @@ Linux and Windows still resolve to 38 and 31 reviewed module policies; their
 serialized policy objects remained byte-for-byte equal across this migration.
 The Windows delta keeps `libart-compiler` shared for `dex2oat`, like Linux,
 while `libart` still absorbs the compiler sources needed by the runtime. The
-converter still has legacy scan exclusions for tests, fuzzers, benchmarks, and
-samples; moving those into target/profile policy remains a follow-up cleanup.
+converter's test/fuzz/benchmark/sample and duplicate top-level ART exclusions
+now live in the typed, path-free product scan policy. The generic CLI defaults
+to scanning everything and no longer accepts the old global `--exclude-top`
+escape hatch.
 
 ### Current architecture assumptions
 
@@ -2707,7 +2715,8 @@ so a failed or partial invocation cannot contaminate another target build.
 - Replace the two overlay entry points with `make_overlay(profile)`.
 - Add the strict canonical target registry and the ignored
   `.art-build.local.toml` loader/generator.
-- Move root modules and scan exclusions into the profile.
+- Move scan exclusions into typed product policy and record them in the graph
+  manifest; moving the root-module set out of frontend constants remains.
 - Make build-host and target fields distinct throughout evaluator, codegen, and
   emitter APIs.
 - Generate both target graphs into isolated build directories and compare their
