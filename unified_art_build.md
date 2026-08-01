@@ -71,6 +71,11 @@ items are closed.
   path-free scan policy keyed by stable logical root variables. Graph-manifest
   schema 2 records the resolved component/top-level exclusions; regenerating
   both targets preserved the 260-input and 34/33-module graphs.
+- [x] The first maintained-CMake decomposition slice moved platform SDK/host
+  imports plus handwritten Windows `sigchain` and POSIX compatibility targets
+  into common `native/cmake/ArtPlatform.cmake`. Linux and Windows-cross CMake
+  regeneration produced no compile/link work, and immediate repeats were
+  Ninja no-ops at `--parallel 32`.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to

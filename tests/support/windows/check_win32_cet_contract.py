@@ -70,8 +70,10 @@ def check_source_policy(repo: Path) -> dict[str, int]:
     ):
         fail("Windows test target policy does not propagate /CETCOMPAT:NO")
 
-    product_graph = (repo / "native" / "CMakeLists.txt").read_text(encoding="utf-8")
-    if 'target_link_options(sigchain PRIVATE "LINKER:/CETCOMPAT:NO")' not in product_graph:
+    platform_graph = (repo / "native/cmake/ArtPlatform.cmake").read_text(
+        encoding="utf-8"
+    )
+    if 'target_link_options(sigchain PRIVATE "LINKER:/CETCOMPAT:NO")' not in platform_graph:
         fail("handwritten Windows sigchain target does not disable CET compatibility")
 
     raw_links = []
