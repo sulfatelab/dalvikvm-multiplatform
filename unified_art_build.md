@@ -97,6 +97,12 @@ items are closed.
   immediate repeats were Ninja no-ops, all 170 host regressions passed, and
   both cross and native 58-file CET contracts passed. Linux/cross used 32 jobs
   and native Windows used 16 jobs.
+- [x] Unified target-aware catalog registration moved unchanged into common
+  `native/cmake/ArtTests.cmake`; `native/CMakeLists.txt` remains the sole CMake
+  entry point. Linux, Windows-cross, and native Windows Server 2025
+  reconfiguration produced no compile/link work, immediate repeats were Ninja
+  no-ops, all 170 host regressions passed, and both cross and native 58-file
+  CET contracts passed. Linux/cross used 32 jobs and native Windows used 16.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to
@@ -1053,9 +1059,11 @@ an unreviewed module-set or kind change.
 - [x] Move converter scan exclusions from global CLI behavior into typed
   target/product policy and serialize the resolved policy in each graph
   manifest.
-- [ ] Split the maintained product CMake into focused codegen, platform import,
-  compatibility, test, and staging modules without creating target-specific
-  product entry points.
+- [x] Split the maintained product CMake into focused codegen, platform import,
+  target-graph, compatibility, and test modules without creating
+  target-specific product entry points. Artifact staging deliberately remains
+  shell-free Python frontend policy in `tools/build_art.py`; it is not a CMake
+  target-graph responsibility.
 - [ ] Strengthen the build fingerprint with the full serialized profile,
   generated graph digest, tool versions, and target-bundle identity rather
   than only paths and the target triple.

@@ -150,8 +150,4 @@ include("${CMAKE_CURRENT_LIST_DIR}/cmake/ArtTargetGraph.cmake")
 
 include("${CMAKE_CURRENT_LIST_DIR}/cmake/ArtCompatibility.cmake")
 
-option(ART_BUILD_TESTS "Define the unified target-aware ART test catalog" ON)
-if(ART_BUILD_TESTS)
-    include(CTest)
-    add_subdirectory("${_repo}/tests" tests)
-endif()
+include("${CMAKE_CURRENT_LIST_DIR}/cmake/ArtTests.cmake")
