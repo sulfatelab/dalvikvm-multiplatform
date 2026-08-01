@@ -9,6 +9,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "win_jni_utf.h"
+
 typedef jlong (*jvm_long_fn)(void);
 typedef void (*jvm_void_fn)(void);
 
@@ -211,9 +213,9 @@ __declspec(dllexport) jstring Java_java_lang_Runtime_nativeLoad(
   if (javaFilename == NULL) {
     return (*env)->NewStringUTF(env, "library path is null");
   }
-  const jchar* filename = (*env)->GetStringChars(env, javaFilename, NULL);
+  wchar_t* filename = win_jstring_to_utf16(env, javaFilename);
   if (filename == NULL) {
-    return (*env)->NewStringUTF(env, "library path GetStringChars failed");
+    return (*env)->NewStringUTF(env, "library path UTF-16 copy failed");
   }
 
   /* Prefer full ART LoadNativeLibrary if exported (future openjdkjvm). */
@@ -224,18 +226,18 @@ __declspec(dllexport) jstring Java_java_lang_Runtime_nativeLoad(
     jvm_native_load_fn jnl =
         (jvm_native_load_fn)GetProcAddress(ojj, "JVM_NativeLoad");
     if (jnl) {
-      (*env)->ReleaseStringChars(env, javaFilename, filename);
+      free(filename);
       return jnl(env, javaFilename, javaLoader, caller);
     }
   }
 
   SetLastError(0);
-  HMODULE mod = LoadLibraryW((LPCWSTR)filename);
+  HMODULE mod = LoadLibraryW(filename);
   if (!mod) {
     char buf[512];
     snprintf(buf, sizeof(buf), "LoadLibraryW failed gle=%lu",
              (unsigned long)GetLastError());
-    (*env)->ReleaseStringChars(env, javaFilename, filename);
+    free(filename);
     return (*env)->NewStringUTF(env, buf);
   }
 
@@ -244,17 +246,17 @@ __declspec(dllexport) jstring Java_java_lang_Runtime_nativeLoad(
   if (onload) {
     JavaVM* vm = NULL;
     if ((*env)->GetJavaVM(env, &vm) != 0 || vm == NULL) {
-      (*env)->ReleaseStringChars(env, javaFilename, filename);
+      free(filename);
       return (*env)->NewStringUTF(env, "GetJavaVM failed after LoadLibrary");
     }
     jint ver = onload(vm, NULL);
     if (ver == JNI_ERR) {
-      (*env)->ReleaseStringChars(env, javaFilename, filename);
+      free(filename);
       return (*env)->NewStringUTF(env, "JNI_OnLoad returned JNI_ERR");
     }
   }
 
-  (*env)->ReleaseStringChars(env, javaFilename, filename);
+  free(filename);
   return NULL; /* success */
 }
 

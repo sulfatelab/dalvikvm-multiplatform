@@ -7,6 +7,7 @@
 
 #include <winsock2.h>
 #include <windows.h>
+#include <mdvm_windows_utf8.h>
 
 #include "mdvm_socket_fd_registry.h"
 
@@ -41,14 +42,16 @@ int main(void) {
   WSADATA wsa;
   if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) fail("WSAStartup");
 
-  char temp_dir[MAX_PATH];
-  char temp_path[MAX_PATH];
-  if (GetTempPathA(MAX_PATH, temp_dir) == 0 ||
-      GetTempFileNameA(temp_dir, "w13", 0, temp_path) == 0) {
+  wchar_t temp_dir[MAX_PATH];
+  wchar_t temp_path[MAX_PATH];
+  if (GetTempPathW(MAX_PATH, temp_dir) == 0 ||
+      GetTempFileNameW(temp_dir, L"w13", 0, temp_path) == 0) {
     fail("temporary path");
   }
+  char* temp_path_utf8 = mdvm_utf16_to_utf8_alloc(temp_path);
+  if (temp_path_utf8 == NULL) fail("temporary path conversion");
 
-  int filefd = open_temp_file(temp_path);
+  int filefd = open_temp_file(temp_path_utf8);
   SOCKET socket1 = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
   if (socket1 == INVALID_SOCKET) fail("socket1");
   int socketfd = adopt_socket(socket1);
@@ -65,7 +68,7 @@ int main(void) {
     fail("socket close unregister");
   }
 
-  int reused = open_temp_file(temp_path);
+  int reused = open_temp_file(temp_path_utf8);
   if (reused != filefd) {
     fprintf(stderr, "W013_SOCKET_FD_REGISTRY_NOTE expected_reuse=%d actual=%d\n",
             filefd, reused);
@@ -86,7 +89,8 @@ int main(void) {
       mdvm_socket_fd_close(socketfd) != 0) {
     fail("cleanup close");
   }
-  DeleteFileA(temp_path);
+  DeleteFileW(temp_path);
+  free(temp_path_utf8);
   WSACleanup();
   printf("W013_SOCKET_FD_REGISTRY_PASS socket=%d dup=%d reused=%d target=%d\n",
          socketfd, dupfd, reused, target);

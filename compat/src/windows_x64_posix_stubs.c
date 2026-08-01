@@ -39,6 +39,7 @@
 #include <pthread.h>
 #include <link.h>
 #include <time.h>
+#include <dirent.h>
 #ifndef PATH_MAX
 #define PATH_MAX 260
 #endif
@@ -93,16 +94,35 @@ int pthread_once(pthread_once_t* once, void (*init)(void)) {
 }
 
 /* --- dirent --- */
-struct dirent { unsigned long d_ino; char d_name[260]; };
-struct DIR { HANDLE h; WIN32_FIND_DATAA f; int first; struct dirent ent; };
+struct DIR { HANDLE h; WIN32_FIND_DATAW f; int first; struct dirent ent; };
 typedef struct DIR DIR;
 
 DIR* opendir(const char* name) {
-  char pattern[MAX_PATH + 4];
-  _snprintf(pattern, sizeof(pattern), "%s\\*", name);
+  wchar_t* wide_name = mdvm_utf8_to_utf16_alloc(name);
+  if (wide_name == NULL) return NULL;
+  size_t name_length = wcslen(wide_name);
+  if (name_length > SIZE_MAX / sizeof(wchar_t) - 3u) {
+    free(wide_name);
+    errno = ENAMETOOLONG;
+    return NULL;
+  }
+  wchar_t* pattern = (wchar_t*)malloc((name_length + 3u) * sizeof(wchar_t));
+  if (pattern == NULL) {
+    free(wide_name);
+    return NULL;
+  }
+  memcpy(pattern, wide_name, name_length * sizeof(wchar_t));
+  pattern[name_length] = L'\\';
+  pattern[name_length + 1u] = L'*';
+  pattern[name_length + 2u] = L'\0';
+  free(wide_name);
   DIR* d = (DIR*)calloc(1, sizeof(DIR));
-  if (!d) return NULL;
-  d->h = FindFirstFileA(pattern, &d->f);
+  if (!d) {
+    free(pattern);
+    return NULL;
+  }
+  d->h = FindFirstFileW(pattern, &d->f);
+  free(pattern);
   if (d->h == INVALID_HANDLE_VALUE) { free(d); return NULL; }
   d->first = 1;
   return d;
@@ -110,11 +130,15 @@ DIR* opendir(const char* name) {
 struct dirent* readdir(DIR* d) {
   if (!d) return NULL;
   if (!d->first) {
-    if (!FindNextFileA(d->h, &d->f)) return NULL;
+    if (!FindNextFileW(d->h, &d->f)) return NULL;
   }
   d->first = 0;
   memset(d->ent.d_name, 0, sizeof(d->ent.d_name));
-  strncpy(d->ent.d_name, d->f.cFileName, sizeof(d->ent.d_name) - 1);
+  if (!mdvm_utf16_to_utf8_buffer(
+          d->f.cFileName, d->ent.d_name, sizeof(d->ent.d_name))) {
+    errno = EILSEQ;
+    return NULL;
+  }
   return &d->ent;
 }
 int closedir(DIR* d) {
@@ -671,10 +695,11 @@ int uname(struct utsname* buf) {
   if (!buf) return -1;
   memset(buf, 0, sizeof(*buf));
   strncpy(buf->sysname, "Windows_NT", sizeof(buf->sysname)-1);
-  char host[256];
-  DWORD n = (DWORD)sizeof(host);
-  if (GetComputerNameA(host, &n)) {
-    strncpy(buf->nodename, host, sizeof(buf->nodename)-1);
+  wchar_t host[256];
+  DWORD n = (DWORD)(sizeof(host) / sizeof(host[0]));
+  if (GetComputerNameW(host, &n) &&
+      mdvm_utf16_to_utf8_buffer(host, buf->nodename, sizeof(buf->nodename))) {
+    buf->nodename[sizeof(buf->nodename) - 1u] = '\0';
   } else {
     strncpy(buf->nodename, "localhost", sizeof(buf->nodename)-1);
   }
@@ -1069,18 +1094,25 @@ int memfd_create(const char* name, unsigned int flags) {
 }
 
 char* realpath(const char* path, char* resolved) {
-  char buf[MAX_PATH];
-  DWORD n = GetFullPathNameA(path ? path : "", MAX_PATH, buf, NULL);
+  wchar_t* wide_path = mdvm_utf8_to_utf16_alloc(path ? path : "");
+  if (wide_path == NULL) return NULL;
+  wchar_t wide_buf[MAX_PATH];
+  DWORD n = GetFullPathNameW(wide_path, MAX_PATH, wide_buf, NULL);
+  free(wide_path);
   if (n == 0 || n >= MAX_PATH) return NULL;
+  char* buf = mdvm_utf16_to_utf8_alloc(wide_buf);
+  if (buf == NULL) return NULL;
   if (resolved) {
-    strncpy(resolved, buf, 259);
-    resolved[259] = 0;
+    if (strlen(buf) >= PATH_MAX) {
+      free(buf);
+      errno = ENAMETOOLONG;
+      return NULL;
+    }
+    strcpy(resolved, buf);
+    free(buf);
     return resolved;
   }
-  char* out = (char*)malloc((size_t)n + 1);
-  if (!out) return NULL;
-  memcpy(out, buf, (size_t)n + 1);
-  return out;
+  return buf;
 }
 
 int pthread_getname_np(pthread_t t, char* buf, size_t len) {

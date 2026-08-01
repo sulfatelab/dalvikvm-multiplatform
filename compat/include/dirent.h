@@ -17,7 +17,7 @@ struct dirent {
   int64_t d_off;
   uint16_t d_reclen;
   uint8_t d_type;
-  char d_name[260];
+  char d_name[1024];
 };
 typedef struct DIR DIR;
 #ifdef __cplusplus

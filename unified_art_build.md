@@ -459,6 +459,17 @@ items are closed.
   ANSI calls and two complete source files leave 28 calls in 11 files across
   18 families. Windows-cross rebuilt 37 product and 35 test actions, and the
   focused W-010/reviewer regressions pass 11/11.
+- [x] W-027's filesystem and returned-path slice moves directory enumeration,
+  full-path resolution, host names, temporary paths, file attributes, crash
+  dump paths, and ICU product-data discovery to Unicode Win32 APIs. Public
+  POSIX-style paths remain strict UTF-8, while Java paths stay UTF-16 through
+  a shared NUL-terminated JNI copy helper. The public and implementation
+  `dirent` layouts are now identical and reserve the UTF-8 worst case for a
+  Windows filename. Eighteen ANSI calls and five complete source files leave
+  10 calls in six files across five families. The Windows-cross product and
+  `art-tests` build pass at 32 jobs, both immediate repeats are true Ninja
+  no-ops, and the corrected focused W-004/W-013/reviewer regressions pass
+  25/25.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to

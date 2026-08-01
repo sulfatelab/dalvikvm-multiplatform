@@ -13,6 +13,7 @@
 #include <windows.h>
 #pragma comment(lib, "ws2_32.lib")
 #include "mdvm_socket_fd_registry.h"
+#include "win_jni_utf.h"
 #include "win_path.h"
 
 /* Android errno values commonly used by IoBridge (bionic-compatible). */
@@ -753,12 +754,13 @@ __declspec(dllexport) jstring Java_libcore_io_Linux_readlink(JNIEnv* env, jobjec
   (void)thiz;
   /* Windows: no symlink readlink by default; return path as-is if exists */
   if (!jpath) { errno = EINVAL; throw_errno(env, "readlink", errno); return NULL; }
-  const char* path = (*env)->GetStringUTFChars(env, jpath, 0);
-  char buf[MAX_PATH];
-  DWORD n = GetFullPathNameA(path, MAX_PATH, buf, NULL);
-  (*env)->ReleaseStringUTFChars(env, jpath, path);
+  wchar_t* path = win_jstring_to_utf16(env, jpath);
+  if (path == NULL) return NULL;
+  wchar_t buf[MAX_PATH];
+  DWORD n = GetFullPathNameW(path, MAX_PATH, buf, NULL);
+  free(path);
   if (n == 0 || n >= MAX_PATH) { errno = ENOENT; throw_errno(env, "readlink", errno); return NULL; }
-  return (*env)->NewStringUTF(env, buf);
+  return (*env)->NewString(env, (const jchar*)buf, (jsize)n);
 }
 __declspec(dllexport) jstring Java_libcore_io_Linux_readlink__Ljava_lang_String_2(JNIEnv* env, jobject thiz, jstring jpath) {
   return Java_libcore_io_Linux_readlink(env, thiz, jpath);
@@ -786,15 +788,20 @@ __declspec(dllexport) void Java_libcore_io_Linux_posix_fallocate__Ljava_io_FileD
 __declspec(dllexport) void Java_libcore_io_Linux_chmod(JNIEnv* env, jobject thiz, jstring jpath, jint mode) {
   (void)thiz;
   if (!jpath) { errno = EINVAL; throw_errno(env, "chmod", errno); return; }
-  const char* path = (*env)->GetStringUTFChars(env, jpath, 0);
-  char npath[MAX_PATH];
-  win_path_normalize(path, npath, sizeof(npath));
-  (*env)->ReleaseStringUTFChars(env, jpath, path);
-  DWORD attr = GetFileAttributesA(npath);
-  if (attr == INVALID_FILE_ATTRIBUTES) { errno = ENOENT; throw_errno(env, "chmod", errno); return; }
+  wchar_t* path = win_jstring_to_utf16(env, jpath);
+  if (path == NULL) return;
+  DWORD attr = GetFileAttributesW(path);
+  if (attr == INVALID_FILE_ATTRIBUTES) {
+    free(path);
+    errno = ENOENT;
+    throw_errno(env, "chmod", errno);
+    return;
+  }
   if ((mode & 0222) == 0) attr |= FILE_ATTRIBUTE_READONLY;
   else attr &= ~FILE_ATTRIBUTE_READONLY;
-  if (!SetFileAttributesA(npath, attr)) {
+  BOOL updated = SetFileAttributesW(path, attr);
+  free(path);
+  if (!updated) {
     errno = EACCES;
     throw_errno(env, "chmod", errno);
   }
