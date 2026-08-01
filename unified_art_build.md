@@ -412,6 +412,20 @@ items are closed.
   58/58; both generated graphs are fresh; all 190 host tests pass; and the
   native Windows unified catalog passes 65/65 (59 target-runnable and six
   host-review tests) without POSIX tooling.
+- [ ] W-027 owns the active Windows graph's ANSI-to-Unicode API migration. A
+  deduplicated scan of the 1,816-command Windows-cross compilation database
+  finds 55 real calls in 21 source files across 22 explicit ANSI entry points.
+  The count strips C/C++ comments and literals, so the diagnostic string
+  `"LoadLibraryA(%s) failed"` is not an API call; it also classifies JNI
+  `Call*MethodA` and other suffix-`A` helpers separately. The inventory includes
+  BoringSSL's Winsock `gai_strerrorA`, which the earlier 20-file estimate
+  omitted. `check_win32_unicode_api_policy.py` now reproduces this inventory,
+  rejects unknown suffix-`A` call families, and will become the W-027 host
+  reviewer once the count reaches zero. Migration is split by boundary:
+  constant/null-name calls, strict UTF-8 input paths and loader names,
+  UTF-16-returning APIs, directory enumeration/error text, and finally mutable
+  process command lines plus Unicode environment blocks. Public ART/JNI/POSIX
+  surfaces remain UTF-8; conversion happens only at their Win32 boundary.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to

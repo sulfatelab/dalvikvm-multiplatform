@@ -8,13 +8,51 @@ REVIEWER_ROOT = REPO_ROOT / "tests" / "support" / "windows"
 
 def test_windows_reviewers_are_python_owned_and_syntax_valid():
     reviewers = sorted(REVIEWER_ROOT.glob("check_*.py"))
-    assert len(reviewers) == 8
+    assert len(reviewers) == 9
     assert not list(
         (REPO_ROOT / "tools" / "verify" / "windows_x64_phase1").glob("*.py")
     )
     for reviewer in reviewers:
         assert not reviewer.is_symlink()
         compile(reviewer.read_text(encoding="utf-8"), reviewer.as_posix(), "exec")
+
+
+def test_win32_unicode_policy_ignores_literals_comments_and_jni_suffix_a_calls():
+    namespace = runpy.run_path(
+        str(REVIEWER_ROOT / "check_win32_unicode_api_policy.py"),
+        run_name="windows_unicode_api_reviewer",
+    )
+    findings = namespace["find_suffix_a_calls"](
+        r'''
+        // CreateFileA("comment");
+        const char* diagnostic = "LoadLibraryA(module)";
+        const char* raw = R"tag(CreateProcessA(NULL))tag";
+        env->CallObjectMethodA(receiver, method, values);
+        HANDLE file = CreateFileA(path, 0, 0, NULL, 0, 0, NULL);
+        ''',
+        "probe.cc",
+    )
+    assert [finding["name"] for finding in findings] == [
+        "CallObjectMethodA",
+        "CreateFileA",
+    ]
+
+
+def test_win32_unicode_policy_classifies_current_cross_graph():
+    namespace = runpy.run_path(
+        str(REVIEWER_ROOT / "check_win32_unicode_api_policy.py"),
+        run_name="windows_unicode_api_reviewer",
+    )
+    compile_commands = (
+        REPO_ROOT / "out/windows-x86_64-msvc/RelWithDebInfo/compile_commands.json"
+    )
+    if not compile_commands.is_file():
+        return
+    record = namespace["inspect_active_graph"](REPO_ROOT, compile_commands)
+    assert record["ansi_call_count"] == 55
+    assert record["ansi_source_count"] == 21
+    assert record["ansi_api_count"] == 22
+    assert record["unclassified_call_count"] == 0
 
 
 def test_boundary_reviewer_resolves_private_pdb_publics():
