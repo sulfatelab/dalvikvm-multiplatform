@@ -367,7 +367,7 @@ C++ frames. The new first miss is `art_quick_to_interpreter_bridge + 0x82`
 worker reaches both UEFs and writes one valid 747,073-byte dump. The result
 bundle SHA-256 is
 `1a58bb0f318eae82882ea1bd0e5b0fa403202d02ae95a889b07a1e7b3524b3d9`;
-see `evidence/w010_w014_e5/DIAGNOSIS.md`.
+see `W010_W014_DIAGNOSTICS.md`.
 
 Local E6 repairs the new boundary without changing the ART frame contract. The
 primary record describes the existing 200-byte save-refs-and-args frame;
@@ -386,7 +386,7 @@ reports `lookup=1` for the primary bridge at hardware frame 11 and raised frame
 frames, both late filters and ART UEF enter, and each JNI case writes a valid
 dump. The native-worker control also passes. The returned bundle SHA-256 is
 `a1c6af0ceff198f6b4543aa832dbf40ced81dcf72800b77c55dd5f2959302736`;
-see `evidence/w010_w014_e6/DIAGNOSIS.md`.
+see `W010_W014_DIAGNOSTICS.md`.
 
 The subsequent complete E6 host run records 25 of the 30 required PASS rows on
 Windows Server 2025 build 26100. Static `-Xint`, threshold-zero JIT J-2/J-1,
@@ -403,7 +403,7 @@ handled-dump aggregates. The authentic returned payload passes issued-package
 identity checking; the reviewer then rejects the expected `OVERALL FAIL`.
 The raw returned bundle SHA-256 is
 `d6bb85c1529496cb384bebcc1495378ade0e253041e01a9605f3f6c90b8538e5`;
-see `evidence/w010_w014_e6_full/DIAGNOSIS.md`.
+see `W010_W014_DIAGNOSTICS.md`.
 
 ## Accepted native E9 host result
 

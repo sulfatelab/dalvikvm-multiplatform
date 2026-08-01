@@ -345,7 +345,10 @@ preflight preceded the native E4 result below.
 
 The exact package was run automatically on Windows Server 2025 build 26100.
 The archive, manifest, structural report, and package checker passed before
-execution. The returned result bundle has SHA-256
+execution. The package SHA-256 is
+`391547a4fe0f76193af2f3767123b9c054ec0461d7cd589ed405cdc9f6ace1b5`;
+the issued root was `22cad3ad23cb94be76a46e7b8fd67748d6162994` with ART
+`69999bce0bd494c616bf8344baeddc7f69f7c702`. The returned result bundle has SHA-256
 `4616e8622dba2977b5472264f099de9449aa5c8b0a4bc1d1d568f9af8c6987b8`.
 
 Both JNI-thread traces confirm Wine's candidate:
@@ -359,7 +362,7 @@ The native worker trace has four registered native/OS frames, reaches zero PC,
 enters both UEFs, and creates one valid 747,491-byte minidump. Its SHA-256 is
 `8d854b1e25d561dd8515e6ceb17c9e58574c9e766e3a0e6a1a82091fb7815bf6`.
 Stack and standalone UEF rows repeat the prior native result on current
-Windows. See `evidence/w010_w014_e4/DIAGNOSIS.md`.
+Windows.
 
 The diagnosis is closed: `ExecuteSwitchImplAsm` is the first missing live
 runtime-function record. Repair its Windows x64 RBX/home-area frame, add structural
@@ -372,7 +375,9 @@ build 26100. Its archive SHA-256 is
 `231322dd1261bb7a592929005cef85079110466462cadfef8fc996fbfaae2a05`, and
 the returned result bundle SHA-256 is
 `1a58bb0f318eae82882ea1bd0e5b0fa403202d02ae95a889b07a1e7b3524b3d9`.
-The package checker and complete diagnostic runner pass.
+The issued root was `177993020896f18c19ab6ac0f863104c640db6d2` with ART
+`b57890bd710687631f56387ab8073c11ce33bdc0`; the package checker and complete
+diagnostic runner pass.
 
 The Windows x64-only RBX save, 32-byte MSVC home area, canonical epilogue, and PE
 unwind metadata work natively. Both JNI traces report `lookup=1` at
@@ -389,7 +394,6 @@ range-accurate descriptions; do not cover both with one blanket unwind record.
 The native-worker control again reaches both UEFs and writes one valid
 747,073-byte dump with SHA-256
 `99bff7ef07986eb4c2c15506056664f1a7d39db6fc6f685482e93fadbacc19f5`.
-See `evidence/w010_w014_e5/DIAGNOSIS.md`.
 
 ## Local E6 interpreter-bridge repair
 
@@ -425,7 +429,9 @@ miss as the only basis for another unwind repair.
 The archive SHA-256 is
 `9ab66c9a7b2e8e40210f9c47971cbf5ac9f86c0ca729c25a05448f12346499bc`.
 The transferred bytes and Python package checker pass on Windows Server 2025
-build 26100. The returned result bundle SHA-256 is
+build 26100. The issued root was
+`6cce29d7b5f1647b90c56ad02de747fdebcdca99` with ART
+`bbb397f2deff19b80588716ee53b0eaf1ab9db88`. The returned result bundle SHA-256 is
 `a1c6af0ceff198f6b4543aa832dbf40ced81dcf72800b77c55dd5f2959302736`.
 
 Both JNI cases now resolve the native E5 miss:
@@ -440,13 +446,16 @@ Hardware frame 11 and raised frame 12 cross the primary bridge record. Every
 later frame has `lookup=1`; the walks end at zero PC after 23 and 24 frames.
 Both cases enter the late UEF, chain into ART's UEF, and create valid dumps.
 The native-worker control also reaches both UEFs and creates a dump. The three
-valid 14-stream `MDMP` files are 748,487, 744,355, and 748,587 bytes.
+valid 14-stream `MDMP` files are 748,487, 744,355, and 748,587 bytes, with
+SHA-256 values
+`8cb6b7d8eb382e6ec86272ecb283936b35b44ed350825db85c4b462c37c44a1e`,
+`4d164e01bb6a34596cf2d1c1df77420cc3bb592010ae5d9a3f38b1ec4a78d727`,
+and `f9caf7f54ae3cf578bce852c17f479d80eb19b5eb945faf8b176b9417cb0b7cc`.
 
 This closes the diagnosed fatal-dispatch lookup chain. It natively validates
 the primary record; the separate pending record is still structural/synthetic
 coverage because these cases do not enter that path. The subsequent complete
 host matrix repeats all five static/JIT/OSR fatal origins as described below.
-See `evidence/w010_w014_e6/DIAGNOSIS.md`.
 
 ## Complete native E6 host matrix
 
@@ -461,6 +470,13 @@ switch-OSR J-2/J-1. Each reports the required VEH and UEF markers, exits with
 `0xC0000005`, and creates a new valid named 14-stream minidump. This accepts
 the complete native fatal-origin subset after the E5/E6 unwind repairs.
 
+Their respective dump SHA-256 values are
+`6b905742f5b9418db0da8462cce71744bb2113089574c03407768bc6665c33d7`,
+`fbe7b7f660273d5452900530d299a07214b8c1c2e0e52a772a35a037eba1f33d`,
+`f1dbc6d200a865964036007ad2ba1dd7706e76285fe47b25674c06e8c17dfcd2`,
+`b9fb23d0a64ce605a3166599cfb666be4d28d02fe1a5103cc028caa97947cbe5`,
+and `1edc97f5f5750ecb28da496063158c12e1af6129bb49184462ce0ea808817c95`.
+
 The remaining failures are all consequences of the rejected fixed-page SOE
 design:
 
@@ -468,14 +484,15 @@ design:
   logs `error=13`, and exits with `0xC0000005` before managed recovery;
 - nterp reaches `0xC00000FD`, logs VEH, and terminates without managed SOE;
 - threshold-zero JIT reaches `0xC00000FD`, logs VEH and UEF, and writes an
-  unwanted 1,768,325-byte dump; and
+  unwanted 1,768,325-byte dump with SHA-256
+  `cc4cb881901d108bb380fb59c8d0ccccfc90c87c96c7ca0ed50229f51681864c`;
+  and
 - handled-log and handled-dump aggregate checks consequently fail.
 
 The full returned payload matches the issued identity. The reviewer reaches
 and correctly rejects `RESULT_W010_W014.txt` because it ends in `OVERALL FAIL`.
 The raw returned archive SHA-256 is
 `d6bb85c1529496cb384bebcc1495378ade0e253041e01a9605f3f6c90b8538e5`.
-See `evidence/w010_w014_e6_full/DIAGNOSIS.md`.
 
 ## Native E8 rejection and E9 acceptance
 

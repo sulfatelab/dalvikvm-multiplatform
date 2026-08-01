@@ -287,6 +287,10 @@ FS-5's pending interpreter-tail disposition was merged into the canonical
 managed-fault result. Its exact structural boundary and the reason a real
 native fault would require product-altering or fabricated injection remain
 source-adjacent; the standalone legacy result path was removed.
+The W-010/W-014 E4–E6 diagnosis fragments were deduplicated into the existing
+consolidated diagnostics analysis. All package/source/result/dump identities,
+live lookup boundaries, and the rejected fixed-page SOE outcome remain there;
+four compact fragments and one raw aggregate record were removed.
 The unreferenced W-025 JIT-2/JIT-3 source preflights and the broken JIT-4
 preflight were removed as well. The unified W-025 reviewer owns their current
 mapping, lifecycle, nterp floating-point, JIT-control, PE-import/export, and

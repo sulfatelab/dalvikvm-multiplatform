@@ -625,6 +625,11 @@ items are closed.
   structural contract and why real native-tail faulting would require product
   mutation or fabricated state remain beside the live case; the standalone
   legacy result was removed.
+- [x] W-010/W-014 E4–E6 diagnosis is deduplicated in the consolidated
+  `W010_W014_DIAGNOSTICS.md`. Exact issued revisions, package/result/dump
+  identities, live lookup boundaries, repaired records, and rejected
+  fixed-page SOE outcome remain; four redundant diagnosis fragments and one
+  raw aggregate file were removed.
 - [x] `art.dll` no longer uses `WINDOWS_EXPORT_ALL_SYMBOLS`. Before the change,
   a Debug scan found 80,318 candidate exports and exceeded PE's 65,535-entry
   limit, while RelWithDebInfo exposed 17,112. ART's existing `EXPORT` boundary
