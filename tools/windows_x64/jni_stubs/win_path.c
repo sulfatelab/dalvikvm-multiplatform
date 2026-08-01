@@ -3,6 +3,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <windows.h>
+#include <mdvm_windows_utf8.h>
 
 static int is_sep(unsigned char c) { return c == '/' || c == '\\'; }
 
@@ -139,13 +140,5 @@ wchar_t* win_path_to_wide(const char* utf8_path) {
   if (!utf8_path) return NULL;
   char norm[4096];
   if (win_path_normalize(utf8_path, norm, sizeof(norm)) != 0) return NULL;
-  int wlen = MultiByteToWideChar(CP_UTF8, 0, norm, -1, NULL, 0);
-  if (wlen <= 0) wlen = MultiByteToWideChar(CP_ACP, 0, norm, -1, NULL, 0);
-  if (wlen <= 0) return NULL;
-  wchar_t* w = (wchar_t*)malloc((size_t)wlen * sizeof(wchar_t));
-  if (!w) return NULL;
-  if (!MultiByteToWideChar(CP_UTF8, 0, norm, -1, w, wlen)) {
-    MultiByteToWideChar(CP_ACP, 0, norm, -1, w, wlen);
-  }
-  return w;
+  return mdvm_utf8_to_utf16_alloc(norm);
 }

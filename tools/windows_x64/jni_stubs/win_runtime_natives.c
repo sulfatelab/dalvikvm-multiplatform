@@ -207,9 +207,9 @@ __declspec(dllexport) jstring Java_java_lang_Runtime_nativeLoad(
   if (javaFilename == NULL) {
     return (*env)->NewStringUTF(env, "library path is null");
   }
-  const char* filename = (*env)->GetStringUTFChars(env, javaFilename, NULL);
+  const jchar* filename = (*env)->GetStringChars(env, javaFilename, NULL);
   if (filename == NULL) {
-    return (*env)->NewStringUTF(env, "library path GetStringUTFChars failed");
+    return (*env)->NewStringUTF(env, "library path GetStringChars failed");
   }
 
   /* Prefer full ART LoadNativeLibrary if exported (future openjdkjvm). */
@@ -220,18 +220,18 @@ __declspec(dllexport) jstring Java_java_lang_Runtime_nativeLoad(
     jvm_native_load_fn jnl =
         (jvm_native_load_fn)GetProcAddress(ojj, "JVM_NativeLoad");
     if (jnl) {
-      (*env)->ReleaseStringUTFChars(env, javaFilename, filename);
+      (*env)->ReleaseStringChars(env, javaFilename, filename);
       return jnl(env, javaFilename, javaLoader, caller);
     }
   }
 
   SetLastError(0);
-  HMODULE mod = LoadLibraryA(filename);
+  HMODULE mod = LoadLibraryW((LPCWSTR)filename);
   if (!mod) {
     char buf[512];
-    snprintf(buf, sizeof(buf), "LoadLibraryA(%s) failed gle=%lu", filename,
+    snprintf(buf, sizeof(buf), "LoadLibraryW failed gle=%lu",
              (unsigned long)GetLastError());
-    (*env)->ReleaseStringUTFChars(env, javaFilename, filename);
+    (*env)->ReleaseStringChars(env, javaFilename, filename);
     return (*env)->NewStringUTF(env, buf);
   }
 
@@ -240,17 +240,17 @@ __declspec(dllexport) jstring Java_java_lang_Runtime_nativeLoad(
   if (onload) {
     JavaVM* vm = NULL;
     if ((*env)->GetJavaVM(env, &vm) != 0 || vm == NULL) {
-      (*env)->ReleaseStringUTFChars(env, javaFilename, filename);
+      (*env)->ReleaseStringChars(env, javaFilename, filename);
       return (*env)->NewStringUTF(env, "GetJavaVM failed after LoadLibrary");
     }
     jint ver = onload(vm, NULL);
     if (ver == JNI_ERR) {
-      (*env)->ReleaseStringUTFChars(env, javaFilename, filename);
+      (*env)->ReleaseStringChars(env, javaFilename, filename);
       return (*env)->NewStringUTF(env, "JNI_OnLoad returned JNI_ERR");
     }
   }
 
-  (*env)->ReleaseStringUTFChars(env, javaFilename, filename);
+  (*env)->ReleaseStringChars(env, javaFilename, filename);
   return NULL; /* success */
 }
 

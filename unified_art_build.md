@@ -433,6 +433,16 @@ items are closed.
   The Windows-cross product rebuilt 33 actions and `art-tests` rebuilt 36 at
   32 jobs; both immediate repeats were Ninja no-ops, and all seven focused host
   reviewer regressions pass.
+- [x] W-027's strict-input slice adds one C/C++ allocation helper for native
+  UTF-8/UTF-16 Win32 boundaries and removes the old ACP fallback from
+  `win_path_to_wide`. Nativehelper, LZMA, and ICU now convert UTF-8 paths and
+  loader names strictly before `LoadLibraryW`/`CreateFileW`. Java
+  `Runtime.nativeLoad` instead consumes JNI UTF-16 directly with
+  `GetStringChars`, because JNI modified UTF-8 is not a valid substitute for a
+  strict UTF-8 boundary. Five more ANSI calls and three complete source files
+  leave the active inventory at 39 calls in 15 files across 18 families. The
+  affected Windows-cross product closure and `art-tests` build pass, followed
+  by true Ninja no-ops; all seven focused reviewer regressions pass.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to
