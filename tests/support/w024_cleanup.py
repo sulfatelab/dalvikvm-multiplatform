@@ -40,7 +40,7 @@ def audit_w024_cleanup(repo_root: Path = REPO_ROOT) -> list[str]:
     native_jit_sources = (
         jit_path,
         product_graph,
-        repo_root / "tools" / "verify" / "windows_x64_phase4" / "run_jit_smoke.sh",
+        repo_root / "tests" / "cases" / "jit-runtime-controls" / "run.py",
         repo_root
         / "tests"
         / "cases"

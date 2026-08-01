@@ -161,13 +161,15 @@ reviewer, and also repeated as a no-op. The debugger launches the
 frontend-resolved product EXE rather than copying it away from its matching DLL
 directory, while all writable runtime state remains isolated below the output
 tree.
-W-025 keeps its three JNI DSOs as compile-only dependencies and makes seven
+W-025 keeps its three JNI DSOs as compile-only dependencies and makes eight
 behavioral declarations target-runnable. The managed runners cover unwind
 lifecycle, stress, and 64 MiB/1 GiB mapping audits; the native runners cover
 unwind encoding/registry, section policy, CFG execution, and fail-closed
-dynamic-code policy. One shared reviewer audits source, CFG/import/export PE
-policy, XMM0 floating-point returns, and absence of the retired J-1 path.
-Windows Server 2025 passed the eight-gate stage twice, and the Linux-hosted
+dynamic-code policy. A unified twelve-process gate covers default/disabled/
+filtered/excluded/quiet JIT controls plus Math, IO, Net, GC, and throw
+workloads. One shared reviewer audits source, CFG/import/export PE policy,
+XMM0 floating-point returns, and absence of the retired J-1 path. Windows
+Server 2025 passed the nine-gate stage twice, and the Linux-hosted
 Windows cross stage passed its reviewer; both stage builds repeated as Ninja
 no-ops. Test assets are copied as regular files into output-owned work roots,
 while the original absolute `dalvikvm.exe` is launched to preserve its product

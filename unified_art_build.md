@@ -38,11 +38,11 @@ items are closed.
 |---|---|---|---|
 | Python frontend | COMPLETE for the initial slice | `generate`, `check-generated`, `configure`, `build`, `test`, and `stage` exist; subprocesses are shell-free; configured JDK 21 is validated and passed to CMake | keep regression coverage current |
 | Linux x86-64 product | COMPLETE for the current W-004/W-013 runtime slice | a fresh target-local boot/runtime closure passes all five W-004 gates plus the shared W-013 128 MiB non-moving-heap gate; identical stage rebuilds are Ninja no-ops | add boot-image/security packaging and migrate the remaining behavioral stages |
-| Windows x86-64 product | PARTIAL / experimental | Linux-hosted cross and native Windows Server 2025 product builds pass; fresh native W-002 passes 4/4, W-003 product passes 4/4, W-003 frame variant passes 5/5, expanded W-004 passes 26/26, W-010 passes 8/8, W-013 passes 7/7, and W-025 passes 8/8; every identical stage repeat is a Ninja no-op | run the remaining multi-stage catalog and migrate its behavioral tests |
+| Windows x86-64 product | PARTIAL / experimental | Linux-hosted cross and native Windows Server 2025 product builds pass; fresh native W-002 passes 4/4, W-003 product passes 4/4, W-003 frame variant passes 5/5, expanded W-004 passes 26/26, W-010 passes 8/8, W-013 passes 7/7, and expanded W-025 passes 9/9; every identical stage repeat is a Ninja no-op | run the remaining multi-stage catalog and migrate its behavioral tests |
 | Compiler DSO parity | COMPLETE for `art-compiler` | both targets emit a shared compiler DSO; Windows imports `art.dll` and exports `art_compiler_jit_create` | retain exact ABI and no-cycle gates |
 | Windows runtime DSO exports | COMPLETE for current x86-64 closure | `art.dll` uses explicit source annotations, not CMake auto-export; Debug and RelWithDebInfo stay below PE's 65,535-entry limit and pass W-014/FS-1 | grow a reviewed ABI allowlist as more consumers migrate |
 | Full DSO topology parity | PARTIAL | five module kinds and two target-specific module pairs still differ | convert each difference or record a reviewed target exception |
-| Unified phase catalog | PARTIAL | seven virtual stages declare 32 native probes, 47 managed JARs, and eleven command gates; Windows has 88 applicable items (58 target-runnable, six host-review, and 24 compile-only in the product variant), while Linux x86-64 has seven applicable items (six runnable and one compile-only artifact) | migrate the remaining behavioral runners, portable JNI expansion, and result checks |
+| Unified phase catalog | PARTIAL | seven virtual stages declare 32 native probes, 47 managed JARs, and twelve command gates; Windows has 89 applicable items (59 target-runnable, six host-review, and 24 compile-only in the product variant), while Linux x86-64 has seven applicable items (six runnable and one compile-only artifact) | migrate the remaining behavioral runners, portable JNI expansion, and result checks |
 | Boot/runtime packaging | PARTIAL | the base boot JAR and probe JARs are Python/CMake/Ninja-owned, deterministic, target-local, and fail-fast; managed gates isolate a runtime root and stage pinned ICU data plus the mandatory native boot DSO closure | add boot images, security providers/resources, cacerts, and complete runtime packages |
 | POSIX-free Windows build host | COMPLETE for the current native/managed W-002, W-003, W-004, W-010, W-013, and W-025 graphs; PARTIAL end to end | Server 2025 uses configured official JDK 21, Python, CMake, Ninja, and plain Clang drivers; native managed build/runtime and no-op gates pass without POSIX tooling | migrate every retained behavioral gate and run the complete current catalog |
 | Legacy build removal | PARTIAL | active product ownership was demoted, project-owned symlink overlays were removed, and the superseded Linux miniature plus Windows Phase-0/Phase-1 product graphs were deleted; the checked-in Linux graph, libcore product CMake, and split overlay datasets remain | remove or demote every alternative product path after gate migration |
@@ -53,7 +53,7 @@ items are closed.
 ### Latest verification baseline (2026-08-01)
 
 - [x] `PYTHONPATH=tools/bp2cmake python3 -m pytest tools/bp2cmake/tests tests/host -q`:
-  163 passed, including generated PE-header, Linux/Windows test-catalog,
+  164 passed, including generated PE-header, Linux/Windows test-catalog,
   shell-free runtime/managed-artifact gates, parallel-frontend, JDK validation,
   deterministic JAR, Windows-path/DSO-name, reviewer ownership, W-010
   nonzero/fault/debugger/fatal-dump orchestration, W-013 source-policy,
@@ -66,12 +66,12 @@ items are closed.
   platform-source `sigchain` target from the common native entry point.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
-  JDK 21 emits a 90-declaration catalog. Seven declarations apply to
+  JDK 21 emits a 91-declaration catalog. Seven declarations apply to
   `linux-x86_64-gnu`: the five runnable W-004 gates, the W-013 non-moving
   managed artifact, and its runnable 128 MiB gate. Six register with CTest;
   the managed artifact is compile-only and built as the W-013 gate dependency.
-- [x] Windows-target configuration emits the same 90 declarations and keeps
-  88 items applicable. Fifty-eight product-variant items are
+- [x] Windows-target configuration emits the same 91 declarations and keeps
+  89 items applicable. Fifty-nine product-variant items are
   `target-runnable`, and the W-002 managed-entry, W-003 quick-boundary, W-004
   runtime-load, W-010 boundary-unwind, W-013 source-policy, and W-025
   JIT-contract reviewers are
@@ -389,22 +389,32 @@ items are closed.
   19.27 seconds at `--parallel 16`; its immediate Ninja no-op repeat passed
   8/8 in 17.26 seconds. The superseded Phase-4 managed-abort and native-crash
   Wine wrappers were then removed; their retained logs are historical only.
-- [x] W-025 now owns seven shell-free target-runnable gates plus one
-  `host-review` gate. Windows Server 2025 passed all 8/8 twice in 8.80 and
-  8.61 seconds. The stage covers six unwind-info encodings, runtime-function
+- [x] W-025 now owns eight shell-free target-runnable gates plus one
+  `host-review` gate. Windows Server 2025 passed the expanded stage 9/9 twice
+  in 20.95 and 20.68 seconds. The stage covers six unwind-info encodings,
+  runtime-function
   registration, managed invalidation/collection/exact reuse, the eight-cycle
   216-compilation/192-reuse stress contract, 64 MiB and 1 GiB JIT mappings,
   low-VA and `SEC_COMMIT` section policy, CFG execution, fail-closed
-  `ProhibitDynamicCode`, and the explicit `-Xusejit:false` control. The native
+  `ProhibitDynamicCode`, and twelve isolated JIT control/workload processes:
+  default, environment-disabled, `-Xusejit:false`, filter, exclude, quiet,
+  retired-key, Math, IO, Net, GC, and throw. The native
   build used `--parallel 16` on the 16 GiB VM and its repeat was a Ninja no-op.
-  All 52 result JSON files in the accumulated native result tree contain zero
-  absolute paths, and its non-following scan found zero reparse points.
+  All 41 result JSON files in the current native result tree contain zero
+  absolute paths; non-following scans of source and output found zero reparse
+  points.
 - [x] The Linux-hosted Windows cross W-025 stage builds with `--parallel 32`,
   passes the same source/PE reviewer, and repeats as a Ninja no-op. A generated
   PE header overlay exports only `JitCodeCache::GetGarbageCollectCode()` and
   `GetCurrentRegion()` for the ordinary JNI test DSOs; it is source-scoped to
   the defining translation unit and does not restore unbounded
   `WINDOWS_EXPORT_ALL_SYMBOLS` on `art.dll`.
+- [x] The final Phase-4 JIT smoke and workload-matrix Bash wrappers were
+  retired after their supported control semantics and canonical Math/IO/Net/
+  GC/throw workloads passed in unified W-025. The ten old managed jars without
+  repository source remain historical evidence only. The unreferenced,
+  already-broken JIT-5 source preflight checker was removed after its retired
+  key and fail-closed source/binary contracts migrated to the live reviewer.
 - [x] After native W-025 acceptance, its four host-package producers, four
   package-only PowerShell runners, five W-025 Bash build/preflight runners,
   two package-only Wine smoke wrappers, and six superseded Phase-4 JIT
@@ -506,17 +516,17 @@ One historical work stage maps to exactly one virtual target named
 | `w010` | 4 EXEs, 3 managed, 1 gate | 2 exact / 6 typed | 7 target-runnable, 1 host-review | registered Windows x86-64 coverage is complete |
 | `w013` | 4 EXEs, 1 managed, 3 gates | 3 exact / 5 typed | 6 runnable, 1 host-review, 1 compile-only | registered x86-64 native, managed, and source-policy coverage is complete |
 | `w014` | 7 EXEs, 1 DLL, 1 managed, 1 gate | 3 exact / 7 typed | product: 7 runnable, 3 compile-only; FS-1 variant: 8 runnable, 1 host-review, 1 compile-only | registered FS-1 coverage is complete for Windows x86-64 |
-| `w025` | 4 EXEs, 3 DLLs, 3 managed, 1 gate | 6 exact / 5 typed | 7 target-runnable, 1 host-review, 3 compile-only | registered Windows x86-64 coverage is complete |
-| Total | 22 EXEs, 10 DLLs, 47 managed, 11 gates | 26 exact / 64 typed | product: 60 target-runnable, 6 host-review, 24 compile-only | Windows applies 88 declarations; Linux x86-64 applies seven |
+| `w025` | 4 EXEs, 3 DLLs, 3 managed, 2 gates | 7 exact / 5 typed | 8 target-runnable, 1 host-review, 3 compile-only | registered Windows x86-64 coverage is complete |
+| Total | 22 EXEs, 10 DLLs, 47 managed, 12 gates | 27 exact / 64 typed | product: 61 target-runnable, 6 host-review, 24 compile-only | Windows applies 89 declarations; Linux x86-64 applies seven |
 
 The shared registry now references zero source files from historical
-verification directories. All 90 declarations own canonical source under
+verification directories. All 91 declarations own canonical source under
 `tests/cases/` or a shell-free runner under `tests/support/`; all 29 native
 source cases and all 48 Java sources have adjacent results, and shared stage
 analysis remains under `tests/stages/`. The old verification tree now contains
 zero Java sources and two uncatalogued native sources retained by unfinished
-legacy evidence paths. It still contains three shell scripts, two PowerShell
-scripts, and 25 Python scripts. Python checkers
+legacy evidence paths. It still contains one shell script, two PowerShell
+scripts, and 24 Python scripts. Python checkers
 and reviewers may remain, but the unified frontend must invoke them through a
 declared stage instead of a phase-local product build.
 
@@ -1029,14 +1039,16 @@ second product graph. CMake writes `tests/art_test_catalog.json` with every
 declaration, failed-selector reason, applicability, CTest registration, and
 separate build/runtime verification status. All 32 compiled probes remain
 truthfully limited to `windows-x86_64-msvc`; 24 are compile-only and eight are
-target-runnable. Nine `GATE` declarations avoid dummy binaries: two exact
+target-runnable. Twelve `GATE` declarations avoid dummy binaries: two exact
 `linux-x86_64-gnu` declarations check the runtime version marker and the
 runtime/compiler ELF DSO topology; the Windows W-002, W-003, and W-004 host
 reviews check source, target objects, PE imports/relocations, and incremental
 assembly dependencies; one shared exact-ID W-013 declaration runs the managed
 non-moving-heap artifact at 128 MiB on Linux and Windows; one Windows W-013
 declaration runs it at 1024 MiB; one Windows W-013 host review checks source
-policy; and the FS-1 variant owns its stack-sampling host review. Managed W-002
+policy; W-010 owns the private-boundary unwind review; W-025 owns its source/
+PE review and twelve-process JIT control/workload matrix; and the FS-1 variant
+owns its stack-sampling host review. Managed W-002
 attach/OSR, W-003 CriticalNative/FastNative/XMM/frame, and W-004 JVMTI
 declarations own their shell-free Python runtime commands without dummy gate
 targets. The old phase directories remain temporary evidence locations while
@@ -1080,7 +1092,7 @@ translation units. This keeps `vendor/art` clean, requires no source-tree
 symlink, and avoids committing generated or absolute-path-bearing headers.
 
 The test-ownership migration moves the registry from `native/` to the top-level
-`tests/` tree and places all 90 declarations under stable logical ownership.
+`tests/` tree and places all 91 declarations under stable logical ownership.
 All 32 native probes and 47 managed artifacts consume canonical source under
 `tests/cases/`; the common W-004 managed gates, Windows W-002/W-003 managed
 commands, Linux command gates, and target-object reviewers use shell-free

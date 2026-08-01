@@ -90,6 +90,7 @@ def check_source_policy(repo: Path) -> dict[str, int]:
     )
     codegen = _read(repo, "tools/bp2cmake/bp2cmake/codegen.py")
     native_cmake = _read(repo, "native/CMakeLists.txt")
+    controls = _read(repo, "tests/cases/jit-runtime-controls/run.py")
 
     create_match = re.search(
         r"void\* MemMap::CreatePageFileSection\(.*?\n\}",
@@ -222,6 +223,21 @@ def check_source_policy(repo: Path) -> dict[str, int]:
         '"${MDVM_ART_ROOT_DIR}/art/runtime/jit/jit_code_cache.cc"',
         "art/windows-pe-headers/art/runtime/jit/jit_code_cache.h",
     )
+    _require(
+        controls,
+        "unified JIT runtime controls",
+        'name="default-verbose"',
+        'name="environment-disabled"',
+        'name="xusejit-disabled"',
+        'name="filter"',
+        'name="exclude"',
+        'name="quiet"',
+        'name="retired-optout"',
+        '"ART_WINDOWS_X64_JIT_DUAL": "0"',
+        '"ART_WINDOWS_X64_JIT_FILTER": "Hello"',
+        '"Windows x64 JIT dual-view (J-2) created"',
+        'required_compile_substrings=("Hello",)',
+    )
     return {
         "pagefile_section_implementations": 1,
         "managed_methods": managed_count,
@@ -229,6 +245,7 @@ def check_source_policy(repo: Path) -> dict[str, int]:
         "nterp_xmm0_return_forms": 2,
         "windows_jit_memory_paths": 1,
         "pe_jit_inspection_exports": 2,
+        "jit_control_cases": 7,
     }
 
 

@@ -85,11 +85,11 @@ canonical policy is [HOST_GATE_POLICY.md](tools/verify/windows_x64_phase4/HOST_G
 - **State:** OPEN (partial — managed JIT suites run without `-Xint`; older interpreter-specific probes retain it)
 - **Kind:** workaround (policy flags)
 - **Area:** packaging / product CLI
-- **Current behavior:** Product default runs with managed JIT ON through the corrected dual view. `run_jit_smoke.sh` and `run_jit_matrix.sh` deliberately omit `-Xint` and pass 12/12 and 14/14. Older Phase 3, package, crash, and generic Phase 4 runners still force `-Xint` for deterministic or interpreter-specific coverage. Product CLI (`run/dalvikvm.exe` directly) does not need `-Xint`. Stage D removed `-Xno-sig-chain` from active product, Wine, package, and native-host runners; the focused W-010 gate retains one intentional negative invocation that proves a started runtime rejects it.
+- **Current behavior:** Product default runs with managed JIT ON through the corrected dual view. Unified `art.w025.windows_w025_jit_runtime_controls` omits `-Xint` and owns seven control cases plus canonical Math/IO/Net/GC/throw workloads; native Windows passes the expanded stage 9/9 twice. Older Phase 3, package, crash, and interpreter-specific gates may still force `-Xint` for deterministic coverage. Product CLI does not need `-Xint`. Stage D removed `-Xno-sig-chain` from active product and native-host runners; the focused W-010 gate retains one intentional negative invocation that proves a started runtime rejects it.
 - **Proper fix:** Classify each remaining `-Xint` use as intentional interpreter coverage or migrate it to the default JIT path, with `ART_WINDOWS_X64_JIT=0`/`-Xint` retained only where the test specifically requires it. Imageless mode may remain until boot-image work (separate track).
-- **Code anchors:** `tools/windows_x64/host_package/package_windows_x64_phase3.sh`, `tools/verify/windows_x64_phase*/run_*.sh`
+- **Code anchors:** `tests/cases/jit-runtime-controls/run.py`, `tests/CMakeLists.txt`, and retained historical Phase-3 package evidence
 - **Opened:** 2026-07-16
-- **Updated:** 2026-07-27 — all active runners use the managed-fault chain; remaining review is limited to intentional `-Xint` coverage and imageless mode
+- **Updated:** 2026-08-01 — the Phase-4 smoke/matrix wrappers migrated to unified W-025; remaining review is limited to intentional `-Xint` coverage and imageless mode
 
 ### W-010 — Windows managed-fault adapter, fatal unwind, and CET exclusion
 - **State:** OPEN for conditional follow-ups; core E9 managed-fault/fatal matrix is native-accepted 30/30 on build 26100

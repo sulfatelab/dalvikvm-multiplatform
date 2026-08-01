@@ -203,9 +203,10 @@ The same ART build also passed:
   forced-interpreter transitions over registered and unresolved normal,
   FastNative, and CriticalNative calls; current reproduction uses the unified
   `../jvmti-force/run.py` gate and only the supported fail-closed J-2 path;
-- `../../../tools/verify/windows_x64_phase4/run_jit_smoke.sh`: 12/12,
-  including default-silent compile diagnostics;
-- `../../../tools/verify/windows_x64_phase4/run_jit_matrix.sh`: 14/14;
+- the historical Phase-4 JIT smoke: 12/12, including default-silent compile
+  diagnostics; its supported controls now run in unified W-025;
+- the historical Phase-4 JIT workload matrix: 14/14; canonical Math/IO/Net/
+  GC/throw workloads now run in unified W-025;
 - native Linux `nativeloader`, `art`, `openjdkjvm`, and `dalvikvm` build;
 - Linux L-005 imageless Hello on the same shared multipath `boot.jar` bytes
   staged for Windows x64.

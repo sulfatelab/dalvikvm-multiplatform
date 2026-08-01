@@ -4,6 +4,10 @@ Date: 2026-07-24. VM: agent01, Wine. Build: windows_x64_phase1 RelWithDebInfo.
 
 ## Test: `run_jit_smoke.sh`
 
+This script was retired after its maintained runtime-control semantics moved
+to `art.w025.windows_w025_jit_runtime_controls`. The results below are retained
+as historical Wine evidence.
+
 The automated script runs `dalvikvm.exe` under Wine with Hello.jar through the
 default pagefile-backed contiguous dual-view code cache. It also verifies the
 default native-JIT policy and the managed-JIT control environment variables.

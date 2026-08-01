@@ -123,9 +123,9 @@ managed JARs, passed the reviewer, and also repeated as a no-op.
 
 The standalone W-010/W-014 package producer, its package-only PowerShell
 runners, and the redundant fault/managed-fault Bash runners were retired.
-Accepted E9/FS evidence and package checkers remain historical records. Fatal
-JIT/OSR compatibility runners remain temporarily because W-025 package flows
-still consume them; they are not the current W-010 reproduction path.
+Accepted E9/FS evidence and package checkers remain historical records. The
+fatal JIT/OSR and general JIT smoke/matrix compatibility runners were retired
+after their maintained semantics moved to unified W-010/W-025 declarations.
 
 ## Scope (from win32_art_port §Phase 4)
 

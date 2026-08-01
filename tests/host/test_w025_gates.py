@@ -186,6 +186,7 @@ def test_w025_reviewer_matches_current_source_and_writes_portable_json(
         "nterp_xmm0_return_forms": 2,
         "windows_jit_memory_paths": 1,
         "pe_jit_inspection_exports": 2,
+        "jit_control_cases": 7,
     }
     artifacts = {}
     for name in ("art.dll", "section.exe", "stress.dll"):

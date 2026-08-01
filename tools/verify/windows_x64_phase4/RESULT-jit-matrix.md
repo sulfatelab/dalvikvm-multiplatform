@@ -4,6 +4,10 @@ Date: 2026-07-23. VM: agent01, Wine. Build: windows_x64_phase1 RelWithDebInfo.
 
 ## Test: `run_jit_matrix.sh`
 
+This script was retired after the canonical Math/IO/Net/GC/throw workloads
+moved to `art.w025.windows_w025_jit_runtime_controls`. The results below retain
+the broader historical Wine-only jar evidence.
+
 Runs the CEnc/float/Math/Io/Net/GC/throw probe suite under the default corrected
 pagefile-backed dual-view JIT (no `-Xint`), verifying managed JIT does not
 regress any existing workload.

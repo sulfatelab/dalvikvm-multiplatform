@@ -1671,6 +1671,30 @@ art_add_target_probe(
         --icu-data "${_art_icu_data}"
         ${_art_managed_runtime_library_args})
 art_add_target_probe(
+    NAME windows_w025_jit_runtime_controls STAGE w025 TYPE GATE
+    EXECUTION target-runnable TIMEOUT 1800
+    ${_art_windows_x86_64_msvc_selector}
+    DEPENDS
+        managed_imageless_hello managed_math_critical managed_ioprobe
+        managed_netprobe managed_gcprobe managed_throwprobe
+        dalvikvm icu_jni javacore openjdk
+    CONTRACTS jit runtime-load control-policy
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_test_cases_root}/jit-runtime-controls/run.py"
+        --target-id "${ART_TARGET_ID}"
+        --dalvikvm "$<TARGET_FILE:dalvikvm>"
+        --boot-jar "${_art_boot_jar}"
+        --hello-jar "${_art_managed_root}/hello.jar"
+        --math-jar "${_art_managed_root}/mathcriticalprobe.jar"
+        --io-jar "${_art_managed_root}/ioprobe.jar"
+        --net-jar "${_art_managed_root}/netprobe.jar"
+        --gc-jar "${_art_managed_root}/gcprobe.jar"
+        --throw-jar "${_art_managed_root}/throwprobe.jar"
+        --work-root "${CMAKE_CURRENT_BINARY_DIR}/results/w025-jit-controls"
+        --icu-data "${_art_icu_data}"
+        ${_art_managed_runtime_library_args})
+art_add_target_probe(
     NAME windows_x64_w025_jit_structure STAGE w025 TYPE GATE
     EXECUTION host-review ${_art_windows_current_selector}
     DEPENDS

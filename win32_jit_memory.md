@@ -814,8 +814,8 @@ No primary mapping may be RWX.
 - JIT code cache creation through the contained Windows section helper.
 - Hello under default managed JIT.
 - FloatProbe under the normal product threshold.
-- Full `run_jit_smoke.sh`.
-- Full `run_jit_matrix.sh`.
+- Unified `art.w025.windows_w025_jit_runtime_controls` control matrix.
+- Unified threshold-zero Math/IO/Net/GC/throw workload matrix.
 - ThrowProbe to exercise CodeInfo decoding.
 - GcProbe to exercise JIT root updates.
 - Small-cache collection and code-reuse stress.
