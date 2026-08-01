@@ -25,3 +25,45 @@ The authoritative Windows Server 2025 source projection and both variant
 output trees contained zero reparse points. Aggregate JSON stores target IDs,
 artifact names and hashes, exits, marker outcomes, mode counts, and validator
 identity without absolute host paths.
+
+## Historical FS-1 native acceptance
+
+The original 2026-07-29 Server 2025 build-26100 package had SHA-256
+`22195128d460eef6fe260b79f25e792a2af5303546fadacc7ad188038c09bfbe`.
+The hash matched before and after transfer, and the package runner verified its
+complete internal checksum manifest before starting Release and Debug switch,
+nterp, and threshold-zero JIT processes.
+
+The instrumented overflow path used fixed-size thread-owned records and direct
+RSP stores at the failing explicit check, quick throw entry/completed frame,
+common throw entry, expanded/restored stack boundary, exception construction,
+delivery, and long jump. Formatting, arithmetic, and completeness checks ran
+only after Java caught `StackOverflowError`; the structural gate proved that
+product `art.dll` contained neither the probe export nor its asm offsets.
+
+All six historical native processes emitted four complete main/child records,
+passed boundary/reserve/margin arithmetic, and left no dump or ART fatal
+VEH/UEF marker:
+
+```text
+Release switch=6784 nterp=7536 jit=7616
+Debug   switch=69744 nterp=37168 jit=37232
+```
+
+Final-source Wine controls passed at Release margins 7536/7520/7616 and Debug
+margins 69728/37216/37232 for switch/nterp/JIT respectively.
+
+The first native Debug run instead raised `STATUS_STACK_OVERFLOW` while
+constructing `StackOverflowError` in
+`art::gc::Heap::CheckPreconditionsForAllocObject`. That proved the normal
+8192-byte recovery reserve was consumed by Clang-O0 Microsoft-ABI frames, not
+that the generated explicit check was wrong. A controlled 20,480-byte reserve
+made switch pass but left nterp/JIT about 8 KiB short. The accepted fix uses
+40 KiB only for non-`NDEBUG` Windows x86-64, leaves Release and non-Windows at
+8192 bytes, and preserves more than 37 KiB on both Debug quick engines. Wine's
+Debug runner used `-XX:ThreadSuspendTimeout=30000` only to isolate slow probe
+recursion outside a safepoint; this is not a product runtime change.
+
+The duplicate aggregate, host-info, dump-scan, and checksum files were removed
+after their exact margins, `NO_DMP_FILES` outcome, host identity, and immutable
+package identity were consolidated here. The ZIP remains outside VCS.

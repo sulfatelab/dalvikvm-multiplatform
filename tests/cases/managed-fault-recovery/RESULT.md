@@ -177,8 +177,8 @@ quick paths. Release/product and non-Windows builds remain at 8192 bytes.
 The native package is 53,459,106 bytes with SHA-256
 `22195128d460eef6fe260b79f25e792a2af5303546fadacc7ad188038c09bfbe`.
 Its transferred hash and internal manifest pass, `DMP_SCAN.txt` contains
-`NO_DMP_FILES`, and `RESULT_FS1.txt` ends in `OVERALL PASS`. See
-`evidence/fs1_stack_high_water/ACCEPTANCE.md`.
+`NO_DMP_FILES`, and the historical aggregate ends in `OVERALL PASS`. See the
+adjacent [stack high-water result](../stack-high-water/RESULT.md).
 
 ## Native Stage E acceptance and remaining matrix
 

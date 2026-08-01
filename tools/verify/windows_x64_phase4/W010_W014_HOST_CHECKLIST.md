@@ -228,7 +228,7 @@ high-water records per mode, positive native margins, no fatal marker, and
 `NO_DMP_FILES`. Native minimum margins are 6784/7536/7616 bytes in Release and
 69744/37168/37232 bytes in Debug. The 40-KiB Debug-only reserve leaves more
 than 37 KiB on both quick paths; product and non-Windows remain at 8192 bytes.
-See `evidence/fs1_stack_high_water/ACCEPTANCE.md`.
+See `../../../tests/cases/stack-high-water/RESULT.md`.
 
 The following are still optional or conditional before W-010/W-014 close:
 

@@ -614,6 +614,12 @@ items are closed.
   markers, native-fatal exit, authoritative-host identity, and out-of-scope
   DNS note remain; duplicate host/result files and seven verbose process logs
   were removed after unified W-004/W-010 assumed their live contracts.
+- [x] FS-1 historical evidence now lives in the canonical
+  `tests/cases/stack-high-water/RESULT.md`. It retains the allocation-free
+  sample contract, exact old native/Wine margins, Debug failure diagnosis,
+  40 KiB reserve rationale, no-dump result, and package identity. The five
+  duplicate aggregate/host/checksum evidence files were removed after unified
+  W-014 variant acceptance and no-op repeats became authoritative.
 - [x] `art.dll` no longer uses `WINDOWS_EXPORT_ALL_SYMBOLS`. Before the change,
   a Debug scan found 80,318 candidate exports and exceeded PE's 65,535-entry
   limit, while RelWithDebInfo exposed 17,112. ART's existing `EXPORT` boundary

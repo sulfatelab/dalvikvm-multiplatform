@@ -278,6 +278,11 @@ summary. Its exact five-case markers, native-fatal exit, authoritative host,
 and out-of-scope DNS note are retained; duplicate host/result records and
 verbose process logs were removed because unified W-004/W-010 now maintain
 the same GC/thread/handle and abort/fatal contracts.
+FS-1 stack-high-water history is now adjacent to its canonical source. The
+case result retains the old native/Wine margins, allocation-free sample
+contract, Debug failure diagnosis, 40 KiB reserve rationale, and archive
+identity; duplicate aggregate, host, dump-scan, and checksum files were
+removed after current unified W-014 acceptance superseded the package.
 The unreferenced W-025 JIT-2/JIT-3 source preflights and the broken JIT-4
 preflight were removed as well. The unified W-025 reviewer owns their current
 mapping, lifecycle, nterp floating-point, JIT-control, PE-import/export, and

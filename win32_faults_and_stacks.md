@@ -2810,7 +2810,7 @@ SHA-256 is
 `22195128d460eef6fe260b79f25e792a2af5303546fadacc7ad188038c09bfbe`;
 the hash matched after transfer and its internal manifest passed before
 execution. Compact evidence is under
-`tools/verify/windows_x64_phase4/evidence/fs1_stack_high_water/`.
+`tests/cases/stack-high-water/RESULT.md`.
 
 Post-FS-1 regressions pass: the product explicit-check object gate, nterp/JIT
 W-010 managed NPE/SOE Wine gate, full Linux rebuild, Linux object's seven
