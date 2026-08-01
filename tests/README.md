@@ -221,6 +221,10 @@ Four unreferenced Wine-only package smoke scripts were also removed after their
 W-002/W-003/W-004/W-010 package producers and repository-side runners had been
 retired. Accepted Wine text remains evidence; new behavioral acceptance uses
 the unified native stages.
+The unreferenced W-025 JIT-2/JIT-3 source preflights and the broken JIT-4
+preflight were removed as well. The unified W-025 reviewer owns their current
+mapping, lifecycle, nterp floating-point, JIT-control, PE-import/export, and
+fail-closed binary contracts.
 The W-014 FS-1 stack-high-water case now uses the exact test-only build variant
 `win32-stack-high-water`. That variant has its own fingerprinted output
 directory, cannot be staged as a product, and changes the managed case from

@@ -18,3 +18,8 @@ python tools/build_art.py test --target-id windows-x86_64-msvc --build-type RelW
 
 Use `--parallel 32` on the 32 GiB Linux host and `--parallel 16` on the 16 GiB
 Windows VM. No archived executable, DLL, JAR, ZIP, or dump belongs in VCS.
+
+The unreferenced JIT-2/JIT-3 source preflights and the already-broken JIT-4
+preflight were removed. Their maintained source/PE contracts are enforced by
+the live unified W-025 reviewer; historical source reports remain with the
+accepted evidence.

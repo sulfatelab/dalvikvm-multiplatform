@@ -218,6 +218,11 @@ items are closed.
   W-003, W-004, and W-010/W-014 bundles were removed after their producers and
   repository-side runners were retired. Their accepted text evidence remains;
   current behavioral acceptance is owned by unified native stages.
+- [x] The unreferenced W-025 JIT-2/JIT-3 source preflights and already-broken
+  JIT-4 preflight were removed. Their mapping/CFG, lifecycle/unwind, nterp
+  floating-point, supported-control, PE, and fail-closed contracts are all
+  enforced by the live unified W-025 reviewer. Accepted historical source
+  reports remain beside the native evidence.
 - [x] The shared shell-free runtime gate now owns native executable repetition,
   marker, timeout, DSO-path, log, and sanitized-result orchestration. W-014
   pthread-once passed 10/10, thread-stack preserved all five reservation sizes
@@ -564,7 +569,7 @@ source cases and all 48 Java sources have adjacent results, and shared stage
 analysis remains under `tests/stages/`. The old verification tree now contains
 zero Java sources and one uncatalogued native source retained by an unfinished
 legacy libcore/ICU graph. It contains zero shell scripts, zero PowerShell
-scripts, and 20 Python scripts. Python checkers
+scripts, and 17 Python scripts. Python checkers
 and reviewers may remain, but the unified frontend must invoke them through a
 declared stage instead of a phase-local product build.
 
