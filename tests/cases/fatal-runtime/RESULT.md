@@ -23,7 +23,8 @@ were forbidden.
 All runner state and dumps remain below the ignored target output. Aggregate
 JSON records hashes and sizes but no absolute paths. The final native stage
 build and the second Linux-hosted Windows cross stage build were Ninja no-ops.
-Other targets remain non-applicable. The superseded Phase-4 managed-abort Wine
-wrapper was retired after this native acceptance. The separate historical
-native-crash wrapper is retained temporarily because it also invokes a PE
-boundary-unwind audit that is not yet a unified catalog declaration.
+Other targets remain non-applicable. The superseded Phase-4 managed-abort and
+native-crash Wine wrappers were retired after native acceptance. The latter's
+additional PE boundary-unwind audit is now the W-010 host-review declaration;
+it resolves private stubs from the adjacent PDB without expanding `art.dll`'s
+export surface.

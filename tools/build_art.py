@@ -279,6 +279,7 @@ def _configure(
     tools["javac"] = jdk / "bin" / ("javac.exe" if os.name == "nt" else "javac")
     if target.target_platform == "windows":
         tools["llvm-rc"] = _resolve_llvm_resource_compiler(local)
+        tools["llvm-pdbutil"] = _resolve_llvm_pdbutil(local)
     bindings = _target_bindings(target, local)
     fingerprint = _build_fingerprint(target, build_type, variant, tools)
     manifest_path = binary_dir / "build_manifest.json"
@@ -319,6 +320,7 @@ def _configure(
             )
         command.extend((
             f"-DART_TARGET_BUNDLE_ROOT={bundle}",
+            f"-DART_LLVM_PDBUTIL={tools['llvm-pdbutil']}",
             f"-DCMAKE_RC_COMPILER={tools['llvm-rc'].as_posix()}",
         ))
         if target.target_abi == "msvc":
@@ -745,6 +747,19 @@ def _resolve_llvm_inspection_tools(local: LocalBuildConfig) -> dict[str, Path]:
             )
         tools[name] = resolved
     return tools
+
+
+def _resolve_llvm_pdbutil(local: LocalBuildConfig) -> Path:
+    """Resolve LLVM's PDB reader for Windows private-symbol reviewers."""
+    executable = "llvm-pdbutil.exe" if os.name == "nt" else "llvm-pdbutil"
+    llvm_root = local.tools.get("llvm_root")
+    path = llvm_root / "bin" / executable if llvm_root is not None else _discover(executable)
+    resolved = validate_managed_path(path)
+    if resolved.name not in ("llvm-pdbutil", "llvm-pdbutil.exe"):
+        raise BuildFrontendError(
+            f"LLVM PDB inspection tool required; got {resolved.name!r}"
+        )
+    return resolved
 
 
 def _resolve_jdk(local: LocalBuildConfig) -> Path:

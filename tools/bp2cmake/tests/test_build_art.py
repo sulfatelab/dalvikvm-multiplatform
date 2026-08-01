@@ -294,8 +294,10 @@ def test_windows_configure_uses_target_bundle_and_clang_target(tmp_path, monkeyp
     )
     llvm_readobj = tmp_path / "llvm-readobj"
     llvm_objdump = tmp_path / "llvm-objdump"
+    llvm_pdbutil = tmp_path / "llvm-pdbutil"
     llvm_readobj.write_bytes(b"")
     llvm_objdump.write_bytes(b"")
+    llvm_pdbutil.write_bytes(b"")
     monkeypatch.setattr(
         build_art,
         "_resolve_llvm_inspection_tools",
@@ -303,6 +305,11 @@ def test_windows_configure_uses_target_bundle_and_clang_target(tmp_path, monkeyp
             "llvm-readobj": llvm_readobj,
             "llvm-objdump": llvm_objdump,
         },
+    )
+    monkeypatch.setattr(
+        build_art,
+        "_resolve_llvm_pdbutil",
+        lambda _local: llvm_pdbutil,
     )
     jdk = tmp_path / "jdk-21"
     (jdk / "bin").mkdir(parents=True)
@@ -324,6 +331,7 @@ def test_windows_configure_uses_target_bundle_and_clang_target(tmp_path, monkeyp
     assert f"-DCMAKE_RC_COMPILER={llvm_rc.as_posix()}" in commands[0]
     assert f"-DART_LLVM_READOBJ={llvm_readobj}" in commands[0]
     assert f"-DART_LLVM_OBJDUMP={llvm_objdump}" in commands[0]
+    assert f"-DART_LLVM_PDBUTIL={llvm_pdbutil}" in commands[0]
     assert f"-DART_JDK_ROOT={jdk}" in commands[0]
     assert any(arg.startswith("-DART_TARGET_BUNDLE_ROOT=") for arg in commands[0])
     assert "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL" in commands[0]

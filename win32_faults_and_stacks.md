@@ -1635,15 +1635,17 @@ sequence, CFI state, and control flow. The Windows x64 entry still uses the same
 248-byte components and the same copied managed stack; only the order of the
 fixed native saves and the placement of the variable-copy body differ.
 
-`check_win32_boundary_unwind.py` verifies exact emitted records, including the
-contiguous return range and completed-frame XMM offsets. The standalone
+The unified W-010 `windows_w010_boundary_unwind_structure` reviewer resolves
+private stub RVAs from `art.pdb` and verifies exact emitted `art.dll` records,
+including the contiguous return range and completed-frame XMM offsets, without
+adding DLL exports. The standalone
 `win32_osr_unwind_probe` resolves both records with
 `RtlLookupFunctionEntry()`, places RSP 256 bytes below the fixed frame, and
 proves variable-body, R12-anchored entry unwinding with a clobbered RBP,
 managed-RBP-independent return-body, and epilogue unwinding with GPR and XMM
 restoration. Wine passes this live probe, the actual 8/8 OSR execution matrix,
-and the J-2/J-1 OSR-origin fatal matrix. Native Windows must repeat these
-lookups, normal-return sentinels, and fatal cases; the zero-prologue
+and the J-2/J-1 OSR-origin fatal matrix. Unified native W-010 passes the linked
+record audit and static/JIT/OSR fatal matrix; the zero-prologue
 inherited-frame record is a deliberate platform adapter and must not be
 generalized to ordinary called functions.
 
@@ -2542,7 +2544,7 @@ and debugger evidence.
 | `compat/src/windows_x64_posix_stubs.c` | Implemented `_beginthreadex`, handle/result lifetime, join/detach, tagged external identity, exact current-stack bounds, and stack attributes |
 | `runtime/runtime.cc` | Implemented diagnostic handler shutdown, managed null/SO capability activation, Linux-like started-runtime sigchain invariant, early nterp range registration, and Windows x64 explicit-SO selection |
 | `tests/support/windows/check_win32_cet_contract.py` and `tests/cases/cet-stack-policy/probe.cc` | Implemented link/PE audit plus deterministic and actual-policy probe |
-| `tests/support/windows/check_win32_boundary_unwind.py`, `tests/cases/osr-unwind/probe.cc`, and transitional fatal/unwind runners under `tools/verify/windows_x64_phase4/` | Implemented exact emitted boundary-record audit, live split-OSR lookup/virtual-unwind/epilogue gate, static JNI fatal gate, and J-2/J-1 JIT-origin plus OSR-origin fatal gates requiring new valid minidumps |
+| `tests/support/windows/check_win32_boundary_unwind.py`, `tests/cases/{osr-unwind,fatal-runtime}/`, and the retained OSR leaf diagnostic | Unified exact emitted boundary-record audit, live split-OSR lookup/virtual-unwind/epilogue gate, and static/JIT/OSR fatal gates requiring new valid minidumps |
 | Canonical native sources under `tests/cases/{thread-stack,stack-page-growth,unhandled-exception-filter,fault-record,sigchain-fault,jit-unwind-info,jit-unwind-registry}/` plus transitional Phase-4 runners | Implemented Stage A reservation/identity/lifetime gate, Stage B synthetic selection/restore/direct-fault gate, native recursive-growth and standalone-UEF diagnostics, Stage C deterministic record/live VEH gate, Stage D nterp/JIT managed-fault stress, and Stage E static OSR, serialization, runtime registry, collection/reuse lifecycle, and threshold-zero fatal-dispatch coverage |
 | `tests/cases/stack-pregrow/probe.c` and `implicit_fault_x86_64.S` | Diagnostic-only E9-bound pre-growth, exact Linux-shaped implicit read, attach/restore irreversibility, fatal native collision, and held-alive commit-scale evidence; not linked into ART |
 

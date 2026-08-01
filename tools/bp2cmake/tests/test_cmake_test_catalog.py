@@ -29,6 +29,7 @@ set(ART_ENABLE_TARGET_RUNTIME_TESTS OFF)
 set(ART_JDK_ROOT "{(tmp_path / 'jdk-21').as_posix()}")
 set(ART_LLVM_READOBJ "{(tmp_path / 'llvm-readobj').as_posix()}")
 set(ART_LLVM_OBJDUMP "{(tmp_path / 'llvm-objdump').as_posix()}")
+set(ART_LLVM_PDBUTIL "{(tmp_path / 'llvm-pdbutil').as_posix()}")
 set(ART_TARGET_BUNDLE_ROOT "{(tmp_path / 'bundle').as_posix()}")
 set(MDVM_COMPAT_INCLUDE_DIR "{(repo / 'compat' / 'include').as_posix()}")
 set(MDVM_GENSRC_DIR "{(tmp_path / 'gensrc').as_posix()}")
@@ -66,9 +67,9 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         (binary / "art-tests" / "art_test_catalog.json").read_text(encoding="utf-8")
     )
     assert catalog["target_id"] == "windows-x86_64-msvc"
-    assert len(catalog["probes"]) == 89
-    assert sum(probe["applicable"] for probe in catalog["probes"]) == 87
-    assert sum(bool(probe["target_ids"]) for probe in catalog["probes"]) == 25
+    assert len(catalog["probes"]) == 90
+    assert sum(probe["applicable"] for probe in catalog["probes"]) == 88
+    assert sum(bool(probe["target_ids"]) for probe in catalog["probes"]) == 26
     assert sum(not probe["target_ids"] for probe in catalog["probes"]) == 64
     w002_attach = next(
         probe for probe in catalog["probes"] if probe["name"] == "managed_w002_attach"
@@ -163,6 +164,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "windows_w002_managed_entry_structure",
         "windows_w003_quick_boundary_structure",
         "windows_w004_runtime_load_structure",
+        "windows_w010_boundary_unwind_structure",
         "windows_w013_source_policy",
         "windows_x64_w025_jit_structure",
     ]
@@ -291,7 +293,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         (binary / "art-tests" / "art_test_catalog.json").read_text(encoding="utf-8")
     )
     applicable = [probe for probe in catalog["probes"] if probe["applicable"]]
-    assert len(catalog["probes"]) == 89
+    assert len(catalog["probes"]) == 90
     assert [probe["name"] for probe in applicable] == [
         "managed_imageless_hello",
         "managed_gc_stress",

@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import pathlib
 import re
-import shutil
 import subprocess
 import sys
 
@@ -89,30 +88,70 @@ BOUNDARIES = {
 }
 
 
-def run_readobj(readobj: str, option: str, dll: pathlib.Path) -> str:
+def run_readobj(readobj: pathlib.Path, option: str, dll: pathlib.Path) -> str:
     return subprocess.check_output(
-        [readobj, option, str(dll)], text=True, errors="replace"
+        [str(readobj), option, str(dll)], text=True, errors="replace"
     )
 
 
-def exported_rvas(readobj: str, dll: pathlib.Path) -> dict[str, int]:
-    output = run_readobj(readobj, "--coff-exports", dll)
-    found: dict[str, int] = {}
-    name: str | None = None
-    for line in output.splitlines():
-        stripped = line.strip()
-        if stripped.startswith("Name: "):
-            name = stripped.removeprefix("Name: ")
-        elif stripped.startswith("RVA: ") and name in BOUNDARIES:
-            found[name] = int(stripped.removeprefix("RVA: "), 16)
-            name = None
-    missing = sorted(set(BOUNDARIES) - set(found))
-    if missing:
-        raise RuntimeError(f"missing boundary exports: {', '.join(missing)}")
+def parse_section_virtual_addresses(output: str) -> dict[int, int]:
+    found: dict[int, int] = {}
+    pattern = re.compile(
+        r"^\s*SECTION HEADER #(\d+)\s*$.*?"
+        r"^\s*([0-9A-Fa-f]+) virtual address\s*$",
+        re.MULTILINE | re.DOTALL,
+    )
+    for match in pattern.finditer(output):
+        found[int(match.group(1), 10)] = int(match.group(2), 16)
+    if not found:
+        raise RuntimeError("PDB image section headers are missing")
     return found
 
 
-def image_base(readobj: str, dll: pathlib.Path) -> int:
+def parse_public_symbol_locations(output: str) -> dict[str, tuple[int, int]]:
+    found: dict[str, tuple[int, int]] = {}
+    name: str | None = None
+    for line in output.splitlines():
+        name_match = re.search(r"`([^`]*)`\s*$", line)
+        if name_match is not None:
+            candidate = name_match.group(1)
+            name = candidate if candidate in BOUNDARIES else None
+            continue
+        address_match = re.search(r"addr = (\d+):(\d+)\s*$", line)
+        if address_match is not None and name is not None:
+            location = (
+                int(address_match.group(1), 10),
+                int(address_match.group(2), 10),
+            )
+            previous = found.setdefault(name, location)
+            if previous != location:
+                raise RuntimeError(
+                    f"PDB boundary symbol has conflicting addresses: {name}"
+                )
+            name = None
+    missing = sorted(set(BOUNDARIES) - set(found))
+    if missing:
+        raise RuntimeError(f"missing private PDB boundary symbols: {', '.join(missing)}")
+    return found
+
+
+def pdb_symbol_rvas(pdbutil: pathlib.Path, pdb: pathlib.Path) -> dict[str, int]:
+    output = subprocess.check_output(
+        [str(pdbutil), "dump", "--publics", "--section-headers", str(pdb)],
+        text=True,
+        errors="replace",
+    )
+    sections = parse_section_virtual_addresses(output)
+    locations = parse_public_symbol_locations(output)
+    found: dict[str, int] = {}
+    for name, (section, offset) in locations.items():
+        if section not in sections:
+            raise RuntimeError(f"{name}: PDB section {section} has no image header")
+        found[name] = sections[section] + offset
+    return found
+
+
+def image_base(readobj: pathlib.Path, dll: pathlib.Path) -> int:
     output = run_readobj(readobj, "--file-headers", dll)
     match = re.search(r"^\s*ImageBase:\s*(0x[0-9A-Fa-f]+)\s*$", output, re.MULTILINE)
     if match is None:
@@ -121,10 +160,10 @@ def image_base(readobj: str, dll: pathlib.Path) -> int:
 
 
 def unwind_records(
-    readobj: str, dll: pathlib.Path, addresses: set[int]
+    readobj: pathlib.Path, dll: pathlib.Path, addresses: set[int]
 ) -> dict[int, str]:
     process = subprocess.Popen(
-        [readobj, "--unwind", str(dll)],
+        [str(readobj), "--unwind", str(dll)],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
@@ -164,19 +203,28 @@ def unwind_records(
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--art-dll", type=pathlib.Path, required=True)
+    parser.add_argument("--art-pdb", type=pathlib.Path, required=True)
+    parser.add_argument("--llvm-readobj", type=pathlib.Path, required=True)
+    parser.add_argument("--llvm-pdbutil", type=pathlib.Path, required=True)
     args = parser.parse_args()
 
     dll = args.art_dll.resolve()
+    pdb = args.art_pdb.resolve()
     if not dll.is_file():
         print(f"missing art.dll: {dll}", file=sys.stderr)
         return 1
-    readobj = shutil.which("llvm-readobj")
-    if readobj is None:
-        print("llvm-readobj is required", file=sys.stderr)
+    if not pdb.is_file():
+        print(f"missing art.pdb: {pdb}", file=sys.stderr)
         return 1
+    readobj = args.llvm_readobj.resolve()
+    pdbutil = args.llvm_pdbutil.resolve()
+    for name, tool in (("llvm-readobj", readobj), ("llvm-pdbutil", pdbutil)):
+        if not tool.is_file():
+            print(f"{name} is required: {tool}", file=sys.stderr)
+            return 1
 
     try:
-        rvas = exported_rvas(readobj, dll)
+        rvas = pdb_symbol_rvas(pdbutil, pdb)
         base = image_base(readobj, dll)
         addresses = {base + rva for rva in rvas.values()}
         records = unwind_records(readobj, dll, addresses)

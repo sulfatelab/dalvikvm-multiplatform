@@ -510,6 +510,10 @@ foreach(_art_test_llvm_tool ART_LLVM_READOBJ ART_LLVM_OBJDUMP)
             "${_art_test_llvm_tool} is required for shell-free object reviewers")
     endif()
 endforeach()
+if(ART_TARGET_PLATFORM STREQUAL "windows" AND NOT ART_LLVM_PDBUTIL)
+    message(FATAL_ERROR
+        "ART_LLVM_PDBUTIL is required for shell-free Windows PDB reviewers")
+endif()
 set(_art_managed_runtime_library_args
     --library-dir "$<TARGET_FILE_DIR:dalvikvm>")
 if(ART_TARGET_PLATFORM STREQUAL "windows")
@@ -1111,6 +1115,20 @@ foreach(_art_fatal_class CrashAbortProbe CrashNativeProbe)
             --icu-data "${_art_icu_data}"
             ${_art_managed_runtime_library_args})
 endforeach()
+art_add_target_probe(
+    NAME windows_w010_boundary_unwind_structure STAGE w010 TYPE GATE
+    EXECUTION host-review
+    ${_art_windows_x86_64_msvc_selector}
+    DEPENDS art
+    CONTRACTS unwind codegen source-policy
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_test_repo_root}/tests/support/windows/check_win32_boundary_unwind.py"
+        --art-dll "$<TARGET_FILE:art>"
+        --art-pdb
+            "$<TARGET_FILE_DIR:art>/$<TARGET_FILE_BASE_NAME:art>.pdb"
+        --llvm-readobj "${ART_LLVM_READOBJ}"
+        --llvm-pdbutil "${ART_LLVM_PDBUTIL}")
 art_add_target_probe(
     NAME managed_w010_fault_recovery STAGE w010 TYPE MANAGED
     EXECUTION target-runnable TIMEOUT 1200

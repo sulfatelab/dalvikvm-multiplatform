@@ -111,13 +111,15 @@ python tools/build_art.py configure --target-id windows-x86_64-msvc --build-type
 python tools/build_art.py test --target-id windows-x86_64-msvc --build-type RelWithDebInfo --stage w010 --parallel 16
 ```
 
-Windows Server 2025 passed all seven CTest gates twice. The stage covers UEF,
+Windows Server 2025 passed all eight CTest gates twice. The stage covers UEF,
 fault-record, sigchain/frame-SEH, debugger NPE/SOE continuation, managed abort,
-static/JIT/OSR fatal dispatch, and switch/nterp/JIT managed recovery. Handled
-paths created no dump; the three fatal origins each created exactly one valid
-`MDMP`. Aggregate JSON contains no machine absolute path. The final build was
-a Ninja no-op. A Linux-hosted Windows cross stage built the same four EXEs and
-three managed JARs and also repeated as a no-op.
+static/JIT/OSR fatal dispatch, switch/nterp/JIT managed recovery, and the exact
+linked boundary-unwind records for six private stubs. The reviewer resolves
+those stubs from `art.pdb`; it does not make them DLL exports. Handled paths
+created no dump; the three fatal origins each created exactly one valid `MDMP`.
+Aggregate JSON contains no machine absolute path. The final build was a Ninja
+no-op. A Linux-hosted Windows cross stage built the same four EXEs and three
+managed JARs, passed the reviewer, and also repeated as a no-op.
 
 The standalone W-010/W-014 package producer, its package-only PowerShell
 runners, and the redundant fault/managed-fault Bash runners were retired.
@@ -141,7 +143,7 @@ still consume them; they are not the current W-010 reproduction path.
 | P4_G3 Handle leak smoke | **PASS in unified native stage; historical Wine PASS** | `art.w004.managed_handleleakprobe` |
 | P4_G4 Perf smoke | **PASS in unified native stage; historical Wine PASS** | `art.w004.managed_perfsmokeprobe` |
 | P4_G5 Java abort path | **PASS in unified native stage; historical Wine PASS** | `art.w010.managed_crashabortprobe` |
-| P4_G5b Native AV + minidump | **PASS** | `run_crashnative.sh` (VEH+UEF+`.dmp`) |
+| P4_G5b Native AV + minidump | **PASS in unified native stage; historical Wine PASS** | `art.w010.managed_crashnativeprobe`; three fatal origins, VEH+UEF, and one valid `MDMP` each |
 | P4_G6 GoldenApp regression | **PASS** | historical Phase-3 evidence; maintained as `art.w004.managed_goldenapp` |
 | W-002 structural managed entries | **PASS in unified native stage** | `windows_w002_managed_entry_structure` |
 | W-003 quick boundary/trap parity | **PASS in unified product and variant** | `windows_w003_quick_boundary_structure` |
@@ -196,7 +198,7 @@ PASS native_crash_aborts
 | W-010 Stage C adapter and probes | `tests/cases/fault-record/probe.cc`; `tests/cases/sigchain-fault/probe.cc`; `vendor/art/runtime/multiplatform/windows/sigchain_windows.cc` |
 | W-010 Stage D activation and stress | `tests/cases/managed-fault-recovery/{W010ManagedFaultProbe.java,run.py}`; common runtime null/SO flags and early nterp range registration |
 | W-010 dynamic-JIT PE unwind | `runtime/multiplatform/windows/jit_unwind_windows.*`; `runtime/jit/{jit_code_cache,jit_memory_region}.*`; `run_jit_unwind_{info,registry,lifecycle}.sh`; `run_jit_fatal_unwind.sh` |
-| W-010 static OSR PE unwind | `quick_entrypoints_x86_64.S`; `tests/cases/osr-unwind/probe.cc`; `run_osr_unwind_probe.sh`; `check_win32_boundary_unwind.py` |
+| W-010 static OSR PE unwind | `quick_entrypoints_x86_64.S`; `tests/cases/osr-unwind/probe.cc`; `run_osr_unwind_probe.sh`; unified `windows_w010_boundary_unwind_structure` reviewer |
 | Historical W-010/W-014 Stage E package evidence | `check_w010_w014_host_package.py`; `review_w010_w014_host_result.py`; `W010_W014_HOST_CHECKLIST.md`; `W010_W014_DIAGNOSTICS.md`; accepted `evidence/` records |
 | FS-1 stack high-water probe/evidence | unified sources under `tests/cases/stack-high-water`; shell-free gates and structural reviewer under `tests/support/windows`; historical package identity under `evidence/fs1_stack_high_water/ACCEPTANCE.md` |
 | FS-2 debugger/CET/embedding/exception-XMM probes and evidence | `tests/cases/debugger-fault/probe.cc`; `tests/cases/cet-stack-policy/probe.cc`; `tests/cases/art-embedding/probe.cc`; `evidence/fs2_w010_w014_native/ACCEPTANCE.md` |

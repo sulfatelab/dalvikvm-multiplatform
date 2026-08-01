@@ -17,6 +17,37 @@ def test_windows_reviewers_are_python_owned_and_syntax_valid():
         compile(reviewer.read_text(encoding="utf-8"), reviewer.as_posix(), "exec")
 
 
+def test_boundary_reviewer_resolves_private_pdb_publics():
+    namespace = runpy.run_path(
+        str(REVIEWER_ROOT / "check_win32_boundary_unwind.py"),
+        run_name="windows_boundary_unwind_reviewer",
+    )
+    section_output = """
+  SECTION HEADER #1
+     .text name
+      2000 virtual size
+      1000 virtual address
+  SECTION HEADER #2
+    .rdata name
+      3000 virtual address
+"""
+    public_output = "\n".join(
+        f"  1 | S_PUB32 [size = 1] `{name}`\n"
+        f"      flags = none, addr = 0001:{offset}"
+        for offset, name in enumerate(namespace["BOUNDARIES"], start=16)
+    )
+    sections = namespace["parse_section_virtual_addresses"](section_output)
+    locations = namespace["parse_public_symbol_locations"](public_output)
+    assert sections == {1: 0x1000, 2: 0x3000}
+    assert {
+        name: sections[section] + offset
+        for name, (section, offset) in locations.items()
+    } == {
+        name: 0x1000 + offset
+        for offset, name in enumerate(namespace["BOUNDARIES"], start=16)
+    }
+
+
 def test_cet_source_policy_uses_generated_graph_and_updated_packagers():
     namespace = runpy.run_path(
         str(REVIEWER_ROOT / "check_win32_cet_contract.py"),

@@ -153,11 +153,14 @@ W-010's four native EXEs and three managed declarations are now all
 four-mode UEF contract, two debugger modes, managed abort, three fatal
 static/JIT/OSR origins with exact minidump validation, and six managed-fault
 recovery modes. Direct native fault-record and sigchain probes remain separate
-CTest processes. Windows Server 2025 passed the seven-gate stage twice with a
-Ninja no-op repeat; the Linux-hosted cross stage built the same artifacts and
-also repeated as a no-op. The debugger launches the frontend-resolved product
-EXE rather than copying it away from its matching DLL directory, while all
-writable runtime state remains isolated below the output tree.
+CTest processes. A host reviewer resolves six private transition stubs from
+`art.pdb` and audits their linked unwind records without exporting them.
+Windows Server 2025 passed the eight-gate stage twice with a Ninja no-op
+repeat; the Linux-hosted cross stage built the same artifacts, passed the
+reviewer, and also repeated as a no-op. The debugger launches the
+frontend-resolved product EXE rather than copying it away from its matching DLL
+directory, while all writable runtime state remains isolated below the output
+tree.
 W-025 keeps its three JNI DSOs as compile-only dependencies and makes seven
 behavioral declarations target-runnable. The managed runners cover unwind
 lifecycle, stress, and 64 MiB/1 GiB mapping audits; the native runners cover
@@ -180,8 +183,8 @@ the same catalog instead of retaining an alternative product or runtime graph.
 The accepted Phase-4 managed stress slice also removed its generic builder,
 generic Wine runner, aggregate Wine runner, and four per-case wrappers. W-010's
 redundant Phase-4 managed-abort Wine wrapper is also retired; the native-crash
-wrapper remains until its additional PE unwind audit migrates. W-025 has removed
-its four package producers,
+wrapper followed after its additional PE unwind audit migrated into W-010.
+W-025 has removed its four package producers,
 package-only PowerShell/Bash/Wine orchestration, and superseded Phase-4 JIT
 wrappers after unified native acceptance. Retained aggregate package flows
 acquire required DLL/JAR inputs from an explicitly configured unified build.
