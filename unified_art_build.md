@@ -361,6 +361,17 @@ items are closed.
   `artbase` commands prelude-free, all 821 pointer-width definitions remain in
   place, both CET contracts pass 58/58, both generated graphs pass their
   freshness checks, and all 188 host tests pass.
+- [x] The 51-command Windows `openjdk` DSO now compiles without the temporary
+  ART prelude on both build hosts. Its C and C++ sources already own the
+  required Windows, C runtime, JNI, socket, and POSIX-compatibility headers, so
+  no source or shim change was needed. Forced-prelude compile commands fell
+  from 546 to 495. Windows-cross completed a 1,434-action clean-equivalent
+  dependency-closure rebuild at 32 jobs, native Windows rebuilt the 55-action
+  target closure at 16 jobs, Linux remained a no-op at 32 jobs, and all three
+  full products repeated as Ninja no-ops. Cross and native compile databases
+  agree at 1,816 commands with all 51 `openjdk` commands prelude-free and all
+  821 pointer-width definitions intact. Both CET contracts pass 58/58, both
+  generated graphs pass their freshness checks, and all 188 host tests pass.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to

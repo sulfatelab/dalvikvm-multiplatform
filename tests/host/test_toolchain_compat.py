@@ -59,6 +59,7 @@ def test_windows_platform_prelude_has_reviewed_target_scope():
         "nativehelper",
         "nativeloader",
         "odrstatslog",
+        "openjdk",
         "openjdkjvm",
         "openjdkjvmti",
         "profile",

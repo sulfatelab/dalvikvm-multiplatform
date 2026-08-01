@@ -37,6 +37,7 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
         nativehelper
         nativeloader
         odrstatslog
+        openjdk
         openjdkjvm
         openjdkjvmti
         profile
