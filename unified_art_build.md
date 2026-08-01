@@ -224,6 +224,14 @@ items are closed.
   affected actions at 32 and 16 jobs, then repeated as Ninja no-ops; Linux
   remained a no-op at 32 jobs. Cross and native compile databases agree, both
   CET contracts pass 58/58, and all 183 host tests pass.
+- [x] Five small leaf targets now use only their owned Windows contracts:
+  one-source `androidio`, two-source `art-disassembler`, one-source `icu`,
+  one-source `nativeloader`, and one-source `odrstatslog`. All six compile
+  commands are prelude-free on both Windows build hosts without adding a shim
+  or target definition, reducing the forced-prelude total from 716 to 710.
+  Linux and both Windows products passed at the required 32/32/16 job limits
+  and repeated as Ninja no-ops. Cross and native compile databases agree, both
+  CET contracts pass 58/58, and all 183 host tests pass.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to

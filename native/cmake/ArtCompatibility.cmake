@@ -12,19 +12,24 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
     # explicit source split below. Keep the list explicit so a newly generated
     # target cannot silently become prelude-free.
     set(_art_windows_prelude_free_targets
+        androidio
         art-dex2oat
+        art-disassembler
         artpalette
         crypto_static
         elffile
         expat
         fdlibm
         icui18n
+        icu
         icuuc
         icuuc_stubdata
         log
         lzma
         nativebridge
         nativehelper
+        nativeloader
+        odrstatslog
         profile
         procinfo
         unwindstack
