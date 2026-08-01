@@ -95,7 +95,7 @@ PASS native_crash_aborts
 | W-010 dynamic-JIT PE unwind | `runtime/multiplatform/windows/jit_unwind_windows.*`; `runtime/jit/{jit_code_cache,jit_memory_region}.*`; `run_jit_unwind_{info,registry,lifecycle}.sh`; `run_jit_fatal_unwind.sh` |
 | W-010 static OSR PE unwind | `quick_entrypoints_x86_64.S`; `tests/cases/osr-unwind/probe.cc`; `run_osr_unwind_probe.sh`; `check_win32_boundary_unwind.py` |
 | W-010/W-014 native Stage E package and diagnostics | `package_windows_x64_w010_w014.sh`; `host/RUN_W010_W014_HOST.ps1`; `host/RUN_W010_W014_DIAGNOSTICS.ps1`; `check_w010_w014_host_package.py`; `review_w010_w014_host_result.py`; `W010_W014_HOST_CHECKLIST.md`; `W010_W014_DIAGNOSTICS.md` |
-| FS-1 stack high-water probe/package/evidence | unified sources under `tests/cases/stack-high-water`; shell-free gates and structural reviewer under `tests/support/windows`; retained `run_fs1_stack_high_water.sh`; `host/RUN_FS1_STACK_HIGH_WATER_HOST.ps1`; `package_windows_x64_fs1.sh`; `evidence/fs1_stack_high_water/ACCEPTANCE.md` |
+| FS-1 stack high-water probe/evidence | unified sources under `tests/cases/stack-high-water`; shell-free gates and structural reviewer under `tests/support/windows`; historical package identity under `evidence/fs1_stack_high_water/ACCEPTANCE.md` |
 | FS-2 debugger/CET/embedding/exception-XMM probes and evidence | `tests/cases/debugger-fault/probe.cc`; `tests/cases/cet-stack-policy/probe.cc`; `tests/cases/art-embedding/probe.cc`; `host/RUN_W010_W014_HOST.ps1`; `evidence/fs2_w010_w014_native/ACCEPTANCE.md` |
 
 ## Host
@@ -137,12 +137,19 @@ JOBS=32 WINEDEBUG=-all \
 # Failure diagnosis: .\scripts\RUN_W010_W014_DIAGNOSTICS.ps1
 ```
 
-Focused FS-1 Release/Debug stack high-water gate:
+Focused FS-1 RelWithDebInfo/Debug stack high-water gate:
 
-```bash
-bash tools/windows_x64/host_package/package_windows_x64_fs1.sh
-# Native PowerShell: .\scripts\RUN_FS1_STACK_HIGH_WATER_HOST.ps1
+```text
+python tools/build_art.py configure --target-id windows-x86_64-msvc --variant win32-stack-high-water --build-type RelWithDebInfo
+python tools/build_art.py test --target-id windows-x86_64-msvc --variant win32-stack-high-water --build-type RelWithDebInfo --stage w014 --parallel 32
+python tools/build_art.py configure --target-id windows-x86_64-msvc --variant win32-stack-high-water --build-type Debug
+python tools/build_art.py test --target-id windows-x86_64-msvc --variant win32-stack-high-water --build-type Debug --stage w014 --parallel 32
 ```
+
+The former phase-local CMake graph, Bash runner/package, and PowerShell package
+runner were retired after this unified path passed both build types and their
+Ninja no-op repeats. The immutable returned-package hashes remain historical
+evidence, not a supported alternative reproduction path.
 
 The Linux-side preflight passes package integrity, the complete Wine matrix,
 all fatal origins, the safe isolated diagnostics, per-case preservation of

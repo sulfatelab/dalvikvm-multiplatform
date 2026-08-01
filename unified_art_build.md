@@ -87,6 +87,11 @@ items are closed.
   Each mode produced four complete records, zero exit, positive native margin,
   sanitized aggregate JSON, and no dump. The source and both output trees had
   zero reparse points.
+- [x] After that native acceptance, the redundant FS-1 standalone CMake graph,
+  Bash build/runtime runner, Bash host packager, and package-only PowerShell
+  runner were removed. Maintained reproduction is the unified frontend plus
+  the W-014 virtual stage; immutable archive hashes and returned text remain as
+  historical evidence only.
 - [x] `art.dll` no longer uses `WINDOWS_EXPORT_ALL_SYMBOLS`. Before the change,
   a Debug scan found 80,318 candidate exports and exceeded PE's 65,535-entry
   limit, while RelWithDebInfo exposed 17,112. ART's existing `EXPORT` boundary
@@ -323,8 +328,8 @@ verification directories. All 85 declarations own canonical source under
 source cases and all 48 Java sources have adjacent results, and shared stage
 analysis remains under `tests/stages/`. The old verification tree now contains
 zero Java sources and two uncatalogued native sources retained by unfinished
-legacy evidence paths. It still contains 61 shell scripts, 11 PowerShell
-scripts, and 29 Python scripts. Python checkers
+legacy evidence paths. It still contains 60 shell scripts, 10 PowerShell
+scripts, and 27 Python scripts. Python checkers
 and reviewers may remain, but the unified frontend must invoke them through a
 declared stage instead of a phase-local product build.
 
