@@ -39,11 +39,6 @@ typedef intptr_t ssize_t;
 typedef int pid_t;
 #define _PID_T_DEFINED
 #endif
-#ifndef _ID_T_DEFINED
-typedef int id_t;
-#define _ID_T_DEFINED
-#endif
-
 /* Large-file types used by libziparchive / Android. */
 #ifndef off64_t
 typedef int64_t off64_t;

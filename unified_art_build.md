@@ -384,6 +384,20 @@ items are closed.
   commands prelude-free and all 821 pointer-width definitions intact. Both CET
   contracts pass 58/58, both generated graphs pass their freshness checks, and
   all 189 host tests pass.
+- [x] The Windows `art` DSO now compiles without the temporary ART prelude on
+  both build hosts. Runtime sources explicitly own their scheduler and signal
+  headers, Android-only `uint` spellings were replaced with `uint32_t`, and the
+  project `sys/types.h` wrapper owns the Windows `id_t` definition. The direct
+  signal dependency also retired the Linux-only `runtime_common.cc` forced
+  include. All 378 `art` compile commands are prelude-free, including the 373
+  that previously inherited it, reducing the forced-prelude total from 399 to
+  26; the remainder belongs only to Windows test/probe targets. Linux rebuilt
+  1,453 actions and Windows-cross rebuilt 1,135 actions at 32 jobs; native
+  Windows rebuilt 1,602 actions at 16 jobs on the 16 GiB VM. All three products
+  then repeated as Ninja no-ops. Cross and native compile databases agree at
+  1,816 commands with all 821 pointer-width definitions intact, both CET
+  contracts pass 58/58, both generated graphs pass their freshness checks, and
+  all 190 host tests pass.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to

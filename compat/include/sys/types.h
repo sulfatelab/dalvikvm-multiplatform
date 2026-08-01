@@ -20,4 +20,9 @@ typedef intptr_t ssize_t;
 typedef int pid_t;
 #define _PID_T_DEFINED 1
 #endif
+
+#ifndef _ID_T_DEFINED
+typedef int id_t;
+#define _ID_T_DEFINED 1
+#endif
 #endif

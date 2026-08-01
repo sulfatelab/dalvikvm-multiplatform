@@ -13,6 +13,7 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
     # target cannot silently become prelude-free.
     set(_art_windows_prelude_free_targets
         androidio
+        art
         art-compiler
         art-dex2oat
         art-disassembler
@@ -90,9 +91,6 @@ if(ART_TARGET_PLATFORM STREQUAL "linux")
     set_property(SOURCE
         ${MDVM_NATIVE_SRC_ROOT_DIR}/art/libartbase/base/time_utils.cc
         APPEND PROPERTY COMPILE_OPTIONS "-include;limits")
-    set_property(SOURCE
-        ${MDVM_NATIVE_SRC_ROOT_DIR}/art/runtime/runtime_common.cc
-        APPEND PROPERTY COMPILE_OPTIONS "-include;signal.h")
 endif()
 if(ART_TARGET_PLATFORM STREQUAL "windows")
     # Windows headers define CALLBACK as __stdcall, but ICU's ucnvisci.cpp

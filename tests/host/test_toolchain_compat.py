@@ -35,6 +35,7 @@ def test_windows_platform_prelude_has_reviewed_target_scope():
     )
     prelude_free_targets = (
         "androidio",
+        "art",
         "art-compiler",
         "art-dex2oat",
         "art-disassembler",
@@ -203,6 +204,51 @@ def test_windows_art_compiler_owns_rand_r_contract():
     assert "static inline int rand_r(unsigned int* seed)" not in prelude
 
 
+def test_windows_art_runtime_owns_platform_contracts():
+    art = REPO_ROOT / "vendor" / "art"
+    sched_consumers = (
+        "runtime/base/locks.cc",
+        "runtime/base/mutex.cc",
+        "runtime/class_linker.cc",
+        "runtime/gc/collector/mark_compact.cc",
+        "runtime/jit/jit_memory_region_test.cc",
+        "runtime/monitor.cc",
+        "runtime/native/java_lang_Thread.cc",
+        "runtime/native_bridge_art_interface.cc",
+        "runtime/thread.cc",
+        "runtime/thread_list.cc",
+    )
+    for relative in sched_consumers:
+        source = (art / relative).read_text(encoding="utf-8")
+        assert "sched_yield" in source or "CLONE_NEWNS" in source
+        assert "#include <sched.h>" in source
+
+    mutex = (art / "runtime" / "base" / "mutex.cc").read_text(encoding="utf-8")
+    region = (art / "runtime" / "gc" / "space" / "region_space.cc").read_text(
+        encoding="utf-8"
+    )
+    mark_compact = (
+        art / "runtime" / "gc" / "collector" / "mark_compact.cc"
+    ).read_text(encoding="utf-8")
+    runtime_common = (art / "runtime" / "runtime_common.h").read_text(
+        encoding="utf-8"
+    )
+    types = (REPO_ROOT / "compat" / "include" / "sys" / "types.h").read_text(
+        encoding="utf-8"
+    )
+    prelude = (
+        REPO_ROOT / "compat" / "include" / "mdvm_windows_x64_prelude.h"
+    ).read_text(encoding="utf-8")
+
+    assert "std::atomic<uint>" not in mutex
+    assert "static constexpr uint " not in region
+    assert "static_cast<uint>(state_)" not in region
+    assert "static constexpr uint " not in mark_compact
+    assert "#include <signal.h>" in runtime_common
+    assert "typedef int id_t;" in types
+    assert "typedef int id_t;" not in prelude
+
+
 def test_windows_openjdkjvmti_owns_sched_yield_declaration():
     deopt_manager = (
         REPO_ROOT / "vendor" / "art" / "openjdkjvmti" / "deopt_manager.cc"
@@ -301,7 +347,6 @@ def test_linux_toolchain_drift_headers_are_source_scoped():
     reviewed_shims = (
         ("MDVM_NATIVE_SRC_ROOT_DIR", "art/libartbase/base/file_utils.cc", "filesystem"),
         ("MDVM_NATIVE_SRC_ROOT_DIR", "art/libartbase/base/time_utils.cc", "limits"),
-        ("MDVM_NATIVE_SRC_ROOT_DIR", "art/runtime/runtime_common.cc", "signal.h"),
         ("MDVM_GENSRC_DIR", "art/libdexfile/dex/invoke_type.h.operator_out.cc", "stdint.h"),
     )
     linux_blocks = cmake.split('if(ART_TARGET_PLATFORM STREQUAL "linux")')[1:]
