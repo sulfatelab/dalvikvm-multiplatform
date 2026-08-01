@@ -502,6 +502,15 @@ items are closed.
   then reported `raw_links=0 legacy_packagers=0 link_targets=58 pe_files=58`,
   and the final `art-tests` repeat was also a Ninja no-op. The Linux-hosted
   Windows product and test graphs retain the same no-op baseline.
+- [x] Layer-2 policy now has one target-aware
+  `overlay/art_port_policy.py`. Exact common fields are declared once and
+  whole-field Linux/Windows deltas remain explicit behind
+  `make_overlay(profile)`. Before deleting the fixed policy files, serialized
+  equality held for all 38 Linux and 31 Windows module policies plus their
+  global policy. Both 260-Blueprint generated graphs passed `check-generated`,
+  both local products remained Ninja no-ops at `--parallel 32`, and native
+  Windows repeated the 33-module graph check and product no-op at
+  `--parallel 16`; the native CET review remained 58/58.
 - [x] The final `install_into_phase1.sh` compatibility installer was removed.
   The unified graph builds ICU, libcore, OpenJDK, ART, and their managed assets
   into one target tree, so no maintained workflow copies a second product into
@@ -1005,9 +1014,11 @@ an unreviewed module-set or kind change.
 - [x] Remove the unproducible libcore/ICU `sources.cmake`, alternative CMake
   graph, duplicate runtime source, raw-link stub builder, and shell package
   flow after the unified product and W-004 gates own their behavior.
-- [ ] Consolidate `overlay/port_policy.py` and
+- [x] Consolidate `overlay/port_policy.py` and
   `overlay/port_policy_windows.py` into common policy plus explicit target
-  deltas behind `make_overlay(profile)`.
+  deltas behind `make_overlay(profile)`; both resolved policies remained
+  exactly equal to their reviewed predecessors before the fixed files were
+  deleted.
 - [ ] Move converter scan exclusions from global CLI behavior into typed
   target/product policy.
 - [ ] Split the maintained product CMake into focused codegen, platform import,
@@ -1651,18 +1662,16 @@ from such a directory is not evidence of a reproducible configuration.
 
 ### Converter and overlay split
 
-The converter already has the right three conceptual layers: parse/evaluate,
-apply port policy, then emit CMake. Its configuration supports Linux and
-Windows target selects, but the policy is currently divided between
-[`overlay/port_policy.py`](overlay/port_policy.py),
-[`overlay/port_policy_windows.py`](overlay/port_policy_windows.py), and the two
-handwritten CMake entry points.
-
-This caused equivalent decisions to drift. The active Windows overlay now
-forces `libart-compiler` to a shared library for `dex2oat`, like Linux, while
-`libart` still absorbs the compiler sources needed by the runtime. The converter
-still has legacy scan exclusions for tests, fuzzers, benchmarks, and samples;
-moving those into target/profile policy remains a follow-up cleanup.
+The converter has the intended three conceptual layers: parse/evaluate, apply
+port policy, then emit CMake. [`overlay/art_port_policy.py`](overlay/art_port_policy.py)
+is the single Layer-2 entry and composes exact common module/global policy with
+an explicit Linux or Windows target delta behind `make_overlay(profile)`.
+Linux and Windows still resolve to 38 and 31 reviewed module policies; their
+serialized policy objects remained byte-for-byte equal across this migration.
+The Windows delta keeps `libart-compiler` shared for `dex2oat`, like Linux,
+while `libart` still absorbs the compiler sources needed by the runtime. The
+converter still has legacy scan exclusions for tests, fuzzers, benchmarks, and
+samples; moving those into target/profile policy remains a follow-up cleanup.
 
 ### Current architecture assumptions
 
@@ -2745,8 +2754,8 @@ inputs:
   `native/generated/dalvikvm.cmake` compatibility path;
 - the now-retired unproducible `windows_x64_libcore_icu/sources.cmake`
   snapshot and its standalone product/package flow;
-- `overlay/port_policy.py` and `overlay/port_policy_windows.py` after their
-  policies are merged;
+- the now-merged `overlay/port_policy.py` and
+  `overlay/port_policy_windows.py` fixed-policy datasets;
 - build instructions or scripts that select Make, NMake, Visual Studio, or
   Ninja Multi-Config;
 - shell-only boot-jar staging with ignored failures and shared `/tmp` output;

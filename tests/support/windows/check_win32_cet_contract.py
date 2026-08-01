@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
 
 
 CET_MARKER = "IMAGE_DLL_CHARACTERISTICS_EX_CET_COMPAT"
@@ -37,8 +38,17 @@ def require_tool(name: str) -> str:
 
 
 def check_source_policy(repo: Path) -> dict[str, int]:
-    overlay = (repo / "overlay/port_policy_windows.py").read_text(encoding="utf-8")
-    if 'add_ldflags=["LINKER:/CETCOMPAT:NO"]' not in overlay:
+    bp2cmake_root = repo / "tools/bp2cmake"
+    if str(bp2cmake_root) not in sys.path:
+        sys.path.insert(0, str(bp2cmake_root))
+    from bp2cmake.overlay import load_overlay_factory
+    from bp2cmake.target import resolve_target
+
+    overlay = load_overlay_factory(
+        str(repo / "overlay/art_port_policy.py"),
+        resolve_target("windows-x86_64-msvc"),
+    )
+    if "LINKER:/CETCOMPAT:NO" not in overlay.global_policy.add_ldflags:
         fail("Windows x64 generator overlay does not explicitly add /CETCOMPAT:NO")
 
     runtime = (repo / "vendor/art/runtime/runtime.cc").read_text(encoding="utf-8")

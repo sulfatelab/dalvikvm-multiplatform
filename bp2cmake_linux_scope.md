@@ -23,7 +23,7 @@ and current Windows/Linux status is tracked by the root platform documents.
 ## 0b. Progress (step 2+)
 
 - **Converter built** (`tools/bp2cmake/`): Layer 1 (lexer/parser/evaluator),
-  Layer 2 (`overlay/port_policy.py`), Layer 3 (emitter). The current regression
+  Layer 2 (`overlay/art_port_policy.py`), Layer 3 (emitter). The current regression
   count and target-aware entry point are tracked in `unified_art_build.md`.
 - **Foundational layer DONE and validated**: all 8 libs the archive builds
   before `art/` — `libbase`, `liblog`, `libnativehelper`, `libprocinfo`,

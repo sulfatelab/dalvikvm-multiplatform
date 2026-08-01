@@ -20,7 +20,7 @@ Product goal (owner requirement): **full native Windows NT support** for this re
 
 This document answers: *is that feasible, what does “full” mean, and what is the actual port plan?*
 
-Grounding: current Linux port (`bp2cmake_linux_scope.md`, `overlay/port_policy.py`, `native/CMakeLists.txt`) and vendored AOSP ART/libcore (android-16 era art + libcore).
+Grounding: current Linux port (`bp2cmake_linux_scope.md`, `overlay/art_port_policy.py`, `native/CMakeLists.txt`) and vendored AOSP ART/libcore (android-16 era art + libcore).
 
 ---
 
@@ -147,9 +147,9 @@ Android.bp
 Layer 1  bp2cmake Config: os ∈ {linux, windows}, arch, libc/crt
     │
     ▼
-Layer 2  port_policy:
-           port_policy_linux.py   (existing OVERLAY)
-           port_policy_windows.py (new)
+Layer 2  art_port_policy.py:
+           common product policy
+           + explicit target delta selected by make_overlay(profile)
     │
     ▼
 Layer 3  CMake emission + native/CMakeLists.txt OS branches
@@ -635,7 +635,7 @@ Keep **CMS** (already forced on Linux to avoid userfaultfd). Do not enable CMC/u
 - Evaluate `target.windows` / `not_windows` / `windows:` bp branches (already present for many leaves).
 - For modules with `windows: { enabled: false }` in ART defaults, **overlay re-enables** runtime modules explicitly (Layer 2), rather than fighting every bp.
 
-### Layer 2 (`port_policy_windows.py`)
+### Layer 2 (`art_port_policy.py`, Windows target delta)
 
 Mirror Linux decisions where semantics match; replace OS-specific ones:
 
@@ -678,7 +678,7 @@ Each phase has a kill-or-continue gate. This is the execution roadmap when imple
 
 - Toolchain bootstrap: **LLVM clang/lld + Win SDK (xwin) + libc++ + compiler-rt** via `/home/agent/Projects/windows_x64-dev-env` (Linux cross → PE). No `cl`, no MinGW.
 - Layer 1: `Config(os="windows")` + `bp2cmake --os windows` selects `target.windows` (e.g. `errors_windows.cpp`, `mem_map_windows.cc`).
-- Layer 2: `overlay/port_policy_windows.py`.
+- Layer 2: the Windows delta in `overlay/art_port_policy.py`.
 - Built PE32+ DLLs: `log`, `base`, `nativehelper`, `ziparchive`, `artpalette`, **`artbase`**.
 - **Gate:** `libartbase` links — **PASSED** (`build/windows_x64_phase0/artbase.dll`). See `tools/verify/windows_x64_phase0/RESULT.md`.
 
@@ -942,8 +942,8 @@ broader JIT-memory hardening remains W-025 and is maintained in
 - [win32_filesystem.md](win32_filesystem.md) — Win32 path/filesystem feasibility (layers A/B/C, mixed paths)
 
 - [bp2cmake_linux_scope.md](bp2cmake_linux_scope.md) — Linux product + three-layer converter  
-- [overlay/port_policy.py](overlay/port_policy.py) and
-  [overlay/port_policy_windows.py](overlay/port_policy_windows.py) — current OS policies
+- [overlay/art_port_policy.py](overlay/art_port_policy.py) — common policy and
+  explicit target deltas selected by `make_overlay(profile)`
 - [native/CMakeLists.txt](native/CMakeLists.txt) — Unix/clang harness  
 - `vendor/art/libartbase/base/globals.h` — implemented `ART_TARGET_WINDOWS` identity
 - `vendor/art/libartbase/base/mem_map_windows.cc` — Windows mapping and constrained dual-view implementation

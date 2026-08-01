@@ -163,7 +163,7 @@ canonical policy is [HOST_GATE_POLICY.md](tools/verify/windows_x64_phase4/HOST_G
 - **Area:** openjdk / nio
 - **Current behavior:** Phase B2 builds AOSP NIO channel natives with Winsock CRT-fd shims; `epoll_*` emulated with `select`; NIO.2 UnixNativeDispatcher/WatchService/async EPollPort not registered.
 - **Proper fix:** Keep NIO.2 non-goal; deepen channel/options matrix; optional IOCP epoll later if needed.
-- **Code anchors:** `overlay/port_policy_windows.py` (`libopenjdk` source filters); `native/CMakeLists.txt`; `compat/src/windows_x64_socket_posix.c`
+- **Code anchors:** `overlay/art_port_policy.py` (`libopenjdk` Windows delta); `native/CMakeLists.txt`; `compat/src/windows_x64_socket_posix.c`
 - **Opened:** 2026-07-17
 
 ### W-026 — Windows SDM timestamp check has one-second granularity
@@ -388,7 +388,7 @@ Summary (details below; do not delete history):
 - **Symptom / why:** Full ojluni + ICU4C PE ports not built; ART `InitNativeMethods` still dlopens those sonames.
 - **Historical behavior:** `libcombined.dll` was copied to six names (`libjavacore.dll`, `libopenjdk.dll`, `libicu_jni.dll`, and short names), exposing about 160 hand-written `Java_*` stubs.
 - **Proper fix:** Real PE modules (or fewer real DLLs) from Soong/bp2cmake Windows x64 graph: javacore, openjdk, icu_jni + icuuc/i18n, etc.; stop multi-name aliasing of one stub.
-- **Code anchors:** `native/CMakeLists.txt`; `overlay/port_policy_windows.py`; historical result `docs/history/windows_x64_libcore_icu_result.md`
+- **Code anchors:** `native/CMakeLists.txt`; `overlay/art_port_policy.py`; historical result `docs/history/windows_x64_libcore_icu_result.md`
 - **Opened:** 2026-07-16 (Phase 2; expanded Phase 3)
 
 ### W-006 — Minimal NativeConverter / ICU version shims (not full ICU4C)
@@ -397,7 +397,7 @@ Summary (details below; do not delete history):
 - **Area:** icu
 - **Current behavior:** the unified graph builds real PE `icuuc.dll`, `icui18n.dll`, and `icu_jni.dll` from AOSP sources; no combined or minimal charset stub remains.
 - **Proper fix:** Default package/install to real ICU PE only; remove charset exports from `libcombined`; verify full data (`ICU_DATA` / icudt) vs stubdata; complete L-001 for javacore/openjdk.
-- **Code anchors:** `overlay/port_policy.py`; `overlay/port_policy_windows.py`; historical result `docs/history/windows_x64_libcore_icu_result.md`
+- **Code anchors:** `overlay/art_port_policy.py`; historical result `docs/history/windows_x64_libcore_icu_result.md`
 - **Opened:** 2026-07-16
 - **Progress:** 2026-07-17 — real ICU PE + CoreProbe wine OK with hybrid package
 

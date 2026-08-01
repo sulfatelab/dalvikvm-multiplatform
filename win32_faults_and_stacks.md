@@ -2520,7 +2520,7 @@ and debugger evidence.
 
 | File | Responsibility and current status |
 |------|------------------------|
-| `overlay/port_policy_windows.py`, `tools/bp2cmake`, and Windows x64 CMake/shell harnesses | Implemented explicit `/CETCOMPAT:NO` on every generated and handwritten executable/DLL target; static archives excluded |
+| `overlay/art_port_policy.py`, `tools/bp2cmake`, and Windows x64 CMake/test graphs | Implemented explicit `/CETCOMPAT:NO` on every generated and handwritten executable/DLL target; static archives excluded |
 | `runtime/multiplatform/windows/cet_compat.{h,cc}` | Implemented process-policy observation and fail-closed decision logic, independently probeable |
 | `runtime/multiplatform/windows/sigchain_windows.cc` | Implemented ART special-SIGSEGV facade, managed VEH handle, promotion/removal, immutable action publication, recursion gate, and exact exception filter |
 | `runtime/multiplatform/windows/runtime_windows.cc` | Implemented earliest CET/HSP policy rejection, separate diagnostic VEH/UEF teardown, and predecessor-preserving fatal UEF chaining |

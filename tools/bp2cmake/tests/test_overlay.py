@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from bp2cmake.config import Config
 from bp2cmake.emitter import Emitter
 from bp2cmake.evaluator import Evaluator
@@ -93,8 +95,15 @@ def test_absorbed_whole_static_includes_precede_other_link_dependencies():
 def test_unified_overlay_factory_selects_current_target_policy():
     repo = Path(__file__).resolve().parents[3]
     factory = repo / "overlay" / "art_port_policy.py"
+    assert not (repo / "overlay" / "port_policy.py").exists()
+    assert not (repo / "overlay" / "port_policy_windows.py").exists()
     linux = load_overlay_factory(str(factory), resolve_target("linux-x86_64-gnu"))
     windows = load_overlay_factory(str(factory), resolve_target("windows-x86_64-msvc"))
+    assert len(linux.modules) == 38
+    assert len(windows.modules) == 31
+    assert linux.global_policy.host_libs == windows.global_policy.host_libs
+    assert linux.global_policy.add_ldflags == []
+    assert windows.global_policy.add_ldflags == ["LINKER:/CETCOMPAT:NO"]
     assert linux.policy_for("libart-compiler").kind == "shared"
     compiler = windows.policy_for("libart-compiler")
     assert compiler.kind == "shared"
@@ -121,3 +130,5 @@ def test_unified_overlay_factory_selects_current_target_policy():
     openjdk = windows.policy_for("libopenjdk")
     assert "LinuxNativeDispatcher.c" in openjdk.remove_srcs
     assert "NativeThread.c" in openjdk.remove_srcs
+    with pytest.raises(ValueError, match="no reviewed ART overlay policy"):
+        load_overlay_factory(str(factory), resolve_target("linux-aarch64-gnu"))
