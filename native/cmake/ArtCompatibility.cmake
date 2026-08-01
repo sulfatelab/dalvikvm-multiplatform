@@ -8,6 +8,22 @@
 # bp2cmake_linux_scope.md and the toolchain-drift notes.
 if(ART_TARGET_PLATFORM STREQUAL "windows")
     set(_PRELUDE "${MDVM_COMPAT_INCLUDE_DIR}/mdvm_windows_x64_prelude.h")
+    # These dependencies either own their Windows portability or have an
+    # explicit source split below. Keep the list explicit so a newly generated
+    # target cannot silently become prelude-free.
+    set(_art_windows_prelude_free_targets
+        art-dex2oat
+        crypto_static
+        expat
+        fdlibm
+        icui18n
+        icuuc
+        icuuc_stubdata)
+    set(_art_windows_prelude_free_definitions
+        _CRT_SECURE_NO_WARNINGS
+        NOMINMAX
+        WIN32_LEAN_AND_MEAN
+        NOGDI)
     set(_art_windows_system_compile_options)
     foreach(_art_windows_system_include IN LISTS _art_windows_system_includes)
         list(APPEND _art_windows_system_compile_options
@@ -62,6 +78,26 @@ if(ART_TARGET_PLATFORM STREQUAL "linux")
         ${MDVM_GENSRC_DIR}/art/libdexfile/dex/invoke_type.h.operator_out.cc
         APPEND PROPERTY COMPILE_OPTIONS "-include;stdint.h")
 endif()
+if(ART_TARGET_PLATFORM STREQUAL "windows")
+    # art-dex2oat embeds BoringSSL's crypto sources directly. BoringSSL owns
+    # its Windows portability; only ART's 19 dex2oat sources and one generated
+    # operator-out source consume the ART compatibility prelude.
+    get_target_property(_art_dex2oat_sources art-dex2oat SOURCES)
+    set(_art_dex2oat_compat_sources)
+    foreach(_art_dex2oat_source IN LISTS _art_dex2oat_sources)
+        if(NOT _art_dex2oat_source MATCHES "/external/boringssl/")
+            list(APPEND _art_dex2oat_compat_sources "${_art_dex2oat_source}")
+        endif()
+    endforeach()
+    list(LENGTH _art_dex2oat_compat_sources _art_dex2oat_compat_source_count)
+    if(NOT _art_dex2oat_compat_source_count EQUAL 20)
+        message(FATAL_ERROR
+            "Review art-dex2oat Windows prelude scope: expected 20 ART sources, "
+            "got ${_art_dex2oat_compat_source_count}")
+    endif()
+    set_property(SOURCE ${_art_dex2oat_compat_sources}
+        APPEND PROPERTY COMPILE_OPTIONS "-include;${_PRELUDE}")
+endif()
 
 # Common generated-target policy. Windows receives its platform compatibility
 # prelude for C/CXX only, so .S assembly sources are not fed C headers via
@@ -90,11 +126,17 @@ foreach(_t IN LISTS _all_targets)
     # deliberate `#undef _GNU_SOURCE`, breaking its POSIX strerror_r selection.
     if(NOT _ttype STREQUAL "INTERFACE_LIBRARY" AND
        (NOT _t STREQUAL "base" OR ART_TARGET_PLATFORM STREQUAL "windows"))
+        if(ART_TARGET_PLATFORM STREQUAL "windows" AND
+           _t IN_LIST _art_windows_prelude_free_targets)
+            target_compile_definitions(${_t} PRIVATE
+                ${_art_windows_prelude_free_definitions})
+        endif()
         # The Windows compatibility header supplies target-platform APIs and
         # declarations to every generated PE target. Linux toolchain drift is
         # kept in the explicit source/module shims above instead of forcing a
         # standard-header prelude into the complete product graph.
-        if(ART_TARGET_PLATFORM STREQUAL "windows")
+        if(ART_TARGET_PLATFORM STREQUAL "windows" AND
+           NOT _t IN_LIST _art_windows_prelude_free_targets)
             target_compile_options(${_t} PRIVATE
                 "$<$<COMPILE_LANGUAGE:C,CXX>:SHELL:-include ${_PRELUDE}>")
         endif()

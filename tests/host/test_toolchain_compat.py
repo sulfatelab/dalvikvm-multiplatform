@@ -19,7 +19,7 @@ def test_linux_openjdkjvmti_toolchain_drift_is_module_scoped():
     assert "ART_LIBARTBASE_BASE_STRLCPY_H_" in prelude
 
 
-def test_graph_wide_compatibility_prelude_is_windows_only():
+def test_windows_platform_prelude_has_reviewed_target_scope():
     cmake = (
         REPO_ROOT / "native" / "cmake" / "ArtCompatibility.cmake"
     ).read_text(encoding="utf-8")
@@ -28,13 +28,36 @@ def test_graph_wide_compatibility_prelude_is_windows_only():
         '                "$<$<COMPILE_LANGUAGE:C,CXX>:SHELL:-include ${_PRELUDE}>")'
     )
     windows_guarded_prelude = (
-        'if(ART_TARGET_PLATFORM STREQUAL "windows")\n'
+        'if(ART_TARGET_PLATFORM STREQUAL "windows" AND\n'
+        "           NOT _t IN_LIST _art_windows_prelude_free_targets)\n"
         f"            {target_prelude}\n"
         "        endif()"
+    )
+    prelude_free_targets = (
+        "art-dex2oat",
+        "crypto_static",
+        "expat",
+        "fdlibm",
+        "icui18n",
+        "icuuc",
+        "icuuc_stubdata",
     )
 
     assert cmake.count(target_prelude) == 1
     assert windows_guarded_prelude in cmake
+    scope = cmake.split("set(_art_windows_prelude_free_targets", 1)[1].split(")", 1)[0]
+    assert set(scope.split()) == set(prelude_free_targets)
+    for definition in (
+        "_CRT_SECURE_NO_WARNINGS",
+        "NOMINMAX",
+        "WIN32_LEAN_AND_MEAN",
+        "NOGDI",
+    ):
+        assert definition in cmake
+    assert "_t IN_LIST _art_windows_prelude_free_targets" in cmake
+    assert "get_target_property(_art_dex2oat_sources art-dex2oat SOURCES)" in cmake
+    assert 'MATCHES "/external/boringssl/"' in cmake
+    assert "_art_dex2oat_compat_source_count EQUAL 20" in cmake
 
 
 def test_linux_toolchain_drift_headers_are_source_scoped():

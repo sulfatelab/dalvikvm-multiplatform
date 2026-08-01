@@ -150,6 +150,17 @@ items are closed.
   `--parallel 32`; the final Windows-cross policy passed and repeated as a
   Ninja no-op at `--parallel 32`. Host regressions prove the platform boundary
   and all 179 host tests pass.
+- [x] The Windows platform prelude was removed from seven reviewed
+  dependency-owning targets. `art-dex2oat` now applies it only to its 19 ART
+  sources and one generated ART source; its 224 embedded BoringSSL sources,
+  standalone BoringSSL, Expat, fdlibm, and ICU compile with only explicit
+  Windows SDK hygiene definitions. A configure-time count guard makes ART-side
+  dex2oat source drift fail closed. Forced-prelude compile commands fell from
+  1,795 to 821. The Windows-cross affected rebuild passed and repeated as a
+  Ninja no-op at `--parallel 32`; native Windows rebuilt 1,009 affected edges
+  and repeated as a no-op at `--parallel 16`. Native and cross compile
+  databases agree on the 224/20 dex2oat split, the native CET contract passed
+  58/58, and all 179 host tests pass.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to
