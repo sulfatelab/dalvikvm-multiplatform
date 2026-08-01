@@ -20,6 +20,7 @@ public class ExecProbe {
   public static void main(String[] args) throws Exception {
     try {
       ProcessBuilder pb = new ProcessBuilder("cmd.exe", "/c", "echo exec.probe.ok");
+      pb.environment().put("ART_PROCESS_UNICODE", "snowman-\u2603");
       pb.redirectErrorStream(true);
       Process p = pb.start();
       String out = readAll(p);

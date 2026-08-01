@@ -17,6 +17,7 @@
 #include <fcntl.h>
 #include <process.h>
 #include <windows.h>
+#include <mdvm_windows_utf8.h>
 
 static jfieldID g_exitcode_field;
 
@@ -52,23 +53,109 @@ static char* bytes_to_cstr(JNIEnv* env, jbyteArray arr) {
   return s;
 }
 
-/* Unix env block: concatenated "KEY=VAL\0" entries, envc of them.
- * Windows CreateProcessA needs "KEY=VAL\0KEY2=VAL2\0\0". */
-static char* unix_env_to_win_block(const char* block, int envc, jsize block_len) {
-  if (!block || envc <= 0 || block_len <= 0) return NULL;
-  /* block already has NULs between entries; ensure double-NUL at end */
-  size_t need = (size_t)block_len + 2;
-  char* out = (char*)malloc(need);
-  if (!out) return NULL;
-  memcpy(out, block, (size_t)block_len);
-  /* ensure trailing double null */
-  if (block_len == 0 || out[block_len - 1] != '\0') {
-    out[block_len] = '\0';
-    out[block_len + 1] = '\0';
-  } else {
-    out[block_len] = '\0';
+static int compare_environment_entries(const void* left, const void* right) {
+  const wchar_t* const* left_entry = (const wchar_t* const*)left;
+  const wchar_t* const* right_entry = (const wchar_t* const*)right;
+  int order = _wcsicmp(*left_entry, *right_entry);
+  return order != 0 ? order : wcscmp(*left_entry, *right_entry);
+}
+
+/* Convert the Unix JNI block ("KEY=VAL\0" repeated envc times) to the
+ * sorted, double-NUL-terminated UTF-16 block required by CreateProcessW. */
+static wchar_t* unix_env_to_win_block(const char* block, int envc, jsize block_len) {
+  if (envc < 0 || block_len < 0 || (envc > 0 && (block == NULL || block_len == 0))) {
+    SetLastError(ERROR_INVALID_PARAMETER);
+    return NULL;
   }
-  return out;
+  if (envc == 0) {
+    if (block_len != 0) {
+      SetLastError(ERROR_INVALID_PARAMETER);
+      return NULL;
+    }
+    return (wchar_t*)calloc(2u, sizeof(wchar_t));
+  }
+
+  wchar_t** entries = (wchar_t**)calloc((size_t)envc, sizeof(wchar_t*));
+  if (entries == NULL) {
+    SetLastError(ERROR_NOT_ENOUGH_MEMORY);
+    return NULL;
+  }
+  size_t offset = 0u;
+  size_t total = 1u;
+  int converted = 0;
+  for (; converted < envc; ++converted) {
+    if (offset >= (size_t)block_len) {
+      SetLastError(ERROR_INVALID_PARAMETER);
+      goto fail;
+    }
+    const char* entry = block + offset;
+    size_t remaining = (size_t)block_len - offset;
+    const char* end = (const char*)memchr(entry, '\0', remaining);
+    if (end == NULL) {
+      SetLastError(ERROR_INVALID_PARAMETER);
+      goto fail;
+    }
+    size_t byte_length = (size_t)(end - entry);
+    if (byte_length > INT_MAX) {
+      SetLastError(ERROR_INVALID_PARAMETER);
+      goto fail;
+    }
+    int wide_length = MultiByteToWideChar(
+        CP_UTF8, MB_ERR_INVALID_CHARS, entry, (int)byte_length, NULL, 0);
+    if (wide_length == 0 || total > SIZE_MAX - (size_t)wide_length - 1u) {
+      if (wide_length != 0) SetLastError(ERROR_NOT_ENOUGH_MEMORY);
+      goto fail;
+    }
+    entries[converted] =
+        (wchar_t*)malloc(((size_t)wide_length + 1u) * sizeof(wchar_t));
+    if (entries[converted] == NULL) {
+      SetLastError(ERROR_NOT_ENOUGH_MEMORY);
+      goto fail;
+    }
+    if (MultiByteToWideChar(CP_UTF8,
+                            MB_ERR_INVALID_CHARS,
+                            entry,
+                            (int)byte_length,
+                            entries[converted],
+                            wide_length) == 0) {
+      goto fail;
+    }
+    entries[converted][wide_length] = L'\0';
+    total += (size_t)wide_length + 1u;
+    offset += byte_length + 1u;
+  }
+  while (offset < (size_t)block_len && block[offset] == '\0') ++offset;
+  if (offset != (size_t)block_len || total > SIZE_MAX / sizeof(wchar_t)) {
+    SetLastError(ERROR_INVALID_PARAMETER);
+    goto fail;
+  }
+
+  qsort(entries, (size_t)envc, sizeof(entries[0]), compare_environment_entries);
+  wchar_t* result = (wchar_t*)calloc(total, sizeof(wchar_t));
+  if (result == NULL) {
+    SetLastError(ERROR_NOT_ENOUGH_MEMORY);
+    goto fail;
+  }
+  size_t result_offset = 0u;
+  for (int index = 0; index < envc; ++index) {
+    size_t length = wcslen(entries[index]);
+    memcpy(result + result_offset, entries[index], (length + 1u) * sizeof(wchar_t));
+    result_offset += length + 1u;
+    free(entries[index]);
+  }
+  free(entries);
+  return result;
+
+fail:
+  {
+    DWORD error = GetLastError();
+    for (int index = 0; index <= converted && index < envc; ++index) {
+      free(entries[index]);
+    }
+    free(entries);
+    SetLastError(error);
+    return NULL;
+  }
 }
 
 static int make_inheritable_pipe(HANDLE* read_h, HANDLE* write_h) {
@@ -93,56 +180,159 @@ static HANDLE crt_fd_to_handle(int fd) {
   return h;
 }
 
-/* Quote Windows command-line argument if needed (simplified). */
-static int append_quoted(char** buf, size_t* len, size_t* cap, const char* arg) {
-  int need_quote = 0;
-  for (const char* p = arg; *p; p++) {
-    if (*p == ' ' || *p == '\t' || *p == '"') { need_quote = 1; break; }
-  }
-  size_t alen = strlen(arg);
-  size_t add = alen + (need_quote ? 2 : 0) + 8;
-  if (*len + add + 1 > *cap) {
-    size_t ncap = (*cap ? *cap * 2 : 256) + add;
-    char* nb = (char*)realloc(*buf, ncap);
-    if (!nb) return -1;
-    *buf = nb;
-    *cap = ncap;
-  }
-  if (need_quote) (*buf)[(*len)++] = '"';
-  for (const char* p = arg; *p; p++) {
-    if (*p == '"') {
-      (*buf)[(*len)++] = '\\';
+static int reserve_cmdline(wchar_t** buf, size_t len, size_t* cap, size_t add) {
+  if (add > SIZE_MAX - len - 1u) return -1;
+  size_t required = len + add + 1u;
+  if (required <= *cap) return 0;
+  size_t next = *cap != 0u ? *cap : 256u;
+  while (next < required) {
+    if (next > SIZE_MAX / 2u) {
+      next = required;
+      break;
     }
-    (*buf)[(*len)++] = *p;
+    next *= 2u;
   }
-  if (need_quote) (*buf)[(*len)++] = '"';
-  (*buf)[*len] = '\0';
+  if (next > SIZE_MAX / sizeof(wchar_t)) return -1;
+  wchar_t* replacement = (wchar_t*)realloc(*buf, next * sizeof(wchar_t));
+  if (replacement == NULL) return -1;
+  *buf = replacement;
+  *cap = next;
   return 0;
 }
 
-static char* build_cmdline(const char* prog, const char* argBlock, int argc) {
-  char* buf = NULL;
-  size_t len = 0, cap = 0;
-  if (append_quoted(&buf, &len, &cap, prog ? prog : "") != 0) goto fail;
-  const char* p = argBlock;
-  for (int i = 0; i < argc; i++) {
-    if (!p) break;
-    if (len + 2 > cap) {
-      size_t ncap = (cap ? cap * 2 : 256) + 16;
-      char* nb = (char*)realloc(buf, ncap);
-      if (!nb) goto fail;
-      buf = nb;
-      cap = ncap;
+/* Apply the quoting and backslash rules consumed by CommandLineToArgvW. */
+static int append_quoted(wchar_t** buf, size_t* len, size_t* cap, const wchar_t* arg) {
+  size_t argument_length = wcslen(arg);
+  int needs_quotes = argument_length == 0u;
+  for (const wchar_t* cursor = arg; *cursor != L'\0' && !needs_quotes; ++cursor) {
+    needs_quotes = *cursor == L' ' || *cursor == L'\t' || *cursor == L'"';
+  }
+  if (reserve_cmdline(buf, *len, cap, 2u * argument_length + 2u) != 0) return -1;
+  if (!needs_quotes) {
+    memcpy(*buf + *len, arg, argument_length * sizeof(wchar_t));
+    *len += argument_length;
+    (*buf)[*len] = L'\0';
+    return 0;
+  }
+
+  (*buf)[(*len)++] = L'"';
+  size_t backslashes = 0u;
+  for (const wchar_t* cursor = arg;; ++cursor) {
+    if (*cursor == L'\\') {
+      ++backslashes;
+      continue;
     }
-    buf[len++] = ' ';
-    buf[len] = '\0';
-    if (append_quoted(&buf, &len, &cap, p) != 0) goto fail;
-    p += strlen(p) + 1;
+    if (*cursor == L'"') {
+      for (size_t index = 0u; index < 2u * backslashes + 1u; ++index) {
+        (*buf)[(*len)++] = L'\\';
+      }
+      (*buf)[(*len)++] = L'"';
+      backslashes = 0u;
+      continue;
+    }
+    if (*cursor == L'\0') {
+      for (size_t index = 0u; index < 2u * backslashes; ++index) {
+        (*buf)[(*len)++] = L'\\';
+      }
+      break;
+    }
+    for (size_t index = 0u; index < backslashes; ++index) {
+      (*buf)[(*len)++] = L'\\';
+    }
+    backslashes = 0u;
+    (*buf)[(*len)++] = *cursor;
+  }
+  (*buf)[(*len)++] = L'"';
+  (*buf)[*len] = L'\0';
+  return 0;
+}
+
+static wchar_t* build_cmdline(const wchar_t* prog,
+                              const char* arg_block,
+                              size_t arg_block_len,
+                              int argc) {
+  wchar_t* buf = NULL;
+  size_t len = 0, cap = 0;
+  if (argc < 0 || append_quoted(&buf, &len, &cap, prog ? prog : L"") != 0) goto fail;
+  size_t offset = 0u;
+  for (int i = 0; i < argc; i++) {
+    if (offset >= arg_block_len) goto fail;
+    const char* argument = arg_block + offset;
+    const char* end = (const char*)memchr(argument, '\0', arg_block_len - offset);
+    if (end == NULL) goto fail;
+    wchar_t* wide_argument = mdvm_utf8_to_utf16_alloc(argument);
+    if (wide_argument == NULL) goto fail;
+    if (reserve_cmdline(&buf, len, &cap, 1u) != 0) {
+      free(wide_argument);
+      goto fail;
+    }
+    buf[len++] = L' ';
+    buf[len] = L'\0';
+    if (append_quoted(&buf, &len, &cap, wide_argument) != 0) {
+      free(wide_argument);
+      goto fail;
+    }
+    free(wide_argument);
+    offset = (size_t)(end - arg_block) + 1u;
   }
   return buf;
 fail:
+  SetLastError(ERROR_INVALID_PARAMETER);
   free(buf);
   return NULL;
+}
+
+static wchar_t* get_environment_variable(const wchar_t* name) {
+  DWORD required = GetEnvironmentVariableW(name, NULL, 0u);
+  if (required == 0u) return NULL;
+  size_t required_chars = (size_t)required;
+  if (required_chars > SIZE_MAX / sizeof(wchar_t)) return NULL;
+  wchar_t* value = (wchar_t*)malloc(required_chars * sizeof(wchar_t));
+  if (value == NULL) {
+    SetLastError(ERROR_NOT_ENOUGH_MEMORY);
+    return NULL;
+  }
+  DWORD length = GetEnvironmentVariableW(name, value, required);
+  if (length == 0u || length >= required) {
+    DWORD error = GetLastError();
+    free(value);
+    SetLastError(error);
+    return NULL;
+  }
+  return value;
+}
+
+static wchar_t* get_command_interpreter(void) {
+  wchar_t* comspec = get_environment_variable(L"ComSpec");
+  if (comspec != NULL) return comspec;
+  wchar_t* system_root = get_environment_variable(L"SystemRoot");
+  const wchar_t* suffix = L"\\System32\\cmd.exe";
+  if (system_root == NULL) {
+    const wchar_t* fallback_root = L"C:\\Windows";
+    size_t fallback_length = wcslen(fallback_root) + 1u;
+    system_root = (wchar_t*)malloc(fallback_length * sizeof(wchar_t));
+    if (system_root == NULL) return NULL;
+    memcpy(system_root, fallback_root, fallback_length * sizeof(wchar_t));
+  }
+  size_t root_length = wcslen(system_root);
+  size_t suffix_length = wcslen(suffix);
+  if (root_length > SIZE_MAX - suffix_length - 1u ||
+      root_length + suffix_length + 1u > SIZE_MAX / sizeof(wchar_t)) {
+    free(system_root);
+    SetLastError(ERROR_NOT_ENOUGH_MEMORY);
+    return NULL;
+  }
+  wchar_t* result = (wchar_t*)malloc(
+      (root_length + suffix_length + 1u) * sizeof(wchar_t));
+  if (result == NULL) {
+    free(system_root);
+    SetLastError(ERROR_NOT_ENOUGH_MEMORY);
+    return NULL;
+  }
+  memcpy(result, system_root, root_length * sizeof(wchar_t));
+  memcpy(result + root_length, suffix, (suffix_length + 1u) * sizeof(wchar_t));
+  free(system_root);
+  return result;
 }
 
 JNIEXPORT void JNICALL
@@ -203,16 +393,17 @@ Java_java_lang_UNIXProcess_forkAndExec(JNIEnv* env, jobject process,
   jint resultPid = -1;
   char* pprog = NULL;
   char* pargs = NULL;
-  char* penv = NULL;
-  char* pdir = NULL;
-  char* cmdline = NULL;
-  char* winenv = NULL;
+  wchar_t* wprog = NULL;
+  wchar_t* wdir = NULL;
+  wchar_t* cmdline = NULL;
+  wchar_t* winenv = NULL;
+  jbyte* arg_bytes = NULL;
   jint* fds = NULL;
   HANDLE in_r = NULL, in_w = NULL, out_r = NULL, out_w = NULL, err_r = NULL, err_w = NULL;
   HANDLE child_in = NULL, child_out = NULL, child_err = NULL;
   int parent_in = -1, parent_out = -1, parent_err = -1;
   int created_in = 0, created_out = 0, created_err = 0;
-  STARTUPINFOA si;
+  STARTUPINFOW si;
   PROCESS_INFORMATION pi;
   memset(&si, 0, sizeof(si));
   memset(&pi, 0, sizeof(pi));
@@ -225,29 +416,51 @@ Java_java_lang_UNIXProcess_forkAndExec(JNIEnv* env, jobject process,
   }
 
   pprog = bytes_to_cstr(env, prog);
+  if (pprog != NULL) wprog = mdvm_utf8_to_utf16_alloc(pprog);
   jsize arg_len = (*env)->GetArrayLength(env, argBlock);
-  jbyte* arg_bytes = (*env)->GetByteArrayElements(env, argBlock, NULL);
-  if (!pprog || !arg_bytes) { throw_io(env, "forkAndExec: OOM"); goto fail; }
+  if (!pprog || !wprog) {
+    throw_io(env, "forkAndExec: invalid UTF-8 or OOM");
+    goto fail;
+  }
   pargs = (char*)malloc((size_t)arg_len + 1);
   if (!pargs) { throw_io(env, "forkAndExec: OOM"); goto fail; }
-  memcpy(pargs, arg_bytes, (size_t)arg_len);
+  if (arg_len > 0) {
+    arg_bytes = (*env)->GetByteArrayElements(env, argBlock, NULL);
+    if (arg_bytes == NULL) { throw_io(env, "forkAndExec: OOM"); goto fail; }
+    memcpy(pargs, arg_bytes, (size_t)arg_len);
+    (*env)->ReleaseByteArrayElements(env, argBlock, arg_bytes, JNI_ABORT);
+    arg_bytes = NULL;
+  }
   pargs[arg_len] = '\0';
-  (*env)->ReleaseByteArrayElements(env, argBlock, arg_bytes, JNI_ABORT);
-  arg_bytes = NULL;
 
-  cmdline = build_cmdline(pprog, pargs, argc);
+  cmdline = build_cmdline(wprog, pargs, (size_t)arg_len, argc);
   if (!cmdline) { throw_io(env, "forkAndExec: cmdline"); goto fail; }
 
-  if (envBlock != NULL && envc > 0) {
+  if (envBlock != NULL) {
     jsize elen = (*env)->GetArrayLength(env, envBlock);
-    jbyte* eb = (*env)->GetByteArrayElements(env, envBlock, NULL);
-    if (!eb) { throw_io(env, "forkAndExec: env"); goto fail; }
+    jbyte* eb = NULL;
+    if (elen > 0) {
+      eb = (*env)->GetByteArrayElements(env, envBlock, NULL);
+      if (!eb) { throw_io(env, "forkAndExec: env"); goto fail; }
+    }
     winenv = unix_env_to_win_block((const char*)eb, envc, elen);
-    (*env)->ReleaseByteArrayElements(env, envBlock, eb, JNI_ABORT);
+    if (eb != NULL) {
+      (*env)->ReleaseByteArrayElements(env, envBlock, eb, JNI_ABORT);
+    }
+    if (winenv == NULL) {
+      throw_io(env, "forkAndExec: invalid UTF-8 environment or OOM");
+      goto fail;
+    }
   }
 
   if (dir != NULL) {
-    pdir = bytes_to_cstr(env, dir);
+    char* dir_utf8 = bytes_to_cstr(env, dir);
+    if (dir_utf8 != NULL) wdir = mdvm_utf8_to_utf16_alloc(dir_utf8);
+    free(dir_utf8);
+    if (wdir == NULL) {
+      throw_io(env, "forkAndExec: invalid UTF-8 directory or OOM");
+      goto fail;
+    }
   }
 
   fds = (*env)->GetIntArrayElements(env, std_fds, NULL);
@@ -334,17 +547,17 @@ Java_java_lang_UNIXProcess_forkAndExec(JNIEnv* env, jobject process,
   si.hStdError = child_err ? child_err : INVALID_HANDLE_VALUE;
 
   /* 0: inherit handles only. CREATE_NO_WINDOW broke stdout capture under wine. */
-  DWORD flags = 0;
+  DWORD flags = winenv != NULL ? CREATE_UNICODE_ENVIRONMENT : 0u;
 
-  BOOL ok = CreateProcessA(
-      /* lpApplicationName */ NULL,
+  BOOL ok = CreateProcessW(
+      /* lpApplicationName */ wprog,
       /* lpCommandLine */ cmdline,
       /* proc attrs */ NULL,
       /* thread attrs */ NULL,
       /* inherit handles */ TRUE,
       flags,
       /* env */ winenv,
-      /* cwd */ pdir,
+      /* cwd */ wdir,
       &si,
       &pi);
 
@@ -353,22 +566,23 @@ Java_java_lang_UNIXProcess_forkAndExec(JNIEnv* env, jobject process,
     /* wine/host: bare "cmd.exe" sometimes needs ComSpec expansion */
     if ((err == ERROR_FILE_NOT_FOUND || err == ERROR_PATH_NOT_FOUND) &&
         pprog && (_stricmp(pprog, "cmd.exe") == 0 || _stricmp(pprog, "cmd") == 0)) {
-      char comspec[MAX_PATH];
-      DWORD n = GetEnvironmentVariableA("ComSpec", comspec, MAX_PATH);
-      if (n == 0 || n >= MAX_PATH) {
-        n = GetEnvironmentVariableA("SystemRoot", comspec, MAX_PATH);
-        if (n > 0 && n < MAX_PATH - 20) {
-          strncat(comspec, "\\System32\\cmd.exe", MAX_PATH - strlen(comspec) - 1);
-        } else {
-          strcpy(comspec, "C:\\Windows\\System32\\cmd.exe");
-        }
+      wchar_t* comspec = get_command_interpreter();
+      if (comspec == NULL) {
+        throw_io(env, "forkAndExec: ComSpec");
+        goto fail;
       }
       free(cmdline);
-      cmdline = build_cmdline(comspec, pargs, argc);
-      if (!cmdline) { throw_io(env, "forkAndExec: cmdline comspec"); goto fail; }
+      cmdline = build_cmdline(comspec, pargs, (size_t)arg_len, argc);
+      if (!cmdline) {
+        free(comspec);
+        throw_io(env, "forkAndExec: cmdline comspec");
+        goto fail;
+      }
       memset(&pi, 0, sizeof(pi));
-      ok = CreateProcessA(NULL, cmdline, NULL, NULL, TRUE, flags, winenv, pdir, &si, &pi);
+      ok = CreateProcessW(
+          comspec, cmdline, NULL, NULL, TRUE, flags, winenv, wdir, &si, &pi);
       err = ok ? 0 : GetLastError();
+      free(comspec);
     }
     if (!ok) {
       throw_io_win(env, "CreateProcess", err);
@@ -399,10 +613,13 @@ Java_java_lang_UNIXProcess_forkAndExec(JNIEnv* env, jobject process,
 cleanup:
   free(pprog);
   free(pargs);
-  free(penv);
-  free(pdir);
+  free(wprog);
+  free(wdir);
   free(cmdline);
   free(winenv);
+  if (arg_bytes != NULL) {
+    (*env)->ReleaseByteArrayElements(env, argBlock, arg_bytes, JNI_ABORT);
+  }
   if (in_r) CloseHandle(in_r);
   if (in_w) CloseHandle(in_w);
   if (out_r) CloseHandle(out_r);

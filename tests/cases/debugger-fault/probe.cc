@@ -2,6 +2,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <cwchar>
 
 namespace {
 
@@ -23,43 +24,49 @@ bool IsOtherHardwareFault(DWORD code) {
          code == 0xc0000602u;  // STATUS_FAIL_FAST_EXCEPTION.
 }
 
-const char* ModeArgument(const char* mode) {
-  if (std::strcmp(mode, "npe") == 0) {
-    return "npe";
+const wchar_t* ModeArgument(const wchar_t* mode) {
+  if (std::wcscmp(mode, L"npe") == 0) {
+    return L"npe";
   }
-  if (std::strcmp(mode, "so") == 0) {
-    return "so";
+  if (std::wcscmp(mode, L"so") == 0) {
+    return L"so";
   }
   return nullptr;
 }
 
+const char* ModeName(const wchar_t* mode) {
+  return std::wcscmp(mode, L"npe") == 0 ? "npe" : "so";
+}
+
 }  // namespace
 
-int main(int argc, char** argv) {
+int wmain(int argc, wchar_t** argv) {
   if (argc != 3 || ModeArgument(argv[2]) == nullptr) {
     std::fputs(
         "usage: win32_debugger_probe.exe <dalvikvm.exe> <npe|so>\n", stderr);
     return 2;
   }
+  const char* mode_name = ModeName(argv[2]);
 
-  char command_line[1024] = {};
-  const int length = std::snprintf(
+  wchar_t command_line[1024] = {};
+  const int length = std::swprintf(
       command_line,
-      sizeof(command_line),
-      "\"%s\" -Xbootclasspath:run\\boot.jar "
-      "-Xbootclasspath-locations:run\\boot.jar "
-      "-Ximage:/nonexistent-no-boot-image -XjdwpProvider:none "
-      "-Xms64m -Xmx512m -verbose:jit -Xjitwarmupthreshold:0 "
-      "-Xjitthreshold:0 "
-      "-cp run\\w010managedfaultprobe.jar W010ManagedFaultProbe %s",
+      sizeof(command_line) / sizeof(command_line[0]),
+      L"\"%ls\" -Xbootclasspath:run\\boot.jar "
+      L"-Xbootclasspath-locations:run\\boot.jar "
+      L"-Ximage:/nonexistent-no-boot-image -XjdwpProvider:none "
+      L"-Xms64m -Xmx512m -verbose:jit -Xjitwarmupthreshold:0 "
+      L"-Xjitthreshold:0 "
+      L"-cp run\\w010managedfaultprobe.jar W010ManagedFaultProbe %ls",
       argv[1],
       ModeArgument(argv[2]));
-  if (length <= 0 || static_cast<size_t>(length) >= sizeof(command_line)) {
+  if (length <= 0 ||
+      static_cast<size_t>(length) >= sizeof(command_line) / sizeof(command_line[0])) {
     std::fputs("WIN32_DEBUGGER_PROBE FAIL command line overflow\n", stderr);
     return 1;
   }
 
-  STARTUPINFOA startup = {};
+  STARTUPINFOW startup = {};
   startup.cb = sizeof(startup);
   startup.dwFlags = STARTF_USESTDHANDLES;
   startup.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
@@ -67,9 +74,9 @@ int main(int argc, char** argv) {
   startup.hStdError = GetStdHandle(STD_ERROR_HANDLE);
   PROCESS_INFORMATION process = {};
   std::printf("WIN32_DEBUGGER_PROBE start mode=%s continue=DBG_EXCEPTION_NOT_HANDLED\n",
-              argv[2]);
+              mode_name);
   std::fflush(stdout);
-  if (!CreateProcessA(argv[1],
+  if (!CreateProcessW(argv[1],
                       command_line,
                       nullptr,
                       nullptr,
@@ -177,7 +184,7 @@ int main(int argc, char** argv) {
       "WIN32_DEBUGGER_PROBE result mode=%s child_exit=%lu first_av=%u "
       "first_stack_overflow=%u first_guard_page=%u first_other_hardware=%u "
       "first_hardware=%u second_chance=%u\n",
-      argv[2],
+      mode_name,
       static_cast<unsigned long>(child_exit),
       counts.first_access_violation,
       counts.first_stack_overflow,
@@ -186,15 +193,15 @@ int main(int argc, char** argv) {
       first_hardware,
       second_chance);
 
-  const bool npe_ok = std::strcmp(argv[2], "npe") != 0 ||
+  const bool npe_ok = std::strcmp(mode_name, "npe") != 0 ||
       (counts.first_access_violation != 0u &&
        counts.first_stack_overflow == 0u &&
        counts.first_other_hardware == 0u);
-  const bool so_ok = std::strcmp(argv[2], "so") != 0 || first_hardware == 0u;
+  const bool so_ok = std::strcmp(mode_name, "so") != 0 || first_hardware == 0u;
   if (!wait_ok || child_exit != 0u || second_chance != 0u || !npe_ok || !so_ok) {
     std::puts("WIN32_DEBUGGER_PROBE FAIL");
     return 1;
   }
-  std::printf("WIN32_DEBUGGER_PROBE PASS mode=%s\n", argv[2]);
+  std::printf("WIN32_DEBUGGER_PROBE PASS mode=%s\n", mode_name);
   return 0;
 }

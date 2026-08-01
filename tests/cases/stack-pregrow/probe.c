@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <wchar.h>
 #include <windows.h>
 #include <process.h>
 #include <psapi.h>
@@ -750,28 +751,28 @@ static int EvaluateAttachDetachSuccess(const ProbeObservation* observation,
 }
 
 static int RunNativeCollisionParent(TargetPolicy policy) {
-  char executable[MAX_PATH];
-  char command_line[2u * MAX_PATH + 64u];
-  STARTUPINFOA startup;
+  wchar_t executable[MAX_PATH];
+  wchar_t command_line[2u * MAX_PATH + 64u];
+  STARTUPINFOW startup;
   PROCESS_INFORMATION process;
   DWORD child_exit = 0u;
   DWORD expected_exit;
   DWORD wait_result;
-  DWORD length = GetModuleFileNameA(NULL, executable, MAX_PATH);
+  DWORD length = GetModuleFileNameW(NULL, executable, MAX_PATH);
   memset(&startup, 0, sizeof(startup));
   memset(&process, 0, sizeof(process));
   startup.cb = sizeof(startup);
   if (length == 0u || length >= MAX_PATH ||
-      snprintf(command_line,
-               sizeof(command_line),
-               policy == kTargetE9 ? "\"%s\" native-child e9"
-                                   : "\"%s\" native-child",
+      swprintf(command_line,
+               sizeof(command_line) / sizeof(command_line[0]),
+               policy == kTargetE9 ? L"\"%ls\" native-child e9"
+                                   : L"\"%ls\" native-child",
                executable) < 0) {
     fprintf(stderr, "FAIL prepare native child error=%lu\n",
             (unsigned long)GetLastError());
     return 1;
   }
-  if (!CreateProcessA(NULL,
+  if (!CreateProcessW(NULL,
                       command_line,
                       NULL,
                       NULL,

@@ -478,6 +478,21 @@ items are closed.
   across three families. The affected Windows-cross product and `art-tests`
   closures pass at 32 jobs, both immediate repeats are true Ninja no-ops, and
   the focused libcore/reviewer regressions pass 11/11.
+- [x] W-027's process slice moves the debugger and stack-pregrow probes plus
+  Java `ProcessBuilder` / `Runtime.exec` to `CreateProcessW` and
+  `STARTUPINFOW`. The JNI byte protocol is decoded strictly as UTF-8; program,
+  argument, and current-directory paths become UTF-16, command lines use the
+  complete Windows quote/backslash rules in a writable buffer, and custom
+  environments become sorted, double-NUL UTF-16 blocks paired with
+  `CREATE_UNICODE_ENVIRONMENT`. An explicit empty Java environment stays empty
+  instead of accidentally inheriting the parent environment. The managed exec
+  probe now supplies a non-ASCII environment value. Removing the final seven
+  calls and three source files leaves the active 1,441-source Windows graph at
+  zero ANSI calls, zero ANSI source files, zero ANSI families, and zero
+  unclassified suffix-`A` calls. The Windows-cross product and `art-tests`
+  closures pass at 32 jobs, both immediate repeats are true Ninja no-ops, and
+  the focused W-010/libcore/reviewer regressions pass 15/15. The zero-count
+  scanner still needs promotion into the live W-027 catalog gate.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to
