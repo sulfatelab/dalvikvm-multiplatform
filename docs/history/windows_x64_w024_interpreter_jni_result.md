@@ -1,9 +1,9 @@
 # Windows x64 legacy InterpreterJni fallback reachability audit
 
 **Status:** PASS under Wine and native Windows 10; cleanup complete
-**Date:** 2026-07-24 17:47:36 CST
-**Updated:** 2026-07-24 21:08:00 CST
-**Host:** agent01
+**Wine audit:** 2026-07-24 17:47:36
+**Native acceptance:** 2026-07-24 20:27:51
+**Cleanup completion:** 2026-07-24 21:08:00
 
 ## Question
 
@@ -90,8 +90,8 @@ Windows x64 `-Xint`, Linux `-Xint`, and Linux threshold-zero JIT modes.
 The historical `tools/windows_x64/host_package/package_windows_x64_w024_tripwire.sh` built
 the opt-in binary, ran the complete Wine matrix, wrote the native Windows
 command files, packaged all dependencies, and restored product mode. It was
-deleted after the accepted evidence was archived. Native-host execution and
-package identity remain recorded in `W024_HOST_CHECKLIST.md`.
+deleted after acceptance. This document retains the native-host execution and
+immutable package identities.
 
 The first package review found that the not-yet-run host command files contained
 literal `${name}` and `${jar}` fragments: in an unquoted shell heredoc, the
@@ -127,11 +127,25 @@ debuggable-runtime rule. All transition values passed, every probe ended with
 `main end exception=0`, no tripwire fired, and the recursive dump scan returned
 `NO_DMP_FILES`.
 
-The returned build information and 169-entry manifest match the retained
-package exactly. The shared `boot.jar` is 3,436,578 bytes with SHA-256
-`3cbe9a7f0e4596229c0c5e229e6655463373b1445922b9557286313a28a35a2a`.
-Accepted raw evidence and its independent review are stored under
-`evidence/w024_host/`.
+The independent acceptance review found that the returned build information
+and 169-entry manifest matched the issued package exactly. Its immutable
+identities were:
+
+- parent commit `e7f90935c7b1909fe528a8441fa5014bcd666b95`;
+- ART commit `1a75ad10a3ee28910a7b46184a0a7628f96da72a`;
+- `logs-w024-r2.zip` SHA-256
+  `7644035d77defc8e01eb68bb51c7a663fa3a6fe3abaefcaafe15c2484d63765c`;
+- `w024-meta.zip` SHA-256
+  `5813f7dae446018154d42133feebbbd4a68e1a2e52ccf35f42c9388e58583d9f`;
+  and
+- shared `boot.jar`, 3,436,578 bytes, SHA-256
+  `3cbe9a7f0e4596229c0c5e229e6655463373b1445922b9557286313a28a35a2a`.
+
+The returned archives remain outside VCS. The 169-entry binary manifest,
+package build-info copy, dump-scan file, host-version capture, checklist, and
+raw per-process logs were removed after consolidation: they duplicated the
+accepted facts, described a retired package workflow, or retained generated
+artifact metadata. Git history remains available for forensic review.
 
 ## Conclusion
 
@@ -147,7 +161,6 @@ method-tracing, JVMTI, Math, JIT smoke 12/12, JIT matrix 14/14, and all Phase 4
 Wine gates. The full Linux runtime rebuilt and passed L-005 shared-boot Hello
 and Math `-Xint`/JIT controls. W-011, W-012, and W-024 are closed.
 
-Acceptance records:
-
-- `W024_HOST_CHECKLIST.md`
-- `evidence/w024_host/ACCEPTANCE.md`
+Maintained reproduction now uses the unified W-004 gates beside the JNI,
+JVMTI, and Math cases. This document is the single historical W-024 package
+acceptance record.

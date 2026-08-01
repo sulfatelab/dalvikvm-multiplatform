@@ -213,6 +213,11 @@ wrapper followed after its additional PE unwind audit migrated into W-010.
 The four remaining raw aggregate/crash transcripts were removed after their
 durable pass markers were reduced into the Phase-4 result: they duplicated
 unified native coverage and contained machine-specific absolute paths.
+The retired W-024 tripwire checklist, 169-entry package manifest, raw native
+logs, and duplicate package metadata were likewise reduced into one flat
+history record that preserves the native 9/9 result, exact source revisions,
+archive hashes, boot-artifact identity, compilation contract, and no-dump
+finding. Maintained reproduction is the unified W-004 catalog.
 The final Phase-4 shell wrapper, for Math CriticalNative, was retired after its
 two-mode matrix moved beside the case and passed twice on native Windows plus
 the fresh Linux W-004 build. The W-024 source cleanup is now enforced by the

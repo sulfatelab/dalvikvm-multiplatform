@@ -774,8 +774,7 @@ tripwire-OFF mode and the final binaries rebuilt. Linux and Windows x64 use iden
 boot.jar dex and annotation bytes, so there is no Windows-only boot shorty set.
 ART commit `42a03f2ea0` restored exact upstream interpreter scope and removed
 the native-JIT gate; see
-`tools/verify/windows_x64_phase4/RESULT-interpreter-jni-fallback.md` and
-`tools/verify/windows_x64_phase4/evidence/w024_host/ACCEPTANCE.md`.
+`docs/history/windows_x64_w024_interpreter_jni_result.md`.
 
 ## 12. Verification and acceptance
 

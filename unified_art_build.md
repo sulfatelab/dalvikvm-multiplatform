@@ -932,6 +932,13 @@ items are closed.
   the retained summary records the complete suite pass, stress/performance
   markers, expected-nonzero Java abort, VEH/UEF native fault path, valid
   minidump creation, and GoldenApp pass.
+- [x] The W-024 native tripwire package is consolidated into
+  `docs/history/windows_x64_w024_interpreter_jni_result.md`. Its exact source
+  revisions, two archive hashes, shared-boot identity, nine-case native result,
+  required compilation records, and no-tripwire/no-dump conclusion remain;
+  the obsolete host checklist, 169-entry binary manifest, build/dump/host
+  copies, and roughly 750 KiB of raw logs were removed. Unified W-004 owns
+  maintained JNI/JVMTI/Math reproduction.
 - [x] W-010 now owns seven shell-free target-runnable gates in the unified
   catalog: the four-mode UEF matrix, eight-case fault-record adapter, live
   sigchain ordering/frame-SEH probe, two-mode managed-fault debugger, managed

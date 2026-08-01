@@ -23,7 +23,7 @@ tracing, and JVMTI forced interpretation now work. Nested ART commit
 Android 16 upstream policy and removed the native-method JIT exclusion.
 
 The accepted Wine and native-Windows reachability audit is recorded in
-`tools/verify/windows_x64_phase4/RESULT-interpreter-jni-fallback.md`. The
+`docs/history/windows_x64_w024_interpreter_jni_result.md`. The
 original source excerpt remains recoverable from top-level Git history if an
 old Phase 2 binary must be investigated, but it must not be used as source for a
 future Windows port.

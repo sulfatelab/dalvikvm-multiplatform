@@ -444,7 +444,7 @@ Summary (details below; do not delete history):
 - **Current behavior:** ART commit `42a03f2ea0` restores `runtime/interpreter/interpreter.cc` byte-for-byte to `android-16.0.0_r4`. `ArtInterpreterToInterpreterBridge` again enforces the upstream pre-start-only native invariant; runtime-started native calls retain JNI compiler/generated entrypoints under `-Xint`, tracing, and JVMTI.
 - **Shared-artifact implication:** Linux and Windows x64 use identical `boot.jar` dex/annotation bytes (`3cbe9a7...`), so no Windows-only boot shorty or native annotation set exists to justify this expansion.
 - **Proper fix:** Complete. The interpreter file has exact upstream parity and the complete Linux/Windows x64 post-change matrix passes.
-- **Evidence:** `tools/verify/windows_x64_phase4/RESULT-interpreter-jni-fallback.md`; accepted native-host evidence: `tools/verify/windows_x64_phase4/evidence/w024_host/ACCEPTANCE.md`
+- **Evidence:** `docs/history/windows_x64_w024_interpreter_jni_result.md`
 - **Code anchors:** `vendor/art/runtime/interpreter/interpreter.cc` (`InterpreterJni`, `EnterInterpreterFromInvoke`, `ArtInterpreterToInterpreterBridge`)
 - **Opened:** 2026-07-16
 - **Closed:** 2026-07-24 — native Windows tripwire acceptance plus final Wine/Linux regression
@@ -455,7 +455,7 @@ Summary (details below; do not delete history):
 - **Area:** art / jni
 - **Current behavior:** Product and upstream fallback paths use ART's normal registered entrypoint and generated dlsym-stub policy. The Windows x64-only direct resolver no longer exists.
 - **Proper fix:** Complete with ART commit `42a03f2ea0`.
-- **Evidence:** `tools/verify/windows_x64_phase4/RESULT-interpreter-jni-fallback.md`, `tests/cases/jni-critical-native/RESULT.md`, `tests/cases/jni-native-abi/RESULT.md`, `tools/verify/windows_x64_phase4/evidence/w024_host/ACCEPTANCE.md`
+- **Evidence:** `docs/history/windows_x64_w024_interpreter_jni_result.md`, `tests/cases/jni-critical-native/RESULT.md`, `tests/cases/jni-native-abi/RESULT.md`
 - **Code anchors:** `vendor/art/runtime/interpreter/interpreter.cc`; generated JNI dlsym stubs
 - **Opened:** 2026-07-16
 - **Closed:** 2026-07-24 — upstream resolver behavior restored
@@ -623,7 +623,7 @@ Summary (details below; do not delete history):
   14. `MathCriticalProbe` verifies native modifiers, 23 direct and reflective edge cases, signed-zero bits, 2,000 repeated calls, and source-level absence of `gMethodsWin`. The maintained case-local Python matrix runs `-Xint` and threshold-zero JIT twice for each exact Linux/Windows x86-64 target; native Windows requires a matching compile record. It passes twice in unified native Windows W-004 and in the fresh Linux W-004 build. The earlier 3/3 dual/J-1/Wine and shared-boot results remain historical evidence.
   15. Windows x64 ZipProbe/HashMap and conscrypt SslProviderProbe pass after restoration; Linux ZipProbe/HashMap and L-005 pass. The Linux converter does not currently build `libjavacrypto.so`, which is a native-module packaging difference rather than a boot-jar or CriticalNative blocker.
   16. Per-method `Windows x64 CompileMethod done` output is now opt-in. Log-dependent harnesses explicitly set `ART_WINDOWS_X64_JIT_LOG_COMPILES=1`; JIT smoke verifies a normal quiet product run.
-  17. The opt-in fatal-tripwire build disabled both runtime-started `InterpreterJni` call sites. Windows x64 `-Xint`, direct/unresolved CriticalNative, normal/FastNative, method tracing, and JVMTI forced interpretation all passed under Wine; Clang reported `InterpreterJni` unused. The then-product-default OFF build and final controls passed before the option was retired. See `RESULT-interpreter-jni-fallback.md`.
+  17. The opt-in fatal-tripwire build disabled both runtime-started `InterpreterJni` call sites. Windows x64 `-Xint`, direct/unresolved CriticalNative, normal/FastNative, method tracing, and JVMTI forced interpretation all passed under Wine; Clang reported `InterpreterJni` unused. The then-product-default OFF build and final controls passed before the option was retired. See `docs/history/windows_x64_w024_interpreter_jni_result.md`.
   18. Because Linux and Windows x64 use identical boot.jar dex/annotation bytes, there is no Windows-only boot-native shorty set. This removed the final rationale for retaining the gate or fallback expansion; both were deleted after acceptance.
   19. The complete fatal-tripwire package passes all nine cases on Windows 10 Enterprise LTSC 2021 build 19044. Both normal/FastNative runs compile 7/7 required targets exactly once; both JVMTI runs compile the two allowed targets and no CriticalNative target; no tripwire or crash dump is observed.
 - **Proper fix:**
@@ -676,8 +676,7 @@ Summary (details below; do not delete history):
   - `tests/cases/jni-critical-native/` (canonical source/result) plus unified `managed_critical_native`
   - `tests/cases/jvmti-force/` plus the transitional managed runner and historical result under `tools/verify/windows_x64_phase4/`
   - `tests/cases/math-critical/` (canonical source, shell-free runner, and adjacent result) plus the live W-024 cleanup audit in `tests/support/w024_cleanup.py`
-  - `tools/verify/windows_x64_phase4/RESULT-interpreter-jni-fallback.md` (accepted Wine and native-Windows tripwire reachability audit)
-  - `tools/verify/windows_x64_phase4/W024_HOST_CHECKLIST.md` (native Windows 10 acceptance and returned-evidence procedure)
+  - `docs/history/windows_x64_w024_interpreter_jni_result.md` (accepted Wine and native-Windows tripwire reachability audit and package identity)
   - `vendor/art/openjdkjvmti/` and `native/CMakeLists.txt` (separate Windows x64 JVMTI plugin)
   - `vendor/art/runtime/{thread-current-inl.h,thread.h,interpreter/interpreter_common.cc}` (PE plugin TLS accessor and Linux-like native interpreter policy)
   - `vendor/art/runtime/jit/jit.cc` (common native compilation policy and opt-in compile-record diagnostics)
@@ -685,7 +684,7 @@ Summary (details below; do not delete history):
     `vendor/art/openjdkjvm/openjdkjvm_memory_windows.cc` (`JVM_NativeLoad` and
     `ART_LoadNativeLibrary` product boundary)
   - AOSP history: `d021f1d8475c` FastNative→CriticalNative Math; multipath `f16cd44db5fe` pure-Java ceil/floor; `b9265e7b5da6` CriticalNative register fix; art `7ea144b073` / `4c17423714` interpreter Critical/FastNative bridge
-- **Closed by:** ART `42a03f2ea0`; native Windows evidence under `tools/verify/windows_x64_phase4/evidence/w024_host/`; final historical regressions on 2026-07-24; unified Linux/Windows W-004 acceptance on 2026-08-01
+- **Closed by:** ART `42a03f2ea0`; native Windows acceptance in `docs/history/windows_x64_w024_interpreter_jni_result.md`; final historical regressions on 2026-07-24; unified Linux/Windows W-004 acceptance on 2026-08-01
 - **Related:** W-019 (CLOSED temporary Math ABI fix), W-011/W-012 (legacy InterpreterJni fallback), W-025 (JIT memory; threshold-zero proved unrelated)
 - **Opened:** 2026-07-17
 - **Closed:** 2026-07-24 — upstream interpreter scope and default native-JIT policy restored after complete native-host and post-change regression acceptance
