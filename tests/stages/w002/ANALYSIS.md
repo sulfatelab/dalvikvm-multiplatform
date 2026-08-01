@@ -1,4 +1,4 @@
-# W-002 managed-entry repair
+# W-002 managed-entry analysis
 
 **Status:** PASS — NATIVE WINDOWS R2 ACCEPTED; W-002 CLOSED
 
@@ -200,7 +200,7 @@ retired after the unified stage passed natively and repeated as a Ninja no-op.
 The following describes the already issued R2 package and is retained only to
 interpret its immutable returned evidence and hashes.
 
-Historical package generation:
+The retired historical package generation:
 
 - rebuilds ART;
 - reruns the structural and 16-process focused Wine matrix;
@@ -217,20 +217,17 @@ The native runner repeats every pair twice, enforces Windows build 17134 or
 later, validates package hashes and structural-report artifact identities,
 scans fatal markers, and recursively rejects any `*.dmp`.
 
-See [W002_HOST_CHECKLIST.md](W002_HOST_CHECKLIST.md). Accept returned evidence
-with:
-
-```bash
-python3 tools/verify/windows_x64_phase4/review_w002_host_result.py \
-  /path/to/returned.zip --issued dist/windows_x64_w002_host
-```
-
 The accepted native result has 21 PASS records over 16 child processes and
-ends in `OVERALL PASS`.
+ends in `OVERALL PASS`. The package checker, offline returned-ZIP reviewer,
+host checklist, and duplicate checksum record were retired after the unified
+stage passed natively and repeated as a Ninja no-op. The issued package's
+SHA-256 is
+`9efa883e1de06fe375d104b7c69be301b11c23c22d8a7e82a75ac27e56b56a4d`;
+the returned and normalized evidence identities are recorded below.
 
 ## Native Windows R1 result
 
-R1 evidence is `/tmp/w002-run1.zip`, SHA-256
+R1 evidence is `<temporary>/w002-run1.zip`, SHA-256
 `0a1fa8ac02a3eba7d536d539c8fc77ad7c596e93e85c3bbc07191ba66e6e6b81`.
 It was produced on Windows 10 Enterprise LTSC build 19044 x64 with PowerShell
 5.1. The evidence archive and the issued package have identical
@@ -331,7 +328,7 @@ root commit `5cc3e2b52834b42f2f9b135ce2bbb2fd5dcd43ec` and ART commit
 - fatal-marker scanning passes; and
 - recursive dump scanning reports `NO_DMP_FILES`.
 
-The returned archive `/tmp/w002-r2-log.zip` has SHA-256
+The returned archive `<temporary>/w002-r2-log.zip` has SHA-256
 `2c49fe7161f96e98ae74dcd4e610eee775dfff21234673c902c7d4bf58e5df7e` and
 passes ZIP integrity testing. It omitted the root `MANIFEST.json` while the
 evidence files were copied, so the unchanged strict reviewer correctly
@@ -346,11 +343,12 @@ a host-run failure:
   `e48211612ce16c84acca6af1aca3f749b4c88112f99e31d76b0ace2bd519e125`;
   and
 - adding only that retained byte-identical manifest produces
-  `/tmp/w002-r2-log-normalized.zip`, SHA-256
+  `<temporary>/w002-r2-log-normalized.zip`, SHA-256
   `8aea7af225f154678d50ea7b329ce8574242c2e8cea8c947170c4a58f916bc03`,
   which passes ZIP integrity and the unchanged strict reviewer as an
   evidence-only return.
 
-No runtime log or result record was altered during normalization. See
-[`evidence/w002_host/ACCEPTANCE.md`](evidence/w002_host/ACCEPTANCE.md).
-This evidence satisfies the final native-host gate and closes W-002.
+No runtime log or result record was altered during normalization. The hashes
+and acceptance details above are the durable evidence; the returned archives
+remain outside VCS. This evidence satisfies the final native-host gate and
+closes W-002.

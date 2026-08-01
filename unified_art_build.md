@@ -551,8 +551,12 @@ items are closed.
   two Bash/Wine runtime runners, Bash host packager, and package-only
   PowerShell runner were removed. The broader legacy Phase-4/W-025 scripts no
   longer invoke those runners; current W-002 reproduction is only the unified
-  frontend and virtual stage. Historical checklists, returned evidence, and
-  archive hashes remain readable.
+  frontend and virtual stage. The remaining package checker, returned-ZIP
+  reviewer and its tests, host checklist, and duplicate checksum/acceptance
+  files are now retired. One sanitized `tests/stages/w002/ANALYSIS.md` retains
+  the cross-case design, R1 timing diagnosis, deterministic R2 correction,
+  archive identities, and accepted native result; maintained behavior remains
+  beside the canonical OSR/unwind and attached-thread sources.
 - [x] The remaining Phase-4 OSR leaf wrapper was retired after its complete
   R12/RBP, GPR/XMM, invoke, GenericJNI, switch, interpreter-bridge, and
   epilogue matrix passed as `art.w002.win32_osr_unwind_probe` on native

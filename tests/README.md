@@ -248,6 +248,12 @@ Four unreferenced Wine-only package smoke scripts were also removed after their
 W-002/W-003/W-004/W-010 package producers and repository-side runners had been
 retired. Accepted Wine text remains evidence; new behavioral acceptance uses
 the unified native stages.
+W-002's remaining package checker, returned-ZIP reviewer and its unit tests,
+host checklist, and duplicate checksum/acceptance files were retired after
+the unified stage passed twice. Its durable rSELF/OSR/attach design, R1 timing
+diagnosis, R2 correction, and native acceptance are one stage-owned
+`stages/w002/ANALYSIS.md`; its two maintained runtime results remain adjacent
+to the canonical `osr-unwind` and `attached-thread-entry` sources.
 The unreferenced W-025 JIT-2/JIT-3 source preflights and the broken JIT-4
 preflight were removed as well. The unified W-025 reviewer owns their current
 mapping, lifecycle, nterp floating-point, JIT-control, PE-import/export, and

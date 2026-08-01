@@ -1776,7 +1776,7 @@ R2 pins warmup and optimize thresholds to 100 and lengthens the loop to
 2,000,000 iterations. Native Windows R2 passes every required transition on
 build 19044. The accepted result and the evidence-transport normalization are
 documented in
-`tools/verify/windows_x64_phase4/evidence/w002_host/ACCEPTANCE.md`.
+`tests/stages/w002/ANALYSIS.md`.
 
 
 ## 17.10 W-003 quick callee-save frames and native-boundary gap (2026-07-26)

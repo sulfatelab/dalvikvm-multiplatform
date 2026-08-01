@@ -617,9 +617,9 @@ to 100, runs 2,000,000 iterations with checksum `65553463744`, and passes the
 focused matrix, Phase 3/4 aggregates, Linux controls, package smoke, and seven
 tooling tests. Native Windows R2 then passes 21/21 records on build 19044:
 8/8 OSR, 8/8 attach, package/structure checks, fatal scan, and `NO_DMP_FILES`.
-W-002 is closed. See
-[`RESULT-w002-managed-entry.md`](RESULT-w002-managed-entry.md) and
-[`evidence/w002_host/ACCEPTANCE.md`](evidence/w002_host/ACCEPTANCE.md).
+W-002 is closed. The durable cross-case design, R1 diagnosis, deterministic R2
+correction, and accepted native result are retained in
+[`tests/stages/w002/ANALYSIS.md`](../../../tests/stages/w002/ANALYSIS.md).
 
 ## W-003 quick-frame/XMM re-run (2026-07-26)
 
