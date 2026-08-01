@@ -17,6 +17,7 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
         art-disassembler
         artpalette
         crypto_static
+        dalvikvm
         elffile
         expat
         fdlibm

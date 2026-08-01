@@ -243,6 +243,14 @@ items are closed.
   no-ops. Cross and native compile databases agree at 1,816 commands with all
   three `openjdkjvm` commands prelude-free, both CET contracts pass 58/58, and
   all 184 host tests pass.
+- [x] The one-source `dalvikvm` launcher now compiles without the ART prelude
+  on both Windows build hosts. Its source and included project headers already
+  expose the complete launcher contract, so this stage needs no compatibility
+  shim or target definition. Forced-prelude compile commands fell from 707 to
+  706. Linux and both Windows products passed at their required 32/32/16 job
+  limits and repeated as Ninja no-ops. Cross and native compile databases
+  agree at 1,816 commands with the `dalvikvm` command prelude-free, both CET
+  contracts pass 58/58, and all 184 host tests pass.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to
