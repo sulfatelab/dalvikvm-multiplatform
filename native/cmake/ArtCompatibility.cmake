@@ -34,6 +34,7 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
         openjdkjvm
         profile
         procinfo
+        sigchain
         unwindstack
         ziparchive)
     set(_art_windows_prelude_free_definitions

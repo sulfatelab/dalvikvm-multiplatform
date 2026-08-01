@@ -251,6 +251,14 @@ items are closed.
   limits and repeated as Ninja no-ops. Cross and native compile databases
   agree at 1,816 commands with the `dalvikvm` command prelude-free, both CET
   contracts pass 58/58, and all 184 host tests pass.
+- [x] The one-source Windows `sigchain` DSO now compiles without the ART
+  prelude on both build hosts. Its platform source, `sigchain.h`, project
+  `signal.h`, fault-record header, and direct Windows SDK include already own
+  the complete contract, so no source shim was added. Forced-prelude compile
+  commands fell from 706 to 705. Linux and both Windows products passed at the
+  required 32/32/16 job limits and repeated as Ninja no-ops. Cross and native
+  compile databases agree at 1,816 commands with the `sigchain` command
+  prelude-free, both CET contracts pass 58/58, and all 184 host tests pass.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to
