@@ -16,6 +16,7 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
         art-dex2oat
         art-disassembler
         artpalette
+        base
         crypto_static
         dalvikvm
         dex2oat
@@ -64,10 +65,12 @@ endif()
 # Per-file: files that need an extra include / warning demotion. Force-includes
 # are NEVER applied to posix_strerror_r.cpp (it #undef's _GNU_SOURCE first).
 set_source_files_properties(
-    ${MDVM_NATIVE_SRC_ROOT_DIR}/libbase/hex.cpp
     ${MDVM_NATIVE_SRC_ROOT_DIR}/libprocinfo/process.cpp
     ${MDVM_NATIVE_SRC_ROOT_DIR}/art/libartbase/base/metrics/metrics_common.cc
     PROPERTIES COMPILE_OPTIONS "-include;${_PRELUDE}")
+set_source_files_properties(
+    ${MDVM_NATIVE_SRC_ROOT_DIR}/libbase/hex.cpp
+    PROPERTIES COMPILE_OPTIONS "-include;stdint.h")
 set_source_files_properties(
     ${MDVM_NATIVE_SRC_ROOT_DIR}/art/libartbase/base/file_utils.cc
     ${MDVM_NATIVE_SRC_ROOT_DIR}/art/libartbase/base/utils.cc

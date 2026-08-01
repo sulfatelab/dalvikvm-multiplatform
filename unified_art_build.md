@@ -288,6 +288,16 @@ items are closed.
   and repeated as Ninja no-ops. Cross and native compile databases agree at
   1,816 commands with all 13 `icu_jni` commands prelude-free, both CET
   contracts pass 58/58, and all 185 host tests pass.
+- [x] The 18-source `base` DSO now owns its Windows portability without the ART
+  prelude. The project `string.h` wrapper owns the UCRT `strcasecmp` and
+  `strncasecmp` spellings, and `hex.cpp` receives only its exact `stdint.h`
+  toolchain-drift include instead of the broad platform prelude. Forced-prelude
+  compile commands fell from 689 to 671. The shared-header migration exercised
+  1,395 Linux, 1,487 Windows-cross, and 1,516 native-Windows affected actions at
+  the required 32/32/16 job limits; all three products then repeated as Ninja
+  no-ops. Cross and native compile databases agree at 1,816 commands with all
+  18 `base` commands prelude-free, both CET contracts pass 58/58, and all 185
+  host tests pass.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to

@@ -38,6 +38,7 @@ def test_windows_platform_prelude_has_reviewed_target_scope():
         "art-dex2oat",
         "art-disassembler",
         "artpalette",
+        "base",
         "crypto_static",
         "dalvikvm",
         "dex2oat",
@@ -79,6 +80,10 @@ def test_windows_platform_prelude_has_reviewed_target_scope():
     assert "get_target_property(_art_dex2oat_sources art-dex2oat SOURCES)" in cmake
     assert 'MATCHES "/external/boringssl/"' in cmake
     assert "_art_dex2oat_compat_source_count EQUAL 20" in cmake
+    assert (
+        "${MDVM_NATIVE_SRC_ROOT_DIR}/libbase/hex.cpp\n"
+        '    PROPERTIES COMPILE_OPTIONS "-include;stdint.h")'
+    ) in cmake
 
 
 def test_windows_sdk_macro_hygiene_is_header_owned():
@@ -88,6 +93,9 @@ def test_windows_sdk_macro_hygiene_is_header_owned():
     prelude = (
         REPO_ROOT / "compat" / "include" / "mdvm_windows_x64_prelude.h"
     ).read_text(encoding="utf-8")
+    strings = (REPO_ROOT / "compat" / "include" / "string.h").read_text(
+        encoding="utf-8"
+    )
 
     assert "#include_next <windows.h>" in windows
     assert "defined(MDVM_WINDOWS_NO_CALLBACK_MACRO)" in windows
@@ -98,6 +106,10 @@ def test_windows_sdk_macro_hygiene_is_header_owned():
     assert "#undef CONST" not in prelude
     assert "#undef ERROR" not in prelude
     assert "#undef __reserved" not in prelude
+    assert "#define strcasecmp _stricmp" in strings
+    assert "#define strncasecmp _strnicmp" in strings
+    assert "#define strcasecmp _stricmp" not in prelude
+    assert "#define strncasecmp _strnicmp" not in prelude
 
 
 def test_windows_openjdkjvm_uses_explicit_source_and_header_contracts():

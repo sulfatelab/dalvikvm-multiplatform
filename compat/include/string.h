@@ -5,6 +5,12 @@
 #else
 #include_next <string.h>
 #include <stdio.h>
+#ifndef strcasecmp
+#define strcasecmp _stricmp
+#endif
+#ifndef strncasecmp
+#define strncasecmp _strnicmp
+#endif
 #ifdef __cplusplus
 extern "C" {
 #endif

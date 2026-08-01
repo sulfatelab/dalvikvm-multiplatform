@@ -65,13 +65,6 @@ typedef int id_t;
 typedef int64_t off64_t;
 #endif
 
-#ifndef strncasecmp
-#define strncasecmp _strnicmp
-#endif
-#ifndef strcasecmp
-#define strcasecmp _stricmp
-#endif
-
 /* File mode tests (sys/stat.h on Windows is incomplete vs POSIX). */
 #include <sys/stat.h>
 #ifndef S_ISREG
