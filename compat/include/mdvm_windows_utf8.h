@@ -5,6 +5,7 @@
 #endif
 
 #include <stddef.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <windows.h>
 
@@ -61,4 +62,20 @@ static inline char* mdvm_utf16_to_utf8_alloc(const wchar_t* utf16) {
     return NULL;
   }
   return utf8;
+}
+
+static inline int mdvm_utf16_to_utf8_buffer(
+    const wchar_t* utf16, char* utf8, size_t capacity) {
+  if (utf16 == NULL || utf8 == NULL || capacity == 0u || capacity > INT_MAX) {
+    SetLastError(ERROR_INVALID_PARAMETER);
+    return 0;
+  }
+  return WideCharToMultiByte(CP_UTF8,
+                             WC_ERR_INVALID_CHARS,
+                             utf16,
+                             -1,
+                             utf8,
+                             (int)capacity,
+                             NULL,
+                             NULL) != 0;
 }

@@ -451,6 +451,14 @@ items are closed.
   complete source files leave 32 calls in 13 files across 18 families. The
   affected Windows-cross product and CET probe build pass, and the focused
   W-025/reviewer regressions pass 10/10.
+- [x] W-027's module-path slice uses `GetModuleFileNameW` in the compatibility
+  layer, ART fatal-unwind logging, JNI diagnostics, and the embedding probe.
+  UTF-8-facing logs and `dladdr` receive checked UTF-16-to-UTF-8 conversion;
+  the embedding probe compares basenames as UTF-16. The compatibility layer's
+  duplicate converter was removed in favor of the common strict helper. Four
+  ANSI calls and two complete source files leave 28 calls in 11 files across
+  18 families. Windows-cross rebuilt 37 product and 35 test actions, and the
+  focused W-010/reviewer regressions pass 11/11.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to

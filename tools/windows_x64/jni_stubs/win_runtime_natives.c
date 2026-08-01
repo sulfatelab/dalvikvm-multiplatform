@@ -1,6 +1,7 @@
 /* java.lang.Runtime free/total/max memory + nativeGc for Windows x64 PE stubs. */
 #include <jni.h>
 #include <windows.h>
+#include <mdvm_windows_utf8.h>
 #include <process.h>
 #include <limits.h>
 #include <errno.h>
@@ -167,7 +168,8 @@ __declspec(dllexport) void Java_CrashNativeProbe_nativeWorkerSegfault__(
 __declspec(dllexport) void Java_CrashNativeProbe_nativeInstallUefProbe(
     JNIEnv* env, jclass cls) {
   (void)env; (void)cls;
-  char module_path[MAX_PATH] = "unknown";
+  wchar_t wide_module_path[MAX_PATH] = L"unknown";
+  char module_path[MAX_PATH * 3 + 1] = "unknown";
   HMODULE module = NULL;
   g_late_uef_predecessor = SetUnhandledExceptionFilter(late_uef_probe);
   if (g_late_uef_predecessor != NULL) {
@@ -176,7 +178,9 @@ __declspec(dllexport) void Java_CrashNativeProbe_nativeInstallUefProbe(
                      &memory,
                      sizeof(memory)) != 0) {
       module = (HMODULE)memory.AllocationBase;
-      if (GetModuleFileNameA(module, module_path, sizeof(module_path)) == 0) {
+      DWORD length = GetModuleFileNameW(module, wide_module_path, MAX_PATH);
+      if (length == 0u || length >= MAX_PATH ||
+          !mdvm_utf16_to_utf8_buffer(wide_module_path, module_path, sizeof(module_path))) {
         snprintf(module_path, sizeof(module_path), "unknown-error-%lu",
                  (unsigned long)GetLastError());
       }

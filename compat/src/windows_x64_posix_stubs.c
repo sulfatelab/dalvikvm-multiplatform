@@ -1,5 +1,6 @@
 #include <winsock2.h>
 #include <windows.h>
+#include <mdvm_windows_utf8.h>
 #include <fcntl.h>
 #include <sys/uio.h>
 #include <unistd.h>
@@ -224,27 +225,10 @@ ssize_t pwrite(int fd, const void* buf, size_t count, long long offset) {
 
 static char g_dlerror[256];
 
-static wchar_t* mdvm_utf8_to_utf16(const char* value) {
-  int length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, value, -1, NULL, 0);
-  if (length == 0) return NULL;
-  wchar_t* result = (wchar_t*)malloc((size_t)length * sizeof(wchar_t));
-  if (result == NULL) {
-    SetLastError(ERROR_NOT_ENOUGH_MEMORY);
-    return NULL;
-  }
-  if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, value, -1, result, length) == 0) {
-    DWORD error = GetLastError();
-    free(result);
-    SetLastError(error);
-    return NULL;
-  }
-  return result;
-}
-
 void* dlopen(const char* filename, int flag) {
   (void)flag;
   if (!filename) return GetModuleHandleW(NULL);
-  wchar_t* wide_filename = mdvm_utf8_to_utf16(filename);
+  wchar_t* wide_filename = mdvm_utf8_to_utf16_alloc(filename);
   if (wide_filename == NULL) {
     snprintf(g_dlerror, sizeof(g_dlerror),
              "UTF-8 to UTF-16 conversion failed for %s: %lu", filename, GetLastError());
@@ -519,8 +503,11 @@ int dladdr(const void* addr, Dl_info* info) {
   if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
                          GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                          (LPCWSTR)addr, &mod) && mod) {
-    static char path[MAX_PATH];
-    if (GetModuleFileNameA(mod, path, MAX_PATH)) {
+    static char path[MAX_PATH * 3 + 1];
+    wchar_t wide_path[MAX_PATH + 1];
+    DWORD length = GetModuleFileNameW(mod, wide_path, MAX_PATH);
+    if (length != 0u && length < MAX_PATH &&
+        mdvm_utf16_to_utf8_buffer(wide_path, path, sizeof(path))) {
       info->dli_fname = path;
       info->dli_fbase = (void*)mod;
     }

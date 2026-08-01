@@ -3,6 +3,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <cwchar>
 
 namespace {
 
@@ -80,18 +81,18 @@ void RaiseForFrameSeh(const char* phase) {
   }
 }
 
-bool PointerIsInModule(void* pointer, const char* expected_name) {
+bool PointerIsInModule(void* pointer, const wchar_t* expected_name) {
   MEMORY_BASIC_INFORMATION memory = {};
-  char path[MAX_PATH] = {};
+  wchar_t path[MAX_PATH] = {};
   if (pointer == nullptr || VirtualQuery(pointer, &memory, sizeof(memory)) == 0u ||
-      GetModuleFileNameA(static_cast<HMODULE>(memory.AllocationBase), path, sizeof(path)) == 0u) {
+      GetModuleFileNameW(static_cast<HMODULE>(memory.AllocationBase), path, MAX_PATH) == 0u) {
     return false;
   }
-  const char* base = std::strrchr(path, '\\');
-  base = base == nullptr ? std::strrchr(path, '/') : base;
+  const wchar_t* base = std::wcsrchr(path, L'\\');
+  base = base == nullptr ? std::wcsrchr(path, L'/') : base;
   base = base == nullptr ? path : base + 1;
-  return _stricmp(base, expected_name) == 0 ||
-      (std::strcmp(expected_name, "art.dll") == 0 && _stricmp(base, "libart.dll") == 0);
+  return _wcsicmp(base, expected_name) == 0 ||
+      (std::wcscmp(expected_name, L"art.dll") == 0 && _wcsicmp(base, L"libart.dll") == 0);
 }
 
 }  // namespace
@@ -154,7 +155,7 @@ int main() {
   LPTOP_LEVEL_EXCEPTION_FILTER late_predecessor =
       SetUnhandledExceptionFilter(LateUef);
   const bool late_predecessor_is_art =
-      PointerIsInModule(reinterpret_cast<void*>(late_predecessor), "art.dll");
+      PointerIsInModule(reinterpret_cast<void*>(late_predecessor), L"art.dll");
   std::printf("WIN32_ART_EMBED late_uef installed predecessor_is_art=%d\n",
               late_predecessor_is_art ? 1 : 0);
 
