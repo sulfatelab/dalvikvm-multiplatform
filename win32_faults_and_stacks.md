@@ -2840,7 +2840,7 @@ stress cases, and rejected an active fiber. The page-state probe passed eight
 selection cases, five layout cases, 16 KiB configured guarantees, 64 committed
 and 64 reserved restorations, and 258 direct faults. Compact raw results and
 the host identity are under
-`tools/verify/windows_x64_phase4/evidence/fs4_same_host_20260730/`.
+`docs/history/windows_x64_fs4_same_host_result.md`.
 
 Per the acceptance-policy decision, this closes FS-4 on the authoritative
 Windows Server 2025 build-26100 host. A local SSH inventory found no second
@@ -2881,7 +2881,7 @@ debugger-quality follow-ups.
 | FS-1 (done) | Add allocation-free high-water instrumentation around the explicit check, quick throw, temporary stack-end expansion, exception construction, and non-local transfer; run release and debug builds | Accepted 2026-07-30: Wine and native Release/Debug switch, nterp, and JIT have positive margins; native quick Debug retains more than 37 KiB with the 40-KiB Debug-only reserve; four records per mode and no dumps |
 | FS-2 (done) | Extend the combined native package with debugger first-chance/continue, every named forced-incompatible CET policy, foreign VEH/frame-SEH/predecessor-UEF embedding, and XMM6-XMM15 sentinels during exception unwind | Accepted 2026-07-30 on build 26100: NPE continues into Java, explicit SOE remains fault-free, incompatible CET starts reject before Java/JIT with no dump, foreign search handlers coexist, and full-width XMM state survives unwind |
 | FS-3 (done) | With JIT-1 encoding and JIT-2 mapping/policy prerequisites complete, share the JIT closure load test: compile, invalidate, collect, reuse, and re-register many optimizing/JNI allocations while another thread performs lookup and virtual unwind | Accepted 2026-07-29: 52 collections, 1,344 compilations, 1,248 exact reuses, and 696,969 virtual unwinds complete with no missing/stale/failed record; callback tables remain unnecessary |
-| FS-4 (closed by policy) | Run FS-1 through FS-3, E9, parameterized guarantee geometry, fiber/manual-stack rejection, and deep detach/continue/reattach lifecycle on the authoritative host | Closed 2026-07-30 by decision: Windows Server 2025 build 26100 is authoritative; the Windows 10/second-host repetition is skipped. Evidence: `tools/verify/windows_x64_phase4/evidence/fs4_same_host_20260730/` |
+| FS-4 (closed by policy) | Run FS-1 through FS-3, E9, parameterized guarantee geometry, fiber/manual-stack rejection, and deep detach/continue/reattach lifecycle on the authoritative host | Closed 2026-07-30 by decision: Windows Server 2025 build 26100 is authoritative; the Windows 10/second-host repetition is skipped. Evidence: `docs/history/windows_x64_fs4_same_host_result.md` |
 | FS-5 (closed conditional) | Attempt the brief pending bridge-range exception only if a deterministic probe can enter it without changing product control flow | Closed 2026-07-30: the pending tail is entered only by ART's managed pending-exception branch; structural and synthetic unwind checks pass, while a real native fault would require product fault injection or fabricated direct entry. See `tests/cases/managed-fault-recovery/RESULT.md` |
 
 The history follow-ups—fatal-dump instrumentation with RSP inside the pregrown

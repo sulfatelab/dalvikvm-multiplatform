@@ -296,6 +296,10 @@ package identity, exact debugger/CET/XMM/embedding contracts, final result,
 and all six intentional dump identities. Absolute host paths, duplicate
 structural/result/scan records, and verbose process logs were removed after
 the unified W-010 gates assumed live ownership.
+FS-4's authoritative-host repeat is also one sanitized history summary. It
+retains all three package identities, repeat FS-1 margins, 16-way guarantee
+geometry, thread/fiber/lifecycle counts, and six dump identities. Host/subnet
+addresses and copied FS-1/FS-2/FS-3 raw records were removed.
 The unreferenced W-025 JIT-2/JIT-3 source preflights and the broken JIT-4
 preflight were removed as well. The unified W-025 reviewer owns their current
 mapping, lifecycle, nterp floating-point, JIT-control, PE-import/export, and

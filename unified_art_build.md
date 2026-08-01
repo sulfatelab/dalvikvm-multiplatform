@@ -636,6 +636,11 @@ items are closed.
   dump identities remain. Absolute host paths, duplicate structural/result/
   scan records, and ten verbose process logs were removed after unified W-010
   assumed their live behavior.
+- [x] FS-4's authoritative-host repeat is consolidated in
+  `docs/history/windows_x64_fs4_same_host_result.md`. The three package
+  identities, repeat FS-1 margins, 16-way guarantee geometry, thread/fiber/
+  lifecycle counts, and six dump identities remain. Host/subnet addresses and
+  ten copied raw FS-1/FS-2/FS-3 records were removed.
 - [x] `art.dll` no longer uses `WINDOWS_EXPORT_ALL_SYMBOLS`. Before the change,
   a Debug scan found 80,318 candidate exports and exceeded PE's 65,535-entry
   limit, while RelWithDebInfo exposed 17,112. ART's existing `EXPORT` boundary

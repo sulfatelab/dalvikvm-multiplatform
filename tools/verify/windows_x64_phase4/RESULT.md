@@ -510,7 +510,7 @@ retained in `../../../docs/history/windows_x64_fs2_w010_w014_result.md`.
 - Keep E9's explicit Windows x64 stack checks and guarantee-aware bound accounting as
   the accepted product path; retain fixed-page operations only as direct
   diagnostics. The authoritative Windows Server 2025 build-26100 FS-4 repeat
-  is archived under `evidence/fs4_same_host_20260730/`.
+  is archived in `../../../docs/history/windows_x64_fs4_same_host_result.md`.
 - Correlate Java/ART-pool reservations and add wrong-address/unsupported-
   exception negatives or debugger-quality dump-stack reconstruction if those
   remain release requirements. FS-5 records why a real pending-tail native

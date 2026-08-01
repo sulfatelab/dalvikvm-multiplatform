@@ -2,7 +2,6 @@
 
 **Date:** 2026-07-30
 **Host:** Windows Server 2025 Datacenter Evaluation, x64, build 26100
-**Host address:** `administrator@10.127.137.62`
 **Status:** **FS-4 CLOSED by acceptance-policy decision**; Windows Server 2025 build 26100 is the authoritative native gate
 
 ## Repeated gates
@@ -30,6 +29,17 @@ The combined E9/FS-2 runner returned `OVERALL PASS`:
 - the parameterized thread-stack and page-state probes passed;
 - handled-dump scanning returned `NO_HANDLED_DMP_FILES`; and
 - six intentional fatal/embedding dumps passed the fatal dump scan.
+
+The six repeat dumps had the following byte/SHA-256 identities:
+
+```text
+embedding 740381 cc9ef7fee49a33183e5759a0fb37a6f443ad9ce8e43f83519e6834e9ded8126b
+static    745547 823f84e4982c4848a40a9b01b47c65b2727fdd442a936dfcf6977ad1e9c0b0ce
+jit-j1    750777 e10f53f9a82b394368e263f9b681b8813372223123600deacc1e73cee2c0ca7e
+jit-j2    747545 9ceb678309d1360eaa23fd294f351a3b3799035ca3d3f0e08f1b650846616020
+osr-j1    748255 5c46f117febe4996b0a43f554af6593276e44f053a2ec3e101e69d3a8d4655d5
+osr-j2    751919 21a817f8c2305d4d5b381e62c49ede54388d98fbb2279a004f6ddfaa3e412f6c
+```
 
 FS-1 returned `OVERALL PASS` for all six native modes:
 
@@ -66,21 +76,16 @@ The page-state probe reports eight selection cases, five layout cases, a
 16-KiB configured guarantee, 64 committed-page restorations, 64 reserved-page
 restorations, 258 direct faults, and `win32_stack_page_probe OK`.
 
-Compact raw results are retained beside this file:
-
-- `fs2/RESULT_W010_W014.txt`
-- `fs2/W010_W014_STRUCTURAL_REPORT.txt`
-- `fs2/thread_stack.log` and `fs2/stack_page.log`
-- `fs1/RESULT_FS1.txt`
-- `fs3/RESULT_W025_JIT3.txt`
-- `STACK_GROWTH_PARAMETERIZED.txt`
+The copied FS-1/FS-2/FS-3 result/scan records and parameterized raw transcript
+were removed after the exact repeat contract and immutable identities were
+consolidated here.
 
 ## Acceptance-policy disposition
 
-The local `10.127.137.32/27` network was checked for SSH listeners. The only
-other listener was `10.127.137.60`, which identifies as Ubuntu OpenSSH and
-rejects the available Windows `administrator` credentials. Per the explicit
-acceptance decision, Windows Server 2025 build 26100 is authoritative for this
-gate and the separate Windows 10/second-host repetition is skipped. The
-same-host results above therefore close FS-4 and H-002 within that declared
-scope; they do not claim cross-version coverage.
+The local lab network was checked for another Windows SSH endpoint; the only
+other listener identified as Ubuntu. Per the explicit
+[native Windows gate policy](../../win32_host_gate_policy.md), Windows Server
+2025 build 26100 is authoritative for this gate and the separate Windows
+10/second-host repetition is skipped. The same-host results above therefore
+close FS-4 and H-002 within that declared scope; they do not claim
+cross-version coverage.
