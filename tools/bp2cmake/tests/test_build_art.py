@@ -314,6 +314,11 @@ def test_windows_configure_uses_target_bundle_and_clang_target(tmp_path, monkeyp
     jdk = tmp_path / "jdk-21"
     (jdk / "bin").mkdir(parents=True)
     monkeypatch.setattr(build_art, "_resolve_jdk", lambda _local: jdk)
+    monkeypatch.setattr(
+        build_art,
+        "_build_fingerprint",
+        lambda *_args: {"schema_version": 2},
+    )
     commands = []
     monkeypatch.setattr(build_art, "_run_checked", lambda command: commands.append(command))
 
@@ -468,3 +473,146 @@ def test_runtime_tests_require_exact_native_host(
     monkeypatch.setattr(build_art.platform, "system", lambda: system)
     monkeypatch.setattr(build_art.platform, "machine", lambda: machine)
     assert build_art._host_can_run_target(build_art.resolve_target(target_id)) is expected
+
+
+def test_build_fingerprint_records_resolved_profile_graph_tools_and_bindings(
+    tmp_path, monkeypatch
+):
+    target = build_art.resolve_target("windows-x86_64-msvc")
+    graph_identity = {
+        "graph_sha256": "1" * 64,
+        "manifest_sha256": "2" * 64,
+        "profile_sha256": "3" * 64,
+    }
+    tool_identities = {
+        "clang": {
+            "path": str(tmp_path / "clang"),
+            "version_command": ["--version"],
+            "version_output": "clang version 21.1.8",
+        }
+    }
+    binding_identities = {
+        "bundle_root": {
+            "path": str(tmp_path / "bundle"),
+            "tree_sha256": "4" * 64,
+            "file_count": 1,
+            "directory_count": 0,
+            "total_bytes": 4,
+        }
+    }
+    monkeypatch.setattr(
+        build_art, "_generated_graph_identity", lambda *_args: graph_identity
+    )
+    monkeypatch.setattr(build_art, "_tool_identities", lambda _tools: tool_identities)
+    monkeypatch.setattr(
+        build_art,
+        "_target_binding_identities",
+        lambda _bindings: binding_identities,
+    )
+    monkeypatch.setattr(build_art.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(build_art.platform, "machine", lambda: "AMD64")
+
+    fingerprint = build_art._build_fingerprint(
+        target,
+        "RelWithDebInfo",
+        "product",
+        {"clang": tmp_path / "clang"},
+        tmp_path / "generated",
+        {"bundle_root": tmp_path / "bundle"},
+    )
+
+    assert fingerprint["schema_version"] == 2
+    assert fingerprint["target"] == target.to_dict()
+    assert fingerprint["generated_graph"] == graph_identity
+    assert fingerprint["tools"] == tool_identities
+    assert fingerprint["target_bindings"] == binding_identities
+    assert fingerprint["build_host"]["os"] == "windows"
+    assert fingerprint["build_host"]["arch"] == "x86_64"
+
+
+def test_generated_graph_identity_checks_manifest_and_file_digest(tmp_path):
+    target = build_art.resolve_target("linux-x86_64-gnu")
+    generated = tmp_path / "generated"
+    generated.mkdir()
+    graph = generated / "art_graph.cmake"
+    graph.write_text("add_library(art SHARED art.cc)\n", encoding="utf-8")
+    profile = generated / "target_profile.cmake"
+    profile.write_text(target.to_cmake(), encoding="utf-8")
+    graph_sha256 = build_art._sha256_file(graph)
+    manifest = {
+        "schema_version": 2,
+        "target": target.to_dict(),
+        "graph_sha256": graph_sha256,
+    }
+    (generated / "graph_manifest.json").write_text(
+        json.dumps(manifest, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
+    identity = build_art._generated_graph_identity(generated, target)
+
+    assert identity["graph_sha256"] == graph_sha256
+    assert len(identity["manifest_sha256"]) == 64
+    assert identity["profile_sha256"] == build_art._sha256_file(profile)
+    graph.write_text("add_library(art STATIC art.cc)\n", encoding="utf-8")
+    with pytest.raises(build_art.BuildFrontendError, match="digest mismatch"):
+        build_art._generated_graph_identity(generated, target)
+
+
+def test_tool_identities_capture_shell_free_version_output(tmp_path, monkeypatch):
+    commands = []
+
+    def run(command, **kwargs):
+        commands.append((command, kwargs))
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=("cmake version 4.2.3\r\n" if command[-1] == "--version" else ""),
+            stderr=("openjdk version 21.0.11\r\n" if command[-1] == "-version" else ""),
+        )
+
+    monkeypatch.setattr(build_art.subprocess, "run", run)
+    tools = {
+        "cmake": tmp_path / "cmake",
+        "java": tmp_path / "java",
+    }
+
+    identities = build_art._tool_identities(tools)
+
+    assert identities["cmake"]["version_output"] == "cmake version 4.2.3"
+    assert identities["java"]["version_output"] == "openjdk version 21.0.11"
+    assert commands[0][1]["shell"] is False
+    assert commands[0][1]["capture_output"] is True
+    assert commands[1][0][-1] == "-version"
+
+
+def test_regular_tree_identity_is_layout_and_content_sensitive(tmp_path):
+    bundle = tmp_path / "bundle"
+    include = bundle / "include"
+    include.mkdir(parents=True)
+    header = include / "runtime.h"
+    header.write_bytes(b"ART1")
+    (bundle / "empty").mkdir()
+
+    first = build_art._regular_tree_identity(bundle)
+    header.write_bytes(b"ART2")
+    second = build_art._regular_tree_identity(bundle)
+
+    assert first["file_count"] == 1
+    assert first["directory_count"] == 2
+    assert first["total_bytes"] == 4
+    assert first["tree_sha256"] != second["tree_sha256"]
+
+
+def test_regular_tree_identity_rejects_links(tmp_path):
+    bundle = tmp_path / "bundle"
+    bundle.mkdir()
+    target = bundle / "target.h"
+    target.write_bytes(b"header")
+    link = bundle / "alias.h"
+    try:
+        link.symlink_to(target.name)
+    except OSError:
+        pytest.skip("host cannot create a test symlink")
+
+    with pytest.raises(build_art.BuildFrontendError, match="link/reparse"):
+        build_art._regular_tree_identity(bundle)

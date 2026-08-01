@@ -53,14 +53,15 @@ items are closed.
 ### Latest verification baseline (2026-08-01)
 
 - [x] `PYTHONPATH=tools/bp2cmake python3 -m pytest tools/bp2cmake/tests tests/host -q`:
-  170 passed, including generated PE-header, Linux/Windows test-catalog,
+  175 passed, including generated PE-header, Linux/Windows test-catalog,
   shell-free runtime/managed-artifact gates, parallel-frontend, JDK validation,
   deterministic JAR, Windows-path/DSO-name, reviewer ownership, W-010
   nonzero/fault/debugger/fatal-dump orchestration, W-013 source-policy,
   W-025 JIT lifecycle/mapping/process-policy/reviewer orchestration, fatal
   contracts, the shell-free Math CriticalNative matrix, W-024 cleanup, the
   reviewed PE runtime-consumer export boundary, retired libcore-product-path
-  absence, and VCS binary/source-ownership coverage.
+  absence, VCS binary/source-ownership coverage, and schema-2 build-fingerprint
+  graph/tool/target-binding identity coverage.
 - [x] Fresh generation loads the same 260 Blueprint files for both targets and
   emits 34 generated modules for `linux-x86_64-gnu` and 33 for
   `windows-x86_64-msvc`. Both graphs emit the separate `openjdkjvmti` DSO;
@@ -101,8 +102,25 @@ items are closed.
   `native/cmake/ArtTests.cmake`; `native/CMakeLists.txt` remains the sole CMake
   entry point. Linux, Windows-cross, and native Windows Server 2025
   reconfiguration produced no compile/link work, immediate repeats were Ninja
-  no-ops, all 170 host regressions passed, and both cross and native 58-file
+  no-ops, all 175 host regressions passed, and both cross and native 58-file
   CET contracts passed. Linux/cross used 32 jobs and native Windows used 16.
+- [x] Build-manifest schema 2 records the full serialized target profile;
+  SHA-256 identities for the generated graph, graph manifest, and generated
+  CMake profile; each tool's resolved path, shell-free version command, and
+  complete version output; and deterministic layout/content identities for
+  configured bundle, sysroot, and runtime roots. Target-binding traversal
+  rejects links, reparse points, and non-regular entries instead of following
+  them. The regular-file Windows bundle contains 6,618 files in 144
+  directories, totals 718,271,618 bytes, and has tree identity
+  `c3892764c8a4b7d386437e896ea2905aee722617c18a6bc8db62ff14aa44083c`.
+  In a fresh ignored output root, Linux and Windows-cross configuration replay
+  accepted identical fingerprints; both product builds passed at
+  `--parallel 32` and repeated as Ninja no-ops. The cross `art-tests` graph
+  also built and repeated as a no-op, and its CET contract passed 58/58 with
+  no raw links or legacy packagers. A fresh native Windows Server 2025 product
+  completed all 1,857 steps at `--parallel 16` on the 16 GiB VM; `art-tests`
+  completed 123 steps; product, tests, and the post-reconfiguration test repeat
+  were Ninja no-ops; and the native CET contract passed all 58 PE files.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to
@@ -1064,9 +1082,12 @@ an unreviewed module-set or kind change.
   target-specific product entry points. Artifact staging deliberately remains
   shell-free Python frontend policy in `tools/build_art.py`; it is not a CMake
   target-graph responsibility.
-- [ ] Strengthen the build fingerprint with the full serialized profile,
+- [x] Strengthen the build fingerprint with the full serialized profile,
   generated graph digest, tool versions, and target-bundle identity rather
-  than only paths and the target triple.
+  than only paths and the target triple. Schema 2 also fingerprints the graph
+  manifest and generated CMake profile, captures complete shell-free tool
+  version output, hashes every regular target-binding file, and rejects
+  link/reparse and non-regular binding entries.
 - [ ] Retire global toolchain-drift warning demotions and forced preludes as
   vendored dependencies are updated or the required compatibility becomes
   explicit per module.

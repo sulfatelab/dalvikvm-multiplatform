@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import platform
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -279,9 +281,16 @@ def _configure(
         tools["llvm-rc"] = _resolve_llvm_resource_compiler(local)
         tools["llvm-pdbutil"] = _resolve_llvm_pdbutil(local)
     bindings = _target_bindings(target, local)
-    fingerprint = _build_fingerprint(target, build_type, variant, tools)
-    manifest_path = binary_dir / "build_manifest.json"
     generated = binary_dir / "generated"
+    fingerprint = _build_fingerprint(
+        target,
+        build_type,
+        variant,
+        tools,
+        generated,
+        bindings,
+    )
+    manifest_path = binary_dir / "build_manifest.json"
     command = [
         str(tools["cmake"]),
         "-S",
@@ -844,20 +853,191 @@ def _build_fingerprint(
     build_type: str,
     variant: str,
     tools: dict[str, Path],
+    generated_dir: Path,
+    bindings: dict[str, Path],
 ) -> dict[str, object]:
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "build_host": {
             "os": platform.system().lower(),
             "arch": _canonical_host_arch(platform.machine()),
             "python_version": platform.python_version(),
         },
-        "target_id": target.target_id,
-        "target_triple": target.target_triple,
+        "target": target.to_dict(),
         "build_type": build_type,
         "build_variant": variant,
-        "tools": {name: str(path) for name, path in sorted(tools.items())},
+        "generated_graph": _generated_graph_identity(generated_dir, target),
+        "tools": _tool_identities(tools),
+        "target_bindings": _target_binding_identities(bindings),
     }
+
+
+def _generated_graph_identity(
+    generated_dir: Path, target: TargetProfile
+) -> dict[str, object]:
+    graph = generated_dir / "art_graph.cmake"
+    manifest_path = generated_dir / "graph_manifest.json"
+    profile_path = generated_dir / "target_profile.cmake"
+    try:
+        manifest_bytes = manifest_path.read_bytes()
+        manifest = json.loads(manifest_bytes.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise BuildFrontendError(
+            f"cannot fingerprint generated graph manifest {manifest_path}: {exc}"
+        ) from exc
+    if manifest.get("target") != target.to_dict():
+        raise BuildFrontendError(
+            f"generated graph target does not match profile {target.target_id}"
+        )
+    graph_sha256 = manifest.get("graph_sha256")
+    if not isinstance(graph_sha256, str) or re.fullmatch(r"[0-9a-f]{64}", graph_sha256) is None:
+        raise BuildFrontendError("generated graph manifest has no valid graph_sha256")
+    actual_graph_sha256 = _sha256_file(graph)
+    if actual_graph_sha256 != graph_sha256:
+        raise BuildFrontendError(
+            f"generated graph digest mismatch: manifest has {graph_sha256}, "
+            f"file has {actual_graph_sha256}"
+        )
+    return {
+        "graph_sha256": graph_sha256,
+        "manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
+        "profile_sha256": _sha256_file(profile_path),
+    }
+
+
+_TOOL_VERSION_ARGUMENTS = {
+    "java": ("-version",),
+    "javac": ("-version",),
+    # llvm-rc deliberately has no version flag. Its official help banner plus
+    # the sibling LLVM tool versions still make this executable identity
+    # reviewable without invoking a shell or compiling a probe resource.
+    "llvm-rc": ("/?",),
+}
+
+
+def _tool_identities(tools: dict[str, Path]) -> dict[str, object]:
+    identities: dict[str, object] = {}
+    for name, path in sorted(tools.items()):
+        arguments = _TOOL_VERSION_ARGUMENTS.get(name, ("--version",))
+        command = [str(path), *arguments]
+        try:
+            result = subprocess.run(
+                command,
+                cwd=REPO_ROOT,
+                shell=False,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+        except OSError as exc:
+            raise BuildFrontendError(
+                f"cannot query {name} version at {path}: {exc}"
+            ) from exc
+        output = (result.stdout + result.stderr).replace("\r\n", "\n").strip()
+        if result.returncode or not output:
+            raise BuildFrontendError(
+                f"{name} version query failed at {path} with exit code "
+                f"{result.returncode}: {output or 'no output'}"
+            )
+        identities[name] = {
+            "path": str(path),
+            "version_command": list(arguments),
+            "version_output": output,
+        }
+    return identities
+
+
+def _target_binding_identities(
+    bindings: dict[str, Path],
+) -> dict[str, object]:
+    identities: dict[str, object] = {}
+    for name, path in sorted(bindings.items()):
+        print(f"fingerprinting target binding {name}: {path}")
+        identities[name] = {
+            "path": str(path),
+            **_regular_tree_identity(path),
+        }
+    return identities
+
+
+def _regular_tree_identity(root: Path) -> dict[str, object]:
+    root = validate_managed_path(root)
+    if not root.is_dir():
+        raise BuildFrontendError(f"target binding must be a directory: {root}")
+    digest = hashlib.sha256()
+    file_count = 0
+    directory_count = 0
+    total_bytes = 0
+
+    def visit(directory: Path, relative: Path) -> None:
+        nonlocal file_count, directory_count, total_bytes
+        try:
+            entries = sorted(os.scandir(directory), key=lambda item: item.name)
+        except OSError as exc:
+            raise BuildFrontendError(
+                f"cannot scan target binding directory {directory}: {exc}"
+            ) from exc
+        for entry in entries:
+            entry_path = Path(entry.path)
+            entry_relative = relative / entry.name
+            normalized = entry_relative.as_posix().encode("utf-8")
+            try:
+                metadata = entry.stat(follow_symlinks=False)
+            except OSError as exc:
+                raise BuildFrontendError(
+                    f"cannot stat target binding entry {entry_path}: {exc}"
+                ) from exc
+            file_attributes = getattr(metadata, "st_file_attributes", 0)
+            if entry.is_symlink() or file_attributes & 0x400:
+                raise BuildFrontendError(
+                    f"target binding contains a link/reparse entry: {entry_path}"
+                )
+            if stat.S_ISDIR(metadata.st_mode):
+                directory_count += 1
+                digest.update(b"D\0" + normalized + b"\0")
+                visit(entry_path, entry_relative)
+                continue
+            if not stat.S_ISREG(metadata.st_mode):
+                raise BuildFrontendError(
+                    f"target binding contains a non-regular entry: {entry_path}"
+                )
+            file_count += 1
+            total_bytes += metadata.st_size
+            digest.update(
+                b"F\0"
+                + normalized
+                + b"\0"
+                + str(metadata.st_size).encode("ascii")
+                + b"\0"
+            )
+            try:
+                with entry_path.open("rb") as stream:
+                    for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                        digest.update(chunk)
+            except OSError as exc:
+                raise BuildFrontendError(
+                    f"cannot hash target binding file {entry_path}: {exc}"
+                ) from exc
+            digest.update(b"\0")
+
+    visit(root, Path())
+    return {
+        "tree_sha256": digest.hexdigest(),
+        "file_count": file_count,
+        "directory_count": directory_count,
+        "total_bytes": total_bytes,
+    }
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    try:
+        with path.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(chunk)
+    except OSError as exc:
+        raise BuildFrontendError(f"cannot hash {path}: {exc}") from exc
+    return digest.hexdigest()
 
 
 def _guard_binary_directory(
