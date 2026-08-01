@@ -334,7 +334,7 @@ def gen_aconfig(cfg: CodegenConfig) -> list[str]:
     return aconfig.generate(files, out_dir)
 
 
-# PE consumers need dllimport on data referenced across the art.dll boundary.
+# PE consumers need explicit annotations on bounded art.dll interfaces.
 # Keep these target-only annotations out of the nested vendor checkout: stage
 # complete, include-guard-compatible header overlays under gensrc instead.
 WINDOWS_PE_HEADER_REPLACEMENTS: dict[str, list[tuple[str, str]]] = {
@@ -459,6 +459,20 @@ WINDOWS_PE_HEADER_REPLACEMENTS: dict[str, list[tuple[str, str]]] = {
             "REQUIRES_SHARED(Locks::mutator_lock_);",
         ),
     ],
+    # The W-025 runtime probes are ordinary JNI DSOs linked to the product
+    # art.dll. Export their two read-only inspection boundaries without
+    # widening art.dll back to CMake's unbounded auto-export policy.
+    "art/runtime/jit/jit_code_cache.h": [
+        (
+            "  bool GetGarbageCollectCode() REQUIRES(!Locks::jit_lock_);",
+            "  EXPORT LIBART_PE_API bool GetGarbageCollectCode() "
+            "REQUIRES(!Locks::jit_lock_);",
+        ),
+        (
+            "  JitMemoryRegion* GetCurrentRegion();",
+            "  EXPORT LIBART_PE_API JitMemoryRegion* GetCurrentRegion();",
+        ),
+    ],
     "art/runtime/runtime_options.h": [
         (
             "#define RUNTIME_OPTIONS_KEY(Type, Name, ...) static const Key<Type> (Name);",
@@ -508,7 +522,7 @@ WINDOWS_PE_HEADER_REPLACEMENTS: dict[str, list[tuple[str, str]]] = {
 
 
 def gen_windows_pe_headers(cfg: CodegenConfig) -> list[str]:
-    """Stage target-only ART headers carrying explicit PE data boundaries."""
+    """Stage target-only ART headers carrying explicit PE DSO boundaries."""
     os_name = (cfg.asm_target_os or "linux").lower()
     if os_name not in ("windows", "win32", "windows_x64", "pe"):
         return []

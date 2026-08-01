@@ -6,8 +6,10 @@ reuse, lookup, and virtual unwind. Its selector is exact
 
 | Build | Runtime | Last checked |
 |---|---|---|
-| verified | pending unified managed runner | 2026-07-31 |
+| verified | verified | 2026-08-01 |
 
-The canonical native source passed the unified cross catalog build. Historical
-native results remain valid evidence for the unchanged source bytes; managed
-runner migration is still required.
+The canonical native source passed the unified cross catalog build and the
+combined source/PE reviewer. The shell-free managed runner passed twice on
+Windows Server 2025: eight cycles, eight collections, 216 compilations, 192
+exact reuses, zero missing-live/stale-dead/unwind failures, no callback tables,
+and passing JNI values. The work tree contained no dump or temporary JIT file.

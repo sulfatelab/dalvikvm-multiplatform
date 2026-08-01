@@ -753,6 +753,13 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
         "${MDVM_ART_ROOT_DIR}/art/runtime/art_method.cc"
         APPEND PROPERTY COMPILE_OPTIONS
             "-include;${MDVM_GENSRC_DIR}/art/windows-pe-headers/art/runtime/art_method.h")
+    # W-025 JNI DSOs inspect whether collection is enabled and audit the
+    # current JIT mapping. Keep those two function exports source-scoped to
+    # the defining translation unit just like the other bounded PE overlays.
+    set_property(SOURCE
+        "${MDVM_ART_ROOT_DIR}/art/runtime/jit/jit_code_cache.cc"
+        APPEND PROPERTY COMPILE_OPTIONS
+            "-include;${MDVM_GENSRC_DIR}/art/windows-pe-headers/art/runtime/jit/jit_code_cache.h")
     target_link_options(art PRIVATE
         "LINKER:/EXPORT:mspace_malloc"
         "LINKER:/EXPORT:mspace_usable_size")

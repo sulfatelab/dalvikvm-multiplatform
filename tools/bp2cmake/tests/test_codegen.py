@@ -163,11 +163,13 @@ def test_windows_pe_header_overlays_are_staged_without_modifying_vendor():
         cfg = _cfg(tmp)
         cfg.asm_target_os = "windows"
         outputs = gen_windows_pe_headers(cfg)
-        assert len(outputs) == 6
+        assert len(outputs) == 7
         joined = "\n".join(open(path, encoding="utf-8").read() for path in outputs)
         assert "EXPORT LIBART_PE_API bool RequestSynchronousCheckpoint" in joined
         assert "EXPORT LIBART_PE_API void SetException" in joined
         assert "EXPORT LIBART_PE_API ObjPtr<mirror::DexCache> GetObsoleteDexCache" in joined
+        assert "EXPORT LIBART_PE_API bool GetGarbageCollectCode" in joined
+        assert "EXPORT LIBART_PE_API JitMemoryRegion* GetCurrentRegion" in joined
         assert "LIBART_PE_DATA static const Key<Type>" in joined
         assert "LIBART_PE_DATA static Mutex* intern_table_lock_" in joined
         assert "LIBART_PE_DATA static ArtMethod* java_lang_OutOfMemoryError_init" in joined

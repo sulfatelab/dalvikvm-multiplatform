@@ -5,7 +5,8 @@ assumptions make it exact `windows-x86_64-msvc`.
 
 | Build | Runtime | Last checked |
 |---|---|---|
-| verified | pending unified behavioral gate | 2026-07-31 |
+| verified | verified | 2026-08-01 |
 
-The canonical source passed the unified cross catalog build. AArch64 and
-ARM64EC need independent unwind probes.
+The Linux-hosted Windows cross stage built the probe through the common graph.
+On Windows Server 2025 the unified native gate passed all six encoding cases
+twice with zero failures. AArch64 and ARM64EC need independent unwind probes.

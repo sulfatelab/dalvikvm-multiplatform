@@ -139,17 +139,31 @@ Ninja no-op repeat; the Linux-hosted cross stage built the same artifacts and
 also repeated as a no-op. The debugger launches the frontend-resolved product
 EXE rather than copying it away from its matching DLL directory, while all
 writable runtime state remains isolated below the output tree.
+W-025 keeps its three JNI DSOs as compile-only dependencies and makes seven
+behavioral declarations target-runnable. The managed runners cover unwind
+lifecycle, stress, and 64 MiB/1 GiB mapping audits; the native runners cover
+unwind encoding/registry, section policy, CFG execution, and fail-closed
+dynamic-code policy. One shared reviewer audits source, CFG/import/export PE
+policy, XMM0 floating-point returns, and absence of the retired J-1 path.
+Windows Server 2025 passed the eight-gate stage twice, and the Linux-hosted
+Windows cross stage passed its reviewer; both stage builds repeated as Ninja
+no-ops. Test assets are copied as regular files into output-owned work roots,
+while the original absolute `dalvikvm.exe` is launched to preserve its product
+DLL lookup order. No machine path is serialized in result JSON.
 Remaining legacy shell runners and retained per-probe CMake entry points use
 canonical files as temporary compatibility shims; they must be replaced by the
 unified Python/CMake/Ninja path before `tools/verify` can be removed. W-003 has
 removed its four standalone CMake graphs, shell runners, and package producer;
 W-004 has likewise removed the standalone JVMTI CMake/Bash orchestration after
-unified native acceptance. Retained aggregate package flows acquire the JVMTI
-DLL/JAR inputs from an explicitly configured unified build.
-The six shared Windows x86-64 source/object/PE reviewers formerly stored beside
-the retired Phase-1 product graph now live under `support/windows/`. Their
-defaults use canonical `out/<target-id>/<build-type>` paths; transitional host
-package scripts pass explicit directories until those packages are retired.
+unified native acceptance. W-025 has removed its four package producers,
+package-only PowerShell/Bash/Wine orchestration, and superseded Phase-4 JIT
+wrappers after unified native acceptance. Retained aggregate package flows
+acquire required DLL/JAR inputs from an explicitly configured unified build.
+Eight shared Windows x86-64 source/object/PE reviewers now live under
+`support/windows/`: six moved from the retired Phase-1 product graph, and the
+W-013 and W-025 policy reviewers were added directly to the unified system.
+Their defaults or explicit arguments consume canonical
+`out/<target-id>/<build-type>` artifacts.
 The W-014 FS-1 stack-high-water case now uses the exact test-only build variant
 `win32-stack-high-water`. That variant has its own fingerprinted output
 directory, cannot be staged as a product, and changes the managed case from

@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "name": "basic",
+      "arguments": ["--basic"],
+      "expected_markers": [
+        "roles=R_RX_RW type=MEM_MAPPED rwx=0 mapped_names=0",
+        "W025_SECTION_POLICY_PASS mode=basic"
+      ],
+      "forbidden_markers": ["W025_SECTION_POLICY_FAIL"],
+      "timeout_seconds": 60
+    },
+    {
+      "name": "low-va",
+      "arguments": ["--low-va"],
+      "expected_markers": [
+        "W025_LOW_VA_PASS",
+        "no_high_fallback=1 recovery=1",
+        "W025_SECTION_POLICY_PASS mode=low-va"
+      ],
+      "forbidden_markers": ["W025_SECTION_POLICY_FAIL"],
+      "timeout_seconds": 120
+    },
+    {
+      "name": "commit-pressure",
+      "arguments": ["--pressure"],
+      "expected_markers": [
+        "W025_SEC_COMMIT_PASS capacity_bytes=1073741824",
+        "primary_low=1 alias=1",
+        "W025_SECTION_POLICY_PASS mode=pressure"
+      ],
+      "forbidden_markers": ["W025_SECTION_POLICY_FAIL"],
+      "timeout_seconds": 600
+    }
+  ]
+}

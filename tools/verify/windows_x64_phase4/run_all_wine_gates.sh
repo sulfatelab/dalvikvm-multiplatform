@@ -33,11 +33,8 @@ run P4_W010_EXPLICIT_STACK_CHECKS python3 \
   --repo "$REPO" --win-build "$BUILD" --linux-build "$LINUX_BUILD"
 run P4_W010_OSR_STATIC_UNWIND bash "$ROOT/run_osr_unwind_probe.sh"
 run P4_W024_CLEANUP_SOURCE python3 "$REPO/tests/support/w024_cleanup.py"
-run P4_W010_JIT_UNWIND_SERIALIZER bash "$ROOT/run_jit_unwind_info_probe.sh"
-run P4_W010_JIT_UNWIND_REGISTRY bash "$ROOT/run_jit_unwind_registry_probe.sh"
-run P4_W010_JIT_UNWIND_LIFECYCLE bash "$ROOT/run_jit_unwind_lifecycle.sh"
-run P4_W010_JIT_FATAL_UNWIND bash "$ROOT/run_jit_fatal_unwind.sh"
-run P4_W010_OSR_FATAL_UNWIND bash "$ROOT/run_osr_fatal_unwind.sh"
+# JIT unwind/lifecycle/fatal behavior is owned by the unified W-010 and W-025
+# stages. This legacy Wine aggregate does not duplicate those native gates.
 run P4_G1_GCSTRESS bash "$ROOT/run_gcstress.sh"
 run P4_G2_THREADHEAVY bash "$ROOT/run_threadheavy.sh"
 run P4_G3_HANDLELEAK bash "$ROOT/run_handleleak.sh"

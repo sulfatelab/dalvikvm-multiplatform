@@ -5,7 +5,9 @@ Its exact selector is `windows-x86_64-msvc`.
 
 | Build | Runtime | Last checked |
 |---|---|---|
-| verified | pending unified behavioral gate | 2026-07-31 |
+| verified | verified | 2026-08-01 |
 
 The source and Windows product implementation passed the unified cross catalog
-build. Other architectures require their own record format and result.
+build and shell-free structural review. Windows Server 2025 passed registration,
+lookup, virtual unwind, deletion, and re-registration twice with zero failures.
+Other architectures require their own record format and result.

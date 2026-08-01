@@ -5,7 +5,11 @@ Its current selector is `windows` / `x86_64` / `msvc`.
 
 | Build | Runtime | Last checked |
 |---|---|---|
-| verified | pending unified managed runner | 2026-07-31 |
+| verified | verified | 2026-08-01 |
 
-The canonical source passed the unified Windows cross catalog build. Other
-architectures remain non-applicable until independently accepted.
+The canonical source passed the unified Windows cross catalog build. The
+shell-free managed runner passed twice on Windows Server 2025 at 64 MiB and
+1 GiB. Both runs observed a contiguous low R/RX primary, unrestricted RW
+alias, unnamed pagefile-backed `MEM_MAPPED` storage, no RWX region, and the
+compiled target method. Other architectures remain non-applicable until
+independently accepted.

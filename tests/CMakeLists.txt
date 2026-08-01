@@ -1384,13 +1384,28 @@ endif()
 
 # W-025: JIT section policy and PE unwind registration/lifecycle.
 art_add_target_probe(
-    NAME win32_jit_unwind_info_probe STAGE w025 TYPE EXECUTABLE EXECUTION compile-only
+    NAME win32_jit_unwind_info_probe STAGE w025 TYPE EXECUTABLE
+    EXECUTION target-runnable TIMEOUT 120
     ${_art_windows_x86_64_msvc_selector}
     SOURCES "${_art_test_cases_root}/jit-unwind-info/probe.cc"
     INCLUDE_DIRS "${_art_test_repo_root}/vendor/art/compiler"
-    CONTRACTS jit unwind PRODUCT_POLICY)
+    CONTRACTS jit unwind PRODUCT_POLICY
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_test_repo_root}/tests/support/runtime_gate.py"
+        native
+        --target-id "${ART_TARGET_ID}"
+        --probe "$<TARGET_FILE:win32_jit_unwind_info_probe>"
+        --work-root "${CMAKE_CURRENT_BINARY_DIR}/results/w025-unwind-info"
+        --library-dir "${CMAKE_BINARY_DIR}"
+        --library-dir "${_art_bundle_lib}/libcxx/bin"
+        --expect "win32_jit_unwind_info_probe failures=0 cases=6"
+        --expect "win32_jit_unwind_info_probe OK"
+        --forbid "FAIL:"
+        --timeout 60)
 art_add_target_probe(
-    NAME win32_jit_unwind_registry_probe STAGE w025 TYPE EXECUTABLE EXECUTION compile-only
+    NAME win32_jit_unwind_registry_probe STAGE w025 TYPE EXECUTABLE
+    EXECUTION target-runnable TIMEOUT 120
     ${_art_windows_x86_64_msvc_selector}
     SOURCES
         "${_art_test_cases_root}/jit-unwind-registry/probe.cc"
@@ -1400,7 +1415,20 @@ art_add_target_probe(
         "${_art_test_repo_root}/vendor/art/compiler"
         "${_art_test_repo_root}/vendor/art/libartbase"
     LINK_LIBRARIES artbase base log
-    CONTRACTS jit unwind PRODUCT_POLICY)
+    CONTRACTS jit unwind PRODUCT_POLICY
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_test_repo_root}/tests/support/runtime_gate.py"
+        native
+        --target-id "${ART_TARGET_ID}"
+        --probe "$<TARGET_FILE:win32_jit_unwind_registry_probe>"
+        --work-root "${CMAKE_CURRENT_BINARY_DIR}/results/w025-unwind-registry"
+        --library-dir "${CMAKE_BINARY_DIR}"
+        --library-dir "${_art_bundle_lib}/libcxx/bin"
+        --expect "win32_jit_unwind_registry_probe failures=0"
+        --expect "win32_jit_unwind_registry_probe OK"
+        --forbid "FAIL:"
+        --timeout 60)
 art_add_target_probe(
     NAME jitunwindlifecycleprobe STAGE w025 TYPE SHARED EXECUTION compile-only
     ${_art_windows_x86_64_msvc_selector}
@@ -1438,41 +1466,125 @@ art_add_target_probe(
     CONTRACTS jit virtual-memory
     PREFIX lib OUTPUT_NAME w025jitmappingprobe WINDOWS_EXPORT_ALL_SYMBOLS PRODUCT_POLICY)
 art_add_target_probe(
-    NAME managed_jit_unwind_lifecycle STAGE w025 TYPE MANAGED EXECUTION compile-only
+    NAME managed_jit_unwind_lifecycle STAGE w025 TYPE MANAGED
+    EXECUTION target-runnable TIMEOUT 600
     ${_art_windows_x86_64_msvc_selector}
     SOURCES
         "${_art_test_cases_root}/jit-unwind-lifecycle/JitUnwindLifecycleProbe.java"
+    DEPENDS jitunwindlifecycleprobe dalvikvm icu_jni javacore openjdk openjdkjvm
     CONTRACTS jit unwind
-    OUTPUT_NAME jitunwindlifecycleprobe)
+    OUTPUT_NAME jitunwindlifecycleprobe
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_test_cases_root}/jit-unwind-lifecycle/run.py"
+        --target-id "${ART_TARGET_ID}"
+        --probe "$<TARGET_FILE:jitunwindlifecycleprobe>"
+        --dalvikvm "$<TARGET_FILE:dalvikvm>"
+        --boot-jar "${_art_boot_jar}"
+        --app-jar "${_art_managed_root}/jitunwindlifecycleprobe.jar"
+        --work-root "${CMAKE_CURRENT_BINARY_DIR}/results/w025-unwind-lifecycle"
+        --icu-data "${_art_icu_data}"
+        ${_art_managed_runtime_library_args})
 art_add_target_probe(
     NAME managed_w025_jit_lifecycle_stress STAGE w025
-    TYPE MANAGED EXECUTION compile-only
+    TYPE MANAGED EXECUTION target-runnable TIMEOUT 1200
     ${_art_windows_x86_64_msvc_selector}
     SOURCES
         "${_art_test_cases_root}/jit-lifecycle-stress/W025JitLifecycleStressProbe.java"
+    DEPENDS w025jitlifecyclestressprobe dalvikvm icu_jni javacore openjdk openjdkjvm
     CONTRACTS jit unwind stress
-    OUTPUT_NAME w025jitlifecyclestressprobe)
+    OUTPUT_NAME w025jitlifecyclestressprobe
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_test_cases_root}/jit-lifecycle-stress/run.py"
+        --target-id "${ART_TARGET_ID}"
+        --probe "$<TARGET_FILE:w025jitlifecyclestressprobe>"
+        --dalvikvm "$<TARGET_FILE:dalvikvm>"
+        --boot-jar "${_art_boot_jar}"
+        --app-jar "${_art_managed_root}/w025jitlifecyclestressprobe.jar"
+        --work-root "${CMAKE_CURRENT_BINARY_DIR}/results/w025-lifecycle-stress"
+        --icu-data "${_art_icu_data}"
+        ${_art_managed_runtime_library_args})
 art_add_target_probe(
-    NAME managed_w025_jit_mapping STAGE w025 TYPE MANAGED EXECUTION compile-only
+    NAME managed_w025_jit_mapping STAGE w025 TYPE MANAGED
+    EXECUTION target-runnable TIMEOUT 1200
     ${_art_windows_current_selector}
     SOURCES "${_art_test_cases_root}/jit-mapping/W025JitMappingProbe.java"
+    DEPENDS w025jitmappingprobe dalvikvm icu_jni javacore openjdk openjdkjvm
     CONTRACTS jit virtual-memory
-    OUTPUT_NAME w025jitmappingprobe)
+    OUTPUT_NAME w025jitmappingprobe
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_test_cases_root}/jit-mapping/run.py"
+        --target-id "${ART_TARGET_ID}"
+        --probe "$<TARGET_FILE:w025jitmappingprobe>"
+        --dalvikvm "$<TARGET_FILE:dalvikvm>"
+        --boot-jar "${_art_boot_jar}"
+        --app-jar "${_art_managed_root}/w025jitmappingprobe.jar"
+        --work-root "${CMAKE_CURRENT_BINARY_DIR}/results/w025-jit-mapping"
+        --icu-data "${_art_icu_data}"
+        ${_art_managed_runtime_library_args})
 art_add_target_probe(
     NAME windows_x64_w025_section_policy_probe STAGE w025 TYPE EXECUTABLE
-    EXECUTION compile-only ${_art_windows_current_selector}
+    EXECUTION target-runnable TIMEOUT 900 ${_art_windows_current_selector}
     SOURCES "${_art_test_cases_root}/jit-section-policy/probe.cc"
     LINK_LIBRARIES onecore psapi
     COMPILE_OPTIONS -Xclang -cfguard
     LINK_OPTIONS "LINKER:/guard:cf"
     CONTRACTS jit executable-memory cfg
-    OUTPUT_NAME W025SectionPolicyProbe PRODUCT_POLICY)
+    OUTPUT_NAME W025SectionPolicyProbe PRODUCT_POLICY
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_test_repo_root}/tests/support/runtime_gate.py"
+        native-matrix
+        --target-id "${ART_TARGET_ID}"
+        --probe "$<TARGET_FILE:windows_x64_w025_section_policy_probe>"
+        --work-root "${CMAKE_CURRENT_BINARY_DIR}/results/w025-section-policy"
+        --library-dir "${CMAKE_BINARY_DIR}"
+        --library-dir "${_art_bundle_lib}/libcxx/bin"
+        --matrix "${_art_test_cases_root}/jit-section-policy/runtime-matrix.json")
 art_add_target_probe(
     NAME windows_x64_w025_policy_launcher STAGE w025 TYPE EXECUTABLE
-    EXECUTION compile-only ${_art_windows_current_selector}
+    EXECUTION target-runnable TIMEOUT 1200 ${_art_windows_current_selector}
     SOURCES "${_art_test_cases_root}/jit-section-policy/launcher.cc"
+    DEPENDS
+        windows_x64_w025_section_policy_probe
+        managed_w025_jit_mapping managed_imageless_hello
+        dalvikvm icu_jni javacore openjdk openjdkjvm
     CONTRACTS jit process-policy
-    OUTPUT_NAME W025PolicyLauncher PRODUCT_POLICY)
+    OUTPUT_NAME W025PolicyLauncher PRODUCT_POLICY
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_test_cases_root}/jit-section-policy/run.py"
+        --target-id "${ART_TARGET_ID}"
+        --launcher "$<TARGET_FILE:windows_x64_w025_policy_launcher>"
+        --section-probe "$<TARGET_FILE:windows_x64_w025_section_policy_probe>"
+        --mapping-probe "$<TARGET_FILE:w025jitmappingprobe>"
+        --dalvikvm "$<TARGET_FILE:dalvikvm>"
+        --boot-jar "${_art_boot_jar}"
+        --mapping-jar "${_art_managed_root}/w025jitmappingprobe.jar"
+        --hello-jar "${_art_managed_root}/hello.jar"
+        --work-root "${CMAKE_CURRENT_BINARY_DIR}/results/w025-policy-launcher"
+        --icu-data "${_art_icu_data}"
+        ${_art_managed_runtime_library_args})
+art_add_target_probe(
+    NAME windows_x64_w025_jit_structure STAGE w025 TYPE GATE
+    EXECUTION host-review ${_art_windows_current_selector}
+    DEPENDS
+        art windows_x64_w025_section_policy_probe
+        w025jitlifecyclestressprobe
+    CONTRACTS jit virtual-memory unwind source-policy
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_test_repo_root}/tests/support/windows/check_w025_jit_contract.py"
+        --target-id "${ART_TARGET_ID}"
+        --repo "${_art_test_repo_root}"
+        --art "$<TARGET_FILE:art>"
+        --section-probe "$<TARGET_FILE:windows_x64_w025_section_policy_probe>"
+        --stress-probe "$<TARGET_FILE:w025jitlifecyclestressprobe>"
+        --llvm-readobj "${ART_LLVM_READOBJ}"
+        --result
+            "${CMAKE_CURRENT_BINARY_DIR}/results/w025-structure/result.json")
 
 get_property(_art_test_catalog_records GLOBAL PROPERTY ART_TEST_CATALOG_RECORDS)
 string(JOIN ",\n" _art_test_catalog_body ${_art_test_catalog_records})
