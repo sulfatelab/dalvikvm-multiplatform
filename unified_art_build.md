@@ -620,6 +620,11 @@ items are closed.
   40 KiB reserve rationale, no-dump result, and package identity. The five
   duplicate aggregate/host/checksum evidence files were removed after unified
   W-014 variant acceptance and no-op repeats became authoritative.
+- [x] FS-5's conditionally closed pending interpreter-tail disposition now
+  lives in `tests/cases/managed-fault-recovery/RESULT.md`. The exact two-range
+  structural contract and why real native-tail faulting would require product
+  mutation or fabricated state remain beside the live case; the standalone
+  legacy result was removed.
 - [x] `art.dll` no longer uses `WINDOWS_EXPORT_ALL_SYMBOLS`. Before the change,
   a Debug scan found 80,318 candidate exports and exceeded PE's 65,535-entry
   limit, while RelWithDebInfo exposed 17,112. ART's existing `EXPORT` boundary

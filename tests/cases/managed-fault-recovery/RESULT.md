@@ -234,3 +234,29 @@ dynamic chains. FS-3 separately proves concurrent native sampling under
 large dynamic-table churn. FS-2 now proves debugger continuation and
 exception-unwind preservation of full-width XMM6-XMM15; debugger-quality
 minidump stack reconstruction remains a separate acceptance item.
+
+## FS-5 pending interpreter-bridge disposition
+
+FS-5 is conditionally closed as impractical coverage. The 88-byte
+`art_quick_to_interpreter_pending_exception` range is structurally valid and
+synthetically unwound, but no deterministic real native exception can enter
+it without changing product control flow or injecting a fault into probe-only
+assembly. The live unwind probe accepts both bridge records with a 200-byte
+primary frame, 88-byte pending frame, and ten XMM records; native E6/E9 fatal
+coverage enters the primary `+0x82` range and completes the full static/JIT/OSR
+origin matrix.
+
+After `artQuickToInterpreterBridge` returns, assembly restores the primary
+save-refs-and-args frame, tests `Thread::exception`, returns normally when it
+is null, or jumps to the pending tail when it is non-null. That tail saves
+callee-saved GPRs and XMM12–XMM15 before non-returning managed exception
+delivery. It is reached by an ART pending-exception transition, not a Windows
+native exception.
+
+A real fault test would have to patch the product tail, make its helper raise,
+or jump into the internal range with fabricated ART registers/thread state.
+The first two change product semantics; the third is only another synthetic
+unwind test already covered by `RtlVirtualUnwind`. No such probe is retained.
+If debugger-quality coverage for this tail becomes a product requirement, it
+needs an explicitly synthetic/non-product label and separately reviewed fault
+injection contract.
