@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run a focused Wine smoke against the staged W-004 host package."""
+"""Recheck an already issued historical W-004 package under Wine."""
 
 from __future__ import annotations
 

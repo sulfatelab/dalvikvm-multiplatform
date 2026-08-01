@@ -106,6 +106,12 @@ builder and Wine runner, the Math wrapper, four other per-case wrappers, and
 the aggregate Wine runner were retired. Historical Wine logs remain evidence,
 not a maintained reproduction path.
 
+The old W-004 host package was a composite of W-003 native-ABI, W-004
+runtime/JVMTI/stress, and W-025 JIT-control behavior. After all three unified
+stages passed natively and repeated as Ninja no-ops, its Bash producer and
+repository-side PowerShell runner were retired. The package checker/reviewer,
+historical checklist, accepted hashes, and returned text remain readable.
+
 ## Unified W-010 acceptance (2026-08-01)
 
 The current authoritative W-010 path is the shell-free unified frontend and

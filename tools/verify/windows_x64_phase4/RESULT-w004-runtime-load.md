@@ -114,23 +114,24 @@ Linux controls also passed:
 - imageless Hello using the shared boot class path; and
 - GC stress.
 
-## Native Windows closure
+## Historical native Windows closure
 
 Native Windows acceptance passed on Windows 10 Enterprise LTSC x64 build
 19044. W-004 is closed.
 
-The focused native package is implemented by
-`tools/windows_x64/host_package/package_windows_x64_w004.sh`. Its source and artifact
-contract are checked by `check_w004_host_package.py`, and the staged package is
-exercised under Wine by `smoke_w004_host_package_wine.py` before the final
-manifest and archive are written.
+The standalone package producer and its repository-side PowerShell runner were
+retired after their maintained behavior passed through unified W-003, W-004,
+and W-025 on Windows Server 2025, with Ninja no-op repeats. New acceptance runs
+use `tools/build_art.py test`; the package checker, Wine rechecker, independent
+reviewer, checklist, hashes, and returned text remain only for interpreting the
+already issued archive.
 
 The package contains the shipped product artifacts, focused
 quick/nterp/JIT/native-ABI/GC/thread probes, and a structural report generated
 on Linux. LLVM inspection tools are not required on the Windows host. The
-embedded PowerShell runner requires Windows 10 RS4 build 17134 or later,
-verifies all packaged SHA-256 values and report/artifact hash agreement, then
-runs the complete host matrix and recursive dump scan. See
+historical embedded PowerShell runner required Windows 10 RS4 build 17134 or
+later, verified all packaged SHA-256 values and report/artifact hash agreement,
+then ran the complete host matrix and recursive dump scan. See
 [`W004_HOST_CHECKLIST.md`](W004_HOST_CHECKLIST.md).
 
 Local package verification passes:

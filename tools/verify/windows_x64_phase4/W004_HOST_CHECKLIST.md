@@ -1,11 +1,19 @@
-# W-004 native Windows host acceptance
+# Historical W-004 native Windows host acceptance
+
+This checklist applies only to the already issued package and its immutable
+returned evidence. The repository package producer and packaged PowerShell
+runner were retired after unified W-003, W-004, and W-025 passed on Windows
+Server 2025 and repeated as Ninja no-ops. For a new run, use the corresponding
+`tools/build_art.py test --stage w003`, `w004`, and `w025` commands; do not
+reconstruct this composite package.
 
 **Authoritative lab gate:** Windows Server 2025 Datacenter Evaluation, x64,
 build 26100. The accepted Windows 10 result below is historical; the former
 Windows 10 host is no longer available for future reruns. See
 [HOST_GATE_POLICY.md](HOST_GATE_POLICY.md).
 
-**State:** ACCEPTED historically on Windows 10 build 19044; W-004 closed
+**State:** HISTORICAL PACKAGE PROCEDURE; accepted on Windows 10 build 19044;
+W-004 is now maintained by the unified virtual stages
 
 The accepted 2026-07-25 run produced 28 PASS records, zero failures,
 `OVERALL PASS`, and `NO_DMP_FILES`. Package metadata and the structural report
@@ -85,5 +93,5 @@ Return the complete `logs` directory plus:
 Do not return only screenshots. Preserve all stdout/stderr logs so marker,
 exit-code, OS-build, and dump-scan results can be reviewed.
 
-The procedure remains available for regression runs. The first returned run
-was reviewed and accepted, closing W-004.
+The procedure is retained only to interpret the already returned evidence. The
+first returned run was reviewed and accepted, closing W-004.

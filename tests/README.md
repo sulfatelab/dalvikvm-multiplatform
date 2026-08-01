@@ -193,6 +193,11 @@ The final Phase-4 shell wrapper, for Math CriticalNative, was retired after its
 two-mode matrix moved beside the case and passed twice on native Windows plus
 the fresh Linux W-004 build. The W-024 source cleanup is now enforced by the
 live W-004 reviewer on native and cross hosts.
+The composite W-004 host package producer and repository-side PowerShell
+runner were then retired: W-003 owns its native-ABI matrices, W-004 owns its
+runtime/JVMTI/stress contracts, and W-025 owns its supported JIT controls and
+workloads. Its source-less FloatProbe JAR remains historical evidence rather
+than a reason to keep an alternative package build.
 W-025 has removed its four package producers,
 package-only PowerShell/Bash/Wine orchestration, and superseded Phase-4 JIT
 wrappers after unified native acceptance. Retained aggregate package flows

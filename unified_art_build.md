@@ -513,6 +513,15 @@ items are closed.
   at `--parallel 32` (Math 1.31 seconds). The Linux-hosted Windows cross graph
   rebuilt 66 affected edges, passed the reviewer, and immediately repeated as
   a Ninja no-op in 0.64 seconds.
+- [x] The final W-004 host package was an obsolete composite: W-003 now owns
+  its CriticalNative and normal/FastNative matrices, W-004 owns its
+  interpreter/JVMTI/runtime-load and managed stress behavior, and W-025 owns
+  the supported JIT controls, workloads, and lifecycle stress. After native
+  acceptance and no-op repeats for all three stages, the Bash package producer
+  and repository-side PowerShell runner were removed. The source-less legacy
+  FloatProbe JAR remains historical evidence; maintained FP/native-ABI
+  coverage is deeper in W-003. Package checkers/reviewers and returned text
+  remain available only for immutable historical evidence.
 
 ### Unified stage migration coverage
 
@@ -536,7 +545,7 @@ verification directories. All 91 declarations own canonical source under
 source cases and all 48 Java sources have adjacent results, and shared stage
 analysis remains under `tests/stages/`. The old verification tree now contains
 zero Java sources and two uncatalogued native sources retained by unfinished
-legacy evidence paths. It contains zero shell scripts, two PowerShell scripts,
+legacy evidence paths. It contains zero shell scripts, one PowerShell script,
 and 24 Python scripts. Python checkers
 and reviewers may remain, but the unified frontend must invoke them through a
 declared stage instead of a phase-local product build.

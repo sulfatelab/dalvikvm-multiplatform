@@ -647,15 +647,16 @@ The Windows x64 graph rebuilt successfully with `-j32`. Acceptance on agent01 pa
 Full details are in
 `tools/verify/windows_x64_phase4/RESULT-w004-runtime-load.md`.
 
-**Stage W004-D — native Windows closure: COMPLETE**
+**Stage W004-D — historical native Windows closure: COMPLETE**
 
-`tools/windows_x64/host_package/package_windows_x64_w004.sh` builds and locally verifies a
-focused native-host bundle containing the Linux-generated structural report
-plus quick/nterp/JIT/native-ABI/GC/thread probes. The package checker validates
-the inspected DLL hashes, manifest, PE export/import contract, and absence of
-the helper. Its staged Wine smoke passes before the final archive is written.
+The standalone package producer and repository-side PowerShell runner were
+retired after unified W-003, W-004, and W-025 passed natively on Windows Server
+2025 and repeated as Ninja no-ops. New acceptance uses the unified frontend.
+The historical package checker validates the inspected DLL hashes, manifest,
+PE export/import contract, and absence of the helper; its Wine rechecker and
+independent returned-result reviewer remain for the already issued archive.
 
-The Windows 10+ PowerShell runner verifies package hashes, runs both dual and
+The historical Windows 10+ PowerShell runner verified package hashes, ran both dual and
 J-1 native paths, performs ten repeated starts, scans all logs for fatal/access-
 violation markers, and recursively scans for crash dumps. On Windows 10 build
 19044 the returned result contains 28 PASS records, zero failures, and
