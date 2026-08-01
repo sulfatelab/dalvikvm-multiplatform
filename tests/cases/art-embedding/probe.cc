@@ -106,7 +106,7 @@ int main() {
   LPTOP_LEVEL_EXCEPTION_FILTER original_uef =
       SetUnhandledExceptionFilter(PredecessorUef);
 
-  HMODULE art = LoadLibraryA("art.dll");
+  HMODULE art = LoadLibraryW(L"art.dll");
   if (art == nullptr) {
     std::fprintf(stderr, "WIN32_ART_EMBED FAIL LoadLibrary art error=%lu\n", GetLastError());
     return 1;

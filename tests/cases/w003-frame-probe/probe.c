@@ -19,7 +19,7 @@ static int ResolveProbe(JNIEnv* env) {
   if (g_reset != NULL && g_snapshot != NULL) {
     return 1;
   }
-  HMODULE art = GetModuleHandleA("art.dll");
+  HMODULE art = GetModuleHandleW(L"art.dll");
   if (art == NULL) {
     ThrowLinkError(env, "instrumented art.dll is not loaded");
     return 0;

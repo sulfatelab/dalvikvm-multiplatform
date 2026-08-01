@@ -36,8 +36,8 @@ static LONG WINAPI late_uef_probe(EXCEPTION_POINTERS* info) {
 }
 
 static HMODULE art_module(void) {
-  HMODULE m = GetModuleHandleA("art.dll");
-  if (!m) m = GetModuleHandleA("libart.dll");
+  HMODULE m = GetModuleHandleW(L"art.dll");
+  if (!m) m = GetModuleHandleW(L"libart.dll");
   return m;
 }
 
@@ -214,8 +214,8 @@ __declspec(dllexport) jstring Java_java_lang_Runtime_nativeLoad(
 
   /* Prefer full ART LoadNativeLibrary if exported (future openjdkjvm). */
   typedef jstring (*jvm_native_load_fn)(JNIEnv*, jstring, jobject, jclass);
-  HMODULE ojj = GetModuleHandleA("libopenjdkjvm.dll");
-  if (!ojj) ojj = GetModuleHandleA("openjdkjvm.dll");
+  HMODULE ojj = GetModuleHandleW(L"libopenjdkjvm.dll");
+  if (!ojj) ojj = GetModuleHandleW(L"openjdkjvm.dll");
   if (ojj) {
     jvm_native_load_fn jnl =
         (jvm_native_load_fn)GetProcAddress(ojj, "JVM_NativeLoad");

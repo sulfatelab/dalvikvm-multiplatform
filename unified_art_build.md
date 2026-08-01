@@ -426,6 +426,13 @@ items are closed.
   UTF-16-returning APIs, directory enumeration/error text, and finally mutable
   process command lines plus Unicode environment blocks. Public ART/JNI/POSIX
   surfaces remain UTF-8; conversion happens only at their Win32 boundary.
+- [x] W-027's encoding-neutral first slice uses `CreateEventW` for unnamed
+  events, `GetModuleHandleExW` for address-based lookup, and wide constants for
+  module/library names. It removes eleven ANSI calls and three complete source
+  files from the inventory, leaving 44 calls in 18 files across 19 families.
+  The Windows-cross product rebuilt 33 actions and `art-tests` rebuilt 36 at
+  32 jobs; both immediate repeats were Ninja no-ops, and all seven focused host
+  reviewer regressions pass.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to

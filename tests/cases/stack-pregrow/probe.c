@@ -797,7 +797,7 @@ static int RunNativeCollisionParent(TargetPolicy policy) {
   }
   CloseHandle(process.hProcess);
   expected_exit =
-      GetProcAddress(GetModuleHandleA("ntdll.dll"), "wine_get_version") != NULL
+      GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "wine_get_version") != NULL
           ? 1u
           : EXCEPTION_ACCESS_VIOLATION;
   printf("native_collision target_policy=%s child_exit=0x%08lx expected=0x%08lx\n",
@@ -880,7 +880,7 @@ static int RunCommitScale(TargetPolicy policy, int thread_count) {
       (ProbeObservation*)calloc((size_t)thread_count, sizeof(ProbeObservation));
   threads = (HANDLE*)calloc((size_t)thread_count, sizeof(HANDLE));
   thread_ids = (unsigned int*)calloc((size_t)thread_count, sizeof(unsigned int));
-  hold_event = CreateEventA(NULL, TRUE, FALSE, NULL);
+  hold_event = CreateEventW(NULL, TRUE, FALSE, NULL);
   if (observations == NULL || threads == NULL || thread_ids == NULL ||
       hold_event == NULL) {
     fprintf(stderr, "FAIL allocate commit-scale state\n");
