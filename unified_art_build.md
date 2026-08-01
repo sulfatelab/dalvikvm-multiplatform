@@ -443,6 +443,14 @@ items are closed.
   leave the active inventory at 39 calls in 15 files across 18 families. The
   affected Windows-cross product closure and `art-tests` build pass, followed
   by true Ninja no-ops; all seven focused reviewer regressions pass.
+- [x] W-027's first returned-text slice moves Java system-property current
+  directory, home, and user discovery to UTF-16 from `GetCurrentDirectoryW` /
+  `GetEnvironmentVariableW` through JNI `NewString`. Runtime and CET boolean /
+  policy environment controls also use the wide APIs; only CET's deliberately
+  narrow parser receives a checked UTF-8 conversion. Seven ANSI calls and two
+  complete source files leave 32 calls in 13 files across 18 families. The
+  affected Windows-cross product and CET probe build pass, and the focused
+  W-025/reviewer regressions pass 10/10.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to

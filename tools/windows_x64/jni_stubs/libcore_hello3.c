@@ -1,9 +1,12 @@
 #include <stdio.h>
 #include <stddef.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include <stdint.h>
 #include <jni.h>
 #include <windows.h>
+#include <wchar.h>
 
 __declspec(dllexport) jint JNI_OnLoad(JavaVM* vm, void* reserved) {
   (void)vm; (void)reserved; return JNI_VERSION_1_6;
@@ -135,32 +138,48 @@ __declspec(dllexport) jstring Java_libcore_icu_ICU_getIcuVersion__(JNIEnv* env, 
 __declspec(dllexport) jstring Java_libcore_icu_ICU_getUnicodeVersion__(JNIEnv* env, jclass cls){return Java_libcore_icu_ICU_getUnicodeVersion(env,cls);}
 __declspec(dllexport) jstring Java_libcore_icu_ICU_getCldrVersion__(JNIEnv* env, jclass cls){return Java_libcore_icu_ICU_getCldrVersion(env,cls);}
 
+static jstring new_wide_property(JNIEnv* env, const wchar_t* key, const wchar_t* value) {
+  size_t key_length = wcslen(key);
+  size_t value_length = wcslen(value);
+  if (key_length > (size_t)INT32_MAX ||
+      value_length > (size_t)INT32_MAX - key_length) {
+    return NULL;
+  }
+  size_t length = key_length + value_length;
+  jchar* property = (jchar*)malloc(length * sizeof(jchar));
+  if (property == NULL) return NULL;
+  memcpy(property, key, key_length * sizeof(jchar));
+  memcpy(property + key_length, value, value_length * sizeof(jchar));
+  jstring result = (*env)->NewString(env, property, (jsize)length);
+  free(property);
+  return result;
+}
+
 __declspec(dllexport) jobjectArray Java_java_lang_System_specialProperties(JNIEnv* env, jclass cls) {
   (void)cls;
   if ((*env)->PushLocalFrame(env, 48) < 0) return NULL;
   jclass stringClass = (*env)->FindClass(env, "java/lang/String");
   jobjectArray result = (*env)->NewObjectArray(env, 12, stringClass, 0);
-  char cwd[MAX_PATH];
-  if (!GetCurrentDirectoryA(sizeof(cwd), cwd)) {
-    strcpy(cwd, "C:\\");
+  wchar_t cwd[MAX_PATH];
+  if (!GetCurrentDirectoryW(MAX_PATH, cwd)) {
+    wcscpy(cwd, L"C:\\");
   }
-  char home[MAX_PATH];
-  DWORD n = GetEnvironmentVariableA("USERPROFILE", home, sizeof(home));
-  if (n == 0 || n >= sizeof(home)) {
-    if (!GetEnvironmentVariableA("HOME", home, sizeof(home)) || home[0] == 0) {
-      strcpy(home, cwd);
+  wchar_t home[MAX_PATH];
+  DWORD n = GetEnvironmentVariableW(L"USERPROFILE", home, MAX_PATH);
+  if (n == 0 || n >= MAX_PATH) {
+    if (!GetEnvironmentVariableW(L"HOME", home, MAX_PATH) || home[0] == 0) {
+      wcscpy(home, cwd);
     }
   }
-  char user[256];
-  n = GetEnvironmentVariableA("USERNAME", user, sizeof(user));
-  if (n == 0 || n >= sizeof(user)) {
-    if (!GetEnvironmentVariableA("USER", user, sizeof(user)) || user[0] == 0) {
-      strcpy(user, "user");
+  wchar_t user[256];
+  n = GetEnvironmentVariableW(L"USERNAME", user, 256);
+  if (n == 0 || n >= 256) {
+    if (!GetEnvironmentVariableW(L"USER", user, 256) || user[0] == 0) {
+      wcscpy(user, L"user");
     }
   }
-  char buf[MAX_PATH + 32];
-  snprintf(buf, sizeof(buf), "user.dir=%s", cwd);
-  (*env)->SetObjectArrayElement(env, result, 0, (*env)->NewStringUTF(env, buf));
+  (*env)->SetObjectArrayElement(env, result, 0,
+      new_wide_property(env, L"user.dir=", cwd));
   (*env)->SetObjectArrayElement(env, result, 1, (*env)->NewStringUTF(env, "file.separator=\\"));
   (*env)->SetObjectArrayElement(env, result, 2, (*env)->NewStringUTF(env, "path.separator=;"));
   (*env)->SetObjectArrayElement(env, result, 3, (*env)->NewStringUTF(env, "line.separator=\r\n"));
@@ -170,10 +189,10 @@ __declspec(dllexport) jobjectArray Java_java_lang_System_specialProperties(JNIEn
   (*env)->SetObjectArrayElement(env, result, 7, (*env)->NewStringUTF(env, "os.name=Windows"));
   (*env)->SetObjectArrayElement(env, result, 8, (*env)->NewStringUTF(env, "os.arch=amd64"));
   (*env)->SetObjectArrayElement(env, result, 9, (*env)->NewStringUTF(env, "os.version=10.0"));
-  snprintf(buf, sizeof(buf), "user.home=%s", home);
-  (*env)->SetObjectArrayElement(env, result, 10, (*env)->NewStringUTF(env, buf));
-  snprintf(buf, sizeof(buf), "user.name=%s", user);
-  (*env)->SetObjectArrayElement(env, result, 11, (*env)->NewStringUTF(env, buf));
+  (*env)->SetObjectArrayElement(env, result, 10,
+      new_wide_property(env, L"user.home=", home));
+  (*env)->SetObjectArrayElement(env, result, 11,
+      new_wide_property(env, L"user.name=", user));
   return (jobjectArray)(*env)->PopLocalFrame(env, result);
 }
 __declspec(dllexport) jobjectArray Java_java_lang_System_specialProperties__(JNIEnv* env, jclass cls) {
