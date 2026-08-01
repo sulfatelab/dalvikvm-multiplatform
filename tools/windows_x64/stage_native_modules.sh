@@ -57,7 +57,7 @@ require_copy_as() {
   if ! src=$(pick_module "$product_name" "$@"); then
     echo "ERROR: missing required real PE module: $product_name (also tried: $*)" >&2
     echo "  Build hybrid: cmake --build build/windows_x64_libcore_icu --target icuuc icui18n icu_jni javacore openjdk openjdkjvm" >&2
-    echo "  Then: bash tools/verify/windows_x64_libcore_icu/install_into_phase1.sh" >&2
+    echo "  Then rerun this historical package staging command with that build directory." >&2
     echo "  libcombined multi-name stubs are NOT accepted for product (W-005)." >&2
     exit 1
   fi

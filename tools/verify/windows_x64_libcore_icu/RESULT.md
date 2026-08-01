@@ -135,7 +135,9 @@ tools/windows_x64/stage_run_assets.sh <dest_root> [build_dir]
 # -> <dest>/run/icu/icudt72l.dat
 ```
 
-Used by `package_windows_x64_phase3.sh` and `install_into_phase1.sh`.  
+Used by the historical `package_windows_x64_phase3.sh`. The Phase-1 installer
+was retired after the unified graph began building and staging these modules
+directly.
 `libicu_jni` `Register.cpp` defaults `ICU_DATA` to `<cwd>/run/icu` when unset if `icudt72l.dat` is present.
 
 

@@ -428,6 +428,11 @@ items are closed.
   host suite. It checks the actual retired-workaround contract instead of the
   obsolete whole-file equality rule that rejected accepted guarded FS-1
   stack-high-water instrumentation.
+- [x] The final `install_into_phase1.sh` compatibility installer was removed.
+  The unified graph builds ICU, libcore, OpenJDK, ART, and their managed assets
+  into one target tree, so no maintained workflow copies a second product into
+  the deleted Phase-1 tree. Historical Phase-3 package staging remains clearly
+  separate until its own evidence flow is retired.
 - [x] The six documentation-only Linux E2E bring-up records moved from
   `tools/verify/e2e` to flat, clearly historical names under `docs/history`;
   their obsolete harness commands are not test entry points.
@@ -510,7 +515,7 @@ verification directories. All 90 declarations own canonical source under
 source cases and all 48 Java sources have adjacent results, and shared stage
 analysis remains under `tests/stages/`. The old verification tree now contains
 zero Java sources and two uncatalogued native sources retained by unfinished
-legacy evidence paths. It still contains four shell scripts, two PowerShell
+legacy evidence paths. It still contains three shell scripts, two PowerShell
 scripts, and 25 Python scripts. Python checkers
 and reviewers may remain, but the unified frontend must invoke them through a
 declared stage instead of a phase-local product build.
