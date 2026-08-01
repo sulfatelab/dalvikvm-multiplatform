@@ -1,4 +1,10 @@
-# W-013 native Windows host acceptance
+# Historical W-013 native Windows host acceptance
+
+This checklist applies only to the already issued R2 package and its immutable
+returned evidence. The repository package producer and packaged PowerShell
+runner were retired after unified W-013 passed on Windows Server 2025 and Linux
+x86-64, with Ninja no-op repeats. For a new run, use
+`tools/build_art.py test --stage w013`; do not reconstruct this package.
 
 **Authoritative lab gate:** Windows Server 2025 Datacenter Evaluation, x64,
 build 26100. The accepted Windows 10 result below is historical; the former
@@ -11,10 +17,10 @@ archive `w013-log-r2.7z` has SHA-256
 the reviewed result contains 56 PASS records, zero failures, complete metrics,
 and `NO_DMP_FILES`. See `evidence/native_r2/ACCEPTANCE.md`.
 
-**Purpose:** document the accepted native host matrix and provide the repeat
-procedure after W-013 Stages A–E, the reviewed failed R1 run, and the post-R1
-Wine/Linux repair gates. Do not reuse the R1 package built from root `dbca77c`;
-it contains the defects recorded in `RESULT.md`.
+**Purpose:** document the accepted historical native host matrix after W-013
+Stages A–E, the reviewed failed R1 run, and the post-R1 Wine/Linux repair
+gates. This is not a current repeat procedure. Do not reuse the R1 package
+built from root `dbca77c`; it contains the defects recorded in `RESULT.md`.
 
 ## Run
 

@@ -200,6 +200,15 @@ items are closed.
   reconfigured Server 2025 Stage-8 tree was also a Ninja no-op and passed W-013
   7/7 in 5.14 seconds. All managed results are sanitized, both Windows trees
   contain zero reparse points, and the host remained responsive.
+- [x] The last W-013 host-package path was retired after a final native/Linux
+  audit. Windows Server 2025 rebuilt eleven previously absent test edges at
+  `--parallel 16`, passed 7/7 in 14.93 seconds, then repeated as a Ninja no-op
+  in 5.05 seconds. Linux passed 1/1 and repeated as a no-op at `--parallel 32`
+  in 0.31 seconds. The deleted Bash producer was already broken by its
+  references to removed runners and the deleted Phase-1 tree; its PowerShell
+  matrix is superseded by W-013 allocator/pressure gates, W-004 managed stress,
+  and W-025 JIT controls/lifecycle. Historical per-process memory and pagefile
+  measurements remain evidence, not portable pass criteria.
 - [x] The shared shell-free runtime gate now owns native executable repetition,
   marker, timeout, DSO-path, log, and sanitized-result orchestration. W-014
   pthread-once passed 10/10, thread-stack preserved all five reservation sizes
@@ -545,7 +554,7 @@ verification directories. All 91 declarations own canonical source under
 source cases and all 48 Java sources have adjacent results, and shared stage
 analysis remains under `tests/stages/`. The old verification tree now contains
 zero Java sources and two uncatalogued native sources retained by unfinished
-legacy evidence paths. It contains zero shell scripts, one PowerShell script,
+legacy evidence paths. It contains zero shell scripts and zero PowerShell scripts,
 and 24 Python scripts. Python checkers
 and reviewers may remain, but the unified frontend must invoke them through a
 declared stage instead of a phase-local product build.

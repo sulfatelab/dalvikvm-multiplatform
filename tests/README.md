@@ -207,6 +207,12 @@ Eight shared Windows x86-64 source/object/PE reviewers now live under
 W-013 and W-025 policy reviewers were added directly to the unified system.
 Their defaults or explicit arguments consume canonical
 `out/<target-id>/<build-type>` artifacts.
+The last W-013 host package producer and repository-side PowerShell runner were
+retired after native Windows 7/7 and Linux 1/1 acceptance plus no-op repeats.
+W-013 owns allocator/mapping/source-policy and 128/1024 MiB pressure; W-004
+owns the package's generic managed stress; W-025 owns its supported JIT
+controls and lifecycle behavior. Historical peak-memory/pagefile measurements
+remain evidence, not portable pass criteria.
 The W-014 FS-1 stack-high-water case now uses the exact test-only build variant
 `win32-stack-high-water`. That variant has its own fingerprinted output
 directory, cannot be staged as a product, and changes the managed case from

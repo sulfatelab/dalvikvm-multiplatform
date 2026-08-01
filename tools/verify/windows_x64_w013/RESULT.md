@@ -22,7 +22,7 @@ Landed changes:
 Command:
 
 ```text
-python tools/build_art.py test --target-id windows-x86_64-msvc --stage w013 --parallel 32
+python tools/build_art.py test --target-id windows-x86_64-msvc --stage w013 --parallel 16
 ```
 
 Observed under Wine:
@@ -63,7 +63,7 @@ The actual `art-dlmalloc.cc` wrapper is also compiled into a focused executable
 and exercised by the unified stage command:
 
 ```text
-python tools/build_art.py test --target-id windows-x86_64-msvc --stage w013 --parallel 32
+python tools/build_art.py test --target-id windows-x86_64-msvc --stage w013 --parallel 16
 ```
 
 Its success case grows through one provider, trims, detaches, rebinds a second
@@ -118,7 +118,7 @@ Landed behavior:
 Current unified reproduction:
 
 ```text
-python tools/build_art.py test --target-id windows-x86_64-msvc --stage w013 --parallel 32
+python tools/build_art.py test --target-id windows-x86_64-msvc --stage w013 --parallel 16
 python tests/support/windows/check_w013_source_policy.py
 ```
 
@@ -230,7 +230,7 @@ unconditional barrier. The low-address audit now rejects its return.
 Command:
 
 ```text
-python tools/build_art.py test --target-id windows-x86_64-msvc --stage w013 --parallel 32
+python tools/build_art.py test --target-id windows-x86_64-msvc --stage w013 --parallel 16
 python tools/build_art.py test --target-id linux-x86_64-gnu --stage w013 --parallel 32
 ```
 
@@ -257,6 +257,12 @@ on Windows only. A fresh Linux build completed 1,485 Ninja actions, passed 1/1
 in 0.27 seconds, and repeated as a Ninja no-op in 0.28 seconds. The native
 Server 2025 Stage-8 tree remained a Ninja no-op and passed W-013 7/7 in 5.14
 seconds. The legacy dual-target Bash/Wine runner was then removed.
+
+A final retirement audit on 2026-08-01 rebuilt eleven previously absent W-013
+test edges on the 16 GiB Windows Server 2025 VM with `--parallel 16` and passed
+7/7 in 14.93 seconds. Its immediate repeat was a true Ninja no-op and passed
+7/7 in 5.05 seconds. Linux x86-64 passed its 128 MiB gate in 0.31 seconds and
+also repeated as a Ninja no-op with `--parallel 32`.
 
 ## Integration verification
 
@@ -384,13 +390,14 @@ failure, HandleLeak misclassification, missing metric, timeout, or hidden
 marker failure recurs. The compact durable review is recorded in
 `tools/verify/windows_x64_w013/evidence/native_r2/ACCEPTANCE.md`.
 
-## Native Windows acceptance package
+## Historical native Windows acceptance package
 
-The host matrix is packaged by:
-
-```text
-tools/windows_x64/host_package/package_windows_x64_w013.sh
-```
+The standalone host-package producer and its repository-side PowerShell runner
+were retired after unified W-013 native/Linux acceptance. The producer was
+already non-reproducible because it called removed legacy W-013 shell runners
+and staged from the deleted Phase-1 product tree. New acceptance uses the
+unified frontend; the checklist, accepted archive hash, and compact returned
+text remain only to interpret the immutable R2 evidence.
 
 The generated archive contains the native mapping, dlmalloc configuration, and
 mspace-owner probes. The mapping probe additionally rejects zero/overflowing
@@ -402,8 +409,9 @@ ThreadHeavy and HandleLeak; 512-MiB and 1-GiB startup; default dual-view JIT,
 the J-1 diagnostic path, and the fourteen-case JIT matrix; twenty repeated
 default-JIT starts; per-process memory metrics and host pagefile data; fatal-log
 scanning; and recursive dump scanning. Execution and evidence-return
-instructions are in `tools/verify/windows_x64_w013/W013_HOST_CHECKLIST.md`. The R2
-return meets this bar: `logs/RESULT_W013.txt` ends in `OVERALL PASS`,
+historical instructions are in
+`tools/verify/windows_x64_w013/W013_HOST_CHECKLIST.md`. The R2 return meets this
+bar: `logs/RESULT_W013.txt` ends in `OVERALL PASS`,
 the complete logs were reviewed, and the returned package metadata matches the
 issued package.
 
