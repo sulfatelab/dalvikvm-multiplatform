@@ -23,7 +23,8 @@ and current Windows/Linux status is tracked by the root platform documents.
 ## 0b. Progress (step 2+)
 
 - **Converter built** (`tools/bp2cmake/`): Layer 1 (lexer/parser/evaluator),
-  Layer 2 (`overlay/port_policy.py`), Layer 3 (emitter). 16 unit tests pass.
+  Layer 2 (`overlay/port_policy.py`), Layer 3 (emitter). The current regression
+  count and target-aware entry point are tracked in `unified_art_build.md`.
 - **Foundational layer DONE and validated**: all 8 libs the archive builds
   before `art/` — `libbase`, `liblog`, `libnativehelper`, `libprocinfo`,
   `libziparchive`, `libtinyxml2`, `liblzma`, `libcpu_features` — are converted
@@ -92,16 +93,15 @@ libdexfile absorbing `dex_file_supp.cc`. Build needs `ASM` language enabled and
 ### Status: the native side is functionally complete
 
 The original goal — "something converting Android.bp to CMakeLists.txt so we
-don't hand-write CMake" — is achieved for the whole `dalvikvm` native graph,
-with a clean single-entry build:
+don't hand-write CMake" — is achieved for the whole `dalvikvm` native graph.
+The historical ignored graph snapshot and tracked Bash generator have since
+been retired; the current single entry point generates into the ignored
+target-local output tree:
 
 ```sh
-native/generate.sh                       # Android.bp -> generated/dalvikvm.cmake
-cmake -S native -B build/native -G Ninja -DCMAKE_C_COMPILER=clang \
-    -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_BUILD_TYPE=Release
-cmake --build build/native               # -> dalvikvm + 17 libs
-LD_LIBRARY_PATH=build/native build/native/dalvikvm -showversion
-# ART version 2.1.0 x86_64
+python tools/build_art.py configure --target-id linux-x86_64-gnu
+python tools/build_art.py build --target-id linux-x86_64-gnu --parallel 32
+python tools/build_art.py test --target-id linux-x86_64-gnu --parallel 32
 ```
 
 - **Dependency closure**: `bp2cmake --root-module dalvikvm` walks the link graph
@@ -585,4 +585,3 @@ smoke have since been completed.
 - Java build: `../MinDalvikVM-Archive/javalib/build.gradle.kts`
 - Reusable helpers: `../MinDalvikVM-Archive/buildSrc/src/main/`
 - Submodule list + URLs: `../MinDalvikVM-Archive/.gitmodules`
-

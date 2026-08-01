@@ -251,10 +251,10 @@ _No open product leftovers. Closed L- items live under §Closed._
 ### H-005 — Minimal product CMake graph does not build ART gtests
 - **State:** OPEN
 - **Kind:** host-gap / build
-- **Gap:** `native/generated/dalvikvm.cmake` intentionally contains the product dependency closure only. It does not build `art_runtime_tests`, the ART test support libraries, GoogleTest, or the required test jars, so agent01 cannot execute the new canonical OAT characterization tests through the minimal build.
+- **Gap:** The unified frontend intentionally generates the product dependency closure only. It does not build `art_runtime_tests`, the ART test support libraries, GoogleTest, or the required test jars, so agent01 cannot execute the new canonical OAT characterization tests through the product build.
 - **Current coverage:** The complete modified test source passes a production-flag syntax compile using the available test headers and a compatibility definition for the pre-existing `GTEST_SKIP()` use absent from fmtlib's old GoogleTest copy. Linux `art` builds; Windows x64 `oat_file.cc` compiles and `art.dll` links; the rebuilt DLL passes `dalvikvm.exe -showversion` on the authoritative Server 2025 build-26100 host. None of these is behavioral execution of the focused gtests.
 - **Exit criteria:** Run the focused `OatFileTest` set with its real test data under AOSP ART host/device infrastructure, or add a maintainable opt-in CMake test closure without adding test-only dependencies to product binaries.
-- **Code anchors:** `vendor/art/runtime/oat/oat_file_test.cc`; `vendor/art/runtime/Android.bp` (`art_runtime_tests_defaults`); `native/generate.sh`
+- **Code anchors:** `vendor/art/runtime/oat/oat_file_test.cc`; `vendor/art/runtime/Android.bp` (`art_runtime_tests_defaults`); `tools/build_art.py`; `native/CMakeLists.txt`
 - **Opened:** 2026-07-30
 
 ---

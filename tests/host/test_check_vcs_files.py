@@ -73,3 +73,11 @@ def test_retired_windows_libcore_product_paths_do_not_reappear():
         REPO_ROOT / "tools/windows_x64/jni_stubs/native_converter.c",
     )
     assert not [path for path in retired if path.exists() or path.is_symlink()]
+
+
+def test_retired_checked_linux_product_graph_does_not_reappear():
+    retired = (
+        REPO_ROOT / "native/generate.sh",
+        REPO_ROOT / "native/generated/dalvikvm.cmake",
+    )
+    assert not [path for path in retired if path.exists() or path.is_symlink()]

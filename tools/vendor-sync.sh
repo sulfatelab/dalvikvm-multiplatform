@@ -6,7 +6,8 @@
 # are commits on the nested artmp_* branches; there is no top-level patch queue.
 # Reproducible:
 # re-run after deleting vendor/art or vendor/libcore. The archive is NEVER used
-# for art/libcore once this runs (see native/generate.sh --exclude-top art).
+# for art/libcore once this runs (the unified Python frontend excludes the
+# duplicate top-level art scan and loads the canonical vendor/art root).
 set -euo pipefail
 TAG="${MDVM_AOSP_TAG:-android-16.0.0_r4}"
 HERE="$(cd "$(dirname "$0")/../vendor" && pwd)"; mkdir -p "$HERE"

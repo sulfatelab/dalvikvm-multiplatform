@@ -993,9 +993,10 @@ an unreviewed module-set or kind change.
 
 #### P2: remove migration scaffolding and harden orchestration
 
-- [ ] Remove `native/generate.sh` and the checked-in
-  `native/generated/dalvikvm.cmake` after focused verification harnesses stop
-  consuming them.
+- [x] Remove `native/generate.sh` and its ignored
+  `native/generated/dalvikvm.cmake` snapshot; no focused harness consumed them, the
+  frontend-owned target-local graph is the only maintained product input, and
+  VCS regression coverage prevents either compatibility path from returning.
 - [x] Remove the Phase-0 product CMake graph, Bash generator, and generated
   source snapshots; retain its historical result record.
 - [x] Remove the Phase-1 product CMake graph, move its historical result out of
@@ -1592,21 +1593,23 @@ are explicitly designed.
 
 The Linux path is the closest existing model for the desired architecture:
 
-- [`native/generate.sh`](native/generate.sh) runs `bp2cmake` over five root
-  modules and writes [`native/generated/dalvikvm.cmake`](native/generated/dalvikvm.cmake).
+- [`tools/build_art.py`](tools/build_art.py) runs `bp2cmake` over the seven
+  product roots and writes the resolved graph/profile only below the ignored,
+  fingerprinted target output directory.
 - [`native/CMakeLists.txt`](native/CMakeLists.txt) is the handwritten product
   shell. It supplies code generation, imported libraries, compatibility flags,
   staging, and the generated graph.
-- The current generated closure contains 33 modules and already emits
+- The current Linux generated closure contains 34 modules and already emits
   `art-compiler` as `SHARED`.
-- A fresh Linux conversion currently matches the checked-in generated file.
+- A fresh Linux conversion is checked against its target-local generated file
+  and deterministic graph manifest.
 
-The legacy `native/generate.sh` and checked-in graph remain compatibility
-evidence, but are no longer the supported product entry point. The Python
-frontend owns graph generation and passes a target-specific graph/profile to
-CMake. Linux imports validated host libraries; Windows imports zlib, lz4, and
-expat only from the explicit target bundle. Configure-time code generation is
-still intentionally performed by Python before CMake emits the Ninja graph.
+The legacy Bash generator and ignored 3,672-line graph snapshot were removed
+after all focused product harnesses stopped consuming them. The Python frontend owns
+graph generation and passes a target-specific graph/profile to CMake. Linux
+imports validated host libraries; Windows imports zlib, lz4, and expat only
+from the explicit target bundle. Configure-time code generation is still
+intentionally performed by Python before CMake emits the Ninja graph.
 
 ### Windows product and verification paths
 
@@ -1744,10 +1747,9 @@ cannot rely on any of these aliases after tool discovery.
 
 ### POSIX-host assumptions
 
-The current product path assumes a Unix userland in several places:
+Residual repository utilities and historical instructions still assume a Unix
+userland in several places, but the product path does not:
 
-- graph generation is launched by `native/generate.sh` and Windows Phase 0 has
-  another Bash generator;
 - source provisioning is launched by `tools/vendor-sync.sh`;
 - boot-jar and staging flows use Bash arrays, `source`, pipelines, shell
   redirection, `/tmp`, `rm`, `cp`, `find`, `grep`, `stat`, `strings`, and
@@ -2739,7 +2741,8 @@ so a failed or partial invocation cannot contaminate another target build.
 After all acceptance gates pass, remove or demote the following as product
 inputs:
 
-- `native/generate.sh` and the checked-in `native/generated/dalvikvm.cmake`;
+- the now-retired `native/generate.sh` and ignored
+  `native/generated/dalvikvm.cmake` compatibility path;
 - the now-retired unproducible `windows_x64_libcore_icu/sources.cmake`
   snapshot and its standalone product/package flow;
 - `overlay/port_policy.py` and `overlay/port_policy_windows.py` after their

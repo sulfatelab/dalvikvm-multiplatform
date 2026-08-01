@@ -9,7 +9,6 @@ __pycache__/
 /out/
 /dist/
 /generated/
-/native/generated/
 
 # Machine-local build configuration
 /.art-build.local.toml
