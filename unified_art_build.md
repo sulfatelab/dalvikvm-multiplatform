@@ -348,6 +348,19 @@ items are closed.
   Windows each completed the resulting 842-action clean-equivalent rebuild at
   32/16 jobs and repeated as Ninja no-ops; Linux remained a no-op, both CET
   contracts pass 58/58, and all 187 host tests pass.
+- [x] The 33-command Windows `artbase` static library now compiles without the
+  temporary ART prelude on both build hosts. ART's `mman.h` uniformly includes
+  the project-owned `<sys/mman.h>` contract, `time_utils.cc` explicitly owns
+  its `<sys/time.h>` dependency, and `mem_map.cc` undefines the Windows SDK
+  `ZeroMemory` macro only after all of its includes. Keeping that cleanup local
+  preserves later SDK consumers such as `ws2tcpip.h`. The two Linux-only
+  per-source prelude assignments remain unchanged. Forced-prelude compile
+  commands fell from 579 to 546. Linux and Windows-cross passed at 32 jobs,
+  native Windows passed at 16 jobs, and all three repeated as Ninja no-ops.
+  Cross and native compile databases agree at 1,816 commands with all 33
+  `artbase` commands prelude-free, all 821 pointer-width definitions remain in
+  place, both CET contracts pass 58/58, both generated graphs pass their
+  freshness checks, and all 188 host tests pass.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to

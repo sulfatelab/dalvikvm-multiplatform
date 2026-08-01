@@ -37,6 +37,7 @@ def test_windows_platform_prelude_has_reviewed_target_scope():
         "androidio",
         "art-dex2oat",
         "art-disassembler",
+        "artbase",
         "artpalette",
         "base",
         "crypto_static",
@@ -104,6 +105,7 @@ def test_windows_sdk_macro_hygiene_is_header_owned():
     assert "#undef CONST" in windows
     assert "#undef ERROR" in windows
     assert "#undef __reserved" in windows
+    assert "#undef ZeroMemory" not in windows
     assert "#undef CONST" not in prelude
     assert "#undef ERROR" not in prelude
     assert "#undef __reserved" not in prelude
@@ -111,6 +113,26 @@ def test_windows_sdk_macro_hygiene_is_header_owned():
     assert "#define strncasecmp _strnicmp" in strings
     assert "#define strcasecmp _stricmp" not in prelude
     assert "#define strncasecmp _strnicmp" not in prelude
+
+
+def test_windows_artbase_uses_project_mman_and_sdk_macro_hygiene():
+    mman = (
+        REPO_ROOT / "vendor" / "art" / "libartbase" / "base" / "mman.h"
+    ).read_text(encoding="utf-8")
+    mem_map = (
+        REPO_ROOT / "vendor" / "art" / "libartbase" / "base" / "mem_map.cc"
+    ).read_text(encoding="utf-8")
+    time_utils = (
+        REPO_ROOT / "vendor" / "art" / "libartbase" / "base" / "time_utils.cc"
+    ).read_text(encoding="utf-8")
+
+    assert "#include <sys/mman.h>" in mman
+    assert "There is no sys/mman.h in mingw" not in mman
+    assert "MDVM_UNDEFINE_ZEROMEMORY" not in mem_map
+    assert "#ifdef ZeroMemory\n#undef ZeroMemory\n#endif" in mem_map
+    assert mem_map.rfind("#undef ZeroMemory") > mem_map.rfind('#include "utils.h"')
+    assert "#include <sys/time.h>" in time_utils
+    assert "#if defined(__APPLE__)\n#include <sys/time.h>" not in time_utils
 
 
 def test_windows_dex2oat_compatibility_is_header_and_source_scoped():
@@ -272,6 +294,17 @@ def test_linux_toolchain_drift_headers_are_source_scoped():
             f'        APPEND PROPERTY COMPILE_OPTIONS "-include;{header}")'
         )
         assert any(block in guarded.split("endif()", 1)[0] for guarded in linux_blocks)
+
+    paired_prelude = (
+        "set_source_files_properties(\n"
+        "        ${MDVM_NATIVE_SRC_ROOT_DIR}/libprocinfo/process.cpp\n"
+        "        ${MDVM_NATIVE_SRC_ROOT_DIR}/art/libartbase/base/metrics/metrics_common.cc\n"
+        '        PROPERTIES COMPILE_OPTIONS "-include;${_PRELUDE}")'
+    )
+    assert any(
+        paired_prelude in guarded.split("endif()", 1)[0]
+        for guarded in linux_blocks
+    )
 
 
 def test_product_graph_has_no_tree_wide_warning_as_error_demotion():
