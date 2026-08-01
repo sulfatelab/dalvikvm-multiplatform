@@ -4,6 +4,13 @@
 #else
 #include_next <sys/stat.h>
 #include <direct.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
+int fchmod(int fd, int mode);
+#ifdef __cplusplus
+}
+#endif
 /* Windows UCRT has _S_IF* / _S_IS*. Map POSIX S_IS*. */
 #ifndef mkdir
 #define mkdir(path, mode) _mkdir(path)

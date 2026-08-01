@@ -269,6 +269,17 @@ items are closed.
   Cross and native compile databases agree at 1,816 commands with the stubs
   command prelude-free, both CET contracts pass 58/58, and all 184 host tests
   pass.
+- [x] The two-source `dex2oat` executable now compiles without the ART prelude
+  on both Windows build hosts. The project `sys/stat.h` wrapper now owns the
+  `fchmod` declaration, and a project `stdio.h` wrapper owns `getline`; both
+  implementations already reside in `windows_x64_posix_stubs`, and their
+  duplicate prelude declarations were removed. Forced-prelude compile commands
+  fell from 704 to 702. The header migration received broad clean-equivalent
+  coverage, including 1,193 affected native Windows actions at 16 jobs. Linux
+  and both Windows products passed at their required 32/32/16 job limits and
+  repeated as Ninja no-ops. Cross and native compile databases agree at 1,816
+  commands with both `dex2oat` commands prelude-free, both CET contracts pass
+  58/58, and all 185 host tests pass.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to

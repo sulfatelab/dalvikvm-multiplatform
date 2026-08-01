@@ -40,6 +40,7 @@ def test_windows_platform_prelude_has_reviewed_target_scope():
         "artpalette",
         "crypto_static",
         "dalvikvm",
+        "dex2oat",
         "elffile",
         "expat",
         "fdlibm",
@@ -123,6 +124,29 @@ def test_windows_openjdkjvm_uses_explicit_source_and_header_contracts():
     assert "int posix_memalign(void** memptr, size_t alignment, size_t size);" in stdlib
     assert "int posix_memalign(void** memptr, size_t alignment, size_t size);" not in prelude
     assert "int posix_memalign(void** memptr, size_t alignment, size_t size)" in stubs
+
+
+def test_windows_dex2oat_posix_declarations_are_header_owned():
+    stdio = (REPO_ROOT / "compat" / "include" / "stdio.h").read_text(
+        encoding="utf-8"
+    )
+    stat = (REPO_ROOT / "compat" / "include" / "sys" / "stat.h").read_text(
+        encoding="utf-8"
+    )
+    prelude = (
+        REPO_ROOT / "compat" / "include" / "mdvm_windows_x64_prelude.h"
+    ).read_text(encoding="utf-8")
+    stubs = (
+        REPO_ROOT / "compat" / "src" / "windows_x64_posix_stubs.c"
+    ).read_text(encoding="utf-8")
+
+    assert "#include_next <stdio.h>" in stdio
+    assert "ssize_t getline(char** lineptr, size_t* capacity, FILE* stream);" in stdio
+    assert "int fchmod(int fd, int mode);" in stat
+    assert "ssize_t getline(char** lineptr, size_t* capacity, FILE* stream);" not in prelude
+    assert "int fchmod(int fd, int mode);" not in prelude
+    assert "ssize_t getline(char** lineptr, size_t* capacity, FILE* stream)" in stubs
+    assert "int fchmod(int fd, int mode)" in stubs
 
 
 def test_windows_unwindstack_uses_posix_header_ownership():

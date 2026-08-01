@@ -221,9 +221,6 @@ static inline struct mallinfo mallinfo(void) {
   return info;
 }
 
-int fchmod(int fd, int mode);
-ssize_t getline(char** lineptr, size_t* capacity, FILE* stream);
-
 #ifdef __cplusplus
 }  // extern "C"
 #endif

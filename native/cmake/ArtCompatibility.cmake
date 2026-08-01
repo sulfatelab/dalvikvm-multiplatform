@@ -18,6 +18,7 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
         artpalette
         crypto_static
         dalvikvm
+        dex2oat
         elffile
         expat
         fdlibm
