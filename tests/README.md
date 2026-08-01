@@ -273,6 +273,11 @@ JIT-5 series under `docs/history`; it also retains the durable 12-control and
 14-workload Wine conclusions. Duplicate smoke/matrix notes and raw host,
 build-path, checksum, dump-scan, and aggregate files were removed after their
 identities and acceptance contract were consolidated into that summary.
+The H-001 scoped Phase-4 native rerun is likewise one sanitized history
+summary. Its exact five-case markers, native-fatal exit, authoritative host,
+and out-of-scope DNS note are retained; duplicate host/result records and
+verbose process logs were removed because unified W-004/W-010 now maintain
+the same GC/thread/handle and abort/fatal contracts.
 The unreferenced W-025 JIT-2/JIT-3 source preflights and the broken JIT-4
 preflight were removed as well. The unified W-025 reviewer owns their current
 mapping, lifecycle, nterp floating-point, JIT-control, PE-import/export, and

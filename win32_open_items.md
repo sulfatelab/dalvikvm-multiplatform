@@ -217,7 +217,7 @@ _No open product leftovers. Closed L- items live under §Closed._
 - **State:** CLOSED (2026-07-30 — scoped native subset accepted on Windows Server 2025 build 26100)
 - **Kind:** host-gap
 - **Gap:** Wine Phase 4 PASS (incl. multiplatform rebuild 2026-07-17). The available native Server 2025 host had not yet rerun the scoped gcstress, threadheavy, handleleak, crash-native, and crash-abort subset.
-- **Exit criteria:** Met for the available native host; logs are under `tools/verify/windows_x64_phase4/evidence/h001_phase4_host/` and the scoped result is `OVERALL PASS`. The authoritative-host FS-4 repeat is also accepted; the separate Win10/second-host repetition is skipped by policy.
+- **Exit criteria:** Met for the available native host; the sanitized [H-001 result](docs/history/windows_x64_h001_phase4_result.md) records `OVERALL PASS`. The authoritative-host FS-4 repeat is also accepted; the separate Win10/second-host repetition is skipped by policy.
 - **Opened:** 2026-07-16
 
 ### H-002 — Phase 3 G12 with multiplatform-built PE (not only pre-migration tree)

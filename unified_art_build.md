@@ -609,6 +609,11 @@ items are closed.
   12-control/14-workload Wine conclusions. Its duplicate smoke/matrix notes
   and raw host/build/checksum/result records were removed; maintained behavior
   remains in the unified W-025 cases and stage.
+- [x] The H-001 scoped Phase-4 native rerun is consolidated into
+  `docs/history/windows_x64_h001_phase4_result.md`. The exact five-case
+  markers, native-fatal exit, authoritative-host identity, and out-of-scope
+  DNS note remain; duplicate host/result files and seven verbose process logs
+  were removed after unified W-004/W-010 assumed their live contracts.
 - [x] `art.dll` no longer uses `WINDOWS_EXPORT_ALL_SYMBOLS`. Before the change,
   a Debug scan found 80,318 candidate exports and exceeded PE's 65,535-entry
   limit, while RelWithDebInfo exposed 17,112. ART's existing `EXPORT` boundary
