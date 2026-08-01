@@ -519,7 +519,7 @@ E9 archive SHA-256 is
 On Windows Server 2025 build 26100, the native runner records 30/30 PASS,
 `NO_HANDLED_DMP_FILES`, and exactly five valid fatal dumps. The independent
 reviewer accepts the returned full package. See
-`evidence/w010_w014_e9/ACCEPTANCE.md`.
+`../../../docs/history/windows_x64_w010_w014_e9_result.md`.
 
 ### Pregrown PAGE_NOACCESS implicit probe at the E9 low boundary
 

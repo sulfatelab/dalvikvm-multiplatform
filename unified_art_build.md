@@ -641,6 +641,11 @@ items are closed.
   identities, repeat FS-1 margins, 16-way guarantee geometry, thread/fiber/
   lifecycle counts, and six dump identities remain. Host/subnet addresses and
   ten copied raw FS-1/FS-2/FS-3 records were removed.
+- [x] E9's configured-guarantee/explicit-stack-check acceptance now lives in
+  `docs/history/windows_x64_w010_w014_e9_result.md`. Its archive identity,
+  E8 failure identity, 30/30 result, zero-handled/five-fatal-dump contract,
+  and exact stack accounting remain. The retired host checklist, package
+  checker, returned-result reviewer, and reviewer tests were removed.
 - [x] `art.dll` no longer uses `WINDOWS_EXPORT_ALL_SYMBOLS`. Before the change,
   a Debug scan found 80,318 candidate exports and exceeded PE's 65,535-entry
   limit, while RelWithDebInfo exposed 17,112. ART's existing `EXPORT` boundary

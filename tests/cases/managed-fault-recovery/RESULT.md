@@ -188,7 +188,8 @@ E9 is accepted on Windows Server 2025 build 26100. The immutable archive
 The returned full package matches the issued identity, has 30/30 PASS records,
 zero handled dumps, and five valid fatal static/JIT/OSR dumps. The reviewer
 reports `PASS (build=26100, pass_records=30, dumps=5,
-return=full-package)`. See `evidence/w010_w014_e9/ACCEPTANCE.md`.
+return=full-package)`. See
+`../../../docs/history/windows_x64_w010_w014_e9_result.md`.
 
 Native Stage E therefore no longer blocks managed NPE/SOE, stack-budget
 measurement, dynamic-table sampling/churn, the five-origin fatal matrix, or

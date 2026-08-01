@@ -300,6 +300,10 @@ FS-4's authoritative-host repeat is also one sanitized history summary. It
 retains all three package identities, repeat FS-1 margins, 16-way guarantee
 geometry, thread/fiber/lifecycle counts, and six dump identities. Host/subnet
 addresses and copied FS-1/FS-2/FS-3 raw records were removed.
+E9's configured-guarantee/explicit-stack-check acceptance is now a sanitized
+history summary linked from the live W-010 design and case results. Its 30/30
+contract and E8 failure identity remain; the obsolete host checklist, package
+checker, returned-result reviewer, and reviewer unit tests were removed.
 The unreferenced W-025 JIT-2/JIT-3 source preflights and the broken JIT-4
 preflight were removed as well. The unified W-025 reviewer owns their current
 mapping, lifecycle, nterp floating-point, JIT-control, PE-import/export, and

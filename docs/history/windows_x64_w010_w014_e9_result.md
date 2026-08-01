@@ -61,7 +61,7 @@ only for direct diagnostic page-state tests.
 
 E8 used `max(inaccessible prefix, guarantee)` and still failed all three
 managed-SOE paths. Its returned bundle is retained outside the repository at
-`/tmp/w010_w014_e8_result.zip`, SHA-256
+`<temporary>/w010_w014_e8_result.zip`, SHA-256
 `3c5fb26da6882e4fb3643a4575fef03b5cf4569ebe45a51e16086658aefd587b`.
 Controlled native measurements then proved that the guarantee is above a
 separate terminal prefix and that one moving guard page must also be debited.
@@ -73,9 +73,9 @@ CET user-shadow-stack support, debugger-quality dump reconstruction, forced
 incompatible CET-policy coverage, exception-unwind XMM coverage, or broad
 embedding/predecessor-UEF coverage. FS-2 subsequently closes those four native
 proof points on the same build-26100 class host; its compact result is recorded
-in `../../../../../docs/history/windows_x64_fs2_w010_w014_result.md`.
+in [`windows_x64_fs2_w010_w014_result.md`](windows_x64_fs2_w010_w014_result.md).
 Conditional pending-range,
 reservation-correlation, and debugger-quality dump-stack work do not reopen the
 accepted E9 managed-SOE mechanism. The former Windows 10 host is unavailable;
 future native reruns use the Server 2025 gate under
-[`win32_host_gate_policy.md`](../../../../../win32_host_gate_policy.md).
+[`win32_host_gate_policy.md`](../../win32_host_gate_policy.md).

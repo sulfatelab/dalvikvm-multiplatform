@@ -137,7 +137,7 @@ Server 2025 build 26100. Nterp, switch, and threshold-zero JIT each pass two
 runs with `mask=0`, the retained `selfTestMask=63`, and authoritative
 `fullSelfTestMask=1023`. These six cases are part of the accepted 30/30
 W-010/W-014 package described in
-[E9 acceptance](../../../tools/verify/windows_x64_phase4/evidence/w010_w014_e9/ACCEPTANCE.md).
+[E9 acceptance](../../../docs/history/windows_x64_w010_w014_e9_result.md).
 
 ## Related files
 

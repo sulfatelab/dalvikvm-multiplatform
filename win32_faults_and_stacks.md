@@ -582,7 +582,7 @@ The immutable E9 archive SHA-256 is
 Windows Server 2025 build 26100 returns 30/30 PASS, no handled dumps, and five
 valid fatal dumps. The independent reviewer reports
 `PASS (build=26100, pass_records=30, dumps=5, return=full-package)`. See
-`tools/verify/windows_x64_phase4/evidence/w010_w014_e9/ACCEPTANCE.md`.
+`docs/history/windows_x64_w010_w014_e9_result.md`.
 
 ## 5. Windows contracts and conclusions
 

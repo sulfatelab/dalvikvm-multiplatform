@@ -211,7 +211,7 @@ PASS native_crash_aborts
 | W-010 Stage D activation and stress | `tests/cases/managed-fault-recovery/{W010ManagedFaultProbe.java,run.py}`; common runtime null/SO flags and early nterp range registration |
 | W-010 dynamic-JIT PE unwind | `runtime/multiplatform/windows/jit_unwind_windows.*`; `runtime/jit/{jit_code_cache,jit_memory_region}.*`; `run_jit_unwind_{info,registry,lifecycle}.sh`; `run_jit_fatal_unwind.sh` |
 | W-010 static OSR PE unwind | `quick_entrypoints_x86_64.S`; unified `tests/cases/osr-unwind/` probe; unified `windows_w010_boundary_unwind_structure` reviewer |
-| Historical W-010/W-014 Stage E package evidence | `check_w010_w014_host_package.py`; `review_w010_w014_host_result.py`; `W010_W014_HOST_CHECKLIST.md`; `W010_W014_DIAGNOSTICS.md`; accepted `evidence/` records |
+| Historical W-010/W-014 Stage E evidence | `W010_W014_DIAGNOSTICS.md`; `../../../docs/history/windows_x64_w010_w014_e9_result.md` and later FS summaries |
 | FS-1 stack high-water probe/evidence | unified source, current result, and historical package identity under `tests/cases/stack-high-water`; shell-free gates and structural reviewer under `tests/support/windows` |
 | FS-2 debugger/CET/embedding/exception-XMM probes and evidence | `tests/cases/debugger-fault/probe.cc`; `tests/cases/cet-stack-policy/probe.cc`; `tests/cases/art-embedding/probe.cc`; `../../../docs/history/windows_x64_fs2_w010_w014_result.md` |
 
@@ -442,7 +442,7 @@ All switch/nterp/JIT handled SOE paths pass, handled logs are free of fatal
 markers, `HANDLED_DMP_SCAN.txt` says `NO_HANDLED_DMP_FILES`, and the five
 intentional static/JIT/OSR fatal origins produce five valid dumps. The main and
 pthread page probes both report `before=0 configured=16384 minimum=16384`.
-See `evidence/w010_w014_e9/ACCEPTANCE.md`.
+See `../../../docs/history/windows_x64_w010_w014_e9_result.md`.
 
 ## FS-1 native stack high-water acceptance
 
