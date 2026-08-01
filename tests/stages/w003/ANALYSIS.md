@@ -330,17 +330,25 @@ restores product `art.dll`, removes runtime output, and validates the final
 manifest again. The native PowerShell runner requires Windows build 17134 or
 newer, performs 8 frame runs and 6 XMM runs, scans logs for fatal markers, and
 recursively scans for dumps. Acceptance is exactly 19 `PASS` records followed
-by `OVERALL PASS` and a `NO_DMP_FILES` result. Operator and evidence-return
-instructions for that immutable package remain in the historical
-[W003 host checklist](../../../tools/verify/windows_x64_phase4/W003_HOST_CHECKLIST.md).
+by `OVERALL PASS` and a `NO_DMP_FILES` result. The package checker, host
+checklist, and repository-side package instructions were retired after the
+unified native stage and its no-op repeat passed.
 
 Stage D now passes on native Windows 10 build 19044. The return contains
 exactly 19 PASS records and `OVERALL PASS`; all 14 children exit zero without
 timeout. Nterp and JIT independently attribute all four frame families, all
 six XMM runs return `mask=0 selfTestMask=63`, both JIT probe pairs compile
 successfully through the Windows J-2 dual view, and fatal/dump scans are clean.
-See the transitional
-[native acceptance](../../../tools/verify/windows_x64_phase4/evidence/w003_host/ACCEPTANCE.md).
+The issued package SHA-256 is
+`59d2e85926bbbed59e02c2c07e79b7362b4d60f1a08cd62093938053dbd81289`;
+the 51-entry evidence-only return has SHA-256
+`e4f76840ae12153f73cca1101a59e421d2a0e4de1f9fd0cd54f9c915cd3d6eb8`.
+It contains no absolute or parent-traversal member and its build information,
+manifest, checksums, and structural report are byte-identical to the issued
+metadata. The issued root was commit
+`79c4f18fff8e510b579b27f66967e48e93393ecd` with ART commit
+`1b2afe73fafcffda1891e4d925a870c3ed328cbe`; returned archives remain outside
+VCS.
 
 The complete Stage A-D close bar is satisfied and W-003 is closed. W-010
 continues to own implicit generated-fault translation and the broader

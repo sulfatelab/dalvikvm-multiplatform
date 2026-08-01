@@ -174,9 +174,7 @@ W003_HOST_PACKAGE_PASS path=.../dist/windows_x64_w003_host.zip
 
 The package carries `art.product.dll`, the opt-in `art.frame-probe.dll`, both
 JNI probe DLLs and jars, a precomputed structural report, full SHA-256
-manifests, and the transitional
-[W003 host checklist](../../../tools/verify/windows_x64_phase4/W003_HOST_CHECKLIST.md).
-Its PowerShell
+manifests, and a package-only PowerShell runner. Its PowerShell
 runner requires Windows build 17134 or newer and no compiler, JDK, LLVM tools,
 or network connection. It runs 8 frame processes plus 6 XMM processes, scans
 all logs for fatal markers, recursively scans the package for dumps, and
@@ -195,11 +193,9 @@ six native XMM runs return `mask=0 selfTestMask=63 iterations=128`. The JIT
 logs explicitly confirm construction of the Windows pagefile-section J-2
 dual view and successful workload compilation.
 
-The accepted package and returned evidence are documented in the transitional
-[native acceptance](../../../tools/verify/windows_x64_phase4/evidence/w003_host/ACCEPTANCE.md).
-W-003 is closed. PE quick-assembly unwind and generated-fault translation
-remain with W-010 as documented in the
-[main W-003 analysis](../../stages/w003/ANALYSIS.md).
+The immutable package/return identities and accepted evidence are retained in
+the [main W-003 analysis](../../stages/w003/ANALYSIS.md). W-003 is closed. PE
+quick-assembly unwind and generated-fault translation remain with W-010.
 
 ## Related files
 

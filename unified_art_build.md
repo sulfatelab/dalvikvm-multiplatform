@@ -581,8 +581,10 @@ items are closed.
   only the unified structural reviewer. Later W-004 and W-010 historical
   package flows acquire W-003 DLL/JAR inputs from an explicitly configured
   unified Windows target tree and retain their own package-level Wine/native
-  behavioral matrices. Historical checklists, accepted hashes, and returned
-  evidence remain readable.
+  behavioral matrices. The obsolete package checker, host checklist, and
+  duplicate compact acceptance are now removed; the stage-owned analysis
+  retains the issued/returned identities, source commits, metadata-integrity
+  result, and native 19/19 acceptance beside the canonical frame/XMM results.
 - [x] `art.dll` no longer uses `WINDOWS_EXPORT_ALL_SYMBOLS`. Before the change,
   a Debug scan found 80,318 candidate exports and exceeded PE's 65,535-entry
   limit, while RelWithDebInfo exposed 17,112. ART's existing `EXPORT` boundary

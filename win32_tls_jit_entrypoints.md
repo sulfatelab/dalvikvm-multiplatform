@@ -1860,10 +1860,6 @@ and
 [W-003 frame-family result](tests/cases/w003-frame-probe/RESULT.md)
 and
 [W-003 XMM-sentinel result](tests/cases/w003-xmm-sentinel/RESULT.md)
-and
-[W003_HOST_CHECKLIST.md](tools/verify/windows_x64_phase4/W003_HOST_CHECKLIST.md)
-and
-[native acceptance](tools/verify/windows_x64_phase4/evidence/w003_host/ACCEPTANCE.md)
 for the design, staged implementation, and accepted evidence.
 
 

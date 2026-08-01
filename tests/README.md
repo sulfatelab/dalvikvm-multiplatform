@@ -254,6 +254,11 @@ the unified stage passed twice. Its durable rSELF/OSR/attach design, R1 timing
 diagnosis, R2 correction, and native acceptance are one stage-owned
 `stages/w002/ANALYSIS.md`; its two maintained runtime results remain adjacent
 to the canonical `osr-unwind` and `attached-thread-entry` sources.
+W-003's package checker, host checklist, and duplicate compact acceptance were
+likewise removed. Its existing stage analysis now retains the unique issued
+and returned archive identities, source commits, metadata-integrity result,
+and native 19/19 acceptance alongside the cross-case frame/XMM design; current
+results remain adjacent to both canonical cases.
 The unreferenced W-025 JIT-2/JIT-3 source preflights and the broken JIT-4
 preflight were removed as well. The unified W-025 reviewer owns their current
 mapping, lifecycle, nterp floating-point, JIT-control, PE-import/export, and

@@ -128,10 +128,9 @@ The separate four-family managed-frame probe also passes 8/8 on the same
 native host; see the adjacent
 [frame-family result](../w003-frame-probe/RESULT.md).
 Fatal-marker and recursive dump scans are clean. The complete accepted return
-is documented in
-[native acceptance](../../../tools/verify/windows_x64_phase4/evidence/w003_host/ACCEPTANCE.md),
-and W-003 is closed. The historical accepted logs are intentionally not
-rewritten.
+and its immutable identities are documented in the
+[W-003 analysis](../../stages/w003/ANALYSIS.md), and W-003 is closed. The
+historical accepted logs are intentionally not rewritten.
 
 E9 subsequently performs the strengthened ten-register repetition on Windows
 Server 2025 build 26100. Nterp, switch, and threshold-zero JIT each pass two

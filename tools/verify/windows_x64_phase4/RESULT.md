@@ -203,7 +203,7 @@ PASS native_crash_aborts
 | W-002 unified probes and reviewer | `tests/cases/{attached-thread-entry,osr-unwind}`; `tests/support/windows/{w002_managed_entry_gate,check_w002_managed_entries}.py` |
 | W-003 XMM boundary and structural gate | `quick_entrypoints_x86_64.S`; `check_w003_quick_boundaries.py` |
 | W-003 unified managed gates | `../../../tests/cases/{jni-critical-native,jni-native-abi,w003-frame-probe,w003-xmm-sentinel}/`; `../../../tests/support/windows/w003_managed_gate.py` |
-| W-003 historical native package evidence | `evidence/w003_host/ACCEPTANCE.md`; `W003_HOST_CHECKLIST.md` |
+| W-003 historical native package evidence | `../../../tests/stages/w003/ANALYSIS.md` |
 | W-014 native stack/pthread/page/growth/RX/CET gates | `tests/cases/pthread-once/`; `tests/cases/thread-stack/`; `tests/cases/stack-page-growth/`; `tests/cases/stack-executable-memory/`; `tests/cases/cet-stack-policy/`; `tests/support/runtime_gate.py` |
 | W-010 unified gates | `tests/cases/{unhandled-exception-filter,fault-record,sigchain-fault,debugger-fault,fatal-runtime,managed-fault-recovery}`; `tests/CMakeLists.txt` |
 | W-010 Stage C adapter and probes | `tests/cases/fault-record/probe.cc`; `tests/cases/sigchain-fault/probe.cc`; `vendor/art/runtime/multiplatform/windows/sigchain_windows.cc` |
@@ -244,7 +244,7 @@ python tools/build_art.py test --target-id windows-x86_64-msvc --build-type RelW
 The accepted Windows 10 build 19044 return has 19/19 PASS records over 14
 children, clean fatal/dump scans, 8/8 attributed frame runs, and 6/6 XMM
 sentinel runs. That package is historical and its producer and repository-side
-runner are retired; see `evidence/w003_host/ACCEPTANCE.md`.
+runner are retired; see `../../../tests/stages/w003/ANALYSIS.md`.
 
 Focused W-010 native gate on the 16 GiB Windows VM:
 
@@ -636,8 +636,7 @@ attribute all four frame families; every XMM run reports
 pagefile-section J-2 dual view and successful compilation; and fatal/dump
 scans are clean. W-003 is closed. The independent nterp implicit-null and
 PE/SEH/native-unwind work remains W-010. See
-[`tests/stages/w003/ANALYSIS.md`](../../../tests/stages/w003/ANALYSIS.md)
-and [`evidence/w003_host/ACCEPTANCE.md`](evidence/w003_host/ACCEPTANCE.md).
+[`tests/stages/w003/ANALYSIS.md`](../../../tests/stages/w003/ANALYSIS.md).
 
 The accepted native evidence above remains the historical XMM6-XMM11
 checkpoint. W-010 has since expanded only the Windows boundary adapter to
