@@ -35,6 +35,7 @@ def test_windows_platform_prelude_has_reviewed_target_scope():
     )
     prelude_free_targets = (
         "art-dex2oat",
+        "artpalette",
         "crypto_static",
         "expat",
         "fdlibm",
@@ -42,6 +43,8 @@ def test_windows_platform_prelude_has_reviewed_target_scope():
         "icuuc",
         "icuuc_stubdata",
         "lzma",
+        "nativebridge",
+        "procinfo",
         "unwindstack",
     )
 
@@ -79,6 +82,20 @@ def test_windows_unwindstack_uses_posix_header_ownership():
     assert "static inline int getpagesize(void)" in unistd
     assert "sysconf(_SC_PAGESIZE)" in unistd
     assert "static inline int getpagesize(void)" not in prelude
+
+
+def test_windows_nativebridge_uses_posix_mode_header_ownership():
+    stat = (REPO_ROOT / "compat" / "include" / "sys" / "stat.h").read_text(
+        encoding="utf-8"
+    )
+    prelude = (
+        REPO_ROOT / "compat" / "include" / "mdvm_windows_x64_prelude.h"
+    ).read_text(encoding="utf-8")
+
+    assert "#define mkdir(path, mode) _mkdir(path)" in stat
+    assert "#define S_IRWXG (S_IRGRP|S_IWGRP|S_IXGRP)" in stat
+    assert "#define S_IRWXO (S_IROTH|S_IWOTH|S_IXOTH)" in stat
+    assert "#define mkdir(path,mode) _mkdir(path)" not in prelude
 
 
 def test_linux_toolchain_drift_headers_are_source_scoped():

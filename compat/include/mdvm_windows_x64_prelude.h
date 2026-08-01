@@ -205,9 +205,6 @@ int posix_memalign(void** memptr, size_t alignment, size_t size);
 #include <signal.h>
 
 #include <direct.h>
-#ifndef mkdir
-#define mkdir(path,mode) _mkdir(path)
-#endif
 
 /* minwindef.h defines CONST as const; ART dex opcodes use identifier CONST. */
 #if defined(__cplusplus) && defined(CONST) && !defined(MDVM_WINDOWS_KEEP_CONST_MACRO)

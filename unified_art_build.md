@@ -55,7 +55,7 @@ items are closed.
 ### Latest verification baseline (2026-08-01)
 
 - [x] `PYTHONPATH=tools/bp2cmake python3 -m pytest tools/bp2cmake/tests tests/host -q`:
-  180 passed, including generated PE-header, Linux/Windows test-catalog,
+  181 passed, including generated PE-header, Linux/Windows test-catalog,
   shell-free runtime/managed-artifact gates, parallel-frontend, JDK validation,
   deterministic JAR, Windows-path/DSO-name, reviewer ownership, W-010
   nonzero/fault/debugger/fatal-dump orchestration, W-013 source-policy,
@@ -178,6 +178,15 @@ items are closed.
   Windows products rebuilt successfully at their required 32/32/16 job
   limits and immediately repeated as Ninja no-ops. Cross and native CET
   contracts pass 58/58, and all 180 host tests pass.
+- [x] The one-source `artpalette`, `nativebridge`, and Windows `procinfo`
+  platform-library targets now compile without the ART prelude on both Windows
+  build hosts. The project `sys/stat.h` wrapper owns POSIX `mkdir(path, mode)`
+  adaptation and the group/other aggregate mode bits used by `nativebridge`;
+  the duplicate `mkdir` macro was removed from the prelude. This reduces the
+  forced-prelude total from 743 to 740. Linux, Windows-cross, and native
+  Windows products passed at their required 32/32/16 job limits and repeated
+  as Ninja no-ops. Cross and native CET contracts pass 58/58, and all 181 host
+  tests pass.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to

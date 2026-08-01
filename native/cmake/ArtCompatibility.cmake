@@ -13,6 +13,7 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
     # target cannot silently become prelude-free.
     set(_art_windows_prelude_free_targets
         art-dex2oat
+        artpalette
         crypto_static
         expat
         fdlibm
@@ -20,6 +21,8 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
         icuuc
         icuuc_stubdata
         lzma
+        nativebridge
+        procinfo
         unwindstack)
     set(_art_windows_prelude_free_definitions
         _CRT_SECURE_NO_WARNINGS

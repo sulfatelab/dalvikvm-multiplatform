@@ -3,7 +3,11 @@
 #include_next <sys/stat.h>
 #else
 #include_next <sys/stat.h>
+#include <direct.h>
 /* Windows UCRT has _S_IF* / _S_IS*. Map POSIX S_IS*. */
+#ifndef mkdir
+#define mkdir(path, mode) _mkdir(path)
+#endif
 #ifndef S_IFMT
 #define S_IFMT _S_IFMT
 #define S_IFDIR _S_IFDIR
@@ -28,9 +32,11 @@
 #define S_IRGRP S_IRUSR
 #define S_IWGRP S_IWUSR
 #define S_IXGRP S_IXUSR
+#define S_IRWXG (S_IRGRP|S_IWGRP|S_IXGRP)
 #define S_IROTH S_IRUSR
 #define S_IWOTH S_IWUSR
 #define S_IXOTH S_IXUSR
+#define S_IRWXO (S_IROTH|S_IWOTH|S_IXOTH)
 /* Map timespec fields used by UnixFileSystem. */
 #ifndef st_mtim
 #define st_atim st_atime
