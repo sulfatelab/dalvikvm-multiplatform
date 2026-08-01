@@ -120,7 +120,17 @@ strict exit/marker checks, timeouts, and sanitized JSON results. Linux also
 registers its show-version and compiler-DSO topology gates, for five W-004
 CTest gates. Windows adds its BoringSSL SHA executable plus the exact
 `windows-x86_64-msvc` JVMTI managed gate and runtime-load/assembly-dependency
-reviewer, for six native W-004 gates. The JVMTI runner, native agent, managed
+reviewer. Thirteen more accepted Phase-3 libcore behaviors use one checked-in
+JSON contract matrix and one case-local, shell-free Python runner. The expanded
+native W-004 stage has 19 gates: core/charset/monitor, DNS, ordinary and forced
+GC, GoldenApp, interruption, file I/O, TCP loopback, errno/UTF-8 paths,
+properties/clocks, runtime memory, thread stress, and expected-nonzero uncaught
+exception behavior join the earlier six. Windows Server 2025 passed 19/19
+twice with `--parallel 16`, including a true Ninja no-op repeat. Its first DNS
+run exposed recursive `getnameinfo` JNI behavior; the maintained bridge now
+uses `GetNameInfoW` with explicit bionic-to-Winsock flag mapping. Path/AbsPath,
+L-003, and the remaining unregistered libcore behaviors stay compile-only
+until their exact contracts migrate. The JVMTI runner, native agent, managed
 source, and result live together under `cases/jvmti-force/`; its current
 selector is deliberately not generalized to another Windows architecture or
 ABI.
@@ -155,7 +165,10 @@ canonical files as temporary compatibility shims; they must be replaced by the
 unified Python/CMake/Ninja path before `tools/verify` can be removed. W-003 has
 removed its four standalone CMake graphs, shell runners, and package producer;
 W-004 has likewise removed the standalone JVMTI CMake/Bash orchestration after
-unified native acceptance. W-025 has removed its four package producers,
+unified native acceptance. Its accepted Phase-3 libcore slice also removed 20
+superseded Bash build/run wrappers; retained Path/AbsPath and L-003 scripts
+still mark incomplete semantics, not an alternative product graph. W-025 has
+removed its four package producers,
 package-only PowerShell/Bash/Wine orchestration, and superseded Phase-4 JIT
 wrappers after unified native acceptance. Retained aggregate package flows
 acquire required DLL/JAR inputs from an explicitly configured unified build.

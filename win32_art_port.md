@@ -713,21 +713,21 @@ Each phase has a kill-or-continue gate. This is the execution roadmap when imple
 ### Phase 3 — libcore bring-up (3–6 months, overlaps Phase 2) — **COMPLETE**
 
 - Foundations (2026-07-16): Option H path/FS + `;` classpath; A4–A7 + GoldenApp under wine64.
-- A5 forced GC: `System.gc()` hang fixed (`GetThreadTimes` ThreadCpuNanoTime + WaitOnAddress ETIMEDOUT); gate `run_gcforced.sh`.
+- A5 forced GC: `System.gc()` hang fixed (`GetThreadTimes` ThreadCpuNanoTime + WaitOnAddress ETIMEDOUT); current gate `art.w004.managed_gcforced`.
 - See `tools/verify/windows_x64_phase3/RESULT.md` and
   `docs/windows-port-notes/windows_x64_phase3_system_gc_hang_fix.md`.
 - Path gates (same day): `File.isAbsolute("C:\\…")` **PASS**, mixed/UNC **PASS**, multi-jar `-cp a;b` **PASS** under wine64 (`tools/verify/windows_x64_phase3/run_probe.sh`).
 - **Pitfall:** imageless ART has `Character.isLetter('C')==false` (no ICU props). `WinNTFileSystem` must use ASCII `isDriveLetter`, not `Character.isLetter`.
 - **Shell pitfall:** bash splits on `;` — multi-jar `-cp` must be passed via argv list (Python subprocess), not a shell string.
-- File I/O (P7): `FileInputStream`/`FileOutputStream` round-trip **PASS** (`run_ioprobe.sh`); PE FD must run `<init>` for `releaseLock`.
-- A4 core: arraycopy/UTF-8/reflect/threads monitors **PASS** (`run_coreprobe.sh`).
-- A7 classic loopback `ServerSocket`/`Socket` payload echo **PASS** (`run_netprobe.sh`); NIO.2 still non-goal.
-- A5/A6/GoldenApp + forced System.gc **PASS** under wine64 (`run_gcprobe.sh`, `run_gcforced.sh`, `run_interruptprobe.sh`, `run_goldenapp.sh`).
+- File I/O (P7): `FileInputStream`/`FileOutputStream` round-trip **PASS** (`art.w004.managed_ioprobe`); PE FD must run `<init>` for `releaseLock`.
+- A4 core: arraycopy/UTF-8/reflect/threads monitors **PASS** (`art.w004.managed_coreprobe`).
+- A7 classic loopback `ServerSocket`/`Socket` payload echo **PASS** (`art.w004.managed_netprobe`); NIO.2 still non-goal.
+- A5/A6/GoldenApp + forced System.gc **PASS** on native Windows through the unified W-004 stage.
 - Absolute C: jar load P2–P4/P8 + P5 parent/name + P9c colon **PASS** (`run_abspathprobe.sh`).
-- Runtime free/total/maxMemory **PASS** (`run_rtmem.sh`) via art `JVM_*` exports + PE Runtime natives.
-- Props/time/`java.version=1.8.0` **PASS** (`run_propsprobe.sh`); Os errno + UTF-8 paths **PASS** (`run_oserrnoprobe.sh`).
+- Runtime free/total/maxMemory **PASS** (`art.w004.managed_rtmem`) via art `JVM_*` exports + PE Runtime natives.
+- Props/time/`java.version=1.8.0` and Os errno + UTF-8 paths **PASS** through the unified W-004 stage.
 - Host smoke package staged: `dist/windows_x64_phase3_host` via `tools/windows_x64/host_package/package_windows_x64_phase3.sh`.
-- Full wine suite `run_all_wine_gates.sh` **PASS** (includes throw path + thread stress).
+- The historical full Wine suite **PASS** remains evidence; its migrated behavioral subset now passes 19/19 through shell-free native W-004 CTest gates.
 - Host package integrity under wine `smoke_package_wine64.sh` **PASS** (not a substitute for host).
 - Host transfer: `dist/windows_x64_phase3_host.zip`; checklist `tools/windows_x64/host_package/G12_HOST_CHECKLIST.md`.
 - First Win10 G12 evidence analyzed: paths/props/GC PASS; **net poll EINVAL FAIL**; false OVERALL PASS from cmd ERRORLEVEL clobber.

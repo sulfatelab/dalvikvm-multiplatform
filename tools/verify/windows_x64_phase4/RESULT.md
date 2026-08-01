@@ -118,7 +118,7 @@ still consume them; they are not the current W-010 reproduction path.
 | P4_G4 Perf smoke | **PASS** | `run_perfsmoke.sh` |
 | P4_G5 Java abort path | **PASS** | `run_crashabort.sh` |
 | P4_G5b Native AV + minidump | **PASS** | `run_crashnative.sh` (VEH+UEF+`.dmp`) |
-| P4_G6 GoldenApp regression | **PASS** | phase3 `run_goldenapp.sh` |
+| P4_G6 GoldenApp regression | **PASS** | historical Phase-3 evidence; maintained as `art.w004.managed_goldenapp` |
 | W-002 structural managed entries | **PASS in unified native stage** | `windows_w002_managed_entry_structure` |
 | W-003 quick boundary/trap parity | **PASS in unified product and variant** | `windows_w003_quick_boundary_structure` |
 | W-010 static OSR/invoke lookup and virtual unwind | **PASS** | `run_osr_unwind_probe.sh` (R12-anchored variable RSP entry, explicit RBP JIT handoff, managed-clobbered RBP return, GPR plus XMM6-XMM15 restore, invoke records, epilogue) |

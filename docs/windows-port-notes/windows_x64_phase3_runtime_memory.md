@@ -15,4 +15,4 @@ upstream OpenJDK JVM layer is portable.
 2. `tools/windows_x64/jni_stubs/win_runtime_natives.c` — PE JNI for Runtime natives via `GetProcAddress(art.dll, "JVM_*")`.
 3. Link memory object into `art.dll`; rebuild libcombined and copy to `libopenjdk.dll` et al.
 
-**Verify:** `bash tools/verify/windows_x64_phase3/run_rtmem.sh` → `max=536870912` with `-Xmx512m`.
+**Verify:** `python tools/build_art.py test --target-id windows-x86_64-msvc --stage w004 --parallel 16`; gate `art.w004.managed_rtmem` reports `mem.ok=true` with `-Xmx512m`.

@@ -1,0 +1,101 @@
+import importlib.util
+import json
+from pathlib import Path
+
+
+CASE_ROOT = Path(__file__).parents[1] / "cases" / "windows-libcore-smoke"
+REPO_ROOT = Path(__file__).parents[2]
+
+
+def _load_runner():
+    spec = importlib.util.spec_from_file_location(
+        "art_windows_libcore_gate", CASE_ROOT / "run.py"
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+runner = _load_runner()
+
+
+def test_windows_libcore_runtime_matrix_matches_promoted_cases():
+    matrix = runner.load_matrix()
+    assert set(matrix) == {
+        "CoreProbe",
+        "DnsProbe",
+        "GcForced",
+        "GcProbe",
+        "GoldenApp",
+        "InterruptProbe",
+        "IoProbe",
+        "NetProbe",
+        "OsErrnoProbe",
+        "PropsProbe",
+        "RtMem",
+        "ThreadStressProbe",
+        "ThrowProbe",
+    }
+    assert matrix["ThrowProbe"]["require_nonzero"] is True
+    assert all(case["expected_markers"] for case in matrix.values())
+    assert all("AssertionError" in case["forbidden_markers"] for case in matrix.values())
+
+
+def test_windows_libcore_runner_cleans_output_and_passes_explicit_contract(
+    tmp_path, monkeypatch
+):
+    files = {}
+    for name in ("dalvikvm.exe", "boot.jar", "coreprobe.jar", "icudt72l.dat"):
+        path = tmp_path / name
+        path.write_bytes(name.encode())
+        files[name] = path
+    work = tmp_path / "results" / "core"
+    work.mkdir(parents=True)
+    (work / "stale.txt").write_text("stale", encoding="utf-8")
+    calls = []
+
+    def fake_run_managed(**kwargs):
+        calls.append(kwargs)
+        kwargs["work_root"].mkdir(parents=True)
+        (kwargs["work_root"] / "result.json").write_text(
+            json.dumps({"main_class": kwargs["main_class"]}) + "\n",
+            encoding="utf-8",
+        )
+
+    monkeypatch.setattr(runner.runtime_gate, "run_managed", fake_run_managed)
+    runner.run_gate(
+        case="CoreProbe",
+        target_id="windows-x86_64-msvc",
+        dalvikvm=files["dalvikvm.exe"],
+        boot_jar=files["boot.jar"],
+        app_jar=files["coreprobe.jar"],
+        work_root=work,
+        icu_data=files["icudt72l.dat"],
+        library_dirs=[tmp_path],
+    )
+    assert not (work / "stale.txt").exists()
+    assert len(calls) == 1
+    assert calls[0]["main_class"] == "CoreProbe"
+    assert calls[0]["vm_options"] == ["-Xint"]
+    assert calls[0]["require_nonzero"] is False
+    assert "CoreProbe.done=ok" in calls[0]["expected"]
+
+
+def test_windows_getnameinfo_uses_unicode_winsock_without_java_recursion():
+    source = (
+        REPO_ROOT / "tools" / "windows_x64" / "jni_stubs" / "win_net_natives.c"
+    ).read_text(encoding="utf-8")
+    start = source.index(
+        "__declspec(dllexport) jstring Java_libcore_io_Linux_getnameinfo("
+    )
+    end = source.index(
+        "__declspec(dllexport) jstring "
+        "Java_libcore_io_Linux_getnameinfo__Ljava_net_InetAddress_2I(",
+        start,
+    )
+    implementation = source[start:end]
+    assert "GetNameInfoW(" in implementation
+    assert "java_addr_to_sockaddr(" in implementation
+    assert "getHostAddress" not in implementation
+    assert "GetNameInfoA(" not in implementation

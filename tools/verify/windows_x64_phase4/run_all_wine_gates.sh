@@ -42,9 +42,6 @@ run P4_G4_PERFSMOKE bash "$ROOT/run_perfsmoke.sh"
 run P4_G5_CRASHABORT bash "$ROOT/run_crashabort.sh"
 run P4_G5b_CRASHNATIVE bash "$ROOT/run_crashnative.sh"
 # keep phase3 golden regression as stability anchor
-if [[ -x "$REPO/tools/verify/windows_x64_phase3/run_goldenapp.sh" ]]; then
-  run P4_G6_GOLDEN_REG bash "$REPO/tools/verify/windows_x64_phase3/run_goldenapp.sh"
-fi
 echo "==== SUMMARY ===="
 if [[ $fail -eq 0 ]]; then echo "PASS all wine Phase 4 gates"; else echo "FAIL some wine Phase 4 gates"; fi
 exit $fail

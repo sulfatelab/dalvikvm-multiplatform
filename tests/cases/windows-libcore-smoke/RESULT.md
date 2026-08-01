@@ -4,7 +4,7 @@
 Windows Server 2025 host; A4–A7 + Option H + product golden app also pass on
 the historical Windows 10 host and Wine oracle
 
-**Latest acceptance:** 2026-07-31
+**Latest acceptance:** 2026-08-01
 
 **Original Phase-3 acceptance:** 2026-07-16
 **Plan:** [win32_filesystem.md](../../../win32_filesystem.md) (Option H locked; Windows NIO non-goal)
@@ -49,14 +49,30 @@ Ninja 1.13.2, LLVM 21.1.8 GNU-style Clang drivers, and the official configured
 JDK 21.0.12. No POSIX shell, Make, NMake, PowerShell, WSL, Cygwin, MSVC
 compiler driver, or `clang-cl` participated.
 
-```text
-python tools/build_art.py test --target-id windows-x86_64-msvc --stage w004 --parallel 32
-python tools/build_art.py test --target-id windows-x86_64-msvc --stage w013 --parallel 32
+Thirteen accepted Phase-3 behaviors are now target-runnable through the common
+W-004 catalog and one case-local Python runner with a checked-in JSON contract
+matrix. Core/charset/monitor, DNS, ordinary and forced GC, GoldenApp,
+interruption, file I/O, TCP loopback, errno/UTF-8 paths, properties/clocks,
+runtime memory, thread stress, and the expected-nonzero uncaught-exception path
+all run without Bash, Wine, PowerShell, or a package handoff. Path/AbsPath and
+the separate L-003 matrix remain compile-only pending their next migration
+slice.
 
-W-004: 4/4 PASS, including windows_crypto_sha_probe
-W-013 Stage-8: 6/6 PASS; windows_socket_fd_registry_probe passed in 0.50 seconds
-source/output reparse points: 0
+```text
+python tools/build_art.py test --target-id windows-x86_64-msvc --stage w004 --parallel 16
+
+W-004: 19/19 PASS in 25.15 seconds
+repeat: ninja: no work to do; 19/19 PASS in 21.44 seconds
+Linux-hosted Windows cross reviewer: PASS with --parallel 32
 ```
+
+The first native DNS run exposed that the Win32 `getnameinfo` JNI bridge called
+Java `InetAddress.getHostAddress()`, which calls the same native bridge and
+recursed. The maintained bridge now converts the Java address to `sockaddr`,
+maps bionic name-info flag values to Winsock values, and calls Unicode
+`GetNameInfoW`; the rebuilt `javacore.dll` passes DNS resolution and loopback
+payload acceptance. The superseded Phase-3 Bash producers and runners for
+these 13 cases were removed after native acceptance.
 
 The generated binaries, managed artifacts, routine logs, and build trees
 remain outside VCS. W-027 tracks the probe's current `GetTempPathA`,
@@ -112,16 +128,12 @@ package smoke_package_wine64.sh OVERALL PASS
 ## Current reproduction
 
 ```text
-python tools/build_art.py test --target-id windows-x86_64-msvc --stage w004 --parallel 32
-python tools/build_art.py test --target-id windows-x86_64-msvc --stage w013 --parallel 32
+python tools/build_art.py test --target-id windows-x86_64-msvc --stage w004 --parallel 16
+python tools/build_art.py test --target-id windows-x86_64-msvc --stage w013 --parallel 16
 ```
 
-## Historical Phase-3 reproduction
+## Historical Phase-3 evidence
 
-```bash
-# Wine
-bash tools/verify/windows_x64_phase3/run_all_wine_gates.sh
-# Host package
-bash tools/windows_x64/host_package/package_windows_x64_phase3.sh
-# On Windows: scripts\run_all_host.cmd
-```
+The old Wine and returned-host-package results remain evidence, not maintained
+reproduction paths. Current reproduction uses only the unified frontend and
+the `w004` virtual stage above.

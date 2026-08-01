@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <wchar.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <io.h>
@@ -1348,13 +1349,33 @@ __declspec(dllexport) jstring Java_libcore_io_Linux_if_indextoname__I(JNIEnv* en
 
 __declspec(dllexport) jstring Java_libcore_io_Linux_getnameinfo(
     JNIEnv* env, jobject thiz, jobject inetAddress, jint flags) {
-  (void)thiz; (void)flags;
+  (void)thiz;
   ensure_wsa();
   if (!inetAddress) return NULL;
-  jclass c = (*env)->GetObjectClass(env, inetAddress);
-  jmethodID mid = (*env)->GetMethodID(env, c, "getHostAddress", "()Ljava/lang/String;");
-  if (!mid) return NULL;
-  return (*env)->CallObjectMethod(env, inetAddress, mid);
+
+  struct sockaddr_storage ss;
+  int ss_len = 0;
+  if (java_addr_to_sockaddr(env, inetAddress, 0, &ss, &ss_len) != 0) {
+    throw_gai(env, "getnameinfo", EAI_FAMILY);
+    return NULL;
+  }
+
+  /* OsConstants exposes bionic flag values; Winsock uses different bits. */
+  int winsock_flags = 0;
+  if (flags & 1) winsock_flags |= NI_NUMERICHOST;
+  if (flags & 2) winsock_flags |= NI_NUMERICSERV;
+  if (flags & 4) winsock_flags |= NI_NOFQDN;
+  if (flags & 8) winsock_flags |= NI_NAMEREQD;
+  if (flags & 16) winsock_flags |= NI_DGRAM;
+
+  WCHAR host[NI_MAXHOST];
+  int rc = GetNameInfoW(
+      (const struct sockaddr*)&ss, ss_len, host, NI_MAXHOST, NULL, 0, winsock_flags);
+  if (rc != 0) {
+    throw_gai(env, "getnameinfo", rc);
+    return NULL;
+  }
+  return (*env)->NewString(env, (const jchar*)host, (jsize)wcslen(host));
 }
 __declspec(dllexport) jstring Java_libcore_io_Linux_getnameinfo__Ljava_net_InetAddress_2I(
     JNIEnv* env, jobject thiz, jobject inetAddress, jint flags) {

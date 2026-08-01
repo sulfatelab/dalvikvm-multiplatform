@@ -185,7 +185,9 @@ Product ships real PE natives with **one soname each** (`stage_native_modules.sh
 | run_throw | non-zero exit + `phase3-throw-ok` |
 | run_all_host | `OVERALL PASS` |
 
-Wine64 on Linux is the agent CI oracle (`tools/verify/windows_x64_phase3/run_all_wine_gates.sh`). This package is **G12** for real host goldens.
+The historical Wine result remains evidence. Current agent acceptance uses the
+shell-free unified W-004 CTest stage; this package is retained only for the
+not-yet-migrated G12/Path/AbsPath host evidence.
 
 ## Package integrity (Linux agent)
 

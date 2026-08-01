@@ -890,16 +890,43 @@ set(_art_windows_libcore_managed_classes
     NetProbe OsConstantsProbe OsErrnoProbe PathProbe PropsProbe RtMem
     SocketAddressProbe SslProviderProbe ThreadStressProbe ThrowProbe UdpProbe
     XmlProbe ZipProbe)
+set(_art_windows_libcore_runnable_classes
+    CoreProbe DnsProbe GcForced GcProbe GoldenApp InterruptProbe IoProbe
+    NetProbe OsErrnoProbe PropsProbe RtMem ThreadStressProbe ThrowProbe)
 foreach(_art_libcore_class IN LISTS _art_windows_libcore_managed_classes)
     string(TOLOWER "${_art_libcore_class}" _art_libcore_name)
+    list(FIND _art_windows_libcore_runnable_classes
+        "${_art_libcore_class}" _art_libcore_runnable_index)
+    if(_art_libcore_runnable_index EQUAL -1)
+        set(_art_libcore_execution compile-only)
+        set(_art_libcore_runtime_arguments)
+    else()
+        set(_art_libcore_execution target-runnable)
+        set(_art_libcore_runtime_arguments
+            TIMEOUT 600
+            DEPENDS dalvikvm icu_jni javacore openjdk
+            COMMAND
+                "${Python3_EXECUTABLE}"
+                "${_art_test_cases_root}/windows-libcore-smoke/run.py"
+                --case "${_art_libcore_class}"
+                --target-id "${ART_TARGET_ID}"
+                --dalvikvm "$<TARGET_FILE:dalvikvm>"
+                --boot-jar "${_art_boot_jar}"
+                --app-jar "${_art_managed_root}/${_art_libcore_name}.jar"
+                --work-root
+                    "${CMAKE_CURRENT_BINARY_DIR}/results/libcore-${_art_libcore_name}"
+                --icu-data "${_art_icu_data}"
+                ${_art_managed_runtime_library_args})
+    endif()
     art_add_target_probe(
         NAME "managed_${_art_libcore_name}" STAGE w004
-        TYPE MANAGED EXECUTION compile-only
+        TYPE MANAGED EXECUTION "${_art_libcore_execution}"
         ${_art_windows_current_selector}
         SOURCES
             "${_art_test_cases_root}/windows-libcore-smoke/${_art_libcore_class}.java"
         CONTRACTS libcore runtime-load
-        OUTPUT_NAME "${_art_libcore_name}")
+        OUTPUT_NAME "${_art_libcore_name}"
+        ${_art_libcore_runtime_arguments})
 endforeach()
 art_add_target_probe(
     NAME windows_crypto_sha_probe STAGE w004 TYPE EXECUTABLE

@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "cases": {
+    "CoreProbe": {
+      "expected_markers": [
+        "arraycopy=true",
+        "charset=true",
+        "reflect=reflect-ok",
+        "threads.ok=true",
+        "CoreProbe.done=ok"
+      ],
+      "timeout_seconds": 120
+    },
+    "DnsProbe": {
+      "expected_markers": [
+        "dns.ok=true",
+        "payload=dns-ok",
+        "DnsProbe.done=ok"
+      ],
+      "timeout_seconds": 120
+    },
+    "GcForced": {
+      "expected_markers": [
+        "tiny.ok=true",
+        "los.ok=true",
+        "gc.forced.ok=true",
+        "GcForced.done=ok"
+      ],
+      "timeout_seconds": 300
+    },
+    "GcProbe": {
+      "expected_markers": [
+        "los.ok=true",
+        "gc.ok=true",
+        "GcProbe.done=ok"
+      ],
+      "timeout_seconds": 180
+    },
+    "GoldenApp": {
+      "expected_markers": [
+        "conf.match=true",
+        "net.ok=true",
+        "interrupt.ok=true",
+        "golden.ok=true",
+        "GoldenApp.done=ok"
+      ],
+      "timeout_seconds": 300
+    },
+    "InterruptProbe": {
+      "expected_markers": [
+        "alive=false",
+        "interrupt.ok=true",
+        "InterruptProbe.done=ok"
+      ],
+      "timeout_seconds": 60
+    },
+    "IoProbe": {
+      "expected_markers": [
+        "match=true",
+        "mixedRead=mixed-ok",
+        "rename=true",
+        "delete=true",
+        "IoProbe.done=ok"
+      ],
+      "timeout_seconds": 120
+    },
+    "NetProbe": {
+      "expected_markers": [
+        "match=true",
+        "echoMatch=true",
+        "NetProbe.done=ok"
+      ],
+      "timeout_seconds": 180
+    },
+    "OsErrnoProbe": {
+      "expected_markers": [
+        "OsErrnoProbe.fails=0",
+        "OsErrnoProbe.done=ok"
+      ],
+      "timeout_seconds": 120
+    },
+    "PropsProbe": {
+      "expected_markers": [
+        "java.version.nonzero=true",
+        "props.ok=true",
+        "PropsProbe.done=ok"
+      ],
+      "timeout_seconds": 60
+    },
+    "RtMem": {
+      "expected_markers": [
+        "mem.ok=true",
+        "RtMem.done=ok"
+      ],
+      "timeout_seconds": 60
+    },
+    "ThreadStressProbe": {
+      "expected_markers": [
+        "threadstress.ok=true",
+        "ThreadStressProbe.done=ok"
+      ],
+      "timeout_seconds": 120
+    },
+    "ThrowProbe": {
+      "expected_markers": [
+        "ThrowProbe.start",
+        "RuntimeException: phase3-throw-ok"
+      ],
+      "require_nonzero": true,
+      "timeout_seconds": 60
+    }
+  }
+}
