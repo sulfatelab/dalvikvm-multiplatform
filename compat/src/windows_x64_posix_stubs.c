@@ -1136,7 +1136,6 @@ int pthread_getname_np(pthread_t t, char* buf, size_t len) {
 /* ---- aliases expected by openjdk NIO/file natives ---- */
 int fsync(int fd) { return _commit(fd); }
 int fdatasync(int fd) { return _commit(fd); }
-long long lseek64(int fd, long long off, int whence) { return _lseeki64(fd, off, whence); }
 int mdvm_ftruncate(int fd, long long length) { return _chsize_s(fd, length); }
 int open64(const char* path, int flags, ...) {
   va_list ap; va_start(ap, flags); int mode = va_arg(ap, int); va_end(ap);

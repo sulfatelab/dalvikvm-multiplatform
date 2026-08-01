@@ -97,7 +97,9 @@ typedef long long off64_t;
 #endif
 int fsync(int fd);
 int fdatasync(int fd);
-long long lseek64(int fd, long long off, int whence);
+#ifndef lseek64
+#define lseek64 _lseeki64
+#endif
 /* ftruncate provided by windows_x64_posix_stubs.c — declare without colliding macros */
 int mdvm_ftruncate(int fd, long long length);
 int open64(const char* path, int flags, ...);

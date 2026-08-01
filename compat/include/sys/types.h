@@ -6,6 +6,11 @@
 #if defined(_WIN32)
 #include <stdint.h>
 
+#ifndef _MDVM_MODE_T_DEFINED
+typedef unsigned short mode_t;
+#define _MDVM_MODE_T_DEFINED 1
+#endif
+
 #ifndef _SSIZE_T_DEFINED
 typedef intptr_t ssize_t;
 #define _SSIZE_T_DEFINED 1

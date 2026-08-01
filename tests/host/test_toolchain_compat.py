@@ -42,10 +42,12 @@ def test_windows_platform_prelude_has_reviewed_target_scope():
         "icui18n",
         "icuuc",
         "icuuc_stubdata",
+        "log",
         "lzma",
         "nativebridge",
         "procinfo",
         "unwindstack",
+        "ziparchive",
     )
 
     assert cmake.count(target_prelude) == 1
@@ -75,13 +77,21 @@ def test_windows_unwindstack_uses_posix_header_ownership():
     prelude = (
         REPO_ROOT / "compat" / "include" / "mdvm_windows_x64_prelude.h"
     ).read_text(encoding="utf-8")
+    stubs = (
+        REPO_ROOT / "compat" / "src" / "windows_x64_posix_stubs.c"
+    ).read_text(encoding="utf-8")
 
     assert "#include_next <sys/types.h>" in types
+    assert "typedef unsigned short mode_t;" in types
     assert "typedef int pid_t;" in types
     assert "typedef intptr_t ssize_t;" in types
     assert "static inline int getpagesize(void)" in unistd
     assert "sysconf(_SC_PAGESIZE)" in unistd
+    assert "#define lseek64 _lseeki64" in unistd
+    assert "typedef unsigned short mode_t;" not in prelude
+    assert "#define lseek64 _lseeki64" not in prelude
     assert "static inline int getpagesize(void)" not in prelude
+    assert "long long lseek64(" not in stubs
 
 
 def test_windows_nativebridge_uses_posix_mode_header_ownership():
@@ -96,6 +106,23 @@ def test_windows_nativebridge_uses_posix_mode_header_ownership():
     assert "#define S_IRWXG (S_IRGRP|S_IWGRP|S_IXGRP)" in stat
     assert "#define S_IRWXO (S_IROTH|S_IWOTH|S_IXOTH)" in stat
     assert "#define mkdir(path,mode) _mkdir(path)" not in prelude
+
+
+def test_windows_ziparchive_owns_64_bit_stdio_spellings():
+    cmake = (
+        REPO_ROOT / "native" / "cmake" / "ArtCompatibility.cmake"
+    ).read_text(encoding="utf-8")
+
+    scope = cmake.split("target_compile_definitions(ziparchive PRIVATE", 1)[1].split(
+        ")", 1
+    )[0]
+    for definition in (
+        "fseeko=_fseeki64",
+        "fseeko64=_fseeki64",
+        "ftello=_ftelli64",
+        "ftello64=_ftelli64",
+    ):
+        assert definition in scope
 
 
 def test_linux_toolchain_drift_headers_are_source_scoped():

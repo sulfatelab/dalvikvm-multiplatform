@@ -55,11 +55,6 @@ static inline int rand_r(unsigned int* seed) {
 #endif
 
 
-#ifndef _MDVM_MODE_T_DEFINED
-typedef unsigned short mode_t;
-#define _MDVM_MODE_T_DEFINED 1
-#endif
-
 #ifndef _SSIZE_T_DEFINED
 typedef intptr_t ssize_t;
 #define _SSIZE_T_DEFINED
@@ -115,9 +110,6 @@ typedef int64_t off64_t;
 #endif
 
 /* Map large-file I/O names. */
-#ifndef lseek64
-#define lseek64 _lseeki64
-#endif
 #ifndef fseeko
 #define fseeko _fseeki64
 #endif

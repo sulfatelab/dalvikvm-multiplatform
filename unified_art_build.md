@@ -55,7 +55,7 @@ items are closed.
 ### Latest verification baseline (2026-08-01)
 
 - [x] `PYTHONPATH=tools/bp2cmake python3 -m pytest tools/bp2cmake/tests tests/host -q`:
-  181 passed, including generated PE-header, Linux/Windows test-catalog,
+  182 passed, including generated PE-header, Linux/Windows test-catalog,
   shell-free runtime/managed-artifact gates, parallel-frontend, JDK validation,
   deterministic JAR, Windows-path/DSO-name, reviewer ownership, W-010
   nonzero/fault/debugger/fatal-dump orchestration, W-013 source-policy,
@@ -187,6 +187,16 @@ items are closed.
   Windows products passed at their required 32/32/16 job limits and repeated
   as Ninja no-ops. Cross and native CET contracts pass 58/58, and all 181 host
   tests pass.
+- [x] The five-source `log` and five-source `ziparchive` dependencies now
+  compile without the ART prelude on both Windows build hosts. Project
+  `sys/types.h` owns the Windows `mode_t` spelling, `unistd.h` maps `lseek64`
+  directly to the UCRT 64-bit API, and the redundant compatibility-stub
+  implementation was removed. `ziparchive` owns its four 64-bit stdio
+  spellings as explicit target definitions. This reduces forced-prelude
+  compile commands from 740 to 730. Linux, Windows-cross, and native Windows
+  products passed at their required 32/32/16 job limits and repeated as Ninja
+  no-ops. Cross and native CET contracts pass 58/58, and all 182 host tests
+  pass.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to

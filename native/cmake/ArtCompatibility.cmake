@@ -20,10 +20,12 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
         icui18n
         icuuc
         icuuc_stubdata
+        log
         lzma
         nativebridge
         procinfo
-        unwindstack)
+        unwindstack
+        ziparchive)
     set(_art_windows_prelude_free_definitions
         _CRT_SECURE_NO_WARNINGS
         NOMINMAX
@@ -102,6 +104,15 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
     endif()
     set_property(SOURCE ${_art_dex2oat_compat_sources}
         APPEND PROPERTY COMPILE_OPTIONS "-include;${_PRELUDE}")
+
+    # libziparchive includes the Windows CRT stdio surface directly. Keep its
+    # 64-bit POSIX spellings on the dependency target instead of inheriting
+    # them from ART's forced compatibility prelude.
+    target_compile_definitions(ziparchive PRIVATE
+        fseeko=_fseeki64
+        fseeko64=_fseeki64
+        ftello=_ftelli64
+        ftello64=_ftelli64)
 endif()
 
 # Common generated-target policy. Windows receives its platform compatibility
