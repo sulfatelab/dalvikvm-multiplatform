@@ -1,4 +1,4 @@
-# Windows x64 compiled normal/FastNative ABI result
+# Compiled normal/FastNative ABI result
 
 Date: 2026-07-24. VM: agent01. Runtime: Wine 10.0. Build:
 `build/windows_x64_phase1` RelWithDebInfo.
@@ -7,28 +7,34 @@ Date: 2026-07-24. VM: agent01. Runtime: Wine 10.0. Build:
 
 | Target ID | Applicable | Build | Runtime | Last accepted |
 |---|---:|---:|---:|---|
-| `windows-x86_64-msvc` | yes | verified | verified | 2026-08-01 |
+| `linux-x86_64-gnu` | yes | verified | verified | 2026-08-02 |
+| `windows-x86_64-msvc` | yes | verified | verified | 2026-08-02 |
 | `windows-aarch64-msvc` | not yet declared | pending | pending | — |
 | `windows-arm64ec-msvc` | not yet declared | pending | pending | — |
 
-The scalar C/JNI and Java sources are portability candidates, not evidence for
-either AArch64 target. Each target requires its own ABI and runtime acceptance.
+The scalar C/JNI and Java sources are accepted only for the two exact target
+IDs above. That evidence does not admit either AArch64 target or any other
+platform, architecture, or ABI.
 
-## Unified native acceptance (2026-08-01)
+## Unified exact-target acceptance (2026-08-02)
 
-The authoritative shell-free `stage:w003` gate passed on Windows Server 2025
-x86-64 in four processes: default and method-instrumented execution, each
-repeated twice. Every process completed the initial, unregister, and
-re-register value phases and emitted exactly seven successful target-method
-compile records. The instrumented pair additionally completed the tracing and
-post-tracing phases with mode `0 -> nonzero -> 0` and deleted its trace file.
-The frame-attribution variant repeated the same matrix. Product and variant
-stage repeats were Ninja no-ops and passed again.
+The shared shell-free `stage:w003` gate passed on Linux x86-64 GNU and native
+Windows Server 2025 x86-64 MSVC in four processes per target: default and
+method-instrumented execution, each repeated twice. Every process completed the
+initial, unregister, and re-register value phases. The instrumented pair also
+completed the tracing and post-tracing phases with mode `0 -> nonzero -> 0`
+and deleted its trace file. Windows additionally emitted exactly seven
+successful target-method compile records per process; that diagnostic marker
+format remains Windows-specific and is not claimed for Linux.
 
-Each aggregate JSON records four successful runs, zero dumps, and no machine
-absolute paths. The declaration remains the typed
-`windows`/`x86_64`/`msvc` intersection pending separate AArch64 or ARM64EC ABI
-review and native runtime acceptance.
+The fresh Linux stage passed 2/2 including the adjacent CriticalNative gate,
+and its immediate repeat was a Ninja no-op. The fresh native Windows build
+completed 1,492 actions at 16 jobs, passed product W-003 4/4, then repeated as
+a Ninja no-op and passed 4/4 again. Each normal/FastNative aggregate records
+four successful runs, zero dumps, and no machine absolute paths. Full
+source/output scans found no symlink or reparse point. The declaration lists
+the exact Linux and Windows IDs pending separate review and native acceptance
+for any additional target.
 
 ## Result
 
@@ -36,12 +42,15 @@ The focused compiled-JNI acceptance gate now passes the mixed/high-FP matrix:
 
 | Mode | Result |
 |------|--------|
-| Default native compilation | PASS: exit 0, three exact binding phases, 7/7 targets and exactly 7 compile records |
-| Default native compilation plus method tracing | PASS: tracing mode `0 -> 1 -> 0`, exact during/after values, exactly 7 target compile records |
+| Windows default native compilation | PASS: exit 0, three exact binding phases, 7/7 targets and exactly 7 compile records |
+| Windows native compilation plus method tracing | PASS: tracing mode `0 -> 1 -> 0`, exact during/after values, exactly 7 target compile records |
+| Linux default and method-traced execution | PASS: exact binding/tracing values in four processes; Windows-specific compile-record markers are not asserted |
 
-Authoritative command on the 16 GiB Windows VM:
+Current exact-target reproductions use 32 jobs on agent01 and 16 jobs on the
+16 GiB Windows VM:
 
 ```text
+python tools/build_art.py test --target-id linux-x86_64-gnu --build-type RelWithDebInfo --stage w003 --parallel 32
 python tools/build_art.py test --target-id windows-x86_64-msvc --build-type RelWithDebInfo --stage w003 --parallel 16
 ```
 
@@ -191,5 +200,5 @@ is recorded in
 
 - `probe.c`
 - `FastNativeAbiProbe.java`
-- `../../../tests/support/windows/w003_managed_gate.py`
+- `../../../tests/support/w003_managed_gate.py`
 - `../../../win32_open_items.md` W-024

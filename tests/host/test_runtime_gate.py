@@ -39,7 +39,6 @@ _W002_SPEC.loader.exec_module(w002_gate)
 _W003_GATE_PATH = (
     Path(__file__).parents[1]
     / "support"
-    / "windows"
     / "w003_managed_gate.py"
 )
 _W003_SPEC = importlib.util.spec_from_file_location("art_w003_gate", _W003_GATE_PATH)
@@ -323,6 +322,26 @@ def test_w003_frame_gate_runs_four_modes_twice_and_records_sanitized_result(
     assert result["dump_files"] == []
     assert str(tmp_path) not in result_text
     assert "repetitions=2, runs=8, dumps=0" in capsys.readouterr().out
+
+
+def test_w003_jni_abi_targets_are_exact_and_host_independent():
+    assert w003_gate._target_platform("linux-x86_64-gnu") == "linux"
+    assert w003_gate._target_platform("windows-x86_64-msvc") == "windows"
+    assert w003_gate._target_jit_options("linux") == [
+        "-verbose:jit",
+        "-Xjitwarmupthreshold:0",
+        "-Xjitthreshold:0",
+    ]
+    assert w003_gate._target_jit_options("windows") == ["-Xjitthreshold:0"]
+    assert w003_gate._target_jit_environment("linux", "Probe") == {}
+    assert w003_gate._target_jit_environment("windows", "Probe") == {
+        "ART_WINDOWS_X64_JIT": "1",
+        "ART_WINDOWS_X64_NTERP": "1",
+        "ART_WINDOWS_X64_JIT_FILTER": "Probe",
+        "ART_WINDOWS_X64_JIT_LOG_COMPILES": "1",
+    }
+    with pytest.raises(w003_gate.runtime_gate.GateError, match="no accepted runner"):
+        w003_gate._target_platform("windows-aarch64-msvc")
 
 
 def test_jvmti_force_gate_repeats_and_records_sanitized_result(

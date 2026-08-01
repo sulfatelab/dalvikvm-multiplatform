@@ -69,8 +69,8 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     assert catalog["target_id"] == "windows-x86_64-msvc"
     assert len(catalog["probes"]) == 92
     assert sum(probe["applicable"] for probe in catalog["probes"]) == 90
-    assert sum(bool(probe["target_ids"]) for probe in catalog["probes"]) == 27
-    assert sum(not probe["target_ids"] for probe in catalog["probes"]) == 65
+    assert sum(bool(probe["target_ids"]) for probe in catalog["probes"]) == 31
+    assert sum(not probe["target_ids"] for probe in catalog["probes"]) == 61
     w002_attach = next(
         probe for probe in catalog["probes"] if probe["name"] == "managed_w002_attach"
     )
@@ -97,6 +97,17 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     )
     assert w003_structure["execution"] == "host-review"
     assert w003_structure["ctest_registered"] is True
+    for name in (
+        "criticalnativeprobe",
+        "nativeabiprobe",
+        "managed_critical_native",
+        "managed_native_abi",
+    ):
+        probe = next(probe for probe in catalog["probes"] if probe["name"] == name)
+        assert probe["target_ids"] == [
+            "linux-x86_64-gnu",
+            "windows-x86_64-msvc",
+        ]
     assert sum(
         probe["execution"] == "target-runnable" for probe in catalog["probes"]
     ) == 61
@@ -305,6 +316,10 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     applicable = [probe for probe in catalog["probes"] if probe["applicable"]]
     assert len(catalog["probes"]) == 92
     assert [probe["name"] for probe in applicable] == [
+        "criticalnativeprobe",
+        "nativeabiprobe",
+        "managed_critical_native",
+        "managed_native_abi",
         "managed_imageless_hello",
         "managed_gc_stress",
         "managed_math_critical",
@@ -314,6 +329,10 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "managed_w013_non_moving_128m",
     ]
     assert [probe["stage"] for probe in applicable] == [
+        "w003",
+        "w003",
+        "w003",
+        "w003",
         "w004",
         "w004",
         "w004",
@@ -327,7 +346,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         for probe in applicable
         if probe["execution"] == "target-runnable"
     ]
-    assert len(runnable) == 6
+    assert len(runnable) == 8
     assert all(probe["ctest_registered"] for probe in runnable)
     artifact = applicable[-2]
     assert artifact["type"] == "MANAGED"

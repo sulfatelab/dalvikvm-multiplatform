@@ -200,7 +200,7 @@ and W-010 now own the corresponding executable contracts.
 | W-002 OSR adapters | `quick_entrypoints_x86_64.S`; `mterp/x86_64ng/main.S` |
 | W-002 unified probes and reviewer | `tests/cases/{attached-thread-entry,osr-unwind}`; `tests/support/windows/{w002_managed_entry_gate,check_w002_managed_entries}.py` |
 | W-003 XMM boundary and structural gate | `quick_entrypoints_x86_64.S`; `check_w003_quick_boundaries.py` |
-| W-003 unified managed gates | `../../tests/cases/{jni-critical-native,jni-native-abi,w003-frame-probe,w003-xmm-sentinel}/`; `../../tests/support/windows/w003_managed_gate.py` |
+| W-003 unified managed gates | `../../tests/cases/{jni-critical-native,jni-native-abi,w003-frame-probe,w003-xmm-sentinel}/`; `../../tests/support/w003_managed_gate.py` |
 | W-003 historical native package evidence | `../../tests/stages/w003/ANALYSIS.md` |
 | W-014 native stack/pthread/page/growth/RX/CET gates | `tests/cases/pthread-once/`; `tests/cases/thread-stack/`; `tests/cases/stack-page-growth/`; `tests/cases/stack-executable-memory/`; `tests/cases/cet-stack-policy/`; `tests/support/runtime_gate.py` |
 | W-010 unified gates | `tests/cases/{unhandled-exception-filter,fault-record,sigchain-fault,debugger-fault,fatal-runtime,managed-fault-recovery}`; `tests/CMakeLists.txt` |

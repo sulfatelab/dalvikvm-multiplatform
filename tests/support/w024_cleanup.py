@@ -54,7 +54,6 @@ def audit_w024_cleanup(repo_root: Path = REPO_ROOT) -> list[str]:
         repo_root
         / "tests"
         / "support"
-        / "windows"
         / "w003_managed_gate.py",
     )
     for path in native_jit_sources:

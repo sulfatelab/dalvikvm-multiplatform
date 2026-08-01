@@ -1,6 +1,6 @@
 # W-003 quick callee-save frame analysis
 
-**Status:** COMPLETE — structural, Wine, and native Windows acceptance pass; W-003 closed
+**Status:** COMPLETE — structural/native Windows acceptance passes; the two portable JNI ABI matrices also pass on exact Linux x86-64 GNU
 
 **Date:** 2026-07-26
 
@@ -241,7 +241,7 @@ Run:
 Close W-003 only after all four frame families have attributed coverage and
 the Microsoft XMM nonvolatile sentinel passes.
 
-## Unified stage acceptance (2026-08-01)
+## Unified stage acceptance (2026-08-02)
 
 The current acceptance path is the common Python frontend, generated product
 graph, CMake, Ninja, and CTest. On Windows Server 2025 x86-64 the product
@@ -271,6 +271,17 @@ A final-source Linux-hosted `windows-x86_64-msvc` cross build completed all
 repeat was a Ninja no-op. `llvm-readobj` and `llvm-objdump` are explicit
 frontend-resolved host tools and build-fingerprint inputs, fixing the prior
 host/target suffix ambiguity for cross builds.
+
+CriticalNative and normal/FastNative now list the exact pair
+`linux-x86_64-gnu` and `windows-x86_64-msvc`. Their shared runner resolves
+ELF/DLL names, library-path syntax, absolute loading, and target JIT controls;
+it rejects every other target ID. A fresh Linux product tree passed those two
+gates and repeated as a Ninja no-op. A fresh native Windows product tree built
+all 1,492 actions at 16 jobs, passed the complete product stage 4/4, and
+repeated as a Ninja no-op with another 4/4 pass. Each target's two aggregate
+JNI results are retained separately. Each of the four results records four
+successful runs, zero dumps, and no machine path.
+Source and output scans found zero links or reparse points.
 
 Native reproduction uses `--parallel 16` on the 16 GiB Windows VM; agent01 can
 use 32 for cross builds. The historical Wine/package material below remains

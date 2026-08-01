@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run W-003 managed ABI/frame matrices without a host shell."""
+"""Run target-resolved W-003 managed ABI/frame matrices without a host shell."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ import shutil
 import sys
 
 
-_SUPPORT_ROOT = Path(__file__).parents[1]
+_SUPPORT_ROOT = Path(__file__).parent
 if str(_SUPPORT_ROOT) not in sys.path:
     sys.path.insert(0, str(_SUPPORT_ROOT))
 
@@ -23,8 +23,12 @@ _FORBIDDEN = (
     "AssertionError",
     "ART Win32 VEH",
     "ART Win32 UEF",
+    "Check failed",
+    "Fatal signal",
     "minidump written",
 )
+
+_JNI_ABI_TARGETS = {"linux-x86_64-gnu", "windows-x86_64-msvc"}
 
 _CRITICAL_VALUES = (
     "longs=190 doubles=91.0 mixed=159.5 mixed32=87 "
@@ -86,6 +90,30 @@ def _stage_probe(source: Path, case_root: Path, *names: str) -> None:
         runtime_gate._regular_file(str(destination))
 
 
+def _target_platform(target_id: str) -> str:
+    if target_id in _JNI_ABI_TARGETS:
+        return target_id.split("-", 1)[0]
+    raise runtime_gate.GateError(f"W-003 has no accepted runner for {target_id}")
+
+
+def _target_jit_options(platform: str) -> list[str]:
+    options = ["-Xjitthreshold:0"]
+    if platform == "linux":
+        options[:0] = ["-verbose:jit", "-Xjitwarmupthreshold:0"]
+    return options
+
+
+def _target_jit_environment(platform: str, main_class: str) -> dict[str, str]:
+    if platform != "windows":
+        return {}
+    return {
+        "ART_WINDOWS_X64_JIT": "1",
+        "ART_WINDOWS_X64_NTERP": "1",
+        "ART_WINDOWS_X64_JIT_FILTER": main_class,
+        "ART_WINDOWS_X64_JIT_LOG_COMPILES": "1",
+    }
+
+
 def _run_managed(
     *,
     target_id: str,
@@ -134,6 +162,8 @@ def _run_critical(
     repetitions: int,
     timeout: int,
 ) -> list[dict[str, object]]:
+    platform = _target_platform(target_id)
+    library_separator = ";" if platform == "windows" else ":"
     records: list[dict[str, object]] = []
     for repetition in range(1, repetitions + 1):
         load_mode = "absolute" if repetition % 2 == 0 else "library"
@@ -142,12 +172,10 @@ def _run_critical(
             case_root = work_root / f"{mode}-{load_mode}-{repetition}"
             case_root.mkdir(parents=True)
             (case_root / "empty-native-dir").mkdir()
-            _stage_probe(
-                probe,
-                case_root,
-                "libcriticalnativeprobe.dll",
-                "criticalnativeprobe.dll",
-            )
+            staged_names = [probe.name]
+            if platform == "windows" and "criticalnativeprobe.dll" not in staged_names:
+                staged_names.append("criticalnativeprobe.dll")
+            _stage_probe(probe, case_root, *staged_names)
             expected = [
                 f"CriticalNativeProbe load={load_mode}",
                 f"CriticalNativeProbe values {_CRITICAL_VALUES}",
@@ -177,18 +205,14 @@ def _run_critical(
                 library_dirs=[case_root, *library_dirs],
                 main_class="CriticalNativeProbe",
                 vm_options=[
-                    "-Xjitthreshold:0",
+                    *_target_jit_options(platform),
                     f"-Dcritical.load={load_mode}",
+                    f"-Dcritical.absolute.library={probe.name}",
                     f"-Dcritical.instrumentation={int(instrumentation)}",
-                    "-Djava.library.path=empty-native-dir;.",
+                    f"-Djava.library.path=empty-native-dir{library_separator}.",
                 ],
                 expected=expected,
-                environment={
-                    "ART_WINDOWS_X64_JIT": "1",
-                    "ART_WINDOWS_X64_NTERP": "1",
-                    "ART_WINDOWS_X64_JIT_FILTER": "CriticalNativeProbe",
-                    "ART_WINDOWS_X64_JIT_LOG_COMPILES": "1",
-                },
+                environment=_target_jit_environment(platform, "CriticalNativeProbe"),
                 timeout=timeout,
             )
             if instrumentation and re.search(
@@ -223,6 +247,8 @@ def _run_native_abi(
     repetitions: int,
     timeout: int,
 ) -> list[dict[str, object]]:
+    platform = _target_platform(target_id)
+    library_separator = ";" if platform == "windows" else ":"
     records: list[dict[str, object]] = []
     for repetition in range(1, repetitions + 1):
         for instrumentation in (False, True):
@@ -230,7 +256,7 @@ def _run_native_abi(
             case_root = work_root / f"{mode}-{repetition}"
             case_root.mkdir(parents=True)
             (case_root / "empty-native-dir").mkdir()
-            _stage_probe(probe, case_root, "libnativeabiprobe.dll")
+            _stage_probe(probe, case_root, probe.name)
             phases = ["initial", "unregistered", "reregistered"]
             if instrumentation:
                 phases.extend(("tracing", "postTracing"))
@@ -244,28 +270,27 @@ def _run_native_abi(
                 library_dirs=[case_root, *library_dirs],
                 main_class="FastNativeAbiProbe",
                 vm_options=[
-                    "-Xjitthreshold:0",
+                    *_target_jit_options(platform),
                     f"-Dnative.abi.instrumentation={int(instrumentation)}",
-                    "-Djava.library.path=empty-native-dir;.",
+                    f"-Djava.library.path=empty-native-dir{library_separator}.",
                 ],
                 expected=[
                     *(f"FastNativeAbiProbe {phase} {_NATIVE_PHASES[phase]}" for phase in phases),
                     "FastNativeAbiProbe OK",
                 ],
-                environment={
-                    "ART_WINDOWS_X64_JIT": "1",
-                    "ART_WINDOWS_X64_NTERP": "1",
-                    "ART_WINDOWS_X64_JIT_FILTER": "FastNativeAbiProbe",
-                    "ART_WINDOWS_X64_JIT_LOG_COMPILES": "1",
-                },
+                environment=_target_jit_environment(platform, "FastNativeAbiProbe"),
                 timeout=timeout,
             )
-            for marker in _NATIVE_COMPILE_MARKERS:
-                count = output.count(f"success=1 method={marker}")
-                if count != 1:
-                    raise runtime_gate.GateError(
-                        f"FastNative {mode} run has {count} compile records for {marker!r}"
-                    )
+            compile_records = None
+            if platform == "windows":
+                for marker in _NATIVE_COMPILE_MARKERS:
+                    count = output.count(f"success=1 method={marker}")
+                    if count != 1:
+                        raise runtime_gate.GateError(
+                            f"FastNative {mode} run has {count} compile records "
+                            f"for {marker!r}"
+                        )
+                compile_records = len(_NATIVE_COMPILE_MARKERS)
             if instrumentation and re.search(
                 r"FastNativeAbiProbe tracingMode before=0 during=[1-9][0-9]* "
                 r"after=0 traceFileDeleted=true",
@@ -277,7 +302,7 @@ def _run_native_abi(
             records.append({
                 "mode": mode,
                 "repetition": repetition,
-                "compile_records": len(_NATIVE_COMPILE_MARKERS),
+                "compile_records": compile_records,
                 "runtime": json.loads(
                     (case_root / "result.json").read_text(encoding="utf-8")
                 ),
@@ -476,6 +501,15 @@ def run_gate(
     repetitions: int,
     timeout: int,
 ) -> None:
+    if case in ("critical-native", "native-abi"):
+        if target_id not in _JNI_ABI_TARGETS:
+            raise runtime_gate.GateError(
+                f"W-003 {case} is not accepted for {target_id}"
+            )
+    elif target_id != "windows-x86_64-msvc":
+        raise runtime_gate.GateError(
+            f"W-003 {case} is not accepted for {target_id}"
+        )
     work_root = runtime_gate._managed_path(work_root, allow_missing=True)
     if work_root.exists() or work_root.is_symlink():
         runtime_gate._reject_tree_links(work_root)

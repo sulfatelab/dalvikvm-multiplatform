@@ -120,8 +120,13 @@ three use a declared native DSO closure, isolated target-local runtime
 directories, pinned ICU data, strict exit/marker checks, timeouts, and
 sanitized JSON results. The Math aggregate additionally rejects filesystem
 links/reparse points, and Windows JIT requires a matching compiler record.
-Linux also registers its show-version and compiler-DSO topology gates, for five W-004
-CTest gates. Windows adds its BoringSSL SHA executable plus the exact
+W-003 also declares CriticalNative and normal/FastNative for the exact pair
+`linux-x86_64-gnu` and `windows-x86_64-msvc`. One shared runner resolves the
+ELF/DLL name, library-path separator, absolute-load property, and target JIT
+controls; no other target is inferred. Linux also registers its show-version
+and compiler-DSO topology gates, for five W-004 CTest gates. Together with the
+shared W-013 gate, the Linux catalog has eight runnable declarations and three
+compile-only artifacts. Windows adds its BoringSSL SHA executable plus the exact
 `windows-x86_64-msvc` JVMTI managed gate and runtime-load/assembly-dependency
 reviewer. Fifteen more accepted Phase-3 libcore behaviors use one checked-in
 JSON contract matrix and one case-local, shell-free Python runner. The expanded
@@ -336,7 +341,13 @@ has no W-003 hook. Native Windows passed product 4/4 and variant 5/5, with
 Ninja no-op repeats, sanitized aggregate JSON, no dumps, and no source/output
 reparse points. A Linux-hosted Windows cross build also passed the structural
 gate through the same CTest declaration using explicit host LLVM reviewer
-tools.
+tools. The two JNI ABI matrices are additionally exact-target runnable on
+Linux x86-64 GNU: a fresh Linux build passed 2/2 and its immediate repeat was a
+Ninja no-op. A fresh native Windows product build at 16 jobs passed 4/4 and its
+immediate no-op repeat passed 4/4. Across the two targets, CriticalNative and
+normal/FastNative produce four aggregate results; every result contains four
+completed runs, zero dumps, no machine absolute paths,
+and no links/reparse points.
 
 Until `catalog.py` generation replaces the declarations, add or migrate test
 targets through the common API in `tests/CMakeLists.txt`. Do not add another

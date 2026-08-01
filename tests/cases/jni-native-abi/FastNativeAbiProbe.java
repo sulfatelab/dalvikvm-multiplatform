@@ -3,7 +3,7 @@ import dalvik.annotation.optimization.FastNative;
 import java.io.File;
 import java.lang.reflect.Method;
 
-/** Focused Windows x64 compiled-JNI normal/FastNative argument and binding-transition probe. */
+/** Compiled-JNI normal/FastNative argument and binding-transition probe. */
 public final class FastNativeAbiProbe {
     private static final double BASE_VALUE = 743.75;
 

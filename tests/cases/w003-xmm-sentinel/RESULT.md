@@ -144,5 +144,5 @@ W-010/W-014 package described in
 - `probe.c`
 - `sentinel_x86_64.S`
 - `W003XmmSentinelProbe.java`
-- `../../../tests/support/windows/w003_managed_gate.py`
+- `../../../tests/support/w003_managed_gate.py`
 - `../../stages/w003/ANALYSIS.md`

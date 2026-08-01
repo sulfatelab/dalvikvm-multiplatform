@@ -437,6 +437,7 @@ endforeach()
 
 set(_art_jni_include "${_art_test_repo_root}/vendor/libnativehelper/include_jni")
 
+add_library(art-test-target-policy INTERFACE)
 if(ART_TARGET_PLATFORM STREQUAL "windows")
     set(_art_windows_defines
         _CRT_SECURE_NO_WARNINGS NOMINMAX WIN32_LEAN_AND_MEAN NOGDI
@@ -447,7 +448,6 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
 # policy used by the product graph. Tests are declared after the product-wide
 # target loop in the parent directory, so make this inheritance explicit
 # instead of relying on directory-global flags or host tool discovery.
-add_library(art-test-target-policy INTERFACE)
 target_include_directories(art-test-target-policy INTERFACE
     "${_art_windows_cxx_include}"
     ${_art_windows_system_includes})
@@ -596,12 +596,12 @@ art_add_target_probe(
         --repeat 2
         --timeout 120)
 
-# W-003: quick-frame and native ABI preservation. The first two C sources are
-# portability candidates, but remain Windows x86-64 MSVC until separately
-# built and run for each added profile.
+# W-003: quick-frame and native ABI preservation. The first two source/runtime
+# contracts are accepted for the exact current Linux and Windows target IDs;
+# no other architecture or ABI is inferred from sharing their source.
 art_add_target_probe(
     NAME criticalnativeprobe STAGE w003 TYPE SHARED EXECUTION compile-only
-    ${_art_windows_current_selector}
+    ${_art_current_native_ids_selector}
     SOURCES "${_art_test_cases_root}/jni-critical-native/probe.c"
     INCLUDE_DIRS "${_art_jni_include}"
     LINK_OPTIONS "${_art_no_cet}"
@@ -609,7 +609,7 @@ art_add_target_probe(
     PREFIX lib WINDOWS_EXPORT_ALL_SYMBOLS)
 art_add_target_probe(
     NAME nativeabiprobe STAGE w003 TYPE SHARED EXECUTION compile-only
-    ${_art_windows_current_selector}
+    ${_art_current_native_ids_selector}
     SOURCES "${_art_test_cases_root}/jni-native-abi/probe.c"
     INCLUDE_DIRS "${_art_jni_include}"
     LINK_OPTIONS "${_art_no_cet}"
@@ -651,7 +651,7 @@ art_add_target_probe(
 art_add_target_probe(
     NAME managed_critical_native STAGE w003 TYPE MANAGED EXECUTION target-runnable
     TIMEOUT 1200
-    ${_art_windows_current_selector}
+    ${_art_current_native_ids_selector}
     SOURCES
         "${_art_test_cases_root}/jni-critical-native/CriticalNativeProbe.java"
         "${_art_test_cases_root}/jni-critical-native/CriticalNativeDlsymProbe.java"
@@ -660,7 +660,7 @@ art_add_target_probe(
     OUTPUT_NAME criticalnativeprobe
     COMMAND
         "${Python3_EXECUTABLE}"
-        "${_art_test_repo_root}/tests/support/windows/w003_managed_gate.py"
+        "${_art_test_repo_root}/tests/support/w003_managed_gate.py"
         --case critical-native
         --target-id "${ART_TARGET_ID}"
         --dalvikvm "$<TARGET_FILE:dalvikvm>"
@@ -675,14 +675,14 @@ art_add_target_probe(
 art_add_target_probe(
     NAME managed_native_abi STAGE w003 TYPE MANAGED EXECUTION target-runnable
     TIMEOUT 900
-    ${_art_windows_current_selector}
+    ${_art_current_native_ids_selector}
     SOURCES "${_art_test_cases_root}/jni-native-abi/FastNativeAbiProbe.java"
     DEPENDS nativeabiprobe dalvikvm icu_jni javacore openjdk
     CONTRACTS jni native-abi
     OUTPUT_NAME fastnativeabiprobe
     COMMAND
         "${Python3_EXECUTABLE}"
-        "${_art_test_repo_root}/tests/support/windows/w003_managed_gate.py"
+        "${_art_test_repo_root}/tests/support/w003_managed_gate.py"
         --case native-abi
         --target-id "${ART_TARGET_ID}"
         --dalvikvm "$<TARGET_FILE:dalvikvm>"
@@ -704,7 +704,7 @@ art_add_target_probe(
     OUTPUT_NAME w003xmmsentinelprobe
     COMMAND
         "${Python3_EXECUTABLE}"
-        "${_art_test_repo_root}/tests/support/windows/w003_managed_gate.py"
+        "${_art_test_repo_root}/tests/support/w003_managed_gate.py"
         --case xmm
         --target-id "${ART_TARGET_ID}"
         --dalvikvm "$<TARGET_FILE:dalvikvm>"
@@ -727,7 +727,7 @@ if(ART_TEST_VARIANT STREQUAL "win32-frame-attribution")
         OUTPUT_NAME w003frameprobe
         COMMAND
             "${Python3_EXECUTABLE}"
-            "${_art_test_repo_root}/tests/support/windows/w003_managed_gate.py"
+            "${_art_test_repo_root}/tests/support/w003_managed_gate.py"
             --case frame
             --target-id "${ART_TARGET_ID}"
             --dalvikvm "$<TARGET_FILE:dalvikvm>"

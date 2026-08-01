@@ -201,5 +201,5 @@ quick-assembly unwind and generated-fault translation remain with W-010.
 
 - `probe.c`
 - `W003FrameProbe.java`
-- `../../../tests/support/windows/w003_managed_gate.py`
+- `../../../tests/support/w003_managed_gate.py`
 - `../w003-xmm-sentinel/RESULT.md`

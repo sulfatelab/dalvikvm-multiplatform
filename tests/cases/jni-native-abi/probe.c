@@ -1,4 +1,5 @@
 #include <jni.h>
+#include <stddef.h>
 
 static volatile jint g_calls;
 static volatile jint g_dlsym_phase_offset;

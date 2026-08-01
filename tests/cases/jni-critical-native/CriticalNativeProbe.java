@@ -161,7 +161,11 @@ public final class CriticalNativeProbe {
         // class-initialization dlsym gate.
         String loadMode = System.getProperty("critical.load");
         if ("absolute".equals(loadMode)) {
-            System.load(new java.io.File("libcriticalnativeprobe.dll").getAbsolutePath());
+            String libraryFile = System.getProperty("critical.absolute.library");
+            if (libraryFile == null || libraryFile.isEmpty()) {
+                throw new IllegalArgumentException("critical.absolute.library is required");
+            }
+            System.load(new java.io.File(libraryFile).getAbsolutePath());
             System.out.println("CriticalNativeProbe load=absolute");
         } else {
             System.loadLibrary("criticalnativeprobe");

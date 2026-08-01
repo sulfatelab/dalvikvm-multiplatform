@@ -1,4 +1,4 @@
-# Windows x64 direct CriticalNative ABI result
+# Direct CriticalNative ABI result
 
 Date: 2026-07-24. VM: agent01. Runtime: Wine 10.0. Build:
 `build/windows_x64_phase1` RelWithDebInfo.
@@ -7,27 +7,31 @@ Date: 2026-07-24. VM: agent01. Runtime: Wine 10.0. Build:
 
 | Target ID | Applicable | Build | Runtime | Last accepted |
 |---|---:|---:|---:|---|
-| `windows-x86_64-msvc` | yes | verified | verified | 2026-08-01 |
+| `linux-x86_64-gnu` | yes | verified | verified | 2026-08-02 |
+| `windows-x86_64-msvc` | yes | verified | verified | 2026-08-02 |
 | `windows-aarch64-msvc` | not yet declared | pending | pending | — |
 | `windows-arm64ec-msvc` | not yet declared | pending | pending | — |
 
-The shared C/Java source is a portability candidate, not evidence for either
-AArch64 target. Each target requires its own build and runtime acceptance.
+The shared C/Java source is accepted only for the two exact target IDs above.
+That evidence does not admit either AArch64 target or any other platform,
+architecture, or ABI.
 
-## Unified native acceptance (2026-08-01)
+## Unified exact-target acceptance (2026-08-02)
 
-The authoritative shell-free `stage:w003` gate passed on Windows Server 2025
-x86-64 in four processes: default and method-instrumented execution for both
-library-name and absolute-path loading. Every process ran the registered and
-unresolved signature matrix with exact values; the instrumented pair also
-proved tracing mode `0 -> nonzero -> 0`, exact during/after values, and trace
-file deletion. The frame-attribution variant repeated the same four-process
-matrix. Product and variant stage repeats were Ninja no-ops and passed again.
+The shared shell-free `stage:w003` gate passed on Linux x86-64 GNU and native
+Windows Server 2025 x86-64 MSVC. On each target it ran four processes: default
+and method-instrumented execution for both library-name and absolute-path
+loading. Every process ran the registered and unresolved signature matrix with
+exact values; the instrumented pair also proved tracing mode
+`0 -> nonzero -> 0`, exact during/after values, and trace-file deletion.
 
-Each aggregate JSON records four successful runs, zero dumps, and no machine
-absolute paths. The declaration remains the typed
-`windows`/`x86_64`/`msvc` intersection; portability-candidate source does not
-broaden runtime acceptance to AArch64 or ARM64EC.
+The fresh Linux stage passed 2/2 including the adjacent normal/FastNative gate,
+and its immediate repeat was a Ninja no-op. The fresh native Windows build
+completed 1,492 actions at 16 jobs, passed product W-003 4/4, then repeated as
+a Ninja no-op and passed 4/4 again. Each CriticalNative aggregate records four
+successful runs, zero dumps, and no machine absolute paths. Full source/output
+scans found no symlink or reparse point. The declaration lists the exact Linux
+and Windows IDs; it does not broaden runtime acceptance to AArch64 or ARM64EC.
 
 ## Result
 
@@ -42,9 +46,11 @@ method-tracing transitions:
 | Default corrected dual view | 3/3 | 3/3 | 3/3 |
 | J-1 diagnostic view | 3/3 | 3/3 | 3/3 |
 
-Authoritative command on the 16 GiB Windows VM:
+Current exact-target reproductions use 32 jobs on agent01 and 16 jobs on the
+16 GiB Windows VM:
 
 ```text
+python tools/build_art.py test --target-id linux-x86_64-gnu --build-type RelWithDebInfo --stage w003 --parallel 32
 python tools/build_art.py test --target-id windows-x86_64-msvc --build-type RelWithDebInfo --stage w003 --parallel 16
 ```
 
@@ -220,7 +226,7 @@ Related files:
 - `probe.c`
 - `CriticalNativeProbe.java`
 - `CriticalNativeDlsymProbe.java`
-- `../../../tests/support/windows/w003_managed_gate.py`
+- `../../../tests/support/w003_managed_gate.py`
 - `../../../vendor/art/openjdkjvm/OpenjdkJvm.cc`
 - `../../../vendor/art/openjdkjvm/openjdkjvm_memory_windows.cc`
 - `../../../win32_open_items.md` W-024
