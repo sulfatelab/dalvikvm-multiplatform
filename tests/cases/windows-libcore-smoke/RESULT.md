@@ -27,9 +27,9 @@ Phase 3 libcore bring-up for Windows x86-64 imageless ART:
 
 | Gate | Status | Evidence |
 |------|--------|----------|
-| G0–G11 wine suite | **PASS** | `evidence/all_wine_gates.txt` |
+| G0–G11 wine suite | **HISTORICAL PASS** | summary retained below; raw machine-path log removed |
 | G12 host package | **HISTORICAL PASS** | issued archive hash recorded below; producer retired |
-| G12 real Windows host | **PASS** | `evidence/host/RESULT_HOST.txt`, `logs_20260716T205926/` |
+| G12 real Windows host | **PASS** | compact result and two analyses under `evidence/windows-x86_64-msvc/` |
 
 ## Unified native probe ownership
 
@@ -68,8 +68,8 @@ evidence only and does not broaden this native result.
 ```text
 python tools/build_art.py test --target-id windows-x86_64-msvc --stage w004 --parallel 16
 
-W-004: 23/23 PASS in 30.70 seconds
-repeat: ninja: no work to do; 23/23 PASS in 32.58 seconds
+W-004: 26/26 PASS in 38.24 seconds
+repeat: ninja: no work to do; 26/26 PASS in 38.37 seconds
 Linux-hosted Windows cross reviewer: PASS; repeat Ninja no-op with --parallel 32
 ```
 
@@ -84,31 +84,33 @@ native-open L-003 cases remain ordinary compile-only declarations rather than
 a second runner.
 
 The generated binaries, managed artifacts, routine logs, and build trees
-remain outside VCS. W-027 tracks the probe's current `GetTempPathA`,
-`GetTempFileNameA`, and `DeleteFileA` calls together with the broader Win32
-encoding audit; they did not block this ownership/runtime migration.
+remain outside VCS. W-027 now rejects known or unclassified Win32 suffix-`A`
+calls in the active Windows translation-unit graph; the accepted 1,441-source
+graph contains zero ANSI calls, source files, or API families.
 
 ### Real Windows host (authoritative G12)
 
 Original returned-package SHA-256:
 `4f15b7808a7ff6039663d9931523a82b33c429d00a6a7b068eecb36feac58e3b`.
 The ZIP is retained outside VCS; the accepted text result and analysis remain
-under `evidence/host/`. The runner working directory is normalized as
+under `evidence/windows-x86_64-msvc/`. The runner working directory is normalized as
 `<host-workdir>\windows_x64_phase3_host`.
 
 ```text
 OVERALL PASS
 Hello java.version=1.8.0
-props.ok=true user.dir=C:\Users\sulfate\Desktop\windows_x64_phase3_host
+props.ok=true user.dir=<host-workdir>\windows_x64_phase3_host
 NetProbe.done=ok match=true
 dns.ok=true payload=dns-ok
 golden.ok=true served=32
-AbsPathProbe.fails=0 (C:\art_phase3\...)
+AbsPathProbe.fails=0 (<absolute-test-root>\...)
 gc.forced.ok=true threadstress.ok=true
 throw: phase3-throw-ok
 ```
 
-Analysis: `evidence/host/ANALYSIS_20260716T205926.md`
+Analysis: `evidence/windows-x86_64-msvc/g12_acceptance_analysis.md`. The
+preceding false-pass diagnosis is
+`evidence/windows-x86_64-msvc/g12_failure_analysis.md`.
 
 ### Wine oracle
 
@@ -116,6 +118,10 @@ Analysis: `evidence/host/ANALYSIS_20260716T205926.md`
 PASS all wine Phase 3 gates
 historical package smoke OVERALL PASS
 ```
+
+The raw Wine transcript and duplicate returned-package logs were removed: they
+contained machine paths but added no durable contract beyond this result and
+the retained G12 analyses.
 
 ## Critical fixes landed during Phase 3
 
@@ -138,7 +144,6 @@ historical package smoke OVERALL PASS
 
 ```text
 python tools/build_art.py test --target-id windows-x86_64-msvc --stage w004 --parallel 16
-python tools/build_art.py test --target-id windows-x86_64-msvc --stage w013 --parallel 16
 ```
 
 ## Historical Phase-3 evidence

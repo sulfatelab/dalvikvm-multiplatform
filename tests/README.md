@@ -199,7 +199,13 @@ The remaining Phase-3 libcore/ICU CMake graph, checked source snapshot, shell
 host packager/stager, raw-link combined-stub builder, and minimal
 `NativeConverter` stub were then removed after the unified product built the
 same DLL closure and native W-004 passed. The stable bring-up result is history
-under `docs/history`, not a second reproduction path.
+beside the canonical `cases/windows-libcore-smoke/` sources, not a second
+reproduction path. Its durable G12 result, corrected acceptance analysis, and
+preceding false-pass diagnosis are under the exact
+`evidence/windows-x86_64-msvc/` identity. Raw Wine transcripts, duplicate host
+results, and package-integrity logs were removed because they contained machine
+paths or repeated the retained contract. The maintained Phase-3 reproduction
+is the unified W-004 stage only.
 The accepted Phase-4 managed stress slice also removed its generic builder,
 generic Wine runner, aggregate Wine runner, and four per-case wrappers. W-010's
 redundant Phase-4 managed-abort Wine wrapper is also retired; the native-crash

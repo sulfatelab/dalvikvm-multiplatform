@@ -412,7 +412,7 @@ Summary (details below; do not delete history):
   - 2026-07-17: registered `bind`/`connect` **`SocketAddress`** overloads for `InetSocketAddress` (AF_UNIX still out of product scope).
   - 2026-07-25: removed `_get_osfhandle` + `SO_TYPE` fd probing. Win32 HANDLE and Winsock SOCKET values use independent namespaces and can alias numerically. The permanent design is an explicit process-wide socket-fd registry exported by the already required `libopenjdkjvm.dll`; javacore, openjdk, JVM I/O, NIO, socket/accept/socketpair, dup/dup2, and close paths share it. This is not a temporary heuristic or a disk-backed side channel.
 - **Evidence:**
-  - Host G12 (2026-07-16): net/dns/goldenapp PASS after select poll fix (`tools/verify/windows_x64_phase3/evidence/host/ANALYSIS_20260716T205926.md`).
+  - Host G12 (2026-07-16): net/dns/goldenapp PASS after select poll fix ([acceptance analysis](tests/cases/windows-libcore-smoke/evidence/windows-x86_64-msvc/g12_acceptance_analysis.md)).
   - Wine (2026-07-17): NetProbe, DnsProbe, UdpProbe, AsyncCloseProbe, GoldenApp, **SocketAddressProbe** PASS.
   - Wine (2026-07-25): native socket/file fd-reuse probe PASS; HandleLeak 5/5; NetProbe, IoProbe, dual-view JIT 12/12, and J-1 Hello PASS.
 - **Non-goals residual:** AF_UNIX SocketAddress; full AOSP `libcore_io_Linux.cpp` (L-001 closed with Win bridge map); NIO.2.

@@ -7,7 +7,7 @@ Product tree: **dalvikvm-multiplatform** (nested `vendor/libcore` on `artmp_*`).
 > **Updated:** 2026-07-25 (rev 6)
 > **Status:** **Option H implemented and accepted.** Wine path/file gates and
 > native Windows G12 pass; Windows NIO.2 remains a non-goal (see
-> `tools/verify/windows_x64_phase3/RESULT.md`).
+> `tests/cases/windows-libcore-smoke/RESULT.md`).
 
 ## 0. Why a separate document
 

@@ -25,7 +25,7 @@ All script exits recorded 0; marker validation of log bodies also **PASS** (not 
 | gc / gcforced | `gc.ok=true` / `gc.forced.ok=true` |
 | interrupt / threadstress | PASS |
 | goldenapp | `golden.ok=true net.ok=true served=32` |
-| abspath | `AbsPathProbe.fails=0`, real `C:\art_phase3\...` |
+| abspath | `AbsPathProbe.fails=0`, real `<absolute-test-root>\...` |
 | throw | `RuntimeException: phase3-throw-ok` |
 
 ## Notes

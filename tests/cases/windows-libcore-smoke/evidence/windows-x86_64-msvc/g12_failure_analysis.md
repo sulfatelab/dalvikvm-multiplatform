@@ -1,7 +1,8 @@
 # G12 host log analysis — 2026-07-16 win10 zip
 
-Source: `/tmp/logs-win10-20260716T195646.zip`  
-Host path: `C:\Users\sulfate\Desktop\windows_x64_phase3_host`
+Source: `<temporary>/logs-win10-20260716T195646.zip`
+
+Host path: `<host-workdir>\windows_x64_phase3_host`
 
 ## Headline
 
@@ -35,7 +36,8 @@ echo exit=%ERRORLEVEL%
 
 ## Passing on host (markers present)
 
-Hello (`java.version=1.8.0`), props, rtmem, core, io, oserrno, gc, gcforced, interrupt, threadstress, abspath (real `C:\Users\sulfate\...` and `C:\art_phase3\...`).
+Hello (`java.version=1.8.0`), props, rtmem, core, io, oserrno, gc, gcforced,
+interrupt, threadstress, and abspath (real host and absolute test roots).
 
 ## Next
 

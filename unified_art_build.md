@@ -844,6 +844,16 @@ items are closed.
   `--parallel 16`; its immediate Ninja no-op repeat passed 26/26 in 34.21
   seconds. The Linux-hosted Windows cross stage passed its sole structural
   reviewer with `--parallel 32`, and its immediate repeat was a Ninja no-op.
+- [x] Durable Phase-3 G12 evidence now lives beside the canonical
+  `tests/cases/windows-libcore-smoke` sources under the exact verified target
+  identity. The compact returned-host result, corrected acceptance analysis,
+  and preceding false-pass diagnosis were retained; raw Wine transcripts,
+  duplicate result files, and the obsolete package-integrity log were removed
+  because they serialized machine paths or repeated the retained contract.
+  Native Windows revalidation passed the maintained W-004 stage 26/26 in
+  38.24 seconds and repeated from a Ninja no-op at 26/26 in 38.37 seconds with
+  `--parallel 16`. The unified W-004 stage is the only maintained Phase-3
+  reproduction path.
 - [x] The obsolete Phase-4 aggregate Wine runner, generic managed builder and
   runner, and four GC/runtime-stress wrappers were removed after native
   acceptance. Historical text evidence remains readable; crash, JIT, and OSR

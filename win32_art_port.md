@@ -714,7 +714,7 @@ Each phase has a kill-or-continue gate. This is the execution roadmap when imple
 
 - Foundations (2026-07-16): Option H path/FS + `;` classpath; A4–A7 + GoldenApp under wine64.
 - A5 forced GC: `System.gc()` hang fixed (`GetThreadTimes` ThreadCpuNanoTime + WaitOnAddress ETIMEDOUT); current gate `art.w004.managed_gcforced`.
-- See `tools/verify/windows_x64_phase3/RESULT.md` and
+- See `tests/cases/windows-libcore-smoke/RESULT.md` and
   `docs/windows-port-notes/windows_x64_phase3_system_gc_hang_fix.md`.
 - Path gates: `File.isAbsolute("C:\\…")`, mixed/UNC, and multi-JAR `-cp a;b` **PASS** natively as `art.w004.managed_pathprobe`.
 - **Pitfall:** imageless ART has `Character.isLetter('C')==false` (no ICU props). `WinNTFileSystem` must use ASCII `isDriveLetter`, not `Character.isLetter`.
@@ -728,12 +728,12 @@ Each phase has a kill-or-continue gate. This is the execution roadmap when imple
 - Props/time/`java.version=1.8.0` and Os errno + UTF-8 paths **PASS** through the unified W-004 stage.
 - The historical Phase-3 host package was staged and accepted before its shell
   producer was retired; its text evidence remains with the libcore case.
-- The historical full Wine suite **PASS** remains evidence; its migrated behavioral subset now passes 19/19 through shell-free native W-004 CTest gates.
+- The historical full Wine suite **PASS** remains evidence; its migrated behavioral subset now passes through 26/26 shell-free native W-004 CTest gates.
 - Historical host-package integrity under Wine was **PASS** (not a substitute
   for the accepted native-host result). The archive remains outside VCS and
   the producer/checklist are no longer maintained entry points.
 - First Win10 G12 evidence analyzed: paths/props/GC PASS; **net poll EINVAL FAIL**; false OVERALL PASS from cmd ERRORLEVEL clobber.
-- G12 real Win10 host goldens **PASS** (`evidence/host/RESULT_HOST.txt`, 2026-07-16T205926): net/dns/golden/abspath/props/GC all markers green.
+- G12 real Win10 host goldens **PASS** ([retained result](tests/cases/windows-libcore-smoke/evidence/windows-x86_64-msvc/g12_result.txt), 2026-07-16T205926): net/dns/golden/abspath/props/GC all markers green.
 - Phase 3 acceptance (A4–A7 + Option H + golden app on native Windows) **met**.
 
 The original Phase-3 implementation list is complete: systematic native
