@@ -78,13 +78,7 @@ foreach(_t IN LISTS _all_targets)
        (NOT _t STREQUAL "base" OR ART_TARGET_PLATFORM STREQUAL "windows"))
         target_compile_options(${_t} PRIVATE
             "$<$<COMPILE_LANGUAGE:C,CXX>:SHELL:-include ${_PRELUDE}>"
-            "$<$<COMPILE_LANGUAGE:C,CXX>:-Wno-strict-primary-template-shadow>"
-            # The 2023 sources promote some warnings to errors that clang-21 /
-            # glibc-2.34+ now emit. Demote warning-as-error tree-wide. (Cases
-            # where an in-source `#pragma clang diagnostic error` re-arms past
-            # this -- e.g. thread.cc's -Wconversion on PTHREAD_STACK_MIN -- are
-            # handled by vendor source patches instead.) Harness-only.
-            "$<$<COMPILE_LANGUAGE:C,CXX>:-Wno-error>")
+            "$<$<COMPILE_LANGUAGE:C,CXX>:-Wno-strict-primary-template-shadow>")
         # Project-owned compat shim headers (//compat). Provides android-base/
         # stringify.h, which android-16.0.0_r4 art's macros.h now includes but
         # the archive-pinned 2023 libbase does not ship. Lowest priority (after
