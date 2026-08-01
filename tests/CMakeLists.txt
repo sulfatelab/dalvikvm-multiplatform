@@ -504,6 +504,7 @@ set(_art_linux_x86_64_gnu_selector
     TARGET_IDS linux-x86_64-gnu)
 set(_art_current_native_ids_selector
     TARGET_IDS linux-x86_64-gnu windows-x86_64-msvc)
+get_filename_component(_art_test_llvm_bin "${CMAKE_CXX_COMPILER}" DIRECTORY)
 set(_art_managed_runtime_library_args
     --library-dir "$<TARGET_FILE_DIR:dalvikvm>")
 if(ART_TARGET_PLATFORM STREQUAL "windows")
@@ -524,20 +525,67 @@ art_add_target_probe(
     NAME win32_osr_unwind_probe STAGE w002 TYPE EXECUTABLE EXECUTION target-runnable
     ${_art_windows_x86_64_msvc_selector}
     SOURCES "${_art_test_cases_root}/osr-unwind/probe.cc"
+    LINK_LIBRARIES dbghelp
     DEPENDS art
     CONTRACTS osr unwind PRODUCT_POLICY)
 art_add_target_probe(
-    NAME managed_w002_attach STAGE w002 TYPE MANAGED EXECUTION compile-only
+    NAME windows_w002_managed_entry_structure STAGE w002 TYPE GATE
+    EXECUTION host-review
+    ${_art_windows_x86_64_msvc_selector}
+    DEPENDS art
+    CONTRACTS jni osr unwind source-policy
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_test_repo_root}/tests/support/windows/check_w002_managed_entries.py"
+        --build "${CMAKE_BINARY_DIR}"
+        --llvm-readobj
+            "${_art_test_llvm_bin}/llvm-readobj${CMAKE_EXECUTABLE_SUFFIX}"
+        --llvm-objdump
+            "${_art_test_llvm_bin}/llvm-objdump${CMAKE_EXECUTABLE_SUFFIX}")
+art_add_target_probe(
+    NAME managed_w002_attach STAGE w002 TYPE MANAGED EXECUTION target-runnable
+    TIMEOUT 600
     ${_art_windows_current_selector}
     SOURCES "${_art_test_cases_root}/attached-thread-entry/W002AttachProbe.java"
+    DEPENDS w002attachprobe dalvikvm icu_jni javacore openjdk
     CONTRACTS jni attach
-    OUTPUT_NAME w002attachprobe)
+    OUTPUT_NAME w002attachprobe
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_test_repo_root}/tests/support/windows/w002_managed_entry_gate.py"
+        --case attach
+        --target-id "${ART_TARGET_ID}"
+        --dalvikvm "$<TARGET_FILE:dalvikvm>"
+        --boot-jar "${_art_boot_jar}"
+        --app-jar "${_art_managed_root}/w002attachprobe.jar"
+        --work-root "${CMAKE_CURRENT_BINARY_DIR}/results/w002-attach"
+        --icu-data "${_art_icu_data}"
+        --jni-dir "$<TARGET_FILE_DIR:w002attachprobe>"
+        --library-dir "$<TARGET_FILE_DIR:w002attachprobe>"
+        ${_art_managed_runtime_library_args}
+        --repeat 2
+        --timeout 120)
 art_add_target_probe(
-    NAME managed_w002_osr STAGE w002 TYPE MANAGED EXECUTION compile-only
+    NAME managed_w002_osr STAGE w002 TYPE MANAGED EXECUTION target-runnable
+    TIMEOUT 600
     ${_art_windows_x86_64_msvc_selector}
     SOURCES "${_art_test_cases_root}/osr-unwind/W002OsrProbe.java"
+    DEPENDS dalvikvm icu_jni javacore openjdk
     CONTRACTS osr unwind
-    OUTPUT_NAME w002osrprobe)
+    OUTPUT_NAME w002osrprobe
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_test_repo_root}/tests/support/windows/w002_managed_entry_gate.py"
+        --case osr
+        --target-id "${ART_TARGET_ID}"
+        --dalvikvm "$<TARGET_FILE:dalvikvm>"
+        --boot-jar "${_art_boot_jar}"
+        --app-jar "${_art_managed_root}/w002osrprobe.jar"
+        --work-root "${CMAKE_CURRENT_BINARY_DIR}/results/w002-osr"
+        --icu-data "${_art_icu_data}"
+        ${_art_managed_runtime_library_args}
+        --repeat 2
+        --timeout 120)
 
 # W-003: quick-frame and native ABI preservation. The first two C sources are
 # portability candidates, but remain Windows x86-64 MSVC until separately
@@ -1083,7 +1131,6 @@ art_add_target_probe(
     LINK_OPTIONS "${_art_no_cet}"
     CONTRACTS stack jni
     PREFIX lib WINDOWS_EXPORT_ALL_SYMBOLS)
-get_filename_component(_art_fs1_llvm_bin "${CMAKE_CXX_COMPILER}" DIRECTORY)
 if(ART_TEST_VARIANT STREQUAL "win32-stack-high-water")
     set(_art_fs1_structure_execution host-review)
     if(CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -1110,9 +1157,9 @@ art_add_target_probe(
         --repo "${_art_test_repo_root}"
         --probe-build "${CMAKE_BINARY_DIR}"
         --llvm-readobj
-            "${_art_fs1_llvm_bin}/llvm-readobj${CMAKE_EXECUTABLE_SUFFIX}"
+            "${_art_test_llvm_bin}/llvm-readobj${CMAKE_EXECUTABLE_SUFFIX}"
         --llvm-objdump
-            "${_art_fs1_llvm_bin}/llvm-objdump${CMAKE_EXECUTABLE_SUFFIX}")
+            "${_art_test_llvm_bin}/llvm-objdump${CMAKE_EXECUTABLE_SUFFIX}")
 if(ART_TEST_VARIANT STREQUAL "win32-stack-high-water")
     art_add_target_probe(
         NAME managed_fs1_stack_high_water STAGE w014 TYPE MANAGED

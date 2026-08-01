@@ -25,6 +25,17 @@ assert _FS1_SPEC is not None and _FS1_SPEC.loader is not None
 fs1_gate = importlib.util.module_from_spec(_FS1_SPEC)
 _FS1_SPEC.loader.exec_module(fs1_gate)
 
+_W002_GATE_PATH = (
+    Path(__file__).parents[1]
+    / "support"
+    / "windows"
+    / "w002_managed_entry_gate.py"
+)
+_W002_SPEC = importlib.util.spec_from_file_location("art_w002_gate", _W002_GATE_PATH)
+assert _W002_SPEC is not None and _W002_SPEC.loader is not None
+w002_gate = importlib.util.module_from_spec(_W002_SPEC)
+_W002_SPEC.loader.exec_module(w002_gate)
+
 
 def test_elf_needed_reads_host_python_without_external_tools():
     executable = Path(sys.executable).resolve()
@@ -227,6 +238,75 @@ def test_fs1_gate_runs_three_managed_modes_and_validator_without_shell(
     assert record["dump_files"] == []
     assert str(tmp_path) not in record_text
     assert "modes=3, art_reserve=8192, dumps=0" in capsys.readouterr().out
+
+
+def test_w002_contract_keeps_osr_return_path_mode_specific():
+    _, _, nterp_expected, nterp_environment, nterp_forbidden = (
+        w002_gate._case_contract("osr", "nterp", None)
+    )
+    _, _, switch_expected, switch_environment, switch_forbidden = (
+        w002_gate._case_contract("osr", "switch", None)
+    )
+    completion = "Done running OSR code for long W002OsrProbe.osrLoop(int)"
+    assert completion in nterp_forbidden
+    assert completion not in nterp_expected
+    assert completion in switch_expected
+    assert completion not in switch_forbidden
+    assert nterp_environment["ART_WINDOWS_X64_NTERP"] == "1"
+    assert switch_environment["ART_WINDOWS_X64_NTERP"] == "0"
+
+
+def test_w002_attach_gate_runs_two_modes_and_sanitizes_results(
+    tmp_path, monkeypatch, capsys
+):
+    files = {}
+    for name in ("dalvikvm.exe", "boot.jar", "attach.jar", "icudt72l.dat"):
+        path = tmp_path / name
+        path.write_bytes(name.encode())
+        files[name] = path
+    jni_dir = tmp_path / "jni"
+    jni_dir.mkdir()
+    calls = []
+
+    def run_managed(**kwargs):
+        calls.append(kwargs)
+        case_root = kwargs["work_root"]
+        case_root.mkdir(parents=True)
+        (case_root / "result.json").write_text(
+            json.dumps({"target_id": kwargs["target_id"]}) + "\n",
+            encoding="utf-8",
+        )
+
+    monkeypatch.setattr(w002_gate.runtime_gate, "run_managed", run_managed)
+    work = tmp_path / "out" / "w002"
+    w002_gate.run_gate(
+        case="attach",
+        target_id="windows-x86_64-msvc",
+        dalvikvm=files["dalvikvm.exe"],
+        boot_jar=files["boot.jar"],
+        app_jar=files["attach.jar"],
+        work_root=work,
+        icu_data=files["icudt72l.dat"],
+        jni_dir=jni_dir,
+        library_dirs=[tmp_path],
+        repetitions=2,
+        timeout=30,
+    )
+
+    assert len(calls) == 4
+    assert [call["environment_overrides"]["ART_WINDOWS_X64_NTERP"] for call in calls] == [
+        "1",
+        "1",
+        "0",
+        "0",
+    ]
+    assert all("-Xjitthreshold:0" in call["vm_options"] for call in calls)
+    record_text = (work / "result.json").read_text(encoding="utf-8")
+    record = json.loads(record_text)
+    assert record["completed_runs"] == 4
+    assert record["dump_files"] == []
+    assert str(tmp_path) not in record_text
+    assert "modes=2, repetitions=2, runs=4, dumps=0" in capsys.readouterr().out
 
 
 def test_managed_gate_uses_isolated_runtime_and_records_result(

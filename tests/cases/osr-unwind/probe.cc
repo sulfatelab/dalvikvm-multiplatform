@@ -1,9 +1,11 @@
 #include <windows.h>
+#include <dbghelp.h>
 
 #include <stdint.h>
 
 #include <cstring>
 #include <iostream>
+#include <string>
 
 namespace {
 
@@ -62,9 +64,75 @@ void ExpectForSymbol(bool condition, const char* symbol, const char* message) {
   }
 }
 
-void TestInvokeUnwind(HMODULE art, const char* symbol) {
-  auto* entry = reinterpret_cast<uint8_t*>(GetProcAddress(art, symbol));
-  ExpectForSymbol(entry != nullptr, symbol, "export resolves");
+class ArtSymbols {
+ public:
+  explicit ArtSymbols(HMODULE art) : art_(art), process_(GetCurrentProcess()) {
+    SymSetOptions(SymGetOptions() | SYMOPT_DEFERRED_LOADS | SYMOPT_UNDNAME);
+    initialized_ = SymInitializeW(process_, nullptr, FALSE) != FALSE;
+    Expect(initialized_, "DbgHelp initializes a private symbol session");
+    if (!initialized_) {
+      return;
+    }
+
+    wchar_t image_path[32768] = {};
+    DWORD length = GetModuleFileNameW(art_, image_path, 32768u);
+    Expect(length != 0u && length < 32768u, "art.dll image path resolves");
+    if (length == 0u || length >= 32768u) {
+      return;
+    }
+    loaded_base_ = SymLoadModuleExW(process_,
+                                    nullptr,
+                                    image_path,
+                                    L"art",
+                                    reinterpret_cast<DWORD64>(art_),
+                                    0u,
+                                    nullptr,
+                                    0u);
+    Expect(loaded_base_ == reinterpret_cast<DWORD64>(art_),
+           "DbgHelp loads the adjacent art.pdb");
+  }
+
+  ArtSymbols(const ArtSymbols&) = delete;
+  ArtSymbols& operator=(const ArtSymbols&) = delete;
+
+  ~ArtSymbols() {
+    if (initialized_) {
+      SymCleanup(process_);
+    }
+  }
+
+  uint8_t* Resolve(const wchar_t* name, const char* label) const {
+    if (loaded_base_ == 0u) {
+      return nullptr;
+    }
+    SYMBOL_INFO_PACKAGEW package = {};
+    package.si.SizeOfStruct = sizeof(SYMBOL_INFOW);
+    package.si.MaxNameLen = MAX_SYM_NAME;
+    std::wstring qualified = L"art!";
+    qualified.append(name);
+    const bool found = SymFromNameW(process_, qualified.c_str(), &package.si) != FALSE;
+    ExpectForSymbol(found, label, "PDB symbol resolves");
+    if (!found) {
+      return nullptr;
+    }
+    ExpectForSymbol(package.si.ModBase == reinterpret_cast<DWORD64>(art_),
+                    label,
+                    "PDB symbol belongs to art.dll");
+    return package.si.ModBase == reinterpret_cast<DWORD64>(art_)
+               ? reinterpret_cast<uint8_t*>(package.si.Address)
+               : nullptr;
+  }
+
+ private:
+  HMODULE art_;
+  HANDLE process_;
+  bool initialized_ = false;
+  DWORD64 loaded_base_ = 0u;
+};
+
+void TestInvokeUnwind(const ArtSymbols& symbols, const wchar_t* name, const char* label) {
+  auto* entry = symbols.Resolve(name, label);
+  ExpectForSymbol(entry != nullptr, label, "address resolves");
   if (entry == nullptr) {
     return;
   }
@@ -72,19 +140,19 @@ void TestInvokeUnwind(HMODULE art, const char* symbol) {
   DWORD64 image_base = 0u;
   PRUNTIME_FUNCTION function =
       RtlLookupFunctionEntry(reinterpret_cast<DWORD64>(entry), &image_base, nullptr);
-  ExpectForSymbol(function != nullptr, symbol, "runtime-function entry resolves");
+  ExpectForSymbol(function != nullptr, label, "runtime-function entry resolves");
   if (function == nullptr) {
     return;
   }
   const uint8_t* unwind = reinterpret_cast<const uint8_t*>(image_base + function->UnwindData);
   const uint8_t prologue_size = unwind[1];
-  ExpectForSymbol(prologue_size != 0u, symbol, "prologue is nonempty");
-  ExpectForSymbol((unwind[3] & 0x0fu) == 5u, symbol, "frame register is RBP");
+  ExpectForSymbol(prologue_size != 0u, label, "prologue is nonempty");
+  ExpectForSymbol((unwind[3] & 0x0fu) == 5u, label, "frame register is RBP");
 
   SYSTEM_INFO system_info = {};
   GetSystemInfo(&system_info);
   VirtualStack stack(system_info.dwPageSize);
-  ExpectForSymbol(stack.address != nullptr, symbol, "synthetic stack allocation succeeds");
+  ExpectForSymbol(stack.address != nullptr, label, "synthetic stack allocation succeeds");
   if (stack.address == nullptr) {
     return;
   }
@@ -144,12 +212,12 @@ void TestInvokeUnwind(HMODULE art, const char* symbol) {
                    &handler_data,
                    &establisher_frame,
                    nullptr);
-  ExpectForSymbol(context.Rip == kReturnAddress, symbol, "restores return address");
-  ExpectForSymbol(context.Rsp == entry_rsp + 8u, symbol, "restores caller RSP");
+  ExpectForSymbol(context.Rip == kReturnAddress, label, "restores return address");
+  ExpectForSymbol(context.Rsp == entry_rsp + 8u, label, "restores caller RSP");
   ExpectForSymbol(context.Rbp == kRbp && context.Rdi == kRdi && context.Rsi == kRsi &&
                       context.Rbx == kRbx && context.R12 == kR12 && context.R13 == kR13 &&
                       context.R14 == kR14 && context.R15 == kR15,
-                  symbol,
+                  label,
                   "restores nonvolatile GPRs");
   const M128A* restored[] = {
       &context.Xmm6,
@@ -167,13 +235,13 @@ void TestInvokeUnwind(HMODULE art, const char* symbol) {
   for (size_t index = 0; index < 10u; ++index) {
     xmms_match = xmms_match && EqualM128(*restored[index], saved_xmms[index]);
   }
-  ExpectForSymbol(xmms_match, symbol, "restores XMM6-XMM15");
+  ExpectForSymbol(xmms_match, label, "restores XMM6-XMM15");
 }
 
-size_t TestGenericJniUnwind(HMODULE art) {
+size_t TestGenericJniUnwind(const ArtSymbols& symbols) {
   constexpr const char* kSymbol = "art_quick_generic_jni_trampoline";
-  auto* entry = reinterpret_cast<uint8_t*>(GetProcAddress(art, kSymbol));
-  ExpectForSymbol(entry != nullptr, kSymbol, "export resolves");
+  auto* entry = symbols.Resolve(L"art_quick_generic_jni_trampoline", kSymbol);
+  ExpectForSymbol(entry != nullptr, kSymbol, "address resolves");
   if (entry == nullptr) {
     return 0u;
   }
@@ -187,7 +255,7 @@ size_t TestGenericJniUnwind(HMODULE art) {
   }
   auto* function_begin = reinterpret_cast<uint8_t*>(image_base + function->BeginAddress);
   auto* function_end = reinterpret_cast<uint8_t*>(image_base + function->EndAddress);
-  ExpectForSymbol(function_begin == entry, kSymbol, "runtime-function starts at export");
+  ExpectForSymbol(function_begin == entry, kSymbol, "runtime-function starts at symbol");
   ExpectForSymbol(function_end > function_begin, kSymbol, "runtime-function range is nonempty");
 
   const uint8_t* unwind = reinterpret_cast<const uint8_t*>(image_base + function->UnwindData);
@@ -293,10 +361,10 @@ size_t TestGenericJniUnwind(HMODULE art) {
   return native_return_offset;
 }
 
-size_t TestExecuteSwitchImplUnwind(HMODULE art) {
+size_t TestExecuteSwitchImplUnwind(const ArtSymbols& symbols) {
   constexpr const char* kSymbol = "ExecuteSwitchImplAsm";
-  auto* entry = reinterpret_cast<uint8_t*>(GetProcAddress(art, kSymbol));
-  ExpectForSymbol(entry != nullptr, kSymbol, "export resolves");
+  auto* entry = symbols.Resolve(L"ExecuteSwitchImplAsm", kSymbol);
+  ExpectForSymbol(entry != nullptr, kSymbol, "address resolves");
   if (entry == nullptr) {
     return 0u;
   }
@@ -310,7 +378,7 @@ size_t TestExecuteSwitchImplUnwind(HMODULE art) {
   }
   auto* function_begin = reinterpret_cast<uint8_t*>(image_base + function->BeginAddress);
   auto* function_end = reinterpret_cast<uint8_t*>(image_base + function->EndAddress);
-  ExpectForSymbol(function_begin == entry, kSymbol, "runtime-function starts at export");
+  ExpectForSymbol(function_begin == entry, kSymbol, "runtime-function starts at symbol");
   ExpectForSymbol(function_end > function_begin, kSymbol, "runtime-function range is nonempty");
 
   const uint8_t* unwind = reinterpret_cast<const uint8_t*>(image_base + function->UnwindData);
@@ -414,10 +482,10 @@ struct InterpreterBridgeUnwindResult {
   size_t pending_offset;
 };
 
-InterpreterBridgeUnwindResult TestInterpreterBridgeUnwind(HMODULE art) {
+InterpreterBridgeUnwindResult TestInterpreterBridgeUnwind(const ArtSymbols& symbols) {
   constexpr const char* kSymbol = "art_quick_to_interpreter_bridge";
-  auto* entry = reinterpret_cast<uint8_t*>(GetProcAddress(art, kSymbol));
-  ExpectForSymbol(entry != nullptr, kSymbol, "export resolves");
+  auto* entry = symbols.Resolve(L"art_quick_to_interpreter_bridge", kSymbol);
+  ExpectForSymbol(entry != nullptr, kSymbol, "address resolves");
   if (entry == nullptr) {
     return {};
   }
@@ -431,7 +499,7 @@ InterpreterBridgeUnwindResult TestInterpreterBridgeUnwind(HMODULE art) {
   }
   auto* function_begin = reinterpret_cast<uint8_t*>(image_base + function->BeginAddress);
   auto* function_end = reinterpret_cast<uint8_t*>(image_base + function->EndAddress);
-  ExpectForSymbol(function_begin == entry, kSymbol, "primary range starts at export");
+  ExpectForSymbol(function_begin == entry, kSymbol, "primary range starts at symbol");
   ExpectForSymbol(function_end > function_begin, kSymbol, "primary range is nonempty");
 
   const uint8_t* unwind = reinterpret_cast<const uint8_t*>(image_base + function->UnwindData);
@@ -657,14 +725,16 @@ int main() {
     return 1;
   }
 
-  TestInvokeUnwind(art, "art_quick_invoke_stub");
-  TestInvokeUnwind(art, "art_quick_invoke_static_stub");
-  const size_t generic_jni_native_return = TestGenericJniUnwind(art);
-  const size_t switch_impl_call_return = TestExecuteSwitchImplUnwind(art);
-  const InterpreterBridgeUnwindResult interpreter_bridge = TestInterpreterBridgeUnwind(art);
+  ArtSymbols symbols(art);
+  TestInvokeUnwind(symbols, L"art_quick_invoke_stub", "art_quick_invoke_stub");
+  TestInvokeUnwind(
+      symbols, L"art_quick_invoke_static_stub", "art_quick_invoke_static_stub");
+  const size_t generic_jni_native_return = TestGenericJniUnwind(symbols);
+  const size_t switch_impl_call_return = TestExecuteSwitchImplUnwind(symbols);
+  const InterpreterBridgeUnwindResult interpreter_bridge = TestInterpreterBridgeUnwind(symbols);
 
-  auto* osr = reinterpret_cast<uint8_t*>(GetProcAddress(art, "art_quick_osr_stub"));
-  Expect(osr != nullptr, "art_quick_osr_stub export resolves");
+  auto* osr = symbols.Resolve(L"art_quick_osr_stub", "art_quick_osr_stub");
+  Expect(osr != nullptr, "art_quick_osr_stub address resolves");
   if (osr == nullptr) {
     FreeLibrary(art);
     return 1;
@@ -682,7 +752,7 @@ int main() {
 
   uint8_t* function_begin = reinterpret_cast<uint8_t*>(image_base + function->BeginAddress);
   uint8_t* function_end = reinterpret_cast<uint8_t*>(image_base + function->EndAddress);
-  Expect(function_begin == osr, "runtime-function entry starts at the OSR export");
+  Expect(function_begin == osr, "runtime-function entry starts at the OSR symbol");
   Expect(function_end > function_begin, "runtime-function range is nonempty");
 
   const uint8_t* unwind_info = reinterpret_cast<const uint8_t*>(image_base + function->UnwindData);

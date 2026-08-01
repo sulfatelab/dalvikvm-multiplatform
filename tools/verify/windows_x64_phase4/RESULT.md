@@ -22,6 +22,35 @@ conditionally closes the pending bridge tail.
 longer available; the Windows 10 records in this file are retained as
 historical evidence only. See [HOST_GATE_POLICY.md](HOST_GATE_POLICY.md).
 
+## Unified W-002 acceptance (2026-08-01)
+
+The current authoritative W-002 path is the shell-free unified frontend and
+virtual stage:
+
+```text
+python tools/build_art.py configure --target-id windows-x86_64-msvc --build-type RelWithDebInfo
+python tools/build_art.py test --target-id windows-x86_64-msvc --build-type RelWithDebInfo --stage w002 --parallel 32
+```
+
+A fresh Windows Server 2025 x86-64 product tree built 1,485 Ninja edges and
+then passed all four W-002 CTest gates: native synthetic PE unwind, managed
+entry source/object review, attached-thread entry, and OSR. The identical
+command repeated with `ninja: no work to do` and passed 4/4 again.
+
+The attach and OSR runners each executed nterp and switch twice. Attach
+completed 16 native attach/callback/detach cycles per execution and compiled
+the managed callback. OSR observed baseline and OSR compilation, the compiled
+jump, exact checksum, and the mode-specific completion behavior. Both
+aggregate result files contain four successful records, no machine path, and
+no dump. Non-following scans found zero reparse points in the source and
+output trees; `sshd` and `lsass.exe` remained healthy.
+
+The explicit FS-1 `art.dll` export boundary intentionally keeps transition
+stubs private. The native unwind probe now resolves their addresses from the
+adjacent `art.pdb` with DbgHelp wide-character APIs before exercising
+`RtlVirtualUnwind`; it no longer assumes those implementation symbols are DLL
+exports.
+
 ## Scope (from win32_art_port §Phase 4)
 
 - GC stress, multi-thread stress, crash dumps, resource/handle leaks
@@ -40,7 +69,7 @@ historical evidence only. See [HOST_GATE_POLICY.md](HOST_GATE_POLICY.md).
 | P4_G5 Java abort path | **PASS** | `run_crashabort.sh` |
 | P4_G5b Native AV + minidump | **PASS** | `run_crashnative.sh` (VEH+UEF+`.dmp`) |
 | P4_G6 GoldenApp regression | **PASS** | phase3 `run_goldenapp.sh` |
-| W-002 structural managed entries | **PASS** | `check_w002_managed_entries.py` |
+| W-002 structural managed entries | **PASS in unified native stage** | `windows_w002_managed_entry_structure` |
 | W-003 quick boundary/trap parity | **PASS** | `check_w003_quick_boundaries.py` |
 | W-010 static OSR/invoke lookup and virtual unwind | **PASS** | `run_osr_unwind_probe.sh` (R12-anchored variable RSP entry, explicit RBP JIT handoff, managed-clobbered RBP return, GPR plus XMM6-XMM15 restore, invoke records, epilogue) |
 | W-010 GenericJNI native-return virtual unwind | **PASS** | same probe: captured `+0xc5` return, variable native RSP, 5120-byte R12 anchor, repaired RDI `offset=0x1400`, caller RIP/RSP and all nonvolatile GPRs |
@@ -48,8 +77,8 @@ historical evidence only. See [HOST_GATE_POLICY.md](HOST_GATE_POLICY.md).
 | W-010 interpreter-bridge unwind | **PASS on native build 26100** | E6: live primary `+0x82` lookup plus all later frames reach zero PC/UEF/dump; pending record remains structural/synthetic |
 | W-003 attributed frame families | **PASS, 8/8** | `run_w003_frame_probe.sh` |
 | W-003 historical XMM6-XMM11 / W-010 full XMM6-XMM15 sentinel | **PASS, 6/6** | `run_w003_xmm_sentinel.sh` (`selfTestMask=63`, `fullSelfTestMask=1023`) |
-| W-002 OSR matrix | **PASS, 8/8** | `run_w002_osr_probe.sh` |
-| W-002 attached-thread matrix | **PASS, 8/8** | `run_w002_attach_probe.sh`; each raw thread now detaches, uses native stack, and reattaches |
+| W-002 OSR matrix | **PASS, unified 4/4 executions; historical 8/8** | `managed_w002_osr`; nterp/switch twice each |
+| W-002 attached-thread matrix | **PASS, unified 4/4 executions; historical 8/8** | `managed_w002_attach`; each raw thread detaches, uses native stack, and reattaches |
 | W-014 thread reservation/lifetime/guarantee-aware bounds | **PASS** | unified `stage:w014` native gates; E9 raises/preserves/queries the guarantee and debits prefix + guarantee + moving guard |
 | W-010 fault record/context adapter | **PASS** | `run_fault_adapter_probe.sh` (`failures=0 cases=8`; live probe `calls=2 first=0 second=0`) |
 | W-010 JIT unwind serializer | **PASS, 6/6** | `run_jit_unwind_info_probe.sh` |

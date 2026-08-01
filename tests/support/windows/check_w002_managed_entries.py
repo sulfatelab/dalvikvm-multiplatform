@@ -25,7 +25,11 @@ def run(tool: str, *args: str) -> str:
     return result.stdout
 
 
-def require_tool(name: str) -> str:
+def require_tool(name: str, explicit: Path | None = None) -> str:
+    if explicit is not None:
+        if not explicit.is_file():
+            fail(f"configured tool does not exist: {explicit}")
+        return str(explicit.resolve())
     path = shutil.which(name)
     if path is None:
         fail(f"required tool is missing: {name}")
@@ -318,13 +322,15 @@ def main() -> int:
         default=repo / "out/windows-x86_64-msvc/RelWithDebInfo",
         help="configured Windows x64 build directory",
     )
+    parser.add_argument("--llvm-objdump", type=Path)
+    parser.add_argument("--llvm-readobj", type=Path)
     args = parser.parse_args()
     build = args.build.resolve()
     if not (build / "art.dll").is_file():
         fail(f"required Windows x64 artifact is missing: {build / 'art.dll'}")
 
-    objdump = require_tool("llvm-objdump")
-    readobj = require_tool("llvm-readobj")
+    objdump = require_tool("llvm-objdump", args.llvm_objdump)
+    readobj = require_tool("llvm-readobj", args.llvm_readobj)
     check_source(repo)
     check_objects(repo, build, objdump, readobj)
     print("W-002 managed-entry structural check: PASS")

@@ -61,18 +61,39 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         (binary / "art-tests" / "art_test_catalog.json").read_text(encoding="utf-8")
     )
     assert catalog["target_id"] == "windows-x86_64-msvc"
-    assert len(catalog["probes"]) == 85
-    assert sum(probe["applicable"] for probe in catalog["probes"]) == 83
-    assert sum(bool(probe["target_ids"]) for probe in catalog["probes"]) == 22
+    assert len(catalog["probes"]) == 86
+    assert sum(probe["applicable"] for probe in catalog["probes"]) == 84
+    assert sum(bool(probe["target_ids"]) for probe in catalog["probes"]) == 23
     assert sum(not probe["target_ids"] for probe in catalog["probes"]) == 63
+    w002_attach = next(
+        probe for probe in catalog["probes"] if probe["name"] == "managed_w002_attach"
+    )
+    w002_osr = next(
+        probe for probe in catalog["probes"] if probe["name"] == "managed_w002_osr"
+    )
+    w002_structure = next(
+        probe
+        for probe in catalog["probes"]
+        if probe["name"] == "windows_w002_managed_entry_structure"
+    )
+    assert w002_attach["execution"] == "target-runnable"
+    assert w002_osr["execution"] == "target-runnable"
+    assert w002_attach["timeout_seconds"] == 600
+    assert w002_osr["timeout_seconds"] == 600
+    assert w002_attach["ctest_registered"] is False
+    assert w002_osr["ctest_registered"] is False
+    assert w002_structure["execution"] == "host-review"
+    assert w002_structure["ctest_registered"] is True
     assert sum(
         probe["execution"] == "target-runnable" for probe in catalog["probes"]
-    ) == 20
+    ) == 22
     assert {
         probe["name"]: probe["timeout_seconds"]
         for probe in catalog["probes"]
         if probe["timeout_seconds"] is not None
     } == {
+        "managed_w002_attach": 600,
+        "managed_w002_osr": 600,
         "windows_x64_w013_mem_map_probe": 60,
         "windows_x64_w013_mspace_owner_probe": 60,
         "windows_x64_w013_dlmalloc_config_probe": 60,
@@ -88,7 +109,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     }
     assert [
         probe["name"] for probe in catalog["probes"] if probe["ctest_registered"]
-    ] == ["windows_w013_source_policy"]
+    ] == ["windows_w002_managed_entry_structure", "windows_w013_source_policy"]
 
     variant_binary = tmp_path / "variant-build"
     (source / "CMakeLists.txt").write_text(
@@ -174,7 +195,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         (binary / "art-tests" / "art_test_catalog.json").read_text(encoding="utf-8")
     )
     applicable = [probe for probe in catalog["probes"] if probe["applicable"]]
-    assert len(catalog["probes"]) == 85
+    assert len(catalog["probes"]) == 86
     assert [probe["name"] for probe in applicable] == [
         "managed_imageless_hello",
         "managed_gc_stress",
