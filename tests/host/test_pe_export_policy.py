@@ -40,7 +40,9 @@ def test_pe_export_macro_has_an_explicit_producer_consumer_boundary():
 
 
 def test_optimized_pe_inline_specializations_have_one_explicit_owner():
-    cmake = (REPO_ROOT / "native" / "CMakeLists.txt").read_text(encoding="utf-8")
+    cmake = (
+        REPO_ROOT / "native" / "cmake" / "ArtTargetGraph.cmake"
+    ).read_text(encoding="utf-8")
     source = (
         REPO_ROOT / "compat" / "src" / "art_pe_inline_exports.cc"
     ).read_text(encoding="utf-8")
@@ -64,7 +66,9 @@ def test_art_consumers_use_a_bounded_source_level_export_boundary():
 
 
 def test_art_runtime_consumers_have_a_reviewed_def_boundary():
-    cmake = (REPO_ROOT / "native" / "CMakeLists.txt").read_text(encoding="utf-8")
+    cmake = (
+        REPO_ROOT / "native" / "cmake" / "ArtTargetGraph.cmake"
+    ).read_text(encoding="utf-8")
     definitions = (
         REPO_ROOT / "compat" / "art_runtime_consumer_exports.def"
     ).read_text(encoding="utf-8").splitlines()

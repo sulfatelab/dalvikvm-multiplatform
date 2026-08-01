@@ -88,6 +88,7 @@ def test_native_cmake_modules_are_common_includes_not_entry_points():
     modules = {
         "ArtCodegen.cmake",
         "ArtPlatform.cmake",
+        "ArtTargetGraph.cmake",
     }
     assert {path.name for path in (REPO_ROOT / "native/cmake").glob("*.cmake")} == modules
     for name in modules:

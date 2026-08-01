@@ -53,7 +53,7 @@ items are closed.
 ### Latest verification baseline (2026-08-01)
 
 - [x] `PYTHONPATH=tools/bp2cmake python3 -m pytest tools/bp2cmake/tests tests/host -q`:
-  167 passed, including generated PE-header, Linux/Windows test-catalog,
+  170 passed, including generated PE-header, Linux/Windows test-catalog,
   shell-free runtime/managed-artifact gates, parallel-frontend, JDK validation,
   deterministic JAR, Windows-path/DSO-name, reviewer ownership, W-010
   nonzero/fault/debugger/fatal-dump orchestration, W-013 source-policy,
@@ -82,6 +82,14 @@ items are closed.
   followed by immediate Ninja no-ops at `--parallel 32`. VCS regression
   coverage rejects either focused module becoming an independent CMake entry
   point.
+- [x] Generated-graph loading, the shared `art-compiler` DSO assertion, and
+  reviewed Windows target/source augmentation moved unchanged into common
+  `native/cmake/ArtTargetGraph.cmake`. The sole `native/CMakeLists.txt` remains
+  the entry point; the focused module cannot declare its own CMake project.
+  Linux, Windows-cross, and native Windows Server 2025 reconfiguration produced
+  no compile/link work, immediate repeats were Ninja no-ops, and the native
+  58-file CET contract passed. Linux/cross used 32 jobs and native Windows used
+  16 jobs.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to
