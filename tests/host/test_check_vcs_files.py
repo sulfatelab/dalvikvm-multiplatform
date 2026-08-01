@@ -54,3 +54,22 @@ def test_managed_java_sources_are_case_owned_with_adjacent_results():
     assert len(java_sources) == 48
     assert all((source.parent / "RESULT.md").is_file() for source in java_sources)
     assert not list((REPO_ROOT / "tools" / "verify").glob("**/*.java"))
+
+
+def test_retired_windows_libcore_product_paths_do_not_reappear():
+    verify_root = REPO_ROOT / "tools" / "verify"
+    native_suffixes = {".c", ".cc", ".cpp", ".S"}
+    assert not [
+        path
+        for path in verify_root.rglob("*")
+        if path.is_file() and path.suffix in native_suffixes
+    ]
+
+    retired = (
+        verify_root / "windows_x64_libcore_icu",
+        REPO_ROOT / "tools/windows_x64/host_package",
+        REPO_ROOT / "tools/windows_x64/stage_native_modules.sh",
+        REPO_ROOT / "tools/windows_x64/jni_stubs/build_combined.sh",
+        REPO_ROOT / "tools/windows_x64/jni_stubs/native_converter.c",
+    )
+    assert not [path for path in retired if path.exists() or path.is_symlink()]

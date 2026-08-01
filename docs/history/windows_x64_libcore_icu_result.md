@@ -1,7 +1,15 @@
-# Windows x64 real ICU PE — RESULT
+# Windows x64 real ICU PE — historical result
 
 **Date:** 2026-07-17  
-**Status:** **Phase A–B2 SUCCESS for product PE** — real ICU + hybrid javacore + AOSP openjdk NIO; **W-005 CLOSED** (no libcombined product aliases)
+**Historical status:** **Phase A–B2 SUCCESS for product PE** — real ICU +
+hybrid javacore + AOSP openjdk NIO; **W-005 CLOSED** (no libcombined product
+aliases)
+
+The standalone CMake graph, checked source snapshot, shell packager, and stub
+builders described below were retired after the unified `bp2cmake` + Python +
+CMake/Ninja product graph built and natively exercised the same DLL closure.
+Use `tools/build_art.py`; the commands and artifact paths in this document are
+retained only to explain the original 2026-07-17 evidence.
 
 ## What built
 
@@ -11,7 +19,7 @@
 | `icui18n.dll` | ~3.4M | ICU4C i18n |
 | `icu_jni.dll` | (built) | Real `android_icu4j` libcore_bridge natives (NativeConverter, ICU4CMetadata, …) |
 
-Harness: `tools/verify/windows_x64_libcore_icu/`  
+Retired harness: `tools/verify/windows_x64_libcore_icu/`
 Configure/build:
 
 ```bash
@@ -246,7 +254,7 @@ blockers listed here were subsequently resolved; see the L-002 close below.
 - Script: `tools/bootjar/build_conscrypt_windows_x64.sh`
   - Generates `NativeConstants.java` (host g++ + boringssl headers)
   - Compiles repackaged `com.android.org.conscrypt` + publicapi against boot classes
-  - Merges into `/tmp/bootbuild/classes`, re-dexes, embeds `java/security/security.properties`
+  - Merged into `<historical-boot-work>/classes`, re-dexed, and embedded `java/security/security.properties`
 - Staged `run/boot.jar` contains:
   - `Lcom/android/org/conscrypt/` + `NativeCrypto` + `OpenSSLProvider`
   - resource `java/security/security.properties` (C2 provider list without BC)
@@ -299,7 +307,7 @@ Hybrid targets emit ART/product sonames directly:
 | AOSP `libcore_io_Memory.cpp` | Enabled in hybrid `libjavacore` (no longer empty register) |
 | Linux Os bridge | Added mmap/munmap/msync/madvise/mincore/mlock/munlock, ftruncate, isatty, strerror, gai_strerror, environ, readlink, posix_fallocate |
 | Link | `libjavacore` links `windows_x64_socket_posix` (posix stubs: mmap family) |
-| Design map | [win32_libcore_os_natives.md](../../../win32_libcore_os_natives.md) — Needed vs ENOSYS inventory |
+| Design map | [win32_libcore_os_natives.md](../../win32_libcore_os_natives.md) — Needed vs ENOSYS inventory |
 
 Full AOSP `libcore_io_Linux.cpp` still **excluded** (Bionic header surface). Grow Win bridges per the map.
 
@@ -315,7 +323,7 @@ Added Win hybrid implementations + RegisterNatives for:
 - `inet_pton`, `if_nametoindex` / `if_indextoname`, `getnameinfo`
 - `sendtoBytes` / `recvfromBytes`, simplified `sendmsg` / `recvmsg`
 
-Inventory: [win32_libcore_os_natives.md](../../../win32_libcore_os_natives.md).
+Inventory: [win32_libcore_os_natives.md](../../win32_libcore_os_natives.md).
 
 ## L-002 Security.getProviders (2026-07-17 late)
 
@@ -453,12 +461,11 @@ Rebuilt conscrypt+okhttp boot.jar with security.properties. Wine:
 
 ## W-015 CLOSED — product libopenjdkjvm PE (2026-07-17)
 
-The standalone hybrid source now remains only as an input to this retained
-legacy verification/package graph; it is not a unified product source. The
+The retired standalone hybrid source was not a unified product source. The
 unified target builds AOSP `OpenjdkJvm.cc` plus the Windows socket-fd registry,
 while `openjdkjvm_memory_windows.cc` supplies real ART heap/GC helpers and the
-`ART_LoadNativeLibrary` bridge used by the product DLL. Remove the standalone
-source together with this graph after its remaining package consumers migrate.
+`ART_LoadNativeLibrary` bridge used by the product DLL. The duplicate source
+was removed with the alternative graph after its package consumers migrated.
 
 ## Native-load ownership correction (2026-07-24)
 

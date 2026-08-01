@@ -48,14 +48,15 @@ def test_boundary_reviewer_resolves_private_pdb_publics():
     }
 
 
-def test_cet_source_policy_uses_generated_graph_and_updated_packagers():
+def test_cet_source_policy_rejects_raw_links_and_legacy_packagers():
     namespace = runpy.run_path(
         str(REVIEWER_ROOT / "check_win32_cet_contract.py"),
         run_name="windows_cet_reviewer",
     )
-    raw_links, packagers = namespace["check_source_policy"](REPO_ROOT)
-    assert raw_links > 0
-    assert packagers > 0
+    assert namespace["check_source_policy"](REPO_ROOT) == {
+        "raw_links": 0,
+        "legacy_packagers": 0,
+    }
 
 
 def test_w013_source_policy_matches_current_product_inventory():

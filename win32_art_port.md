@@ -726,10 +726,12 @@ Each phase has a kill-or-continue gate. This is the execution roadmap when imple
 - Absolute C: JAR load P2–P4/P8, P5 parent/name, and P9c colon rejection **PASS** natively as `art.w004.managed_abspathprobe`.
 - Runtime free/total/maxMemory **PASS** (`art.w004.managed_rtmem`) via art `JVM_*` exports + PE Runtime natives.
 - Props/time/`java.version=1.8.0` and Os errno + UTF-8 paths **PASS** through the unified W-004 stage.
-- Host smoke package staged: `dist/windows_x64_phase3_host` via `tools/windows_x64/host_package/package_windows_x64_phase3.sh`.
+- The historical Phase-3 host package was staged and accepted before its shell
+  producer was retired; its text evidence remains with the libcore case.
 - The historical full Wine suite **PASS** remains evidence; its migrated behavioral subset now passes 19/19 through shell-free native W-004 CTest gates.
-- Host package integrity under wine `smoke_package_wine64.sh` **PASS** (not a substitute for host).
-- Host transfer: `dist/windows_x64_phase3_host.zip`; checklist `tools/windows_x64/host_package/G12_HOST_CHECKLIST.md`.
+- Historical host-package integrity under Wine was **PASS** (not a substitute
+  for the accepted native-host result). The archive remains outside VCS and
+  the producer/checklist are no longer maintained entry points.
 - First Win10 G12 evidence analyzed: paths/props/GC PASS; **net poll EINVAL FAIL**; false OVERALL PASS from cmd ERRORLEVEL clobber.
 - G12 real Win10 host goldens **PASS** (`evidence/host/RESULT_HOST.txt`, 2026-07-16T205926): net/dns/golden/abspath/props/GC all markers green.
 - Phase 3 acceptance (A4–A7 + Option H + golden app on native Windows) **met**.

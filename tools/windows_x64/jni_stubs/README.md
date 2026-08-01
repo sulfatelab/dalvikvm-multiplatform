@@ -1,33 +1,29 @@
-# Windows x64 JNI stubs (legacy / hybrid source pool)
+# Windows x64 libcore compatibility source pool
 
-## Product PE (required)
-
-Do **not** ship `libcombined.dll` as `libicu_jni` / `libjavacore` / `libopenjdk`.
-
-Use:
-
-```bash
-tools/windows_x64/stage_native_modules.sh <dest>
-tools/windows_x64/stage_run_assets.sh <dest>
-```
+These regular source files are temporary inputs to the unified Windows product
+graph. Build and stage them only through `tools/build_art.py`; this directory
+does not own a compiler invocation, CMake graph, or package producer.
 
 | Product module | Role |
 |----------------|------|
 | `icuuc.dll` / `icui18n.dll` / `icu_jni.dll` | Real AOSP ICU4C + android_icu4j natives (`NativeConverter`, metadata, …) |
-| `javacore.dll` | Hybrid AOSP + Win bridges (may still link `win_fs`/`win_net` from this folder) |
+| `javacore.dll` | Hybrid AOSP + Win bridges linking `win_fs`/`win_net` from this folder |
 | `openjdk.dll` / `openjdkjvm.dll` | Hybrid openjdk NIO + JVM_* helpers |
 
-## Legacy
+## Retired alternatives
 
-| File | Status |
-|------|--------|
-| `build_combined.sh` / `libcombined.dll` | **Non-product** (W-005 closed) |
-| `native_converter.c` | **Obsolete** (W-006 closed); real converter in `icu_jni` |
-| `win_fs_natives.c` / `win_net_natives.c` / `win_path.c` / `win_runtime_natives.c` | Still used as **source** linked into hybrid javacore/openjdk PE |
-| `libcore_hello3.c` | Partial PE stubs for System/Runtime/math bits still linked into hybrids |
+The one-DLL `libcombined` builder and the minimal `NativeConverter` stub were
+removed after W-005/W-006 closed. The separate libcore/ICU CMake graph and
+shell package/staging flow were removed after the unified graph built the full
+DLL closure and the native W-004 gates passed.
+
+The retained `win_fs_natives.c`, `win_net_natives.c`, `win_path.c`,
+`win_runtime_natives.c`, `win_process_natives.c`, and `libcore_hello3.c` are
+still compiled into the product. Their eventual relocation is source-layout
+cleanup, not permission to recreate a target-specific build path.
 
 ## Trackers
 
 - W-005 closed — no multi-name libcombined product aliases
 - W-006 closed — no product NativeConverter/ICU charset stubs
-- W-016 closed — ship `run/icu/icudt72l.dat`
+- W-016 closed — stage `icudt72l.dat` through the unified runtime/test paths

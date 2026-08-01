@@ -469,7 +469,8 @@ foreach(_art_test_bundle_lib_dir
             "${_art_test_bundle_lib_dir}")
     endif()
 endforeach()
-target_link_options(art-test-target-policy INTERFACE -fuse-ld=lld)
+target_link_options(art-test-target-policy INTERFACE
+    -fuse-ld=lld "${_art_no_cet}")
 target_link_libraries(art-test-target-policy INTERFACE
     art_windows_cxx windows_x64_posix_stubs ws2_32 synchronization)
 

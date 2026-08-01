@@ -45,7 +45,7 @@ items are closed.
 | Unified phase catalog | PARTIAL | seven virtual stages declare 32 native probes, 47 managed JARs, and twelve command gates; Windows has 89 applicable items (59 target-runnable, six host-review, and 24 compile-only in the product variant), while Linux x86-64 has seven applicable items (six runnable and one compile-only artifact) | migrate the remaining behavioral runners, portable JNI expansion, and result checks |
 | Boot/runtime packaging | PARTIAL | the base boot JAR and probe JARs are Python/CMake/Ninja-owned, deterministic, target-local, and fail-fast; managed gates isolate a runtime root and stage pinned ICU data plus the mandatory native boot DSO closure | add boot images, security providers/resources, cacerts, and complete runtime packages |
 | POSIX-free Windows build host | COMPLETE for the current native/managed W-002, W-003, W-004, W-010, W-013, and W-025 graphs; PARTIAL end to end | Server 2025 uses configured official JDK 21, Python, CMake, Ninja, and plain Clang drivers; native managed build/runtime and no-op gates pass without POSIX tooling | migrate every retained behavioral gate and run the complete current catalog |
-| Legacy build removal | PARTIAL | active product ownership was demoted, project-owned symlink overlays were removed, and the superseded Linux miniature plus Windows Phase-0/Phase-1 product graphs were deleted; the checked-in Linux graph, libcore product CMake, and split overlay datasets remain | remove or demote every alternative product path after gate migration |
+| Legacy build removal | PARTIAL | active product ownership was demoted, project-owned symlink overlays were removed, and the superseded Linux miniature, Windows Phase-0/Phase-1, and libcore/ICU product graphs were deleted; the checked-in Linux graph and split overlay datasets remain | remove or demote every alternative product path after gate migration |
 | CI/acceptance automation | NOT STARTED | no in-repository CI workflow owns the acceptance matrix | fresh-build, no-op, graph, command, artifact, and native-host gates run automatically |
 | Additional architectures | BLOCKED by capability gates | all 17 canonical identities are registered; only `linux-x86_64-gnu` and experimental `windows-x86_64-msvc` generate | admit each profile only after its architecture and runtime gates pass |
 | Windows AOT/OAT | BLOCKED / separate track | compiler DSO parity does not provide Windows OAT production or loading | satisfy `win32_aot_oat.md`; do not imply capability from `art-compiler.dll` |
@@ -53,14 +53,14 @@ items are closed.
 ### Latest verification baseline (2026-08-01)
 
 - [x] `PYTHONPATH=tools/bp2cmake python3 -m pytest tools/bp2cmake/tests tests/host -q`:
-  166 passed, including generated PE-header, Linux/Windows test-catalog,
+  167 passed, including generated PE-header, Linux/Windows test-catalog,
   shell-free runtime/managed-artifact gates, parallel-frontend, JDK validation,
   deterministic JAR, Windows-path/DSO-name, reviewer ownership, W-010
   nonzero/fault/debugger/fatal-dump orchestration, W-013 source-policy,
   W-025 JIT lifecycle/mapping/process-policy/reviewer orchestration, fatal
   contracts, the shell-free Math CriticalNative matrix, W-024 cleanup, the
-  reviewed PE runtime-consumer export boundary, and VCS binary/source-ownership
-  coverage.
+  reviewed PE runtime-consumer export boundary, retired libcore-product-path
+  absence, and VCS binary/source-ownership coverage.
 - [x] Fresh generation loads the same 260 Blueprint files for both targets and
   emits 34 generated modules for `linux-x86_64-gnu` and 33 for
   `windows-x86_64-msvc`. Both graphs emit the separate `openjdkjvmti` DSO;
@@ -483,11 +483,30 @@ items are closed.
   host suite. It checks the actual retired-workaround contract instead of the
   obsolete whole-file equality rule that rejected accepted guarded FS-1
   stack-high-water instrumentation.
+- [x] The unproducible 641-line libcore/ICU source snapshot, its standalone
+  CMake graph, and its duplicate `openjdkjvm` memory source were removed after
+  the unified graph built the full ICU/libcore/openjdk DLL closure. The final
+  Phase-3 shell package/staging flow, the one-DLL `libcombined` raw linker, and
+  the obsolete minimal `NativeConverter` stub were retired after native W-004
+  acceptance. Their stable 2026-07-17 result moved to `docs/history`; current
+  builds and stages use only `tools/build_art.py` and generated Ninja edges.
+- [x] Retiring the raw linker made the CET reviewer fail closed on the unified
+  graph itself. It exposed the handwritten product `sigchain.dll` and thirteen
+  test probes without explicit `/CETCOMPAT:NO`. `sigchain` now declares the
+  option directly and the shared Windows test-target policy propagates it to
+  every probe. The reviewer ignores Ninja `phony` aliases, rejects any new raw
+  PE linker or legacy shell packager, and passes all 58 real cross-built PE
+  link commands and files. A fresh native Windows Server 2025 RelWithDebInfo
+  product build completed 1,857 edges at `--parallel 16`; its repeat was a
+  Ninja no-op. The native `art-tests` build completed 123 edges, the reviewer
+  then reported `raw_links=0 legacy_packagers=0 link_targets=58 pe_files=58`,
+  and the final `art-tests` repeat was also a Ninja no-op. The Linux-hosted
+  Windows product and test graphs retain the same no-op baseline.
 - [x] The final `install_into_phase1.sh` compatibility installer was removed.
   The unified graph builds ICU, libcore, OpenJDK, ART, and their managed assets
   into one target tree, so no maintained workflow copies a second product into
-  the deleted Phase-1 tree. Historical Phase-3 package staging remains clearly
-  separate until its own evidence flow is retired.
+  the deleted Phase-1 tree. The historical Phase-3 package staging flow was
+  subsequently retired with the alternative libcore/ICU graph.
 - [x] The six documentation-only Linux E2E bring-up records moved from
   `tools/verify/e2e` to flat, clearly historical names under `docs/history`;
   their obsolete harness commands are not test entry points.
@@ -588,9 +607,8 @@ verification directories. All 91 declarations own canonical source under
 `tests/cases/` or a shell-free runner under `tests/support/`; all 29 native
 source cases and all 48 Java sources have adjacent results, and shared stage
 analysis remains under `tests/stages/`. The old verification tree now contains
-zero Java sources and one uncatalogued native source retained by an unfinished
-legacy libcore/ICU graph. It contains zero shell scripts, zero PowerShell
-scripts, and 17 Python scripts. Python checkers
+zero Java or native source files, zero shell scripts, zero PowerShell scripts,
+and 17 Python scripts. Python checkers
 and reviewers may remain, but the unified frontend must invoke them through a
 declared stage instead of a phase-local product build.
 
@@ -983,8 +1001,9 @@ an unreviewed module-set or kind change.
 - [x] Remove the Phase-1 product CMake graph, move its historical result out of
   `tools/verify`, and relocate its reusable PE/source auditors to
   `tests/support/windows`.
-- [ ] Remove the unproducible libcore/ICU `sources.cmake` and alternative
-  CMake graph after the remaining package flows use unified product outputs.
+- [x] Remove the unproducible libcore/ICU `sources.cmake`, alternative CMake
+  graph, duplicate runtime source, raw-link stub builder, and shell package
+  flow after the unified product and W-004 gates own their behavior.
 - [ ] Consolidate `overlay/port_policy.py` and
   `overlay/port_policy_windows.py` into common policy plus explicit target
   deltas behind `make_overlay(profile)`.
@@ -1032,11 +1051,12 @@ an unreviewed module-set or kind change.
 ### Legacy inventory blocking Phase 5 removal
 
 The retained alternative build descriptions are concentrated in the checked-in
-Linux graph, the libcore/ICU snapshot and CMake entry point, and split overlay
-datasets. The eight early Linux isolation/miniature graphs and both Windows
-Phase-0/Phase-1 graphs have been removed. The remaining descriptions are not
-invoked by `tools/build_art.py`, but remain runnable and can drift. Removal is
-blocked only by missing unified gate ownership, not by product graph generation.
+Linux graph and split overlay datasets. The eight early Linux
+isolation/miniature graphs, both Windows Phase-0/Phase-1 graphs, and the
+libcore/ICU alternative graph have been removed. The remaining descriptions
+are not invoked by `tools/build_art.py`, but remain runnable and can drift.
+Removal is blocked only by missing unified gate ownership, not by product graph
+generation.
 
 The repository also has no checked-in CI workflow. External or manual evidence
 does not replace a repeatable in-repository acceptance entry point.
@@ -1605,10 +1625,11 @@ The historical Windows phase files are no longer a product entry point:
   `elffile`, and the compiler component static, folded compiler objects into
   `art.dll`, and did not emit a standalone `art-compiler.dll`. The active
   target-aware graph now emits `art-compiler` as a shared target.
-- [`tools/verify/windows_x64_libcore_icu/sources.cmake`](tools/verify/windows_x64_libcore_icu/sources.cmake)
-  claims to be automatically extracted, but the repository contains no
-  matching extractor. Its CMake file imports Phase-1 artifacts rather than
-  consuming targets from one graph.
+- The retired `tools/verify/windows_x64_libcore_icu/sources.cmake` claimed to
+  be automatically extracted, but the repository contained no matching
+  extractor. Its CMake file imported Phase-1 artifacts rather than consuming
+  targets from one graph. The stable bring-up evidence now lives in
+  [`docs/history/windows_x64_libcore_icu_result.md`](docs/history/windows_x64_libcore_icu_result.md).
 
 The present Windows linker command is nevertheless useful evidence: plain
 `clang++ --target=x86_64-pc-windows-msvc ... -shared -fuse-ld=lld` already
@@ -2719,7 +2740,8 @@ After all acceptance gates pass, remove or demote the following as product
 inputs:
 
 - `native/generate.sh` and the checked-in `native/generated/dalvikvm.cmake`;
-- the unproducible `windows_x64_libcore_icu/sources.cmake` snapshot;
+- the now-retired unproducible `windows_x64_libcore_icu/sources.cmake`
+  snapshot and its standalone product/package flow;
 - `overlay/port_policy.py` and `overlay/port_policy_windows.py` after their
   policies are merged;
 - build instructions or scripts that select Make, NMake, Visual Studio, or

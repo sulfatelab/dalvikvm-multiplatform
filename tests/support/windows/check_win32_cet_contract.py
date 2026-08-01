@@ -36,7 +36,7 @@ def require_tool(name: str) -> str:
     return path
 
 
-def check_source_policy(repo: Path) -> tuple[int, int]:
+def check_source_policy(repo: Path) -> dict[str, int]:
     overlay = (repo / "overlay/port_policy_windows.py").read_text(encoding="utf-8")
     if 'add_ldflags=["LINKER:/CETCOMPAT:NO"]' not in overlay:
         fail("Windows x64 generator overlay does not explicitly add /CETCOMPAT:NO")
@@ -50,6 +50,20 @@ def check_source_policy(repo: Path) -> tuple[int, int]:
     if not check_index < mem_map_index < thread_index:
         fail("Windows x64 process-policy guard no longer precedes memory and thread startup")
 
+    test_graph = (repo / "tests" / "CMakeLists.txt").read_text(encoding="utf-8")
+    if 'set(_art_no_cet "LINKER:/CETCOMPAT:NO")' not in test_graph:
+        fail("Windows test graph does not define the shared /CETCOMPAT:NO policy")
+    if not re.search(
+        r"target_link_options\(art-test-target-policy INTERFACE\s+"
+        r'-fuse-ld=lld "\$\{_art_no_cet\}"\)',
+        test_graph,
+    ):
+        fail("Windows test target policy does not propagate /CETCOMPAT:NO")
+
+    product_graph = (repo / "native" / "CMakeLists.txt").read_text(encoding="utf-8")
+    if 'target_link_options(sigchain PRIVATE "LINKER:/CETCOMPAT:NO")' not in product_graph:
+        fail("handwritten Windows sigchain target does not disable CET compatibility")
+
     raw_links = []
     for path in (repo / "tools").rglob("*.sh"):
         text = path.read_text(encoding="utf-8")
@@ -61,27 +75,33 @@ def check_source_policy(repo: Path) -> tuple[int, int]:
         if LINK_OPTION not in text.upper():
             fail(f"raw Windows x64 PE link does not pass {LINK_OPTION}: {path.relative_to(repo)}")
 
-    if not raw_links:
-        fail("no raw Windows x64 PE links were audited")
+    if raw_links:
+        fail(
+            "raw Windows x64 PE link scripts bypass the unified graph: "
+            + ", ".join(str(path.relative_to(repo)) for path in raw_links)
+        )
 
     packagers = sorted(
         (repo / "tools/windows_x64/host_package").glob("package_windows_x64_*.sh")
     )
-    for path in packagers:
-        text = path.read_text(encoding="utf-8")
-        if "check_win32_cet_contract.py" not in text or "--pe-root" not in text:
-            fail(f"Windows x64 host packager does not enforce the PE audit: {path.relative_to(repo)}")
-    if not packagers:
-        fail("no Windows x64 host packagers were audited")
-    return len(raw_links), len(packagers)
+    if packagers:
+        fail(
+            "legacy Windows x64 shell packagers remain: "
+            + ", ".join(str(path.relative_to(repo)) for path in packagers)
+        )
+    return {"raw_links": len(raw_links), "legacy_packagers": len(packagers)}
 
 
 def pe_targets(ninja: str, build: Path) -> list[Path]:
     output = run(ninja, "-C", str(build), "-t", "targets", "all")
     targets = []
     for line in output.splitlines():
-        name, separator, _rule = line.partition(": ")
-        if not separator or not name.lower().endswith((".dll", ".exe")):
+        name, separator, rule = line.partition(": ")
+        if (
+            not separator
+            or rule == "phony"
+            or not name.lower().endswith((".dll", ".exe"))
+        ):
             continue
         targets.append(Path(name))
     if not targets:
@@ -153,7 +173,7 @@ def main() -> int:
     ninja = require_tool(os.environ.get("NINJA", "ninja"))
     readobj = require_tool(os.environ.get("LLVM_READOBJ", "llvm-readobj"))
 
-    raw_count, packager_count = check_source_policy(repo)
+    source_policy = check_source_policy(repo)
     targets = pe_targets(ninja, build)
     check_link_commands(ninja, build, targets)
 
@@ -183,7 +203,8 @@ def main() -> int:
 
     print(
         "WIN32_CET_CONTRACT PASS "
-        f"generated_policy=1 raw_links={raw_count} packagers={packager_count} "
+        f"generated_policy=1 raw_links={source_policy['raw_links']} "
+        f"legacy_packagers={source_policy['legacy_packagers']} "
         f"link_targets={len(targets)} pe_files={len(files)}"
     )
     return 0

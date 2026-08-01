@@ -185,6 +185,11 @@ W-004 has likewise removed the standalone JVMTI CMake/Bash orchestration after
 unified native acceptance. Its accepted Phase-3 libcore slices removed all 26
 superseded Bash build/run wrappers; native-open cases remain compile-only in
 the same catalog instead of retaining an alternative product or runtime graph.
+The remaining Phase-3 libcore/ICU CMake graph, checked source snapshot, shell
+host packager/stager, raw-link combined-stub builder, and minimal
+`NativeConverter` stub were then removed after the unified product built the
+same DLL closure and native W-004 passed. The stable bring-up result is history
+under `docs/history`, not a second reproduction path.
 The accepted Phase-4 managed stress slice also removed its generic builder,
 generic Wine runner, aggregate Wine runner, and four per-case wrappers. W-010's
 redundant Phase-4 managed-abort Wine wrapper is also retired; the native-crash

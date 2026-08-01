@@ -216,13 +216,9 @@ PASS native_crash_aborts
 
 ## Host
 
-Rebuild package (includes Phase 4 jars/scripts):
-
-```bash
-bash tools/windows_x64/host_package/package_windows_x64_phase3.sh
-# Windows: scripts\run_all_host.cmd  (now includes gcstress/threadheavy/handleleak/perfsmoke)
-# Optional: scripts\run_crashabort.cmd
-```
+The historical Phase-3/4 aggregate shell package producer was retired after
+its maintained behaviors moved to the unified virtual stages. Accepted package
+text and hashes remain evidence only; do not reconstruct that package flow.
 
 Focused W-002 native acceptance:
 

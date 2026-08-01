@@ -21,14 +21,14 @@ Phase 3 libcore bring-up for Windows x86-64 imageless ART:
 - A7 classic sockets + DNS/localhost resolve
 - A8-lite uncaught exception path
 - Product **GoldenApp**
-- Host smoke package + **G12 real Windows goldens**
+- Historical host package + **G12 real Windows goldens**
 
 ## Gates
 
 | Gate | Status | Evidence |
 |------|--------|----------|
 | G0–G11 wine suite | **PASS** | `evidence/all_wine_gates.txt` |
-| G12 host package | **PASS** | `dist/windows_x64_phase3_host` / packager |
+| G12 host package | **HISTORICAL PASS** | issued archive hash recorded below; producer retired |
 | G12 real Windows host | **PASS** | `evidence/host/RESULT_HOST.txt`, `logs_20260716T205926/` |
 
 ## Unified native probe ownership
@@ -114,7 +114,7 @@ Analysis: `evidence/host/ANALYSIS_20260716T205926.md`
 
 ```text
 PASS all wine Phase 3 gates
-package smoke_package_wine64.sh OVERALL PASS
+historical package smoke OVERALL PASS
 ```
 
 ## Critical fixes landed during Phase 3
@@ -145,4 +145,5 @@ python tools/build_art.py test --target-id windows-x86_64-msvc --stage w013 --pa
 
 The old Wine and returned-host-package results remain evidence, not maintained
 reproduction paths. Current reproduction uses only the unified frontend and
-the `w004` virtual stage above.
+the `w004` virtual stage above. The shell package producer and Wine package
+smoke were removed with the obsolete standalone libcore/ICU graph.

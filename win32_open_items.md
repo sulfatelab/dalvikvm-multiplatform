@@ -101,7 +101,7 @@ canonical policy is [HOST_GATE_POLICY.md](tools/verify/windows_x64_phase4/HOST_G
 - **Chain / diagnostics contract:** debugger first-chance notification remains before ART as Windows documents. ART registers first and `EnsureFrontOfChain()` may best-effort promote it after JNI load, but unrecognized faults always continue to later VEH/SEH handlers. Expected implicit faults do not log or dump. Fatal UEF/minidump handling is separate and must call the previously installed UEF rather than replace host policy silently. PE runtime-function data is required for Windows dispatch to cross native/managed boundaries; it is not merely optional dump hardening.
 - **Activation:** implicit null handling still requires the managed VEH and published special action. Windows x64 stack checks require validated guarantee-aware `Thread::stack_end_` bounds but no installed fixed page. A normal started runtime rejects `-Xno-sig-chain` exactly as Linux does; only genuine non-started compiler/tool runtimes retain the option.
 - **CET/HSP contract:** Win32 ART does not support CET user shadow stacks (Hardware-enforced Stack Protection). `art_quick_do_long_jump` restores an older regular `RSP` and executes `ret` without synchronizing CET's protected return stack, affecting ordinary managed throws, deoptimization, JNI exception delivery, and W-010 implicit throws. W-010's `CONTEXT.Rip`/`Rsp` edits also conflict with context-IP validation. Every project PE link must explicitly use `/CETCOMPAT:NO`; packaged DLLs must omit `IMAGE_DLL_CHARACTERISTICS_EX_CET_COMPAT`; startup must reject every defined incompatible `ProcessUserShadowStackPolicy` field before ART threads/JIT. Compatibility, audit, strict, context-IP-validation, and non-CET-binary fields are unsupported. `CetDynamicApisOutOfProcOnly` is allowed because it does not enable HSP or context-IP validation; `ReservedFlags` is ignored because reserved bits have no defined meaning. CFG remains distinct from CET and its W-025 JIT-2 compile/execute matrix is native-accepted; `/guard:ehcont`, dynamic continuation targets, CET-compatible JIT ranges, IBT, or `-fcf-protection` are not fixes.
-- **Current CET state:** Stage 0 is implemented and FS-2 is native-accepted. Generator policy applies `LINKER:/CETCOMPAT:NO` to every generated non-static target; nine handwritten Windows x64 CMake harnesses and three direct Clang/lld links use the same explicit option. `Runtime::Init()` queries `ProcessUserShadowStackPolicy` after logger selection and before `MemMap::Init()`, ART threads, nterp, or JIT. It constructs an incompatibility mask from named SDK fields, accepts `CetDynamicApisOutOfProcOnly` and reserved fields, accepts `ERROR_INVALID_PARAMETER` only below Windows build 19041, and fails closed on unexpected query/version failures. Native build 26100 accepts raw `flags=0x00000100` as `CetDynamicApisOutOfProcOnly`, accepts reserved bits, and rejects all nine forced named-incompatible policy cases before Java/JIT with no dump.
+- **Current CET state:** Stage 0 is implemented and FS-2 is native-accepted. Generator policy applies `LINKER:/CETCOMPAT:NO` to every generated non-static target, and the unified test catalog applies the same option to every PE probe. The reviewer rejects raw PE link scripts and legacy shell packagers, then audits every PE target's actual Ninja command and output marker. `Runtime::Init()` queries `ProcessUserShadowStackPolicy` after logger selection and before `MemMap::Init()`, ART threads, nterp, or JIT. It constructs an incompatibility mask from named SDK fields, accepts `CetDynamicApisOutOfProcOnly` and reserved fields, accepts `ERROR_INVALID_PARAMETER` only below Windows build 19041, and fails closed on unexpected query/version failures. Native build 26100 accepts raw `flags=0x00000100` as `CetDynamicApisOutOfProcOnly`, accepts reserved bits, and rejects all nine forced named-incompatible policy cases before Java/JIT with no dump.
 - **First combined native candidate:** `/tmp/log-w010-w014-osr-host-20260727-6.zip` matches the issued package identity but is not accepted: review returns 9 PASS and 21 FAIL. The raw-policy rejection above prevented ART startup and cascaded through managed/JIT cases. Independent native successes remain useful evidence: static OSR/RBP lookup and live unwind, stack-page restoration, exact fault-record filtering, foreign-VEH/frame-SEH behavior, and join/detach handle stability all passed. The same run also exposed the separate W-014 small-reservation probe defect described below.
 - **Second combined native candidate:** `/tmp/log-windows_x64_w010_w014_host-run2.zip` matches the issued package and returns 20 PASS and 12 FAIL on Windows 10 Enterprise LTSC build 19044. CET classification, exact small reservations, stable handles, direct stack-page restoration, fault records, sigchain/frame-SEH, nterp/JIT NPE, OSR live unwind, six XMM sentinel runs, and no-chain rejection pass. Switch/nterp/JIT SOE terminate with `STATUS_STACK_OVERFLOW`; the JIT access is exactly `RSP - 0x2000`, but Windows' moving guard wins before ART's page AV. Switch recovery also sees the temporarily writable ART page with unexpected protection and error 13. Static, JIT J-2/J-1, and OSR J-2/J-1 fatal AVs all reach VEH, then exit without UEF or dump. Their identical behavior means JIT unwind is not the first diagnosis.
 - **Third native diagnostic result:** `/tmp/diag-log-windows_x64_w010_w014_host-run3.zip` matches the issued package and completes the isolated matrix on build 19044. Baseline/protected/writable recursion reaches `STATUS_STACK_OVERFLOW`; direct protected-page access still AVs. At protected-mode termination the selected page belongs to a 2,093,056-byte committed `PAGE_READWRITE` region, proving Windows stack growth consumed its protection. Writable mode re-protects successfully before `_resetstkoflw()`, so run-2 error 13 was secondary recovery-state fallout. Standalone main/worker/chained UEF dispatch passes and frame SEH consumes its own AV as expected. The late JNI probe identifies ART's filter in `art.dll` as its predecessor immediately before the crash, then only `ART Win32 VEH` runs: neither late nor ART UEF runs, and dump creation is never reached. UEF replacement, the runner, debugger attachment, and dump-path/API failure are ruled out.
@@ -163,7 +163,7 @@ canonical policy is [HOST_GATE_POLICY.md](tools/verify/windows_x64_phase4/HOST_G
 - **Area:** openjdk / nio
 - **Current behavior:** Phase B2 builds AOSP NIO channel natives with Winsock CRT-fd shims; `epoll_*` emulated with `select`; NIO.2 UnixNativeDispatcher/WatchService/async EPollPort not registered.
 - **Proper fix:** Keep NIO.2 non-goal; deepen channel/options matrix; optional IOCP epoll later if needed.
-- **Code anchors:** `tools/verify/windows_x64_libcore_icu/CMakeLists.txt` (`_OJ_SRCS` filters); `compat/src/windows_x64_socket_posix.c`
+- **Code anchors:** `overlay/port_policy_windows.py` (`libopenjdk` source filters); `native/CMakeLists.txt`; `compat/src/windows_x64_socket_posix.c`
 - **Opened:** 2026-07-17
 
 ### W-026 — Windows SDM timestamp check has one-second granularity
@@ -283,15 +283,15 @@ Summary (details below; do not delete history):
 - **W-002** — No managed GS / Thread base on Windows (2026-07-26) — r15 managed-self design, OSR adapters, and attached-thread entry accepted on native Windows R2
 - **W-003** — Quick entrypoint SETUP frames and Microsoft XMM boundary (2026-07-26) — all four frame families and XMM6-XMM11 preservation accepted on native Windows R1
 - **W-004** — `LOAD_RUNTIME_INSTANCE` direct PE singleton load (2026-07-25) — helper removed; direct same-image load passes structural, Wine, Linux, and native Windows acceptance
-- **W-005** — Combined PE JNI stub DLL aliased as libjavacore/libopenjdk/libicu_jni (2026-07-17) — product packaging uses stage_native_modules.sh (real PE only); libcombined is legacy non-product
-- **W-006** — Minimal NativeConverter / ICU version shims (not full ICU4C) (2026-07-17) — product uses real icu_jni NativeConverter + icuuc/icui18n + icudt; native_converter.c obsolete and removed from libcombined; charset stub no longer product path
+- **W-005** — Combined PE JNI stub DLL aliased as libjavacore/libopenjdk/libicu_jni (2026-07-17) — the unified graph builds real PE modules; the raw-link `libcombined` builder and shell stager were retired
+- **W-006** — Minimal NativeConverter / ICU version shims (not full ICU4C) (2026-07-17) — product uses real icu_jni NativeConverter + icuuc/icui18n + icudt; the obsolete stub source was deleted
 - **W-007** — Classic sockets / poll via Winsock `select` (not full Os/NIO) (2026-07-17) — permanent WinNT design: classic Os sockets use Winsock + **`select()`-based poll/timeouts** (not CRT-fd `WSAPoll`)
 - **W-009** — Phase-1 grade `compat` POSIX/pthread stubs (2026-07-17) — hot paths hardened; remaining ENOSYS is intentional Linux-only surface
 - **W-011** — Legacy expanded InterpreterJni shorty fallback (2026-07-24) — removed after Wine and native Windows tripwire acceptance; upstream pre-start-only invariant restored
 - **W-012** — Legacy InterpreterJni direct JNI resolver (2026-07-24) — removed with upstream `interpreter.cc` restoration
 - **W-013** — dlmalloc WIN32 / low-4GB / MORECORE choices for imageless ART (2026-07-25) — accepted design and native Windows R2 closure matrix pass
 - **W-015** — openjdkjvm memory exports minimal PE surface (2026-07-17) — product ships comprehensive standalone `libopenjdkjvm.dll`
-- **W-016** — ICU needs external `ICU_DATA` / `icudt72l.dat` for wine smoke (2026-07-17) — product always stages run/icu/icudt72l.dat via tools/windows_x64/stage_run_assets.sh (same class as boot.jar); libicu_jni defaults ICU_DATA to run/icu when unset
+- **W-016** — ICU needs external `ICU_DATA` / `icudt72l.dat` for wine smoke (2026-07-17) — unified runtime gates stage the pinned data beside each isolated runtime; libicu_jni defaults ICU_DATA to run/icu when unset
 - **W-018** — NetProbe StructLinger NPE (getsockopt SO_LINGER incomplete in javacore Win bridge) (2026-07-17) — implemented getsockoptLinger/setsockoptLinger in win_net_natives; NetProbe wine PASS
 - **W-019** — Math @CriticalNative / FastNative double ABI on Windows x64 (2026-07-17; superseded 2026-07-24) — historical interpreter DD/DDD workaround replaced by Linux-like entrypoints and restored native Math surface
 - **W-020** — FileChannelImpl.map0 pointer truncation on Windows x64 (LLP64) (2026-07-17) — `ptr_to_jlong(mapAddress)` instead of `(jlong)(unsigned long)`
@@ -382,22 +382,22 @@ Summary (details below; do not delete history):
 
 
 ### W-005 — Combined PE JNI stub DLL aliased as libjavacore/libopenjdk/libicu_jni
-- **State:** CLOSED (2026-07-17) — product packaging uses stage_native_modules.sh (real PE only); libcombined is legacy non-product
+- **State:** CLOSED (2026-07-17) — the unified graph builds/stages real PE modules; the raw-link combined stub and shell stager were removed
 - **Kind:** workaround
 - **Area:** libcore-stub / packaging
 - **Symptom / why:** Full ojluni + ICU4C PE ports not built; ART `InitNativeMethods` still dlopens those sonames.
-- **Current behavior:** `tools/windows_x64/jni_stubs/libcombined.dll` copied to six names (`libjavacore.dll`, `libopenjdk.dll`, `libicu_jni.dll`, and short names). ~160 `Java_*` exports, hand-written (~2.3k LOC).
+- **Historical behavior:** `libcombined.dll` was copied to six names (`libjavacore.dll`, `libopenjdk.dll`, `libicu_jni.dll`, and short names), exposing about 160 hand-written `Java_*` stubs.
 - **Proper fix:** Real PE modules (or fewer real DLLs) from Soong/bp2cmake Windows x64 graph: javacore, openjdk, icu_jni + icuuc/i18n, etc.; stop multi-name aliasing of one stub.
-- **Code anchors:** `tools/windows_x64/jni_stubs/build_combined.sh`, `tools/windows_x64/host_package/package_windows_x64_phase3.sh`, stage scripts in phase2 RESULT
+- **Code anchors:** `native/CMakeLists.txt`; `overlay/port_policy_windows.py`; historical result `docs/history/windows_x64_libcore_icu_result.md`
 - **Opened:** 2026-07-16 (Phase 2; expanded Phase 3)
 
 ### W-006 — Minimal NativeConverter / ICU version shims (not full ICU4C)
-- **State:** CLOSED (2026-07-17) — product uses real icu_jni NativeConverter + icuuc/icui18n + icudt; native_converter.c obsolete and removed from libcombined; charset stub no longer product path
+- **State:** CLOSED (2026-07-17) — product uses real icu_jni NativeConverter + icuuc/icui18n + icudt; the obsolete charset-stub source was deleted
 - **Kind:** workaround
 - **Area:** icu
-- **Current behavior:** Phase-3 package historically used `native_converter.c` stubs. **Phase A progress:** real PE `icuuc.dll` / `icui18n.dll` / `icu_jni.dll` now build from AOSP sources (`tools/verify/windows_x64_libcore_icu/`) and can replace stub `libicu_jni` in `build/windows_x64_phase1`. `libjavacore`/`libopenjdk` still combined stubs (may still register overlapping charset helpers until removed).
+- **Current behavior:** the unified graph builds real PE `icuuc.dll`, `icui18n.dll`, and `icu_jni.dll` from AOSP sources; no combined or minimal charset stub remains.
 - **Proper fix:** Default package/install to real ICU PE only; remove charset exports from `libcombined`; verify full data (`ICU_DATA` / icudt) vs stubdata; complete L-001 for javacore/openjdk.
-- **Code anchors:** `tools/verify/windows_x64_libcore_icu/`, `tools/windows_x64/jni_stubs/native_converter.c`
+- **Code anchors:** `overlay/port_policy.py`; `overlay/port_policy_windows.py`; historical result `docs/history/windows_x64_libcore_icu_result.md`
 - **Opened:** 2026-07-16
 - **Progress:** 2026-07-17 — real ICU PE + CoreProbe wine OK with hybrid package
 
@@ -501,15 +501,15 @@ Summary (details below; do not delete history):
 ---
 
 ### W-016 — ICU needs external `ICU_DATA` / `icudt72l.dat` for wine smoke
-- **State:** CLOSED (2026-07-17) — product always stages run/icu/icudt72l.dat via tools/windows_x64/stage_run_assets.sh (same class as boot.jar); libicu_jni defaults ICU_DATA to run/icu when unset
+- **State:** CLOSED (2026-07-17) — unified runtime gates stage the pinned data as a regular file in each isolated runtime; libicu_jni defaults ICU_DATA to run/icu when unset
 - **Kind:** workaround
 - **Area:** icu / packaging
 - **Symptom / why:** Linked stubdata alone yields `u_init` `U_FILE_ACCESS_ERROR` under wine; full data file works.
 - **Current behavior:** Stage `run/icu/icudt72l.dat` and set `ICU_DATA=run/icu` (or absolute path). `Register.cpp` also calls `udata_setCommonData(&U_ICUDATA_ENTRY_POINT)` on Win.
-- **Proper fix:** Package full ICU data by default in host package scripts; verify embedded data path or always set ICU_DATA in runners.
-- **Code anchors:** `vendor/icu/android_icu4j/libcore_bridge/src/native/Register.cpp`; `build/windows_x64_phase1/run/icu/`
+- **Proper fix:** Package full ICU data in the eventual complete runtime package; every current managed runner passes an explicit staged data path.
+- **Code anchors:** `vendor/icu/android_icu4j/libcore_bridge/src/native/Register.cpp`; `tests/support/runtime_gate.py`; `native/CMakeLists.txt`
 - **Opened:** 2026-07-17
-- **Progress:** 2026-07-17 — `package_windows_x64_phase3.sh` fails if `icudt72l.dat` missing; phase3/4 runners and install_into_phase1 default/export `ICU_DATA=run/icu`
+- **Progress:** the historical shell package required the file; the unified shell-free runners now copy it into their output-owned runtime roots and set `ICU_DATA`.
 
 ### W-018 — NetProbe StructLinger NPE (getsockopt SO_LINGER incomplete in javacore Win bridge)
 - **State:** CLOSED (2026-07-17) — implemented getsockoptLinger/setsockoptLinger in win_net_natives; NetProbe wine PASS
@@ -734,7 +734,7 @@ Summary (details below; do not delete history):
 - **Gap:** ~~Windows x64 product still on libcombined / incomplete hybrid PE~~ **product PE from AOSP + multipath hybrids; no libcombined aliasing**.
 - **Exit criteria:** PE DLLs built from AOSP sources without `libcombined` aliasing; GoldenApp + charset/locale smoke still pass. **Met.**
 - **Fix / evidence:**
-  - Product stages only real PE via `tools/windows_x64/stage_native_modules.sh` (rejects `libcombined`): `libicu_jni`, `libjavacore`, `libopenjdk`, `libopenjdkjvm`, `icuuc`, `icui18n` (+ optional crypto under L-002).
+  - The unified graph and Python stage own the real PE closure: `libicu_jni`, `libjavacore`, `libopenjdk`, `libopenjdkjvm`, `icuuc`, and `icui18n`; no `libcombined` alias is accepted.
   - Hybrid `libjavacore` includes AOSP Register surface + Memory, NetworkUtilities, NativeBN (`libcrypto`), ExpatParser (static `vendor/external/expat`), AsynchronousCloseMonitor, OsConstantsHolder (multipath), Win Os bridge (`win_fs`/`win_net`/register map).
   - Hybrid `libopenjdk` ships AOSP NIO/zip/fdlibm surface + `win_close` NET_* AsyncClose wrappers (NIO.2 non-goal).
   - Wine gates (2026-07-17): `GoldenApp` (golden.ok/net.ok/done), `CoreProbe` (charset=true), `LocaleProbe`, plus L-001 probes Bn/Xml/AsyncClose/OsConstants/Dns/Net/Io.
@@ -744,7 +744,7 @@ Summary (details below; do not delete history):
   - Full AOSP `libcore_io_Linux.cpp` remains **excluded by design** for Windows x64; product Os surface is the Win bridge map ([win32_libcore_os_natives.md](win32_libcore_os_natives.md): needed=0, 82 implemented, 44 ENOSYS).
   - `cbigint` unused in graph; Linux-only `android_system_OsConstantsHolder.cpp` replaced by multipath Win TU.
   - Crypto/TLS productization tracked under **L-002**; NIO.2 non-goal.
-  - Details: `tools/verify/windows_x64_libcore_icu/RESULT.md`
+  - Historical details: `docs/history/windows_x64_libcore_icu_result.md`
 
 ### L-002 — boringssl / conscrypt / SSL PE
 - **State:** CLOSED (2026-07-17) — product TLS stack green under wine (providers + SSLContext.init + HTTPS GET)
@@ -760,7 +760,7 @@ Summary (details below; do not delete history):
     - `SslProviderProbe.done=ok` (AndroidOpenSSL digests/AES-GCM/SSLContext.init)
     - `HttpsProbe.done=ok` (`https://example.com/` status 200; handlers Http/HttpsURLConnectionImpl)
 - **Residual (non-exit / optional):** boringssl win-x86_64 ASM acceleration; BouncyCastle/BKS; full ICU4J IDNA tables for non-ASCII hosts; broader HTTPS golden matrix on real Win10.
-- **Code anchors:** `tools/verify/windows_x64_libcore_icu/CMakeLists.txt`; `tools/bootjar/build_conscrypt_windows_x64.sh`; `tools/bootjar/build_okhttp_windows_x64.sh`; `tools/windows_x64/stage_run_assets.sh`
+- **Code anchors:** historical `docs/history/windows_x64_libcore_icu_result.md`; `tools/bootjar/build_conscrypt_windows_x64.sh`; `tools/bootjar/build_okhttp_windows_x64.sh`; `tools/windows_x64/stage_run_assets.sh`
 - **Opened:** 2026-07-17
 - **Closed:** 2026-07-17
 
@@ -787,7 +787,7 @@ Summary (details below; do not delete history):
 - **State:** CLOSED (2026-07-17) — product ships one PE soname each: `libicu_jni`/`libjavacore`/`libopenjdk`/`libopenjdkjvm`/`libcrypto`/`libssl`/`libjavacrypto` (+ `icuuc`/`icui18n`); short-name twins removed from packaging
 - **Kind:** leftover / packaging debt
 - **Depends on:** L-001, W-005
-- **Fix:** CMake `OUTPUT_NAME` for hybrid targets; `stage_native_modules.sh` stages only product names and deletes short twins; install rejects short-name reappearance
+- **Fix:** generated/CMake product names are canonical and the Python frontend stages only those regular-file outputs; the short-name shell copier was retired
 - **Opened:** 2026-07-17
 
 ### L-005 — Linux multiplatform imageless Hello / boot.jar CI gate
@@ -806,7 +806,7 @@ Summary (details below; do not delete history):
 - **Area:** build
 - **Gap:** ~~Residual MinDalvikVM-Archive path assumptions in product scripts~~ **pure-vendor**.
 - **Fix / evidence:**
-  - Product CMake (`tools/verify/windows_x64_phase1`, `windows_x64_libcore_icu`, `native/`, Linux verify) already resolved via `${MDVM_NATIVE_SRC_ROOT_DIR}` → **`vendor/`**; `phase1.cmake` has no hard-coded archive absolutes.
+  - The maintained product CMake resolves `${MDVM_NATIVE_SRC_ROOT_DIR}` to **`vendor/`**; the former Windows phase/libcore alternative graphs were retired.
   - `tools/bootjar/build.sh` no longer auto-discovers sibling `MinDalvikVM-Archive(_)` for ICU/annotation stubs; requires nested `vendor/icu` + in-tree `compat/java-stubs` (expanded minimal android.annotation / android.compat.annotation set).
   - `MDVM_ARCHIVE` remains an optional non-default escape hatch only.
   - Docs/tests scrubbed: `README.md`, `native/{CMakeLists,generate}.sh`, `tools/bp2cmake` CODEGEN/codegen + unit tests point at multipath `vendor/`.

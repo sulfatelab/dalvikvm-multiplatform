@@ -5,4 +5,4 @@ License: MIT (`COPYING`)
 
 Used by AOSP `org.apache.harmony.xml.ExpatParser` (`libjavacore`) on Windows x64 PE.
 Only `lib/` sources are kept; built as a static library in
-`tools/verify/windows_x64_libcore_icu` and linked into `libjavacore.dll`.
+the unified generated product graph and linked into `libjavacore.dll`.
