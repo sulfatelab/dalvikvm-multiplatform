@@ -338,6 +338,16 @@ items are closed.
   repeated as Ninja no-ops. Cross and native compile databases agree at 1,816
   commands with all 29 `openjdkjvmti` commands prelude-free, both CET contracts
   pass 58/58, and all 187 host tests pass.
+- [x] Windows pointer-64 ART profiles now receive `__LP64__=1` from generated
+  target policy instead of inheriting their ABI layout selector only from the
+  temporary compatibility prelude. The policy explicitly admits `x86_64`,
+  `aarch64`, and `arm64ec`, while 32-bit Windows architectures do not receive
+  it; Linux continues to use Clang's native target macro. The admitted x86-64
+  graph emits the definition on all 16 ART-tree modules and 821 compile
+  commands, including all 29 prelude-free JVMTI commands. Cross and native
+  Windows each completed the resulting 842-action clean-equivalent rebuild at
+  32/16 jobs and repeated as Ninja no-ops; Linux remained a no-op, both CET
+  contracts pass 58/58, and all 187 host tests pass.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to

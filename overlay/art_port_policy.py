@@ -80,6 +80,12 @@ def _global_policy(profile: TargetProfile) -> GlobalPolicy:
         return GlobalPolicy(**common)
     if profile.target_platform == "windows":
         common["name_map"] = {**_COMMON_NAME_MAP, "libcap": "cap"}
+        if profile.target_arch in ("x86_64", "aarch64", "arm64ec"):
+            # ART uses __LP64__ as its 64-bit pointer-layout selector even on
+            # Windows LLP64 targets where Clang does not define it itself.
+            # Keep that ABI contract in target policy rather than inheriting
+            # it from the temporary compatibility prelude.
+            common["art_defines"] = [*common["art_defines"], "__LP64__=1"]
         common["drop_cflags"] = [
             "-Werror",
             "-Wthread-safety",

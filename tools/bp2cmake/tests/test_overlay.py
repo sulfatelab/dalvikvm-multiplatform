@@ -131,6 +131,8 @@ def test_unified_overlay_factory_selects_current_target_policy():
     )
     assert linux.global_policy.add_ldflags == []
     assert windows.global_policy.add_ldflags == ["LINKER:/CETCOMPAT:NO"]
+    assert "__LP64__=1" not in linux.global_policy.art_defines
+    assert "__LP64__=1" in windows.global_policy.art_defines
     assert linux.policy_for("libart-compiler").kind == "shared"
     compiler = windows.policy_for("libart-compiler")
     assert compiler.kind == "shared"
