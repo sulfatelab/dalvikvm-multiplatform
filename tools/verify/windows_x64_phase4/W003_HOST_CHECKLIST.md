@@ -1,4 +1,10 @@
-# W-003 native Windows acceptance checklist
+# Historical W-003 native Windows acceptance checklist
+
+This checklist applies only to the already issued package and its immutable
+returned evidence. The repository package producer and packaged-runner source
+were retired after the unified `stage:w003` product and frame-attribution
+variant passed on Windows Server 2025 and repeated as Ninja no-ops. For a new
+run, use `tools/build_art.py test --stage w003`; do not reconstruct this package.
 
 Use this package on the authoritative Windows Server 2025 Datacenter
 Evaluation x64 build-26100 host. The former Windows 10 host is unavailable for

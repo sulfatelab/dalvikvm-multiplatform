@@ -62,7 +62,8 @@ def main() -> int:
             raise RuntimeError(f"{art_path}: missing fail-closed marker {marker!r}")
 
     active_scripts = (
-        "tools/verify/windows_x64_phase4/run_critical_native_probe.sh",
+        "tests/support/windows/w003_managed_gate.py",
+        "tests/CMakeLists.txt",
         "tools/verify/windows_x64_phase4/run_jvmti_force_probe.sh",
         "tools/verify/windows_x64_phase4/run_math_critical_probe.sh",
         "tests/support/windows/w002_managed_entry_gate.py",

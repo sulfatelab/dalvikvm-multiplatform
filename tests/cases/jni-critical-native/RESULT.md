@@ -42,14 +42,14 @@ method-tracing transitions:
 | Default corrected dual view | 3/3 | 3/3 | 3/3 |
 | J-1 diagnostic view | 3/3 | 3/3 | 3/3 |
 
-Transitional compatibility command:
+Authoritative command on the 16 GiB Windows VM:
 
-```sh
-bash tools/verify/windows_x64_phase4/run_critical_native_probe.sh
+```text
+python tools/build_art.py test --target-id windows-x86_64-msvc --build-type RelWithDebInfo --stage w003 --parallel 16
 ```
 
-The transitional compatibility harness requires both the probe success marker and
-`main end exception=0`. Its final summary was:
+The retired compatibility harness required both the probe success marker and
+`main end exception=0`. Its historical final summary was:
 
 ```text
 CriticalNative acceptance: dual=6/6 float+signature runs + 3/3 instrumentation; j1=6/6 float+signature runs + 3/3 instrumentation
@@ -197,8 +197,7 @@ transition in both memory modes; see
 The same ART build also passed:
 
 - Windows x64 `art` and `dalvikvm` build;
-- `../../../tools/verify/windows_x64_phase4/run_native_abi_probe.sh`: default
-  7/7 mixed/high-FP normal/FastNative checks
+- unified `managed_native_abi`: default 7/7 mixed/high-FP normal/FastNative checks
   across rebinding and method-tracing phases with no extra target compilation;
 - `../../../tools/verify/windows_x64_phase4/run_jvmti_force_probe.sh`: 3/3
   dual-view and 3/3 J-1 forced-interpreter
@@ -222,7 +221,7 @@ Related files:
 - `probe.c`
 - `CriticalNativeProbe.java`
 - `CriticalNativeDlsymProbe.java`
-- `../../../tools/verify/windows_x64_phase4/run_critical_native_probe.sh`
+- `../../../tests/support/windows/w003_managed_gate.py`
 - `../../../vendor/art/openjdkjvm/OpenjdkJvm.cc`
 - `../../../vendor/art/openjdkjvm/openjdkjvm_memory_windows.cc`
 - `../../../win32_open_items.md` W-024

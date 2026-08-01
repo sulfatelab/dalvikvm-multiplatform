@@ -34,11 +34,11 @@ default native-JIT policy and the managed-JIT control environment variables.
   The historical check searched only for
   `Hello from dalvikvm!` and was a false-positive because that text can be
   printed before `main end exception=1`.
-- `run_native_abi_probe.sh` provides the focused acceptance control: the
+- unified `managed_native_abi` provides the focused acceptance control: the
   mixed/high-FP normal/FastNative matrix compiles 7/7 targets by default across
   initial, unregister/dlsym, re-register, and method-tracing phases without
   extra target compilation or a leftover trace file.
-- `run_critical_native_probe.sh` separately verifies registered and unresolved
+- unified `managed_critical_native` separately verifies registered and unresolved
   CriticalNative calls during and after method tracing in both J-1 and the
   corrected dual-view mode.
 - `ART_WINDOWS_X64_JIT=0` cleanly disables all JIT while keeping nterp.

@@ -29,7 +29,7 @@ virtual stage:
 
 ```text
 python tools/build_art.py configure --target-id windows-x86_64-msvc --build-type RelWithDebInfo
-python tools/build_art.py test --target-id windows-x86_64-msvc --build-type RelWithDebInfo --stage w002 --parallel 32
+python tools/build_art.py test --target-id windows-x86_64-msvc --build-type RelWithDebInfo --stage w002 --parallel 16
 ```
 
 A fresh Windows Server 2025 x86-64 product tree built 1,485 Ninja edges and
@@ -118,7 +118,7 @@ edges, passed the structural CTest gate, and repeated as a Ninja no-op.
 | W-010/W-014 complete E9 native host matrix | **PASS, 30/30 on build 26100** | guarantee-aware excluded-low accounting; switch/nterp/JIT managed SOE; zero handled dumps; five valid static/JIT/OSR fatal dumps |
 | FS-1 RelWithDebInfo/Debug stack high-water | **PASS in unified native Stage-8 and historical package on build 26100** | unified `win32-stack-high-water` variant: switch/nterp/JIT, four complete records each; current RelWithDebInfo minimum margin 6448 bytes, Debug quick minimum 37120 bytes; no dumps; structural reviewer passed |
 | FS-2 native debugger/CET/embedding/exception-XMM matrix | **PASS on native build 26100** | `evidence/fs2_w010_w014_native/ACCEPTANCE.md`; first-chance JIT NPE continue, explicit SOE no AV, nine incompatible CET rejections plus safe-policy acceptance, JNI UEF teardown, and 2x nterp/switch/JIT exception-XMM runs |
-| Full suite | **PASS** | `run_all_wine_gates.sh` |
+| Historical full Wine suite | **PASS** | `run_all_wine_gates.sh`; W-003 runtime coverage has since moved to unified native CTest |
 
 Evidence: `evidence/all_wine_gates.txt`, `evidence/crashnative.txt`
 
@@ -141,9 +141,8 @@ PASS native_crash_aborts
 | W-002 OSR adapters | `quick_entrypoints_x86_64.S`; `mterp/x86_64ng/main.S` |
 | W-002 unified probes and reviewer | `tests/cases/{attached-thread-entry,osr-unwind}`; `tests/support/windows/{w002_managed_entry_gate,check_w002_managed_entries}.py` |
 | W-003 XMM boundary and structural gate | `quick_entrypoints_x86_64.S`; `check_w003_quick_boundaries.py` |
-| W-003 attributed frame-family gate | `../../../tests/cases/w003-frame-probe/`; `run_w003_frame_probe.sh` |
-| W-003 XMM runtime sentinel | `../../../tests/cases/w003-xmm-sentinel/`; `run_w003_xmm_sentinel.sh` |
-| W-003 native package and evidence | `package_windows_x64_w003.sh`; `evidence/w003_host/ACCEPTANCE.md` |
+| W-003 unified managed gates | `../../../tests/cases/{jni-critical-native,jni-native-abi,w003-frame-probe,w003-xmm-sentinel}/`; `../../../tests/support/windows/w003_managed_gate.py` |
+| W-003 historical native package evidence | `evidence/w003_host/ACCEPTANCE.md`; `W003_HOST_CHECKLIST.md` |
 | W-014 native stack/pthread/page/growth/RX/CET gates | `tests/cases/pthread-once/`; `tests/cases/thread-stack/`; `tests/cases/stack-page-growth/`; `tests/cases/stack-executable-memory/`; `tests/cases/cet-stack-policy/`; `tests/support/runtime_gate.py` |
 | W-010 Stage C adapter and probes | `tests/cases/fault-record/probe.cc`; `tests/cases/sigchain-fault/probe.cc`; `run_fault_adapter_probe.sh`; `vendor/art/runtime/multiplatform/windows/sigchain_windows.cc` |
 | W-010 Stage D activation and stress | `src/W010ManagedFaultProbe.java`; `run_w010_managed_fault_probe.sh`; common runtime null/SO flags and early nterp range registration |
@@ -167,7 +166,7 @@ Focused W-002 native acceptance:
 
 ```text
 python tools/build_art.py configure --target-id windows-x86_64-msvc --build-type RelWithDebInfo
-python tools/build_art.py test --target-id windows-x86_64-msvc --build-type RelWithDebInfo --stage w002 --parallel 32
+python tools/build_art.py test --target-id windows-x86_64-msvc --build-type RelWithDebInfo --stage w002 --parallel 16
 ```
 
 The former standalone package producer, Bash/Wine runners, package-only
@@ -175,17 +174,19 @@ PowerShell runner, and attach-only CMake graph were retired after this path
 passed natively and repeated as a Ninja no-op. Returned package evidence and
 hashes remain historical records.
 
-Focused W-003 native acceptance:
+Focused W-003 native acceptance on the 16 GiB Windows VM:
 
-```bash
-JOBS=32 WINEDEBUG=-all \
-  bash tools/windows_x64/host_package/package_windows_x64_w003.sh
-# Native PowerShell: .\scripts\RUN_W003_HOST.ps1
+```text
+python tools/build_art.py configure --target-id windows-x86_64-msvc --build-type RelWithDebInfo
+python tools/build_art.py test --target-id windows-x86_64-msvc --build-type RelWithDebInfo --stage w003 --parallel 16
+python tools/build_art.py configure --target-id windows-x86_64-msvc --build-type RelWithDebInfo --variant win32-frame-attribution
+python tools/build_art.py test --target-id windows-x86_64-msvc --build-type RelWithDebInfo --variant win32-frame-attribution --stage w003 --parallel 16
 ```
 
 The accepted Windows 10 build 19044 return has 19/19 PASS records over 14
 children, clean fatal/dump scans, 8/8 attributed frame runs, and 6/6 XMM
-sentinel runs. See `evidence/w003_host/ACCEPTANCE.md`.
+sentinel runs. That package is historical and its producer and repository-side
+runner are retired; see `evidence/w003_host/ACCEPTANCE.md`.
 
 Focused W-010/W-014 native Stage E gate:
 
@@ -200,9 +201,9 @@ Focused FS-1 RelWithDebInfo/Debug stack high-water gate:
 
 ```text
 python tools/build_art.py configure --target-id windows-x86_64-msvc --variant win32-stack-high-water --build-type RelWithDebInfo
-python tools/build_art.py test --target-id windows-x86_64-msvc --variant win32-stack-high-water --build-type RelWithDebInfo --stage w014 --parallel 32
+python tools/build_art.py test --target-id windows-x86_64-msvc --variant win32-stack-high-water --build-type RelWithDebInfo --stage w014 --parallel 16
 python tools/build_art.py configure --target-id windows-x86_64-msvc --variant win32-stack-high-water --build-type Debug
-python tools/build_art.py test --target-id windows-x86_64-msvc --variant win32-stack-high-water --build-type Debug --stage w014 --parallel 32
+python tools/build_art.py test --target-id windows-x86_64-msvc --variant win32-stack-high-water --build-type Debug --stage w014 --parallel 16
 ```
 
 The former phase-local CMake graph, Bash runner/package, and PowerShell package

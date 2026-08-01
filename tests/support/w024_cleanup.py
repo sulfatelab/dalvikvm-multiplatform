@@ -52,10 +52,10 @@ def audit_w024_cleanup(repo_root: Path = REPO_ROOT) -> list[str]:
         / "windows_x64_phase4"
         / "run_math_critical_probe.sh",
         repo_root
-        / "tools"
-        / "verify"
-        / "windows_x64_phase4"
-        / "run_native_abi_probe.sh",
+        / "tests"
+        / "support"
+        / "windows"
+        / "w003_managed_gate.py",
     )
     for path in native_jit_sources:
         if "ART_WINDOWS_X64_JIT_NATIVE" in _read_regular_text(path, repo_root, errors):

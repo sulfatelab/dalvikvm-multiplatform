@@ -731,7 +731,7 @@ is recognizing drive, root, and UNC absolute paths; Linux behavior is unchanged.
 
 The memory plan did not own that ABI repair. The compiled-JNI split, XMM moves,
 and mixed/high-FP matrix are landed; the acceptance probe is
-`tools/verify/windows_x64_phase4/run_native_abi_probe.sh`.
+unified `managed_native_abi` gate.
 
 Windows x64 now also builds ART's upstream `openjdkjvmti` sources as a separate
 `openjdkjvmti.dll`, matching Linux topology. A focused agent enables
@@ -918,7 +918,7 @@ The landed fix covers both defects:
    and Linux assembly were unchanged in that stage. W-004 later replaced the
    Windows helper with a direct same-image data load, which does not clobber
    `r11`, and removed the now-unnecessary local reload. Linux remains unchanged.
-4. `run_critical_native_probe.sh` covers unresolved `()J`, registered zero,
+4. Unified `managed_critical_native` covers unresolved `()J`, registered zero,
    FP-only, mixed integer/FP, stack-spilled signatures, scalar returns, and the
    corresponding unresolved exported app-JNI dlsym shapes. JIT dump inspection
    confirmed `rsp+0x20`/`rsp+0x28` stack slots.
@@ -1090,7 +1090,7 @@ completed JIT-1 through JIT-5 gates.
 | Dynamic PE unwind metadata | `vendor/art/compiler/utils/x86_64/windows_x64_unwind_info.h`; `vendor/art/runtime/multiplatform/windows/jit_unwind_windows.*`; `vendor/art/runtime/jit/{jit_code_cache,jit_memory_region}.*` |
 | D-1 Thread-address helper | `vendor/art/compiler/utils/x86_64/assembler_x86_64.*` |
 | W-002 OSR entry adapters | `vendor/art/runtime/arch/x86_64/quick_entrypoints_x86_64.S`; `vendor/art/runtime/interpreter/mterp/x86_64ng/main.S` |
-| W-003 frame-family/XMM acceptance | `tools/verify/windows_x64_phase4/run_w003_frame_probe.sh`; `tests/cases/w003-frame-probe/RESULT.md`; `tests/cases/w003-xmm-sentinel/RESULT.md`; `tools/verify/windows_x64_phase4/evidence/w003_host/ACCEPTANCE.md` |
+| W-003 frame-family/XMM acceptance | unified `managed_w003_frame` and `managed_w003_xmm_sentinel`; `tests/cases/w003-frame-probe/RESULT.md`; `tests/cases/w003-xmm-sentinel/RESULT.md`; historical `tools/verify/windows_x64_phase4/evidence/w003_host/ACCEPTANCE.md` |
 | W-025 JIT-2 mapping/policy acceptance | `tools/verify/windows_x64_w025/RESULT-jit2-native.md`; `tools/verify/windows_x64_w025/evidence/jit2_native/ACCEPTANCE.md` |
 | W-025 JIT-3/FS-3 lifecycle/unwind acceptance | `tools/verify/windows_x64_w025/RESULT-jit3-native.md`; `tools/verify/windows_x64_w025/evidence/jit3_native/ACCEPTANCE.md` |
 | W-025 JIT-4 final native regression | `tools/verify/windows_x64_w025/RESULT-jit4-native.md`; `tools/verify/windows_x64_w025/evidence/jit4_native/ACCEPTANCE.md` |

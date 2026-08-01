@@ -124,9 +124,11 @@ Linux and Windows x86-64 identities. Its heavier 1024 MiB gate is separately
 Windows-specific. This is intentional per-test applicability: sharing one Java
 source and Python runner does not imply that every resource profile or future
 architecture is supported.
-Legacy shell runners and the few retained per-probe CMake entry points use
-these canonical files as temporary compatibility shims; they must be replaced by the
-unified Python/CMake/Ninja path before `tools/verify` can be removed.
+Remaining legacy shell runners and retained per-probe CMake entry points use
+canonical files as temporary compatibility shims; they must be replaced by the
+unified Python/CMake/Ninja path before `tools/verify` can be removed. W-003 has
+already removed its four standalone CMake graphs, shell runners, and package
+producer after unified native acceptance.
 The six shared Windows x86-64 source/object/PE reviewers formerly stored beside
 the retired Phase-1 product graph now live under `support/windows/`. Their
 defaults use canonical `out/<target-id>/<build-type>` paths; transitional host
@@ -275,7 +277,7 @@ Each applicable managed probe depends on those boot classes. The aggregate
 `art-managed-tests` target builds only applicable managed artifacts:
 
 ```text
-python tools/build_art.py build --target-id windows-x86_64-msvc --cmake-target art-managed-tests --parallel 32
+python tools/build_art.py build --target-id windows-x86_64-msvc --cmake-target art-managed-tests --parallel 16
 ```
 
 All classes, DEX files, deterministic JARs, argument files, manifests, and
@@ -483,14 +485,17 @@ python tools/build_art.py configure --target-id windows-x86_64-msvc
 Build and run the applicable catalog scope:
 
 ```text
-python tools/build_art.py test --target-id windows-x86_64-msvc --parallel 32
+python tools/build_art.py test --target-id windows-x86_64-msvc --parallel 16
 ```
 
 Select one virtual stage:
 
 ```text
-python tools/build_art.py test --target-id windows-x86_64-msvc --stage w014 --parallel 32
+python tools/build_art.py test --target-id windows-x86_64-msvc --stage w014 --parallel 16
 ```
+
+Use 16 jobs on the current 16 GiB native Windows VM. Linux-hosted cross builds
+on agent01 may use 32 jobs.
 
 Use `--build-type Debug` or `--build-type RelWithDebInfo` when the non-default
 configuration is required. The frontend uses the corresponding canonical

@@ -128,13 +128,8 @@ product, or variant tree.
 The following command and output are the historical Wine qualification that
 preceded the unified native path.
 
-Historical command:
-
-```bash
-REPEATS=2 bash tools/verify/windows_x64_phase4/run_w003_frame_probe.sh
-```
-
-Result:
+The retired compatibility runner executed two repetitions in each mode. Its
+accepted result was:
 
 ```text
 W-003 frame probe int run=1 PASS
@@ -161,16 +156,11 @@ W-003 XMM sentinel: PASS, 2/2 nterp + 2/2 switch + 2/2 JIT
 Full Phase 4 Wine aggregate: PASS
 ```
 
-## Native Windows package
+## Historical native Windows package
 
-The focused native-host package is built and verified with:
-
-```bash
-JOBS=32 WINEDEBUG=-all \
-  bash tools/windows_x64/host_package/package_windows_x64_w003.sh
-```
-
-The pipeline reruns the structural checker, the 8-process frame matrix, and
+The standalone package producer was retired after the unified native product
+and frame-attribution trees passed and repeated as Ninja no-ops. The already
+issued historical pipeline reran the structural checker, the 8-process frame matrix, and
 the 6-process XMM matrix before staging. It then checks package hashes and PE
 exports, runs one independent Wine smoke per mode from the staged tree,
 restores the product `art.dll`, removes runtime output, rebuilds the manifests,
@@ -215,5 +205,5 @@ remain with W-010 as documented in the
 
 - `probe.c`
 - `W003FrameProbe.java`
-- `../../../tools/verify/windows_x64_phase4/run_w003_frame_probe.sh`
+- `../../../tests/support/windows/w003_managed_gate.py`
 - `../w003-xmm-sentinel/RESULT.md`

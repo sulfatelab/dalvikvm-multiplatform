@@ -39,10 +39,10 @@ The focused compiled-JNI acceptance gate now passes the mixed/high-FP matrix:
 | Default native compilation | PASS: exit 0, three exact binding phases, 7/7 targets and exactly 7 compile records |
 | Default native compilation plus method tracing | PASS: tracing mode `0 -> 1 -> 0`, exact during/after values, exactly 7 target compile records |
 
-Transitional compatibility command:
+Authoritative command on the 16 GiB Windows VM:
 
-```sh
-bash tools/verify/windows_x64_phase4/run_native_abi_probe.sh
+```text
+python tools/build_art.py test --target-id windows-x86_64-msvc --build-type RelWithDebInfo --stage w003 --parallel 16
 ```
 
 The post-cleanup run reported:
@@ -191,5 +191,5 @@ is recorded in
 
 - `probe.c`
 - `FastNativeAbiProbe.java`
-- `../../../tools/verify/windows_x64_phase4/run_native_abi_probe.sh`
+- `../../../tests/support/windows/w003_managed_gate.py`
 - `../../../win32_open_items.md` W-024

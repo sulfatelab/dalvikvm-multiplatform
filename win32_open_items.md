@@ -613,7 +613,7 @@ Summary (details below; do not delete history):
   4. A filtered Wine run compiled only `System.arraycopy` and then failed before the probe success marker; with the native-method gate closed, the same probe exits 0. The older Hello T5 was a false-positive because it searched for the greeting even when `main end exception=1` followed it.
   5. The managed/native register-table split is now implemented. Filtered `System.arraycopy` PerfSmoke and unrestricted native-gate-open Hello with compiled `StringFactory.newStringFromBytes` pass.
   6. The expanded probe initially failed compilation at `Move XMM: 3, XMM: 0 unimplemented`. Its first managed FP argument arrives in `XMM0` but, after the two JNI implicit arguments and a core argument, must occupy unified Windows x64 native slot 3 in `XMM3`. `X86_64JNIMacroAssembler::Move()` now emits `movss`/`movsd` for XMM-to-XMM moves, with a focused assembler regression test.
-  7. `run_native_abi_probe.sh` now builds a dedicated PE DLL and covers registered/unresolved normal and FastNative calls, static/instance methods, references, five managed core and six managed FP ordinals, extensive stack spills, and double returns. The gate-open run compiles 7/7 distinct targets and the gate-closed control compiles 0/7; five complete focused runs passed.
+  7. Unified `managed_native_abi` builds the dedicated PE DLL and covers registered/unresolved normal and FastNative calls, static/instance methods, references, five managed core and six managed FP ordinals, extensive stack spills, and double returns. The gate-open run compiles 7/7 distinct targets and the gate-closed control compiles 0/7; five complete focused runs passed.
   8. The expanded probe then calls `UnregisterNatives` on the compiled class, verifies dlsym phase values, installs a second six-method `RegisterNatives` table, and verifies alternate phase values. Exactly seven target compile records are permitted, proving the transitions reuse the existing compiled thunk set. Five complete transition runs passed.
   9. A third gate-open process enables method tracing through `VMDebug`, verifies tracing mode and exact values during/after tracing, deletes the trace output, and still observes exactly seven target compile records. Five complete instrumentation runs passed.
   10. The CriticalNative harness now repeats registered and unresolved mixed/spilled/scalar suites during and after method tracing in both memory modes. The default matrix passes 3/3 instrumentation runs per mode with explicit trace cleanup.
@@ -672,8 +672,8 @@ Summary (details below; do not delete history):
   - `vendor/libcore/ojluni/src/main/java/java/lang/Math.java` (restored native CriticalNative ceil/floor)
   - `vendor/libcore/ojluni/src/main/native/Math.c` (one common ELF/PE registration table)
   - `vendor/art/runtime/interpreter/interpreter.cc` (exact `android-16.0.0_r4` parity)
-  - `tests/cases/jni-native-abi/` (canonical source/result) plus transitional `tools/verify/windows_x64_phase4/{run_native_abi_probe.sh,native_abi/}`
-  - `tests/cases/jni-critical-native/` (canonical source/result) plus transitional `tools/verify/windows_x64_phase4/{run_critical_native_probe.sh,critical_native/}`
+  - `tests/cases/jni-native-abi/` (canonical source/result) plus unified `managed_native_abi`
+  - `tests/cases/jni-critical-native/` (canonical source/result) plus unified `managed_critical_native`
   - `tests/cases/jvmti-force/` plus the transitional managed runner and historical result under `tools/verify/windows_x64_phase4/`
   - `tools/verify/windows_x64_phase4/{run_math_critical_probe.sh,src/MathCriticalProbe.java,RESULT-math-critical.md}`
   - `tools/verify/windows_x64_phase4/RESULT-interpreter-jni-fallback.md` (accepted Wine and native-Windows tripwire reachability audit)

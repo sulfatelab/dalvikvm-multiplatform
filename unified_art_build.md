@@ -120,6 +120,14 @@ items are closed.
   identical repeat was a Ninja no-op. The reviewer tools are explicit
   frontend-resolved fingerprint inputs, so Linux-hosted cross configuration
   uses host `llvm-readobj`/`llvm-objdump` without a target `.exe` suffix.
+- [x] After unified native W-003 acceptance, its four standalone probe CMake
+  graphs, four Bash/Wine runners, Bash host packager, and repository-side
+  PowerShell runner were removed. The broader Phase-4 aggregate now consumes
+  only the unified structural reviewer. Later W-004 and W-010 historical
+  package flows acquire W-003 DLL/JAR inputs from an explicitly configured
+  unified Windows target tree and retain their own package-level Wine/native
+  behavioral matrices. Historical checklists, accepted hashes, and returned
+  evidence remain readable.
 - [x] `art.dll` no longer uses `WINDOWS_EXPORT_ALL_SYMBOLS`. Before the change,
   a Debug scan found 80,318 candidate exports and exceeded PE's 65,535-entry
   limit, while RelWithDebInfo exposed 17,112. ART's existing `EXPORT` boundary
@@ -356,7 +364,7 @@ verification directories. All 87 declarations own canonical source under
 source cases and all 48 Java sources have adjacent results, and shared stage
 analysis remains under `tests/stages/`. The old verification tree now contains
 zero Java sources and two uncatalogued native sources retained by unfinished
-legacy evidence paths. It still contains 58 shell scripts, nine PowerShell
+legacy evidence paths. It still contains 54 shell scripts, eight PowerShell
 scripts, and 27 Python scripts. Python checkers
 and reviewers may remain, but the unified frontend must invoke them through a
 declared stage instead of a phase-local product build.
@@ -926,9 +934,9 @@ commands, Linux command gates, and target-object reviewers use shell-free
 Python under `tests/support/`. Each source case has an adjacent result, while the
 W-003 cross-case analysis remains stage-owned without relocating source by
 stage. The base boot JAR and probe JARs are ordinary target-local Ninja outputs
-from configured JDK 21 and pinned D8. Legacy per-probe CMake entry points and
-shell runners temporarily reference canonical source; they no longer own
-copies. A portable VCS
+from configured JDK 21 and pinned D8. Remaining legacy per-probe CMake entry
+points and shell runners temporarily reference canonical source; W-003 has
+retired these compatibility paths. A portable VCS
 audit rejects tracked product/test binaries and archives
 while retaining the one named `vendor/r8/r8.jar` D8/R8 exception. The old Phase
 3 returned ZIP is retained under ignored `out/` storage, and its tracked result

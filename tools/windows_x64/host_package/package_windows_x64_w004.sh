@@ -4,11 +4,25 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/../../.." && pwd)"
 BUILD="${BUILD:-$REPO/build/windows_x64_phase1}"
+UNIFIED_BUILD="${UNIFIED_BUILD:-$REPO/out/windows-x86_64-msvc/RelWithDebInfo}"
 OUT="${1:-$REPO/dist/windows_x64_w004_host}"
 JOBS="${JOBS:-16}"
 WINEDEBUG="${WINEDEBUG:--all}"
 
 cmake --build "$BUILD" --target art openjdkjvmti -j"$JOBS"
+cmake --build "$UNIFIED_BUILD" --parallel "$JOBS" --target \
+  managed_critical_native managed_native_abi
+
+cp -a "$UNIFIED_BUILD/tests/libcriticalnativeprobe.dll" \
+  "$BUILD/libcriticalnativeprobe.dll"
+cp -a "$UNIFIED_BUILD/tests/libcriticalnativeprobe.dll" \
+  "$BUILD/criticalnativeprobe.dll"
+cp -a "$UNIFIED_BUILD/tests/libnativeabiprobe.dll" \
+  "$BUILD/libnativeabiprobe.dll"
+cp -a "$UNIFIED_BUILD/tests/managed/criticalnativeprobe.jar" \
+  "$BUILD/run/criticalnativeprobe.jar"
+cp -a "$UNIFIED_BUILD/tests/managed/fastnativeabiprobe.jar" \
+  "$BUILD/run/fastnativeabiprobe.jar"
 
 structural_output="$(
   python3 "$REPO/tests/support/windows/check_w004_runtime_load.py" \
@@ -16,10 +30,6 @@ structural_output="$(
 )"
 printf '%s\n' "$structural_output"
 
-REPEATS=1 WINEDEBUG="$WINEDEBUG" \
-  "$REPO/tools/verify/windows_x64_phase4/run_critical_native_probe.sh"
-WINEDEBUG="$WINEDEBUG" \
-  "$REPO/tools/verify/windows_x64_phase4/run_native_abi_probe.sh"
 REPEATS=1 WINEDEBUG="$WINEDEBUG" \
   "$REPO/tools/verify/windows_x64_phase4/run_jvmti_force_probe.sh"
 
@@ -109,6 +119,7 @@ root_commit=$(git -C "$REPO" rev-parse HEAD)
 art_branch=$(git -C "$REPO/vendor/art" branch --show-current)
 art_commit=$(git -C "$REPO/vendor/art" rev-parse HEAD)
 windows_x64_build=$BUILD
+unified_windows_build=$UNIFIED_BUILD
 windows_minimum_build=17134
 EOF
 

@@ -4,6 +4,9 @@ ROOT="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$ROOT/../../.." && pwd)"
 export BUILD="${BUILD:-$REPO/build/windows_x64_phase1}"
 export LINUX_BUILD="${LINUX_BUILD:-$REPO/build/native}"
+UNIFIED_BUILD="${UNIFIED_BUILD:-$REPO/out/windows-x86_64-msvc/RelWithDebInfo}"
+LLVM_READOBJ="${LLVM_READOBJ:-$(readlink -f "$(command -v llvm-readobj)")}"
+LLVM_OBJDUMP="${LLVM_OBJDUMP:-$(readlink -f "$(command -v llvm-objdump)")}"
 fail=0
 run() {
   local name="$1"; shift
@@ -21,17 +24,14 @@ run P4_W002_MANAGED_ENTRIES python3 \
   "$REPO/tests/support/windows/check_w002_managed_entries.py" --build "$BUILD"
 run P4_W003_QUICK_BOUNDARIES python3 \
   "$REPO/tests/support/windows/check_w003_quick_boundaries.py" \
-  --win-build "$BUILD" --linux-build "$LINUX_BUILD"
+  --build "$UNIFIED_BUILD" \
+  --variant product \
+  --llvm-readobj "$LLVM_READOBJ" \
+  --llvm-objdump "$LLVM_OBJDUMP"
 run P4_W010_EXPLICIT_STACK_CHECKS python3 \
   "$REPO/tests/support/windows/check_win32_explicit_stack_checks.py" \
   --repo "$REPO" --win-build "$BUILD" --linux-build "$LINUX_BUILD"
 run P4_W010_OSR_STATIC_UNWIND bash "$ROOT/run_osr_unwind_probe.sh"
-run P4_W003_FRAME_FAMILIES env \
-  PRODUCT_BUILD="$BUILD" \
-  BUILD="$REPO/build/windows_x64_w003_frames" \
-  REPEATS=2 \
-  bash "$ROOT/run_w003_frame_probe.sh"
-run P4_W003_XMM_SENTINEL bash "$ROOT/run_w003_xmm_sentinel.sh"
 run P4_W024_CLEANUP_SOURCE python3 "$REPO/tests/support/w024_cleanup.py"
 run P4_W010_FAULT_ADAPTER bash "$ROOT/run_fault_adapter_probe.sh"
 run P4_W010_JIT_UNWIND_SERIALIZER bash "$ROOT/run_jit_unwind_info_probe.sh"

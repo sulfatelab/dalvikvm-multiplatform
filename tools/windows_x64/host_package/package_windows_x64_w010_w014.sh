@@ -4,6 +4,7 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/../../.." && pwd)"
 BUILD="${BUILD:-$REPO/build/windows_x64_phase1}"
+UNIFIED_BUILD="${UNIFIED_BUILD:-$REPO/out/windows-x86_64-msvc/RelWithDebInfo}"
 LINUX_BUILD="${LINUX_BUILD:-$REPO/build/native}"
 HYBRID="${MDVM_HYBRID_BUILD:-$REPO/build/windows_x64_libcore_icu}"
 OUT="${1:-$REPO/dist/windows_x64_w010_w014_host}"
@@ -23,6 +24,12 @@ cmake --build "$BUILD" --target \
   win32_sigchain_probe \
   win32_osr_unwind_probe \
   -j"$JOBS"
+cmake --build "$UNIFIED_BUILD" --parallel "$JOBS" --target \
+  managed_w003_xmm_sentinel
+cp -a "$UNIFIED_BUILD/tests/libw003xmmsentinel.dll" \
+  "$BUILD/libw003xmmsentinel.dll"
+cp -a "$UNIFIED_BUILD/tests/managed/w003xmmsentinelprobe.jar" \
+  "$BUILD/run/w003xmmsentinelprobe.jar"
 
 cmake --build "$HYBRID" --target openjdk -j"$JOBS"
 bash "$REPO/tools/verify/windows_x64_libcore_icu/install_into_phase1.sh" "$HYBRID" "$BUILD"
@@ -46,8 +53,6 @@ explicit_stack_output="$(
     --linux-build "$LINUX_BUILD"
 )"
 printf '%s\n' "$explicit_stack_output"
-WINEDEBUG="$WINEDEBUG" REPEATS=2 \
-  "$REPO/tools/verify/windows_x64_phase4/run_w003_xmm_sentinel.sh"
 WINEDEBUG="$WINEDEBUG" "$REPO/tools/verify/windows_x64_phase4/run_jit_fatal_unwind.sh"
 WINEDEBUG="$WINEDEBUG" "$REPO/tools/verify/windows_x64_phase4/run_osr_fatal_unwind.sh"
 
@@ -167,6 +172,7 @@ root_commit=$(git -C "$REPO" rev-parse HEAD)
 art_branch=$(git -C "$REPO/vendor/art" branch --show-current)
 art_commit=$(git -C "$REPO/vendor/art" rev-parse HEAD)
 windows_x64_build=$BUILD
+unified_windows_build=$UNIFIED_BUILD
 windows_minimum_build=17134
 stage=E9-configured-guarantee-explicit-stack-checks
 EOF

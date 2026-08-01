@@ -63,11 +63,8 @@ The unified `windows_w003_quick_boundary_structure` reviewer verifies:
 
 It consumes explicit frontend-resolved host LLVM tools, so a Linux-hosted
 Windows cross build does not append the target `.exe` suffix. The following
-transitional runner description is retained as historical context; that runner
-is no longer the maintained command path.
-
-The former
-`../../../tools/verify/windows_x64_phase4/run_w003_xmm_sentinel.sh` verifies:
+retired-runner description is retained as historical context; the standalone
+shell path is no longer maintained. It verified:
 
 - the JNI symbol is exported from `libw003xmmsentinel.dll`;
 - the PE object reserves/releases exactly 200 bytes;
@@ -81,15 +78,10 @@ does not add its own XMM6-XMM15 spill around `CallStaticIntMethod`, so the
 sentinel observes the ART boundary rather than a compiler-generated local
 repair.
 
-## Wine matrix
+## Historical Wine matrix
 
-Command:
-
-```bash
-REPEATS=2 bash tools/verify/windows_x64_phase4/run_w003_xmm_sentinel.sh
-```
-
-Result:
+The retired compatibility runner executed two repetitions in each mode. Its
+accepted result was:
 
 ```text
 W-003 XMM sentinel nterp run=1 PASS
@@ -153,5 +145,5 @@ W-010/W-014 package described in
 - `probe.c`
 - `sentinel_x86_64.S`
 - `W003XmmSentinelProbe.java`
-- `../../../tools/verify/windows_x64_phase4/run_w003_xmm_sentinel.sh`
+- `../../../tests/support/windows/w003_managed_gate.py`
 - `../../stages/w003/ANALYSIS.md`
