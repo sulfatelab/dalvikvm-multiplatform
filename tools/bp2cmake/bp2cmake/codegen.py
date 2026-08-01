@@ -269,14 +269,13 @@ def gen_asm_defines(cfg: CodegenConfig) -> str:
     cmd += ["-I", cfg.out("art/aconfig/include")]
     # project-owned compat shims (android-base/stringify.h) the archive lacks.
     cmd += ["-I", cfg.compat_inc()]
-    # PE target: use the Windows ABI and the same force-included compatibility
-    # prelude as the real ART build before standard-library headers are parsed.
+    # PE target: use the Windows ABI and its selected system headers. Source
+    # and project compatibility headers own their declarations explicitly.
     os_name = (cfg.asm_target_os or "linux").lower()
     if os_name in ("windows", "win32", "windows_x64", "pe"):
         cmd += ["--target=x86_64-pc-windows-msvc", "-nostdinc++"]
         for inc in cfg.asm_target_include_dirs:
             cmd += ["-isystem", inc]
-        cmd += ["-include", os.path.join(cfg.compat_inc(), "mdvm_windows_x64_prelude.h")]
     for m in _asm_defines_macros_for(cfg):
         cmd += ["-D" + m]
     for fi in cfg.asm_force_includes:

@@ -19,63 +19,22 @@ def test_linux_openjdkjvmti_toolchain_drift_is_module_scoped():
     assert "ART_LIBARTBASE_BASE_STRLCPY_H_" in prelude
 
 
-def test_windows_platform_prelude_has_reviewed_target_scope():
+def test_windows_product_targets_use_explicit_definitions_without_a_prelude():
     cmake = (
         REPO_ROOT / "native" / "cmake" / "ArtCompatibility.cmake"
     ).read_text(encoding="utf-8")
-    target_prelude = (
-        "target_compile_options(${_t} PRIVATE\n"
-        '                "$<$<COMPILE_LANGUAGE:C,CXX>:SHELL:-include ${_PRELUDE}>")'
+    test_cmake = (REPO_ROOT / "tests" / "CMakeLists.txt").read_text(encoding="utf-8")
+    codegen = (
+        REPO_ROOT / "tools" / "bp2cmake" / "bp2cmake" / "codegen.py"
+    ).read_text(encoding="utf-8")
+    windows_prelude = (
+        REPO_ROOT / "compat" / "include" / "mdvm_windows_x64_prelude.h"
     )
-    windows_guarded_prelude = (
-        'if(ART_TARGET_PLATFORM STREQUAL "windows" AND\n'
-        "           NOT _t IN_LIST _art_windows_prelude_free_targets)\n"
-        f"            {target_prelude}\n"
-        "        endif()"
-    )
-    prelude_free_targets = (
-        "androidio",
-        "art",
-        "art-compiler",
-        "art-dex2oat",
-        "art-disassembler",
-        "artbase",
-        "artpalette",
-        "base",
-        "crypto_static",
-        "dalvikvm",
-        "dexfile",
-        "dex2oat",
-        "elffile",
-        "expat",
-        "fdlibm",
-        "icui18n",
-        "icu",
-        "icu_jni",
-        "icuuc",
-        "icuuc_stubdata",
-        "javacore",
-        "log",
-        "lzma",
-        "nativebridge",
-        "nativehelper",
-        "nativeloader",
-        "odrstatslog",
-        "openjdk",
-        "openjdkjvm",
-        "openjdkjvmti",
-        "profile",
-        "procinfo",
-        "sigchain",
-        "unwindstack",
-        "windows_x64_posix_stubs",
-        "ziparchive",
-    )
-
-    assert cmake.count(target_prelude) == 1
-    assert windows_guarded_prelude in cmake
-    scope = cmake.split("set(_art_windows_prelude_free_targets", 1)[1].split(")", 1)[0]
-    assert set(scope.split()) == set(prelude_free_targets)
+    assert "mdvm_windows_x64_prelude.h" not in cmake
+    assert "mdvm_windows_x64_prelude.h" not in test_cmake
+    assert "mdvm_windows_x64_prelude.h" not in codegen
+    assert not windows_prelude.exists()
+    assert "_art_windows_prelude_free_targets" not in cmake
     for definition in (
         "_CRT_SECURE_NO_WARNINGS",
         "NOMINMAX",
@@ -83,21 +42,25 @@ def test_windows_platform_prelude_has_reviewed_target_scope():
         "NOGDI",
     ):
         assert definition in cmake
-    assert "_t IN_LIST _art_windows_prelude_free_targets" in cmake
+    assert 'if(ART_TARGET_PLATFORM STREQUAL "windows")\n' in cmake
+    assert "target_compile_definitions(${_t} PRIVATE" in cmake
     assert "get_target_property(_art_dex2oat_sources art-dex2oat SOURCES)" not in cmake
     assert (
         "${MDVM_NATIVE_SRC_ROOT_DIR}/libbase/hex.cpp\n"
         '    PROPERTIES COMPILE_OPTIONS "-include;stdint.h")'
     ) in cmake
+    for relative in (
+        "tests/cases/jit-mapping/probe.cc",
+        "tests/cases/jit-section-policy/probe.cc",
+    ):
+        source = (REPO_ROOT / relative).read_text(encoding="utf-8")
+        assert source.index("#include <windows.h>") < source.index("#include <psapi.h>")
 
 
 def test_windows_sdk_macro_hygiene_is_header_owned():
     windows = (REPO_ROOT / "compat" / "include" / "windows.h").read_text(
         encoding="utf-8"
     )
-    prelude = (
-        REPO_ROOT / "compat" / "include" / "mdvm_windows_x64_prelude.h"
-    ).read_text(encoding="utf-8")
     strings = (REPO_ROOT / "compat" / "include" / "string.h").read_text(
         encoding="utf-8"
     )
@@ -109,13 +72,8 @@ def test_windows_sdk_macro_hygiene_is_header_owned():
     assert "#undef ERROR" in windows
     assert "#undef __reserved" in windows
     assert "#undef ZeroMemory" not in windows
-    assert "#undef CONST" not in prelude
-    assert "#undef ERROR" not in prelude
-    assert "#undef __reserved" not in prelude
     assert "#define strcasecmp _stricmp" in strings
     assert "#define strncasecmp _strnicmp" in strings
-    assert "#define strcasecmp _stricmp" not in prelude
-    assert "#define strncasecmp _strnicmp" not in prelude
 
 
 def test_windows_artbase_uses_project_mman_and_sdk_macro_hygiene():
@@ -148,15 +106,9 @@ def test_windows_dex2oat_compatibility_is_header_and_source_scoped():
     oat_writer = (
         REPO_ROOT / "compat" / "include" / "mdvm_windows_oat_writer_compat.h"
     ).read_text(encoding="utf-8")
-    prelude = (
-        REPO_ROOT / "compat" / "include" / "mdvm_windows_x64_prelude.h"
-    ).read_text(encoding="utf-8")
-
     assert "struct mallinfo" in malloc
     assert "MDVM_WINDOWS_DEX2OAT_COMPAT" in malloc
     assert "class OatWriter;" in oat_writer
-    assert "struct mallinfo" not in prelude
-    assert "class OatWriter;" not in prelude
     assert cmake.count("mdvm_windows_oat_writer_compat.h") == 1
     assert "art/dex2oat/linker/oat_writer.cc" in cmake
 
@@ -171,9 +123,6 @@ def test_windows_openjdkjvm_uses_explicit_source_and_header_contracts():
     stdlib = (REPO_ROOT / "compat" / "include" / "stdlib.h").read_text(
         encoding="utf-8"
     )
-    prelude = (
-        REPO_ROOT / "compat" / "include" / "mdvm_windows_x64_prelude.h"
-    ).read_text(encoding="utf-8")
     stubs = (
         REPO_ROOT / "compat" / "src" / "windows_x64_posix_stubs.c"
     ).read_text(encoding="utf-8")
@@ -184,7 +133,6 @@ def test_windows_openjdkjvm_uses_explicit_source_and_header_contracts():
     assert "for (uint32_t i = 0;; ++i)" in atomic_pair
     assert "#include_next <stdlib.h>" in stdlib
     assert "int posix_memalign(void** memptr, size_t alignment, size_t size);" in stdlib
-    assert "int posix_memalign(void** memptr, size_t alignment, size_t size);" not in prelude
     assert "int posix_memalign(void** memptr, size_t alignment, size_t size)" in stubs
 
 
@@ -195,13 +143,8 @@ def test_windows_art_compiler_owns_rand_r_contract():
     stdlib = (REPO_ROOT / "compat" / "include" / "stdlib.h").read_text(
         encoding="utf-8"
     )
-    prelude = (
-        REPO_ROOT / "compat" / "include" / "mdvm_windows_x64_prelude.h"
-    ).read_text(encoding="utf-8")
-
     assert "#include <stdlib.h>" in scheduler
     assert "static inline int rand_r(unsigned int* seed)" in stdlib
-    assert "static inline int rand_r(unsigned int* seed)" not in prelude
 
 
 def test_windows_art_runtime_owns_platform_contracts():
@@ -236,17 +179,12 @@ def test_windows_art_runtime_owns_platform_contracts():
     types = (REPO_ROOT / "compat" / "include" / "sys" / "types.h").read_text(
         encoding="utf-8"
     )
-    prelude = (
-        REPO_ROOT / "compat" / "include" / "mdvm_windows_x64_prelude.h"
-    ).read_text(encoding="utf-8")
-
     assert "std::atomic<uint>" not in mutex
     assert "static constexpr uint " not in region
     assert "static_cast<uint>(state_)" not in region
     assert "static constexpr uint " not in mark_compact
     assert "#include <signal.h>" in runtime_common
     assert "typedef int id_t;" in types
-    assert "typedef int id_t;" not in prelude
 
 
 def test_windows_openjdkjvmti_owns_sched_yield_declaration():
@@ -265,9 +203,6 @@ def test_windows_dex2oat_posix_declarations_are_header_owned():
     stat = (REPO_ROOT / "compat" / "include" / "sys" / "stat.h").read_text(
         encoding="utf-8"
     )
-    prelude = (
-        REPO_ROOT / "compat" / "include" / "mdvm_windows_x64_prelude.h"
-    ).read_text(encoding="utf-8")
     stubs = (
         REPO_ROOT / "compat" / "src" / "windows_x64_posix_stubs.c"
     ).read_text(encoding="utf-8")
@@ -275,8 +210,6 @@ def test_windows_dex2oat_posix_declarations_are_header_owned():
     assert "#include_next <stdio.h>" in stdio
     assert "ssize_t getline(char** lineptr, size_t* capacity, FILE* stream);" in stdio
     assert "int fchmod(int fd, int mode);" in stat
-    assert "ssize_t getline(char** lineptr, size_t* capacity, FILE* stream);" not in prelude
-    assert "int fchmod(int fd, int mode);" not in prelude
     assert "ssize_t getline(char** lineptr, size_t* capacity, FILE* stream)" in stubs
     assert "int fchmod(int fd, int mode)" in stubs
 
@@ -288,9 +221,6 @@ def test_windows_unwindstack_uses_posix_header_ownership():
     unistd = (REPO_ROOT / "compat" / "include" / "unistd.h").read_text(
         encoding="utf-8"
     )
-    prelude = (
-        REPO_ROOT / "compat" / "include" / "mdvm_windows_x64_prelude.h"
-    ).read_text(encoding="utf-8")
     stubs = (
         REPO_ROOT / "compat" / "src" / "windows_x64_posix_stubs.c"
     ).read_text(encoding="utf-8")
@@ -302,9 +232,6 @@ def test_windows_unwindstack_uses_posix_header_ownership():
     assert "static inline int getpagesize(void)" in unistd
     assert "sysconf(_SC_PAGESIZE)" in unistd
     assert "#define lseek64 _lseeki64" in unistd
-    assert "typedef unsigned short mode_t;" not in prelude
-    assert "#define lseek64 _lseeki64" not in prelude
-    assert "static inline int getpagesize(void)" not in prelude
     assert "long long lseek64(" not in stubs
 
 
@@ -312,14 +239,9 @@ def test_windows_nativebridge_uses_posix_mode_header_ownership():
     stat = (REPO_ROOT / "compat" / "include" / "sys" / "stat.h").read_text(
         encoding="utf-8"
     )
-    prelude = (
-        REPO_ROOT / "compat" / "include" / "mdvm_windows_x64_prelude.h"
-    ).read_text(encoding="utf-8")
-
     assert "#define mkdir(path, mode) _mkdir(path)" in stat
     assert "#define S_IRWXG (S_IRGRP|S_IWGRP|S_IXGRP)" in stat
     assert "#define S_IRWXO (S_IROTH|S_IWOTH|S_IXOTH)" in stat
-    assert "#define mkdir(path,mode) _mkdir(path)" not in prelude
 
 
 def test_windows_ziparchive_owns_64_bit_stdio_spellings():

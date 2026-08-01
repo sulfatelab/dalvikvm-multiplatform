@@ -7,48 +7,7 @@
 # bumped to current AOSP. NONE of this is in the converter or the overlay. See
 # bp2cmake_linux_scope.md and the toolchain-drift notes.
 if(ART_TARGET_PLATFORM STREQUAL "windows")
-    set(_PRELUDE "${MDVM_COMPAT_INCLUDE_DIR}/mdvm_windows_x64_prelude.h")
-    # These dependencies either own their Windows portability or have an
-    # explicit source split below. Keep the list explicit so a newly generated
-    # target cannot silently become prelude-free.
-    set(_art_windows_prelude_free_targets
-        androidio
-        art
-        art-compiler
-        art-dex2oat
-        art-disassembler
-        artbase
-        artpalette
-        base
-        crypto_static
-        dalvikvm
-        dexfile
-        dex2oat
-        elffile
-        expat
-        fdlibm
-        icui18n
-        icu
-        icu_jni
-        icuuc
-        icuuc_stubdata
-        javacore
-        log
-        lzma
-        nativebridge
-        nativehelper
-        nativeloader
-        odrstatslog
-        openjdk
-        openjdkjvm
-        openjdkjvmti
-        profile
-        procinfo
-        sigchain
-        unwindstack
-        windows_x64_posix_stubs
-        ziparchive)
-    set(_art_windows_prelude_free_definitions
+    set(_art_windows_definitions
         _CRT_SECURE_NO_WARNINGS
         NOMINMAX
         WIN32_LEAN_AND_MEAN
@@ -159,19 +118,9 @@ foreach(_t IN LISTS _all_targets)
     # deliberate `#undef _GNU_SOURCE`, breaking its POSIX strerror_r selection.
     if(NOT _ttype STREQUAL "INTERFACE_LIBRARY" AND
        (NOT _t STREQUAL "base" OR ART_TARGET_PLATFORM STREQUAL "windows"))
-        if(ART_TARGET_PLATFORM STREQUAL "windows" AND
-           _t IN_LIST _art_windows_prelude_free_targets)
+        if(ART_TARGET_PLATFORM STREQUAL "windows")
             target_compile_definitions(${_t} PRIVATE
-                ${_art_windows_prelude_free_definitions})
-        endif()
-        # The Windows compatibility header supplies target-platform APIs and
-        # declarations to every generated PE target. Linux toolchain drift is
-        # kept in the explicit source/module shims above instead of forcing a
-        # standard-header prelude into the complete product graph.
-        if(ART_TARGET_PLATFORM STREQUAL "windows" AND
-           NOT _t IN_LIST _art_windows_prelude_free_targets)
-            target_compile_options(${_t} PRIVATE
-                "$<$<COMPILE_LANGUAGE:C,CXX>:SHELL:-include ${_PRELUDE}>")
+                ${_art_windows_definitions})
         endif()
         # Project-owned compat shim headers (//compat). Provides android-base/
         # stringify.h, which android-16.0.0_r4 art's macros.h now includes but

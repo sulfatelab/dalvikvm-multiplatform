@@ -40,13 +40,13 @@ items are closed.
 |---|---|---|---|
 | Python frontend | COMPLETE for the initial slice | `generate`, `check-generated`, `configure`, `build`, `test`, and `stage` exist; subprocesses are shell-free; configured JDK 21 is validated and passed to CMake | keep regression coverage current |
 | Linux x86-64 product | COMPLETE for the current W-004/W-013 runtime slice | a fresh target-local boot/runtime closure passes all five W-004 gates plus the shared W-013 128 MiB non-moving-heap gate; identical stage rebuilds are Ninja no-ops | add boot-image/security packaging and migrate the remaining behavioral stages |
-| Windows x86-64 product | PARTIAL / experimental | Linux-hosted cross and native Windows Server 2025 product builds pass; fresh native W-002 passes 4/4, W-003 product passes 4/4, W-003 frame variant passes 5/5, expanded W-004 passes 26/26, W-010 passes 8/8, W-013 passes 7/7, and expanded W-025 passes 9/9; every identical stage repeat is a Ninja no-op | run the remaining multi-stage catalog and migrate its behavioral tests |
+| Windows x86-64 product | PARTIAL / experimental | Linux-hosted cross and native Windows Server 2025 product builds pass; the complete current native catalog passes 65/65 across W-002, W-003, W-004, W-010, W-013, W-014, and W-025, and identical product/test repeats are Ninja no-ops | add boot-image/security packaging and migrate the remaining behavioral coverage |
 | Compiler DSO parity | COMPLETE for `art-compiler` | both targets emit a shared compiler DSO; Windows imports `art.dll` and exports `art_compiler_jit_create` | retain exact ABI and no-cycle gates |
 | Windows runtime DSO exports | COMPLETE for current x86-64 closure | `art.dll` combines explicit source annotations with a reviewed 187-entry runtime-consumer DEF, never CMake auto-export; Debug has 2,065 exports and RelWithDebInfo has 2,066 | keep the consumer allowlist and actual PE boundary under regression review |
 | Full DSO topology parity | PARTIAL | five module kinds and two target-specific module pairs still differ | convert each difference or record a reviewed target exception |
 | Unified phase catalog | PARTIAL | seven virtual stages declare 32 native probes, 47 managed JARs, and twelve command gates; Windows has 89 applicable items (59 target-runnable, six host-review, and 24 compile-only in the product variant), while Linux x86-64 has seven applicable items (six runnable and one compile-only artifact) | migrate the remaining behavioral runners, portable JNI expansion, and result checks |
 | Boot/runtime packaging | PARTIAL | the base boot JAR and probe JARs are Python/CMake/Ninja-owned, deterministic, target-local, and fail-fast; managed gates isolate a runtime root and stage pinned ICU data plus the mandatory native boot DSO closure | add boot images, security providers/resources, cacerts, and complete runtime packages |
-| POSIX-free Windows build host | COMPLETE for the current native/managed W-002, W-003, W-004, W-010, W-013, and W-025 graphs; PARTIAL end to end | Server 2025 uses configured official JDK 21, Python, CMake, Ninja, and plain Clang drivers; native managed build/runtime and no-op gates pass without POSIX tooling | migrate every retained behavioral gate and run the complete current catalog |
+| POSIX-free Windows build host | COMPLETE for the current catalog; PARTIAL end to end | Server 2025 uses configured official JDK 21, Python, CMake, Ninja, and plain Clang drivers; all 65 current native tests and the product/test no-op gates pass without POSIX tooling | migrate every retained behavioral gate and complete runtime packaging |
 | Legacy build removal | PARTIAL | active product ownership was demoted, project-owned symlink overlays were removed, and the superseded Linux miniature, Windows Phase-0/Phase-1, and libcore/ICU product graphs were deleted; the checked-in Linux graph and split overlay datasets remain | remove or demote every alternative product path after gate migration |
 | CI/acceptance automation | NOT STARTED | no in-repository CI workflow owns the acceptance matrix | fresh-build, no-op, graph, command, artifact, and native-host gates run automatically |
 | Additional architectures | BLOCKED by capability gates | all 17 canonical identities are registered; only `linux-x86_64-gnu` and experimental `windows-x86_64-msvc` generate | admit each profile only after its architecture and runtime gates pass |
@@ -55,7 +55,7 @@ items are closed.
 ### Latest verification baseline (2026-08-01)
 
 - [x] `PYTHONPATH=tools/bp2cmake python3 -m pytest tools/bp2cmake/tests tests/host -q`:
-  186 passed, including generated PE-header, Linux/Windows test-catalog,
+  190 passed, including generated PE-header, Linux/Windows test-catalog,
   shell-free runtime/managed-artifact gates, parallel-frontend, JDK validation,
   deterministic JAR, Windows-path/DSO-name, reviewer ownership, W-010
   nonzero/fault/debugger/fatal-dump orchestration, W-013 source-policy,
@@ -398,6 +398,20 @@ items are closed.
   1,816 commands with all 821 pointer-width definitions intact, both CET
   contracts pass 58/58, both generated graphs pass their freshness checks, and
   all 190 host tests pass.
+- [x] The temporary Windows compatibility prelude is retired from the complete
+  build and test graph and deleted. Common Windows definitions remain explicit
+  target policy; sources and project wrapper headers own API declarations.
+  Target-layout codegen now uses only its target triple, explicit macros, and
+  selected libc++/SDK/CRT include roots. Removing the test-policy force-include
+  exposed two W-025 probes that included `psapi.h` before `windows.h`; both now
+  use the SDK-required order. Forced-prelude compile commands fell from 26 to
+  zero in matching 1,816-command cross and native databases, with all 821
+  pointer-width definitions intact. A fresh Windows-cross configure succeeds;
+  Linux and both Windows products are Ninja no-ops; cross and native
+  `art-tests` build and repeat as no-ops at 32/16 jobs; both CET contracts pass
+  58/58; both generated graphs are fresh; all 190 host tests pass; and the
+  native Windows unified catalog passes 65/65 (59 target-runnable and six
+  host-review tests) without POSIX tooling.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to
@@ -1370,8 +1384,9 @@ an unreviewed module-set or kind change.
   and native Windows rebuilds pass without it.
 - [x] Remove the target-wide strict-primary-template-shadow demotion while
   retaining only the reviewed source-specific exceptions.
-- [ ] Retire forced toolchain-drift preludes as vendored dependencies are
-  updated or required compatibility becomes explicit per module/source.
+- [ ] Retire the remaining Linux source/module toolchain-drift preludes as
+  vendored dependencies are updated or compatibility becomes explicit. The
+  Windows platform prelude is fully retired.
 - [ ] Prove a second identical build is a true Ninja no-op and that Blueprint,
   overlay, and codegen input changes rebuild only affected outputs.
 
@@ -2034,13 +2049,13 @@ The current conversion path remains materially x86-64-specific:
   validated profile;
 - [`tools/bp2cmake/bp2cmake/codegen.py`](tools/bp2cmake/bp2cmake/codegen.py)
   constructs the mterp directory as `<arch>ng`, which is wrong for RISC-V;
-- the same code generator hard-codes `x86_64-pc-windows-msvc` and
-  `mdvm_windows_x64_prelude.h` for target-layout assembly generation;
+- the same code generator hard-codes `x86_64-pc-windows-msvc` for
+  target-layout assembly generation;
 - both current overlays inject `mterp_x86_64.S` rather than a target-selected
   generated source;
 - Linux BoringSSL policy injects a fixed set of x86-64 assembly files; and
-- the Windows policy, compatibility prelude, verification graphs, and ABI
-  checks are Windows x86-64-specific.
+- the Windows compatibility policy, verification graphs, and ABI checks are
+  Windows x86-64-specific.
 
 These are migration work items. A planned target must not be labeled
 `supported` merely because `Config(arch=...)` accepts its spelling or an ART

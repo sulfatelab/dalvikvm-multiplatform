@@ -484,7 +484,6 @@ target_include_directories(art-test-product-policy INTERFACE
     "${MDVM_GENSRC_DIR}/art/asm/include")
 target_compile_definitions(art-test-product-policy INTERFACE ${_art_windows_defines})
 target_compile_options(art-test-product-policy INTERFACE
-    "$<$<COMPILE_LANGUAGE:C,CXX>:SHELL:-include ${MDVM_COMPAT_INCLUDE_DIR}/mdvm_windows_x64_prelude.h>"
     "$<$<COMPILE_LANGUAGE:C,CXX>:-Wno-error>"
     "$<$<COMPILE_LANGUAGE:C,CXX>:-Wno-unused-command-line-argument>"
     "$<$<COMPILE_LANGUAGE:C,CXX>:-Wno-deprecated-declarations>"
