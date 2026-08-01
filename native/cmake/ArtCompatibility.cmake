@@ -13,6 +13,7 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
     # target cannot silently become prelude-free.
     set(_art_windows_prelude_free_targets
         androidio
+        art-compiler
         art-dex2oat
         art-disassembler
         artbase

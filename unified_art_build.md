@@ -372,6 +372,18 @@ items are closed.
   agree at 1,816 commands with all 51 `openjdk` commands prelude-free and all
   821 pointer-width definitions intact. Both CET contracts pass 58/58, both
   generated graphs pass their freshness checks, and all 188 host tests pass.
+- [x] The 96-command Windows `art-compiler` DSO now compiles without the
+  temporary ART prelude on both build hosts. `scheduler.h` explicitly includes
+  `<stdlib.h>` for its random API dependency, while the project `stdlib.h`
+  wrapper owns the Windows `rand_r` fallback; the duplicate fallback was
+  removed from the broad prelude. Forced-prelude compile commands fell from
+  495 to 399. Linux rebuilt 1,234 actions and Windows-cross rebuilt 924 actions
+  at 32 jobs; native Windows completed a 1,512-action rebuild at 16 jobs on the
+  16 GiB VM. All three products then repeated as Ninja no-ops. Cross and native
+  compile databases agree at 1,816 commands with all 96 `art-compiler`
+  commands prelude-free and all 821 pointer-width definitions intact. Both CET
+  contracts pass 58/58, both generated graphs pass their freshness checks, and
+  all 189 host tests pass.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to

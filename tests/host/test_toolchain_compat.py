@@ -35,6 +35,7 @@ def test_windows_platform_prelude_has_reviewed_target_scope():
     )
     prelude_free_targets = (
         "androidio",
+        "art-compiler",
         "art-dex2oat",
         "art-disassembler",
         "artbase",
@@ -184,6 +185,22 @@ def test_windows_openjdkjvm_uses_explicit_source_and_header_contracts():
     assert "int posix_memalign(void** memptr, size_t alignment, size_t size);" in stdlib
     assert "int posix_memalign(void** memptr, size_t alignment, size_t size);" not in prelude
     assert "int posix_memalign(void** memptr, size_t alignment, size_t size)" in stubs
+
+
+def test_windows_art_compiler_owns_rand_r_contract():
+    scheduler = (
+        REPO_ROOT / "vendor" / "art" / "compiler" / "optimizing" / "scheduler.h"
+    ).read_text(encoding="utf-8")
+    stdlib = (REPO_ROOT / "compat" / "include" / "stdlib.h").read_text(
+        encoding="utf-8"
+    )
+    prelude = (
+        REPO_ROOT / "compat" / "include" / "mdvm_windows_x64_prelude.h"
+    ).read_text(encoding="utf-8")
+
+    assert "#include <stdlib.h>" in scheduler
+    assert "static inline int rand_r(unsigned int* seed)" in stdlib
+    assert "static inline int rand_r(unsigned int* seed)" not in prelude
 
 
 def test_windows_openjdkjvmti_owns_sched_yield_declaration():

@@ -30,22 +30,6 @@
 #include <io.h>
 #include <stdio.h>
 
-/* POSIX reentrant RNG; Windows CRT has no rand_r. */
-#ifdef __cplusplus
-extern "C" {
-#endif
-static inline int rand_r(unsigned int* seed) {
-  /* Linear congruential; not crypto. Seed updated. */
-  unsigned int s = seed ? *seed : 1u;
-  s = s * 1103515245u + 12345u;
-  if (seed) *seed = s;
-  return (int)((s >> 16) & 0x7fff);
-}
-#ifdef __cplusplus
-}
-#endif
-
-
 #ifndef _SSIZE_T_DEFINED
 typedef intptr_t ssize_t;
 #define _SSIZE_T_DEFINED
