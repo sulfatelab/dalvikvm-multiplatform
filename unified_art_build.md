@@ -161,6 +161,14 @@ items are closed.
   and repeated as a no-op at `--parallel 16`. Native and cross compile
   databases agree on the 224/20 dex2oat split, the native CET contract passed
   58/58, and all 179 host tests pass.
+- [x] The standalone LZMA target now owns its Windows portability without the
+  ART prelude. Its existing target definitions are sufficient for all 44 C
+  sources on both build hosts, reducing forced-prelude compile commands from
+  821 to 777. Fresh Linux and Windows-cross product graphs rebuilt all 1,773
+  and 1,808 edges respectively at `--parallel 32` and repeated as Ninja
+  no-ops. Native Windows rebuilt the 44 LZMA sources and `lzma.dll` at
+  `--parallel 16` and also repeated as a no-op. Cross and native compile
+  databases agree, both CET contracts pass 58/58, and all 179 host tests pass.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to

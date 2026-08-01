@@ -41,6 +41,7 @@ def test_windows_platform_prelude_has_reviewed_target_scope():
         "icui18n",
         "icuuc",
         "icuuc_stubdata",
+        "lzma",
     )
 
     assert cmake.count(target_prelude) == 1
