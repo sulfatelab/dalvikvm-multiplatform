@@ -265,7 +265,7 @@ run 4 proves it does not by itself repair top-level fatal dispatch.
 
 ## Native run-4 result
 
-`/tmp/diag_w010_w014_host-run4.zip` matches the issued E3 GenericJNI package
+`diag_w010_w014_host-run4.zip` matches the issued E3 GenericJNI package
 identity. Its archive SHA-256 is
 `9f9a4cbaea3cb7cc030b44db47a4275f97b8d39026fa2fb1cb59b7a8ac405aa7`.
 The returned worker dump is a valid 648,619-byte minidump with SHA-256
@@ -519,7 +519,7 @@ E9 archive SHA-256 is
 On Windows Server 2025 build 26100, the native runner records 30/30 PASS,
 `NO_HANDLED_DMP_FILES`, and exactly five valid fatal dumps. The independent
 reviewer accepts the returned full package. See
-`../../../docs/history/windows_x64_w010_w014_e9_result.md`.
+`windows_x64_w010_w014_e9_result.md`.
 
 ### Pregrown PAGE_NOACCESS implicit probe at the E9 low boundary
 
@@ -586,6 +586,5 @@ Interpretation:
   checks because it forces nearly full stack commit on every attached thread,
   permanently changes external-thread stack high water, and turns deep native
   recursion into an unhandled AV at the ART page.
-- Logs:
-  - `tools/verify/windows_x64_phase1/logs/pregrow_e9_matrix_2026-07-29.log`
-  - `tools/verify/windows_x64_phase1/logs/pregrow_e9_commit_scale_hold_2026-07-29.log`
+The two raw pre-growth logs were removed with the retired Phase-1 output tree.
+The artifact hash and complete acceptance metrics above are the durable result.

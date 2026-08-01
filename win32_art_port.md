@@ -749,7 +749,7 @@ all product paths. Windows NIO.2 remains a non-goal.
 - **Gate:** A5–A8 stable under Wine. Focused native Windows W-024 JNI/JVMTI and
   W-013 heap/JIT/handle/repeated-start matrices pass; the broader general
   Phase-4 host rerun remains H-001.
-- See `tools/verify/windows_x64_phase4/RESULT.md`.
+- See `docs/history/windows_x64_phase4_result.md`.
 
 ### Phase 5 — JIT / oat — **JIT COMPLETE FOR X86_64; AOT DEFERRED**
 

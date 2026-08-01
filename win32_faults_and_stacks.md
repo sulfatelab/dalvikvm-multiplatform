@@ -373,12 +373,12 @@ Wine verifies the baseline/writable/direct stack modes, all four standalone
 UEF modes, and the late chain where ART is the predecessor and writes a valid
 dump. Wine 10.0 itself segfaults in protected recursive stack growth, so that
 case is intentionally native-only. See
-`tools/verify/windows_x64_phase4/W010_W014_DIAGNOSTICS.md` for the interpretation
+`docs/history/windows_x64_w010_w014_diagnostics.md` for the interpretation
 matrix.
 
 ### 4.2 Third native diagnostic result
 
-`/tmp/diag-log-windows_x64_w010_w014_host-run3.zip` matches the issued package and
+`diag-log-windows_x64_w010_w014_host-run3.zip` matches the issued package and
 completes every isolated diagnostic on Windows build 19044. The stack result is
 decisive:
 
@@ -432,7 +432,7 @@ provides the comparison.
 
 ### 4.3 Fourth native diagnostic result
 
-`/tmp/diag_w010_w014_host-run4.zip` exactly matches the issued repaired-
+`diag_w010_w014_host-run4.zip` exactly matches the issued repaired-
 GenericJNI package. The stack-growth rows repeat run 3, including the committed
 `PAGE_READWRITE` terminal region and successful pre-reset re-protection. The
 standalone frame-SEH/main/chained/worker UEF rows also repeat run 3.
@@ -646,7 +646,7 @@ tripwire cost. E9 explicit checks stay the product default. The probe artifact
 SHA-256 is
 `bdfec88fa7dc5cbcdd9e6e556ecbd7738a2b8822662bbafc15027ca3f320f7c5`;
 full records and timing are in
-`tools/verify/windows_x64_phase4/W010_W014_DIAGNOSTICS.md`.
+`docs/history/windows_x64_w010_w014_diagnostics.md`.
 
 ### 5.4 Native stack overflow is not ART's managed event
 

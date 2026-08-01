@@ -21,7 +21,7 @@ conditionally closes the pending bridge tail.
 2025 Datacenter Evaluation x64 build 26100. The former Windows 10 host is no
 longer available; the Windows 10 records in this file are retained as
 historical evidence only. See the
-[native Windows gate policy](../../../win32_host_gate_policy.md).
+[native Windows gate policy](../../win32_host_gate_policy.md).
 
 ## Unified W-002 acceptance (2026-08-01)
 
@@ -179,7 +179,7 @@ after their maintained semantics moved to unified W-010/W-025 declarations.
 | W-010/W-014 isolated failure diagnostics | **PASS on native build 19044** | runs 3-4: fixed-page SOE invalidated; UEF replacement ruled out; JNI hardware/raised AVs miss UEF while the JNI-created native worker reaches UEF/dump, isolating traversal through managed/GenericJNI frames. |
 | W-010/W-014 complete E9 native host matrix | **PASS, 30/30 on build 26100** | guarantee-aware excluded-low accounting; switch/nterp/JIT managed SOE; zero handled dumps; five valid static/JIT/OSR fatal dumps |
 | FS-1 RelWithDebInfo/Debug stack high-water | **PASS in unified native Stage-8 and historical package on build 26100** | unified `win32-stack-high-water` variant: switch/nterp/JIT, four complete records each; current RelWithDebInfo minimum margin 6448 bytes, Debug quick minimum 37120 bytes; no dumps; structural reviewer passed |
-| FS-2 native debugger/CET/embedding/exception-XMM matrix | **PASS on native build 26100** | `../../../docs/history/windows_x64_fs2_w010_w014_result.md`; first-chance JIT NPE continue, explicit SOE no AV, nine incompatible CET rejections plus safe-policy acceptance, JNI UEF teardown, and 2x nterp/switch/JIT exception-XMM runs |
+| FS-2 native debugger/CET/embedding/exception-XMM matrix | **PASS on native build 26100** | `windows_x64_fs2_w010_w014_result.md`; first-chance JIT NPE continue, explicit SOE no AV, nine incompatible CET rejections plus safe-policy acceptance, JNI UEF teardown, and 2x nterp/switch/JIT exception-XMM runs |
 | Historical full Wine suite | **PASS** | all seven Phase-4 gates passed; the aggregate runner is retired and maintained coverage uses unified native CTest |
 
 The removed raw Wine transcripts recorded the following durable historical
@@ -195,22 +195,22 @@ and W-010 now own the corresponding executable contracts.
 | Item | Location |
 |------|----------|
 | UEF + MiniDumpWriteDump | `vendor/art/runtime/multiplatform/windows/runtime_windows.cc` (links `dbghelp`) |
-| W-025 section/process policy probes | canonical sources under `../../../tests/cases/jit-section-policy/` and unified `stage:w025` |
+| W-025 section/process policy probes | canonical sources under `../../tests/cases/jit-section-policy/` and unified `stage:w025` |
 | Native AV JNI | `tools/windows_x64/jni_stubs/win_runtime_natives.c` |
 | W-002 OSR adapters | `quick_entrypoints_x86_64.S`; `mterp/x86_64ng/main.S` |
 | W-002 unified probes and reviewer | `tests/cases/{attached-thread-entry,osr-unwind}`; `tests/support/windows/{w002_managed_entry_gate,check_w002_managed_entries}.py` |
 | W-003 XMM boundary and structural gate | `quick_entrypoints_x86_64.S`; `check_w003_quick_boundaries.py` |
-| W-003 unified managed gates | `../../../tests/cases/{jni-critical-native,jni-native-abi,w003-frame-probe,w003-xmm-sentinel}/`; `../../../tests/support/windows/w003_managed_gate.py` |
-| W-003 historical native package evidence | `../../../tests/stages/w003/ANALYSIS.md` |
+| W-003 unified managed gates | `../../tests/cases/{jni-critical-native,jni-native-abi,w003-frame-probe,w003-xmm-sentinel}/`; `../../tests/support/windows/w003_managed_gate.py` |
+| W-003 historical native package evidence | `../../tests/stages/w003/ANALYSIS.md` |
 | W-014 native stack/pthread/page/growth/RX/CET gates | `tests/cases/pthread-once/`; `tests/cases/thread-stack/`; `tests/cases/stack-page-growth/`; `tests/cases/stack-executable-memory/`; `tests/cases/cet-stack-policy/`; `tests/support/runtime_gate.py` |
 | W-010 unified gates | `tests/cases/{unhandled-exception-filter,fault-record,sigchain-fault,debugger-fault,fatal-runtime,managed-fault-recovery}`; `tests/CMakeLists.txt` |
 | W-010 Stage C adapter and probes | `tests/cases/fault-record/probe.cc`; `tests/cases/sigchain-fault/probe.cc`; `vendor/art/runtime/multiplatform/windows/sigchain_windows.cc` |
 | W-010 Stage D activation and stress | `tests/cases/managed-fault-recovery/{W010ManagedFaultProbe.java,run.py}`; common runtime null/SO flags and early nterp range registration |
 | W-010 dynamic-JIT PE unwind | `runtime/multiplatform/windows/jit_unwind_windows.*`; `runtime/jit/{jit_code_cache,jit_memory_region}.*`; `run_jit_unwind_{info,registry,lifecycle}.sh`; `run_jit_fatal_unwind.sh` |
 | W-010 static OSR PE unwind | `quick_entrypoints_x86_64.S`; unified `tests/cases/osr-unwind/` probe; unified `windows_w010_boundary_unwind_structure` reviewer |
-| Historical W-010/W-014 Stage E evidence | `W010_W014_DIAGNOSTICS.md`; `../../../docs/history/windows_x64_w010_w014_e9_result.md` and later FS summaries |
+| Historical W-010/W-014 Stage E evidence | `windows_x64_w010_w014_diagnostics.md`; `windows_x64_w010_w014_e9_result.md` and later FS summaries |
 | FS-1 stack high-water probe/evidence | unified source, current result, and historical package identity under `tests/cases/stack-high-water`; shell-free gates and structural reviewer under `tests/support/windows` |
-| FS-2 debugger/CET/embedding/exception-XMM probes and evidence | `tests/cases/debugger-fault/probe.cc`; `tests/cases/cet-stack-policy/probe.cc`; `tests/cases/art-embedding/probe.cc`; `../../../docs/history/windows_x64_fs2_w010_w014_result.md` |
+| FS-2 debugger/CET/embedding/exception-XMM probes and evidence | `../../tests/cases/debugger-fault/probe.cc`; `../../tests/cases/cet-stack-policy/probe.cc`; `../../tests/cases/art-embedding/probe.cc`; `windows_x64_fs2_w010_w014_result.md` |
 
 ## Host
 
@@ -242,7 +242,7 @@ python tools/build_art.py test --target-id windows-x86_64-msvc --build-type RelW
 The accepted Windows 10 build 19044 return has 19/19 PASS records over 14
 children, clean fatal/dump scans, 8/8 attributed frame runs, and 6/6 XMM
 sentinel runs. That package is historical and its producer and repository-side
-runner are retired; see `../../../tests/stages/w003/ANALYSIS.md`.
+runner are retired; see `../../tests/stages/w003/ANALYSIS.md`.
 
 Focused W-010 native gate on the 16 GiB Windows VM:
 
@@ -285,7 +285,7 @@ diagnostics before changing stack delivery or JIT unwind code; the run-3 result
 below supplies that evidence.
 
 The third returned diagnostic archive,
-`/tmp/diag-log-windows_x64_w010_w014_host-run3.zip`, matches the issued package and
+`diag-log-windows_x64_w010_w014_host-run3.zip`, matches the issued package and
 completes the isolated matrix. Baseline/protected/writable recursion reaches
 `STATUS_STACK_OVERFLOW`; direct access to the protected page still produces
 the expected AV. At protected-mode termination the selected page is part of a
@@ -315,7 +315,7 @@ under Wine. The software-raised case then resumes under Wine and its exit shape
 is recorded rather than treated as infrastructure failure.
 
 The fourth returned diagnostic archive,
-`/tmp/diag_w010_w014_host-run4.zip`, exactly matches that issued package. Its
+`diag_w010_w014_host-run4.zip`, exactly matches that issued package. Its
 stack and standalone UEF results repeat run 3. The JNI hardware and JNI-raised
 AVs both report ART as the predecessor, reach ART's VEH, then exit with
 `STATUS_ACCESS_VIOLATION` without entering either late or ART UEF and without
@@ -364,7 +364,7 @@ C++ frames. The new first miss is `art_quick_to_interpreter_bridge + 0x82`
 worker reaches both UEFs and writes one valid 747,073-byte dump. The result
 bundle SHA-256 is
 `1a58bb0f318eae82882ea1bd0e5b0fa403202d02ae95a889b07a1e7b3524b3d9`;
-see `W010_W014_DIAGNOSTICS.md`.
+see `windows_x64_w010_w014_diagnostics.md`.
 
 Local E6 repairs the new boundary without changing the ART frame contract. The
 primary record describes the existing 200-byte save-refs-and-args frame;
@@ -383,7 +383,7 @@ reports `lookup=1` for the primary bridge at hardware frame 11 and raised frame
 frames, both late filters and ART UEF enter, and each JNI case writes a valid
 dump. The native-worker control also passes. The returned bundle SHA-256 is
 `a1c6af0ceff198f6b4543aa832dbf40ced81dcf72800b77c55dd5f2959302736`;
-see `W010_W014_DIAGNOSTICS.md`.
+see `windows_x64_w010_w014_diagnostics.md`.
 
 The subsequent complete E6 host run records 25 of the 30 required PASS rows on
 Windows Server 2025 build 26100. Static `-Xint`, threshold-zero JIT J-2/J-1,
@@ -400,7 +400,7 @@ handled-dump aggregates. The authentic returned payload passes issued-package
 identity checking; the reviewer then rejects the expected `OVERALL FAIL`.
 The raw returned bundle SHA-256 is
 `d6bb85c1529496cb384bebcc1495378ade0e253041e01a9605f3f6c90b8538e5`;
-see `W010_W014_DIAGNOSTICS.md`.
+see `windows_x64_w010_w014_diagnostics.md`.
 
 ## Accepted native E9 host result
 
@@ -439,7 +439,7 @@ All switch/nterp/JIT handled SOE paths pass, handled logs are free of fatal
 markers, `HANDLED_DMP_SCAN.txt` says `NO_HANDLED_DMP_FILES`, and the five
 intentional static/JIT/OSR fatal origins produce five valid dumps. The main and
 pthread page probes both report `before=0 configured=16384 minimum=16384`.
-See `../../../docs/history/windows_x64_w010_w014_e9_result.md`.
+See `windows_x64_w010_w014_e9_result.md`.
 
 ## FS-1 native stack high-water acceptance
 
@@ -473,7 +473,7 @@ more than 37 KiB on both quick paths; Release/product and non-Windows remain
 at 8192 bytes. Product isolation, final-source Wine Release/Debug, W-010
 managed faults, the combined Windows/Linux object gate, the full Linux
 rebuild, and imageless Hello pass. See
-`../../../tests/cases/stack-high-water/RESULT.md`.
+`../../tests/cases/stack-high-water/RESULT.md`.
 
 ## FS-2 native acceptance
 
@@ -494,7 +494,7 @@ event. The embedding probe reports predecessor UEF resumption, foreign VEH and
 frame-SEH calls before and after ART teardown, and no stale ART callback. The
 exception sentinel reports `exceptionMask=0`, `exceptionCaught=32`, and
 `exceptionSelfTestMask=1023`. Compact native logs and the complete result are
-retained in `../../../docs/history/windows_x64_fs2_w010_w014_result.md`.
+retained in `windows_x64_fs2_w010_w014_result.md`.
 
 ## Non-goals
 
@@ -507,7 +507,7 @@ retained in `../../../docs/history/windows_x64_fs2_w010_w014_result.md`.
 - Keep E9's explicit Windows x64 stack checks and guarantee-aware bound accounting as
   the accepted product path; retain fixed-page operations only as direct
   diagnostics. The authoritative Windows Server 2025 build-26100 FS-4 repeat
-  is archived in `../../../docs/history/windows_x64_fs4_same_host_result.md`.
+  is archived in `windows_x64_fs4_same_host_result.md`.
 - Correlate Java/ART-pool reservations and add wrong-address/unsupported-
   exception negatives or debugger-quality dump-stack reconstruction if those
   remain release requirements. FS-5 records why a real pending-tail native
@@ -588,7 +588,7 @@ same-image load of `Runtime::instance_`. The rebuilt Phase 4 aggregate passes,
 including its new structural/source/dependency gate, with 574 direct
 relocations and zero retired-helper references. Full focused results and the
 accepted native-Windows closure are recorded in
-[`tests/stages/w004/ANALYSIS.md`](../../../tests/stages/w004/ANALYSIS.md).
+[`tests/stages/w004/ANALYSIS.md`](../../tests/stages/w004/ANALYSIS.md).
 
 ## W-002 managed-entry re-run (2026-07-26)
 
@@ -619,7 +619,7 @@ tooling tests. Native Windows R2 then passes 21/21 records on build 19044:
 8/8 OSR, 8/8 attach, package/structure checks, fatal scan, and `NO_DMP_FILES`.
 W-002 is closed. The durable cross-case design, R1 diagnosis, deterministic R2
 correction, and accepted native result are retained in
-[`tests/stages/w002/ANALYSIS.md`](../../../tests/stages/w002/ANALYSIS.md).
+[`tests/stages/w002/ANALYSIS.md`](../../tests/stages/w002/ANALYSIS.md).
 
 ## W-003 quick-frame/XMM re-run (2026-07-26)
 
@@ -636,7 +636,7 @@ attribute all four frame families; every XMM run reports
 pagefile-section J-2 dual view and successful compilation; and fatal/dump
 scans are clean. W-003 is closed. The independent nterp implicit-null and
 PE/SEH/native-unwind work remains W-010. See
-[`tests/stages/w003/ANALYSIS.md`](../../../tests/stages/w003/ANALYSIS.md).
+[`tests/stages/w003/ANALYSIS.md`](../../tests/stages/w003/ANALYSIS.md).
 
 The accepted native evidence above remains the historical XMM6-XMM11
 checkpoint. W-010 has since expanded only the Windows boundary adapter to

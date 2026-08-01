@@ -626,10 +626,16 @@ items are closed.
   mutation or fabricated state remain beside the live case; the standalone
   legacy result was removed.
 - [x] W-010/W-014 E4–E6 diagnosis is deduplicated in the consolidated
-  `W010_W014_DIAGNOSTICS.md`. Exact issued revisions, package/result/dump
+  `docs/history/windows_x64_w010_w014_diagnostics.md`. Exact issued revisions,
+  package/result/dump
   identities, live lookup boundaries, repaired records, and rejected
   fixed-page SOE outcome remain; four redundant diagnosis fragments and one
   raw aggregate file were removed.
+- [x] The remaining clean Phase-4 umbrella result and W-010/W-014 diagnostic
+  guide moved from `tools/verify` to flat `docs/history`. Relative links and
+  obsolete `/tmp` package locations were repaired; immutable archive hashes
+  remain. The two referenced Phase-1 pre-growth logs were already absent, so
+  their complete durable metrics remain in the diagnostic record instead.
 - [x] FS-2 native acceptance is consolidated in
   `docs/history/windows_x64_fs2_w010_w014_result.md`. The package identity,
   exact debugger/CET/XMM/embedding contracts, final pass, and six intentional

@@ -218,6 +218,8 @@ logs, and duplicate package metadata were likewise reduced into one flat
 history record that preserves the native 9/9 result, exact source revisions,
 archive hashes, boot-artifact identity, compilation contract, and no-dump
 finding. Maintained reproduction is the unified W-004 catalog.
+The final clean Phase-4 umbrella result and W-010/W-014 diagnostic guide now
+also live under flat `docs/history`; neither is a maintained test entry point.
 The final Phase-4 shell wrapper, for Math CriticalNative, was retired after its
 two-mode matrix moved beside the case and passed twice on native Windows plus
 the fresh Linux W-004 build. The W-024 source cleanup is now enforced by the
