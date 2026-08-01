@@ -223,12 +223,6 @@ int posix_memalign(void** memptr, size_t alignment, size_t size);
 #ifndef O_DIRECTORY
 #define O_DIRECTORY 0x10000
 #endif
-#ifndef getpagesize
-static inline int getpagesize(void) {
-  SYSTEM_INFO si; GetSystemInfo(&si); return (int)si.dwPageSize;
-}
-#endif
-
 /* Host-generated ART offset tables may not match Windows layout yet. */
 #ifdef ASM_DEFINE
 #undef ASM_DEFINE

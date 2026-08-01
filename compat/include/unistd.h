@@ -11,6 +11,7 @@
 #include <process.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <sys/types.h>
 #ifndef PATH_MAX
 #define PATH_MAX 260
 #endif
@@ -27,14 +28,6 @@
 
 #ifndef useconds_t
 typedef unsigned int useconds_t;
-#endif
-#ifndef _SSIZE_T_DEFINED
-typedef intptr_t ssize_t;
-#define _SSIZE_T_DEFINED
-#endif
-#ifndef _PID_T_DEFINED
-typedef int pid_t;
-#define _PID_T_DEFINED
 #endif
 #ifndef STDIN_FILENO
 #define STDIN_FILENO 0
@@ -72,6 +65,13 @@ int usleep(useconds_t usec);
 long pathconf(const char* path, int name);
 
 long sysconf(int name);
+#ifndef MDVM_GETPAGESIZE_DEFINED
+static inline int getpagesize(void) {
+  long page_size = sysconf(_SC_PAGESIZE);
+  return page_size > 0 ? (int)page_size : 4096;
+}
+#define MDVM_GETPAGESIZE_DEFINED 1
+#endif
 int pipe(int fds[2]);
 unsigned int getuid(void);
 unsigned int geteuid(void);

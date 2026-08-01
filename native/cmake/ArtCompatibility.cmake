@@ -19,7 +19,8 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
         icui18n
         icuuc
         icuuc_stubdata
-        lzma)
+        lzma
+        unwindstack)
     set(_art_windows_prelude_free_definitions
         _CRT_SECURE_NO_WARNINGS
         NOMINMAX

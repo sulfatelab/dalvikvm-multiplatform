@@ -42,6 +42,7 @@ def test_windows_platform_prelude_has_reviewed_target_scope():
         "icuuc",
         "icuuc_stubdata",
         "lzma",
+        "unwindstack",
     )
 
     assert cmake.count(target_prelude) == 1
@@ -59,6 +60,25 @@ def test_windows_platform_prelude_has_reviewed_target_scope():
     assert "get_target_property(_art_dex2oat_sources art-dex2oat SOURCES)" in cmake
     assert 'MATCHES "/external/boringssl/"' in cmake
     assert "_art_dex2oat_compat_source_count EQUAL 20" in cmake
+
+
+def test_windows_unwindstack_uses_posix_header_ownership():
+    types = (REPO_ROOT / "compat" / "include" / "sys" / "types.h").read_text(
+        encoding="utf-8"
+    )
+    unistd = (REPO_ROOT / "compat" / "include" / "unistd.h").read_text(
+        encoding="utf-8"
+    )
+    prelude = (
+        REPO_ROOT / "compat" / "include" / "mdvm_windows_x64_prelude.h"
+    ).read_text(encoding="utf-8")
+
+    assert "#include_next <sys/types.h>" in types
+    assert "typedef int pid_t;" in types
+    assert "typedef intptr_t ssize_t;" in types
+    assert "static inline int getpagesize(void)" in unistd
+    assert "sysconf(_SC_PAGESIZE)" in unistd
+    assert "static inline int getpagesize(void)" not in prelude
 
 
 def test_linux_toolchain_drift_headers_are_source_scoped():

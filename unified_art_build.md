@@ -55,7 +55,7 @@ items are closed.
 ### Latest verification baseline (2026-08-01)
 
 - [x] `PYTHONPATH=tools/bp2cmake python3 -m pytest tools/bp2cmake/tests tests/host -q`:
-  179 passed, including generated PE-header, Linux/Windows test-catalog,
+  180 passed, including generated PE-header, Linux/Windows test-catalog,
   shell-free runtime/managed-artifact gates, parallel-frontend, JDK validation,
   deterministic JAR, Windows-path/DSO-name, reviewer ownership, W-010
   nonzero/fault/debugger/fatal-dump orchestration, W-013 source-policy,
@@ -169,6 +169,15 @@ items are closed.
   no-ops. Native Windows rebuilt the 44 LZMA sources and `lzma.dll` at
   `--parallel 16` and also repeated as a no-op. Cross and native compile
   databases agree, both CET contracts pass 58/58, and all 179 host tests pass.
+- [x] `unwindstack` now owns its Windows portability through project POSIX
+  compatibility headers instead of the ART prelude. The project `sys/types.h`
+  wrapper supplies guarded Windows `pid_t` and `ssize_t`, while `unistd.h`
+  owns `getpagesize()` through `sysconf(_SC_PAGESIZE)`. All 34 `unwindstack`
+  compile commands are prelude-free on both Windows build hosts, reducing the
+  forced-prelude total from 777 to 743. Linux, Windows-cross, and native
+  Windows products rebuilt successfully at their required 32/32/16 job
+  limits and immediately repeated as Ninja no-ops. Cross and native CET
+  contracts pass 58/58, and all 180 host tests pass.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to
