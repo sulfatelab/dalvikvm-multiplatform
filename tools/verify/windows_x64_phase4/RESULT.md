@@ -197,7 +197,7 @@ PASS native_crash_aborts
 | Item | Location |
 |------|----------|
 | UEF + MiniDumpWriteDump | `vendor/art/runtime/multiplatform/windows/runtime_windows.cc` (links `dbghelp`) |
-| Phase 4 probes | `tools/verify/windows_x64_phase4/src/*` |
+| W-025 section/process policy probes | canonical sources under `../../../tests/cases/jit-section-policy/` and unified `stage:w025` |
 | Native AV JNI | `tools/windows_x64/jni_stubs/win_runtime_natives.c` |
 | W-002 OSR adapters | `quick_entrypoints_x86_64.S`; `mterp/x86_64ng/main.S` |
 | W-002 unified probes and reviewer | `tests/cases/{attached-thread-entry,osr-unwind}`; `tests/support/windows/{w002_managed_entry_gate,check_w002_managed_entries}.py` |

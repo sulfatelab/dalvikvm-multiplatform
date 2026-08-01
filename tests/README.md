@@ -213,6 +213,10 @@ W-013 owns allocator/mapping/source-policy and 128/1024 MiB pressure; W-004
 owns the package's generic managed stress; W-025 owns its supported JIT
 controls and lifecycle behavior. Historical peak-memory/pagefile measurements
 remain evidence, not portable pass criteria.
+The unreferenced Phase-4 `JitSectionProbe.c` predecessor was removed after the
+canonical W-025 section-policy case subsumed its low-view, R/RX/RW, execution,
+low-VA failure/recovery, and commit-pressure contracts with stronger native and
+cross-host acceptance.
 The W-014 FS-1 stack-high-water case now uses the exact test-only build variant
 `win32-stack-high-water`. That variant has its own fingerprinted output
 directory, cannot be staged as a product, and changes the managed case from

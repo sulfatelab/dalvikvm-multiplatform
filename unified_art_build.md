@@ -209,6 +209,11 @@ items are closed.
   matrix is superseded by W-013 allocator/pressure gates, W-004 managed stress,
   and W-025 JIT controls/lifecycle. Historical per-process memory and pagefile
   measurements remain evidence, not portable pass criteria.
+- [x] The unreferenced Phase-4 `JitSectionProbe.c` was removed. The canonical
+  W-025 section-policy case is its stronger regular-file successor: it owns
+  R/RX/RW pagefile views, generated execution, complete low-VA rejection and
+  recovery, 1 GiB commit pressure, CFG, and fail-closed process policy in the
+  unified native/cross stage.
 - [x] The shared shell-free runtime gate now owns native executable repetition,
   marker, timeout, DSO-path, log, and sanitized-result orchestration. W-014
   pthread-once passed 10/10, thread-stack preserved all five reservation sizes
@@ -553,8 +558,8 @@ verification directories. All 91 declarations own canonical source under
 `tests/cases/` or a shell-free runner under `tests/support/`; all 29 native
 source cases and all 48 Java sources have adjacent results, and shared stage
 analysis remains under `tests/stages/`. The old verification tree now contains
-zero Java sources and two uncatalogued native sources retained by unfinished
-legacy evidence paths. It contains zero shell scripts and zero PowerShell scripts,
+zero Java sources and one uncatalogued native source retained by an unfinished
+legacy libcore/ICU graph. It contains zero shell scripts and zero PowerShell scripts,
 and 24 Python scripts. Python checkers
 and reviewers may remain, but the unified frontend must invoke them through a
 declared stage instead of a phase-local product build.
