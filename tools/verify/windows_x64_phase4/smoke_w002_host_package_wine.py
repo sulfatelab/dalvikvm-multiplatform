@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the focused W-002 package matrix under Wine before native-host issue."""
+"""Re-run the historical focused W-002 package matrix under Wine."""
 
 from __future__ import annotations
 

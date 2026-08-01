@@ -12,6 +12,7 @@ import unittest
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
+REPO = SCRIPT_DIR.parents[2]
 SPEC = importlib.util.spec_from_file_location(
     "review_w002_host_result", SCRIPT_DIR / "review_w002_host_result.py"
 )
@@ -94,7 +95,9 @@ class IssuedPayloadTest(unittest.TestCase):
 
 class OsrContractTest(unittest.TestCase):
     def test_probe_checksum_matches_declared_workload(self) -> None:
-        source = (SCRIPT_DIR / "src/W002OsrProbe.java").read_text(encoding="utf-8")
+        source = (REPO / "tests/cases/osr-unwind/W002OsrProbe.java").read_text(
+            encoding="utf-8"
+        )
         count_match = re.search(r"COUNT = ([0-9_]+);", source)
         expected_match = re.search(r"EXPECTED = ([0-9_]+)L;", source)
         self.assertIsNotNone(count_match)
@@ -105,17 +108,12 @@ class OsrContractTest(unittest.TestCase):
         self.assertEqual(count, 2_000_000)
         self.assertEqual(actual, expected)
 
-    def test_all_osr_runners_pin_both_thresholds(self) -> None:
-        for relative in (
-            "run_w002_osr_probe.sh",
-            "smoke_w002_host_package_wine.py",
-            "host/RUN_W002_HOST.ps1",
-        ):
-            text = (SCRIPT_DIR / relative).read_text(encoding="utf-8")
-            with self.subTest(relative=relative):
-                self.assertIn("-Xjitwarmupthreshold:100", text)
-                self.assertIn("-Xjitthreshold:100", text)
-                self.assertIn("checksum=65553463744", text)
+    def test_unified_osr_runner_pins_both_thresholds(self) -> None:
+        runner = REPO / "tests/support/windows/w002_managed_entry_gate.py"
+        text = runner.read_text(encoding="utf-8")
+        self.assertIn("-Xjitwarmupthreshold:100", text)
+        self.assertIn("-Xjitthreshold:100", text)
+        self.assertIn("checksum=65553463744", text)
 
 
 if __name__ == "__main__":

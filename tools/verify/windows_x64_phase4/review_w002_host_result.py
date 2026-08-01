@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Review returned native-Windows W-002 evidence against the issued package."""
+"""Review historical native-Windows W-002 evidence against the issued package."""
 
 from __future__ import annotations
 

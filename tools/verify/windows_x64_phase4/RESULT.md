@@ -113,7 +113,7 @@ PASS native_crash_aborts
 | Phase 4 probes | `tools/verify/windows_x64_phase4/src/*` |
 | Native AV JNI | `tools/windows_x64/jni_stubs/win_runtime_natives.c` |
 | W-002 OSR adapters | `quick_entrypoints_x86_64.S`; `mterp/x86_64ng/main.S` |
-| W-002 probes and native package | `run_w002_*.sh`; `package_windows_x64_w002.sh` |
+| W-002 unified probes and reviewer | `tests/cases/{attached-thread-entry,osr-unwind}`; `tests/support/windows/{w002_managed_entry_gate,check_w002_managed_entries}.py` |
 | W-003 XMM boundary and structural gate | `quick_entrypoints_x86_64.S`; `check_w003_quick_boundaries.py` |
 | W-003 attributed frame-family gate | `../../../tests/cases/w003-frame-probe/`; `run_w003_frame_probe.sh` |
 | W-003 XMM runtime sentinel | `../../../tests/cases/w003-xmm-sentinel/`; `run_w003_xmm_sentinel.sh` |
@@ -139,11 +139,15 @@ bash tools/windows_x64/host_package/package_windows_x64_phase3.sh
 
 Focused W-002 native acceptance:
 
-```bash
-JOBS=32 WINEDEBUG=-all \
-  bash tools/windows_x64/host_package/package_windows_x64_w002.sh
-# Native PowerShell: .\scripts\RUN_W002_HOST.ps1
+```text
+python tools/build_art.py configure --target-id windows-x86_64-msvc --build-type RelWithDebInfo
+python tools/build_art.py test --target-id windows-x86_64-msvc --build-type RelWithDebInfo --stage w002 --parallel 32
 ```
+
+The former standalone package producer, Bash/Wine runners, package-only
+PowerShell runner, and attach-only CMake graph were retired after this path
+passed natively and repeated as a Ninja no-op. Returned package evidence and
+hashes remain historical records.
 
 Focused W-003 native acceptance:
 

@@ -111,10 +111,14 @@ acceptance.
 
 | Gate | Purpose |
 |------|---------|
-| `check_w002_managed_entries.py` | Source, Windows x64 object, relocation, r15 compiler, CFA, `NterpFree`, and Linux-path invariants |
-| `run_w002_osr_probe.sh` | Baseline compile, OSR compile, jump, exact checksum, switch/nterp return-path distinction |
-| `run_w002_attach_probe.sh` | Regular/daemon native attach into a pre-JITed Java callback |
-| `run_all_wine_gates.sh` | Runs all three W-002 gates before the broader Phase 4 suite |
+| `windows_w002_managed_entry_structure` | Runs `check_w002_managed_entries.py` over source and configured target objects with explicit LLVM tools |
+| `managed_w002_osr` | Baseline compile, OSR compile, jump, exact checksum, and switch/nterp return-path distinction |
+| `managed_w002_attach` | Regular/daemon native attach into a pre-JITed Java callback |
+| `win32_osr_unwind_probe` | PDB-resolved live synthetic PE unwind without exporting private ART stubs |
+
+All four declarations are owned by unified `stage:w002`. The managed runner is
+shell-free Python, and the structure gate is a CTest `host-review` rather than
+an alternative product build.
 
 The structural gate requires:
 
@@ -128,7 +132,7 @@ The structural gate requires:
 - Windows x64 compiler Thread accesses through r15; and
 - r15 excluded from the Windows x64 compiled callee-save set.
 
-## Focused Wine results
+## Historical focused Wine results
 
 ### OSR
 
@@ -167,7 +171,7 @@ focused matrix: two cycles on each of 128 raw threads, split evenly between
 regular and daemon attachment. Native R2's historical count remains 128
 single-cycle lifecycles.
 
-## Broader regression results
+## Historical broader regression results
 
 | Control | Result |
 |---------|--------|
@@ -189,16 +193,14 @@ The clean Linux rebuild exposed an unrelated compatibility-header issue:
 prototype. The header is now Windows-only and uses the system header on Linux.
 Both Linux and Windows hybrid libcore builds pass after that correction.
 
-## Native Windows package
+## Historical native Windows package
 
-Generate the issued package with:
+The standalone W-002 package producer and its Bash/PowerShell runners were
+retired after the unified stage passed natively and repeated as a Ninja no-op.
+The following describes the already issued R2 package and is retained only to
+interpret its immutable returned evidence and hashes.
 
-```bash
-JOBS=32 WINEDEBUG=-all \
-  bash tools/windows_x64/host_package/package_windows_x64_w002.sh
-```
-
-Package generation:
+Historical package generation:
 
 - rebuilds ART;
 - reruns the structural and 16-process focused Wine matrix;

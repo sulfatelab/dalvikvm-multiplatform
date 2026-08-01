@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the focused W-002 native-Windows acceptance package."""
+"""Validate an already issued historical W-002 native-Windows package."""
 
 from __future__ import annotations
 

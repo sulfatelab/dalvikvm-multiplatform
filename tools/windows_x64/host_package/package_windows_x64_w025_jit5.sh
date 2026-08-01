@@ -37,8 +37,8 @@ BUILD="$BUILD" JOBS="$JOBS" WINEDEBUG="$WINEDEBUG" \
 
 WINEDEBUG="$WINEDEBUG" "$REPO/tools/verify/windows_x64_phase4/run_jit_smoke.sh"
 WINEDEBUG="$WINEDEBUG" "$REPO/tools/verify/windows_x64_phase4/run_jit_matrix.sh"
-REPEATS=1 WINEDEBUG="$WINEDEBUG" \
-  "$REPO/tools/verify/windows_x64_phase4/run_w002_osr_probe.sh"
+# W-002 has its own accepted unified native stage. The W-025 host runner below
+# retains the OSR regression that belongs to this packaged product.
 WINEDEBUG="$WINEDEBUG" \
   "$REPO/tools/verify/windows_x64_w025/run_w025_jit5_preflight.sh"
 cp -a "$BUILD/art.dll" "$BUILD/run/art.dll"

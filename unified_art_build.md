@@ -101,6 +101,12 @@ items are closed.
   both the source and product-output trees contain zero reparse points. The
   synthetic unwind probe resolves private ART stubs from the adjacent PDB with
   DbgHelp `*W` APIs, so it does not widen the explicit `art.dll` export ABI.
+- [x] After unified native W-002 acceptance, its standalone attach CMake graph,
+  two Bash/Wine runtime runners, Bash host packager, and package-only
+  PowerShell runner were removed. The broader legacy Phase-4/W-025 scripts no
+  longer invoke those runners; current W-002 reproduction is only the unified
+  frontend and virtual stage. Historical checklists, returned evidence, and
+  archive hashes remain readable.
 - [x] `art.dll` no longer uses `WINDOWS_EXPORT_ALL_SYMBOLS`. Before the change,
   a Debug scan found 80,318 candidate exports and exceeded PE's 65,535-entry
   limit, while RelWithDebInfo exposed 17,112. ART's existing `EXPORT` boundary
@@ -337,7 +343,7 @@ verification directories. All 86 declarations own canonical source under
 source cases and all 48 Java sources have adjacent results, and shared stage
 analysis remains under `tests/stages/`. The old verification tree now contains
 zero Java sources and two uncatalogued native sources retained by unfinished
-legacy evidence paths. It still contains 60 shell scripts, 10 PowerShell
+legacy evidence paths. It still contains 58 shell scripts, nine PowerShell
 scripts, and 27 Python scripts. Python checkers
 and reviewers may remain, but the unified frontend must invoke them through a
 declared stage instead of a phase-local product build.

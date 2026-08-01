@@ -5,7 +5,8 @@ build 26100. The accepted Windows 10 result below is historical; the former
 Windows 10 host is no longer available for future reruns. See
 [HOST_GATE_POLICY.md](HOST_GATE_POLICY.md).
 
-**State:** ACCEPTED historically on Windows 10 build 19044; W-002 closed
+**State:** HISTORICAL PACKAGE PROCEDURE; accepted on Windows 10 build 19044;
+W-002 is now maintained by unified `stage:w002`
 
 The accepted `2026-07-26 14:37:55` R2 run produced 21 PASS records, zero
 failures, `OVERALL PASS`, and `NO_DMP_FILES`. All OSR and attached-thread mode
@@ -14,10 +15,14 @@ pairs passed twice. See
 
 ## Purpose
 
-This focused package is the remaining close gate for W-002. Wine and Linux
-already pass the structural, OSR, native-thread attach, and broader regression
-controls. The native run confirms that the Windows x64 rSELF and OSR transitions also
-behave correctly on the supported Windows kernel and loader.
+This checklist describes the already returned R2 package. Its producer and
+package-only runner were retired after the shell-free unified stage passed on
+Windows Server 2025 and repeated as a Ninja no-op. Keep this procedure only for
+interpreting or reviewing the immutable historical return; do not use it as a
+current build entry point.
+
+The native run confirmed that the Windows x64 rSELF and OSR transitions behave
+correctly on the supported Windows kernel and loader.
 
 The matrix covers:
 

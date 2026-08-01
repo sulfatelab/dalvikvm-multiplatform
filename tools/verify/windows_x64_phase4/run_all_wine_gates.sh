@@ -32,8 +32,6 @@ run P4_W003_FRAME_FAMILIES env \
   REPEATS=2 \
   bash "$ROOT/run_w003_frame_probe.sh"
 run P4_W003_XMM_SENTINEL bash "$ROOT/run_w003_xmm_sentinel.sh"
-run P4_W002_OSR bash "$ROOT/run_w002_osr_probe.sh"
-run P4_W002_ATTACH bash "$ROOT/run_w002_attach_probe.sh"
 run P4_W024_CLEANUP_SOURCE python3 "$REPO/tests/support/w024_cleanup.py"
 run P4_W010_FAULT_ADAPTER bash "$ROOT/run_fault_adapter_probe.sh"
 run P4_W010_JIT_UNWIND_SERIALIZER bash "$ROOT/run_jit_unwind_info_probe.sh"
