@@ -329,6 +329,15 @@ items are closed.
   native compile databases agree at 1,816 commands with all 22 `dexfile`
   commands prelude-free, both CET contracts pass 58/58, and all 186 host tests
   pass.
+- [x] The 29-source Windows `openjdkjvmti` DSO now compiles without the ART
+  prelude on both build hosts. `deopt_manager.cc` directly includes the
+  project-owned portable `sched.h` for its `sched_yield` call; the other 28
+  sources needed no new shim. The Linux-only JVMTI toolchain prelude remains
+  unchanged. Forced-prelude compile commands fell from 608 to 579. Linux and
+  both Windows products passed at their required 32/32/16 job limits and
+  repeated as Ninja no-ops. Cross and native compile databases agree at 1,816
+  commands with all 29 `openjdkjvmti` commands prelude-free, both CET contracts
+  pass 58/58, and all 187 host tests pass.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to

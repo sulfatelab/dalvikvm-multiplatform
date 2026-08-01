@@ -59,6 +59,7 @@ def test_windows_platform_prelude_has_reviewed_target_scope():
         "nativeloader",
         "odrstatslog",
         "openjdkjvm",
+        "openjdkjvmti",
         "profile",
         "procinfo",
         "sigchain",
@@ -160,6 +161,15 @@ def test_windows_openjdkjvm_uses_explicit_source_and_header_contracts():
     assert "int posix_memalign(void** memptr, size_t alignment, size_t size);" in stdlib
     assert "int posix_memalign(void** memptr, size_t alignment, size_t size);" not in prelude
     assert "int posix_memalign(void** memptr, size_t alignment, size_t size)" in stubs
+
+
+def test_windows_openjdkjvmti_owns_sched_yield_declaration():
+    deopt_manager = (
+        REPO_ROOT / "vendor" / "art" / "openjdkjvmti" / "deopt_manager.cc"
+    ).read_text(encoding="utf-8")
+
+    assert "#include <sched.h>" in deopt_manager
+    assert "sched_yield();" in deopt_manager
 
 
 def test_windows_dex2oat_posix_declarations_are_header_owned():

@@ -37,6 +37,7 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
         nativeloader
         odrstatslog
         openjdkjvm
+        openjdkjvmti
         profile
         procinfo
         sigchain
