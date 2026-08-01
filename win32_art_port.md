@@ -908,7 +908,7 @@ Native Windows R2 closure stress passes 56/56 records, including pressure,
 large heaps, both JIT memory modes, 20 repeated starts, handle churn, complete
 metrics, and no dumps. W-013 is CLOSED; see
 [win32_heap_memory.md](win32_heap_memory.md) and the accepted evidence under
-`tools/verify/windows_x64_w013/evidence/native_r2/ACCEPTANCE.md`.
+`docs/history/windows_x64_w013_result.md`.
 
 ## 10. Conclusion and current position
 

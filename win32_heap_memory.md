@@ -417,7 +417,7 @@ Landed as external dlmalloc `f3356ce` and ART `8c900a9e4b`. Verification:
 - full Linux `art`/`dalvikvm` rebuild; and
 - Linux imageless Hello PASS.
 
-Evidence: `tools/verify/windows_x64_w013/RESULT.md`.
+Evidence: `docs/history/windows_x64_w013_result.md`.
 
 ### Stage B — attach mspaces to their owners
 
@@ -435,7 +435,7 @@ The source gate now rejects raw `create_mspace*()` calls outside
 Landed as ART `d011d72d56`.
 Verification covered the Win32 ART/dalvikvm build, JIT smoke 12/12, GCStress,
 ThreadHeavy, HandleLeak, the Linux ART/dalvikvm build, and Linux imageless
-Hello. Evidence: `tools/verify/windows_x64_w013/RESULT.md`.
+Hello. Evidence: `docs/history/windows_x64_w013_result.md`.
 
 ### Stage C — correct Windows anonymous mapping policy
 
@@ -460,7 +460,7 @@ recovery, reservation transfer, reuse-view lifetime, logical shrink,
 exactly-once whole release, and 128 repeated owner-destruction cycles. Windows x64
 JIT smoke 12/12, GCStress, ThreadHeavy, HandleLeak, the Linux `-j16` build, and
 Linux imageless Hello also pass. Evidence:
-`tools/verify/windows_x64_w013/RESULT.md`.
+`docs/history/windows_x64_w013_result.md`.
 
 Stage C intentionally does not emulate fixed file-view replacement over an
 ordinary `VirtualAlloc` reservation. Windows cannot perform that operation
@@ -490,7 +490,7 @@ including discard while `PAGE_NOACCESS`, verifies adjacent-page contents and
 protections, and checks that logical shrink leaves its excluded tail
 `PAGE_NOACCESS`. Windows x64 JIT smoke 12/12, GCStress, ThreadHeavy, HandleLeak, the
 Linux `-j16` build, Linux imageless Hello, and Linux GCStress pass. Evidence:
-`tools/verify/windows_x64_w013/RESULT.md`.
+`docs/history/windows_x64_w013_result.md`.
 
 ### Stage E — reduce low-address use
 
@@ -518,7 +518,7 @@ search tool. The product non-moving probe churns
 75,497,472 bytes of sub-LOS arrays on both Windows x64/Wine and Linux with stable low
 addresses and post-GC regrowth. Windows x64 `-j16` build, JIT smoke 12/12, GCStress,
 ThreadHeavy, HandleLeak, Linux `-j16` build, imageless Hello, and Linux
-GCStress pass. Evidence: `tools/verify/windows_x64_w013/RESULT.md`.
+GCStress pass. Evidence: `docs/history/windows_x64_w013_result.md`.
 
 Stages A through E implement the W-013 design. Native Windows R2 passes
 pressure, commit-charge, protection/extent, and repeated-start acceptance.
@@ -580,7 +580,7 @@ retired after the unified W-013, W-004, and W-025 owners passed on Windows
 Server 2025 and repeated as Ninja no-ops. New runs use the unified frontend;
 the old per-process memory/pagefile measurements remain host characterization,
 not portable pass criteria. See the historical
-`tools/verify/windows_x64_w013/W013_HOST_CHECKLIST.md`.
+`docs/history/windows_x64_w013_result.md`.
 
 ### 10.4 Cross-platform regression
 
@@ -613,7 +613,7 @@ W-013 was eligible to move to CLOSED only when all of the following became true:
 All eight conditions are satisfied by the recorded Wine/Linux gates and native
 Windows R2 evidence. No macro-masking, blanket forced-low metadata, or
 skipped-card workaround remains in the product path. Acceptance details are in
-`tools/verify/windows_x64_w013/evidence/native_r2/ACCEPTANCE.md`.
+`docs/history/windows_x64_w013_result.md`.
 
 ## 12. Code anchors
 

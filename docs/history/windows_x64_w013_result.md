@@ -301,7 +301,7 @@ Results:
 Returned archive:
 
 ```text
-/tmp/w013-r1.zip
+<temporary>/w013-r1.zip
 SHA-256 643b906885d5a820d629391be7a0f9e504797960d51ae5ba37b4226c56210152
 build commit dbca77c03fa634c5e8460c06695e2636b7d0fa0d
 Windows 10 Enterprise LTSC 2021 build 19044
@@ -387,8 +387,8 @@ Native coverage passed:
 The mapping probe's overflow message is the expected rejection of its explicit
 overflow test, not an acceptance failure. No R1 access violation, discard
 failure, HandleLeak misclassification, missing metric, timeout, or hidden
-marker failure recurs. The compact durable review is recorded in
-`tools/verify/windows_x64_w013/evidence/native_r2/ACCEPTANCE.md`.
+marker failure recurs. This summary retains the compact durable review and the
+immutable package/archive identities.
 
 ## Historical native Windows acceptance package
 
@@ -396,8 +396,8 @@ The standalone host-package producer and its repository-side PowerShell runner
 were retired after unified W-013 native/Linux acceptance. The producer was
 already non-reproducible because it called removed legacy W-013 shell runners
 and staged from the deleted Phase-1 product tree. New acceptance uses the
-unified frontend; the checklist, accepted archive hash, and compact returned
-text remain only to interpret the immutable R2 evidence.
+unified frontend; the accepted archive hash and compact returned conclusion
+remain here only to interpret the immutable R2 evidence.
 
 The generated archive contains the native mapping, dlmalloc configuration, and
 mspace-owner probes. The mapping probe additionally rejects zero/overflowing
@@ -408,10 +408,8 @@ non-moving pressure at 128-MiB and 1-GiB `-Xmx`; moving/LOS GC stress;
 ThreadHeavy and HandleLeak; 512-MiB and 1-GiB startup; default dual-view JIT,
 the J-1 diagnostic path, and the fourteen-case JIT matrix; twenty repeated
 default-JIT starts; per-process memory metrics and host pagefile data; fatal-log
-scanning; and recursive dump scanning. Execution and evidence-return
-historical instructions are in
-`tools/verify/windows_x64_w013/W013_HOST_CHECKLIST.md`. The R2 return meets this
-bar: `logs/RESULT_W013.txt` ends in `OVERALL PASS`,
+scanning; and recursive dump scanning. The R2 return met the now-retired
+package-checklist bar: `logs/RESULT_W013.txt` ends in `OVERALL PASS`,
 the complete logs were reviewed, and the returned package metadata matches the
 issued package.
 

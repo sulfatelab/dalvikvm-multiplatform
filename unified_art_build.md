@@ -671,7 +671,9 @@ items are closed.
   references to removed runners and the deleted Phase-1 tree; its PowerShell
   matrix is superseded by W-013 allocator/pressure gates, W-004 managed stress,
   and W-025 JIT controls/lifecycle. Historical per-process memory and pagefile
-  measurements remain evidence, not portable pass criteria.
+  measurements remain evidence, not portable pass criteria. The single durable
+  R1/R2 summary moved to `docs/history/windows_x64_w013_result.md`; the obsolete
+  host checklist and duplicate compact acceptance file were removed.
 - [x] The unreferenced Phase-4 `JitSectionProbe.c` was removed. The canonical
   W-025 section-policy case is its stronger regular-file successor: it owns
   R/RX/RW pagefile views, generated execution, complete low-VA rejection and

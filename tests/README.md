@@ -231,7 +231,9 @@ retired after native Windows 7/7 and Linux 1/1 acceptance plus no-op repeats.
 W-013 owns allocator/mapping/source-policy and 128/1024 MiB pressure; W-004
 owns the package's generic managed stress; W-025 owns its supported JIT
 controls and lifecycle behavior. Historical peak-memory/pagefile measurements
-remain evidence, not portable pass criteria.
+remain evidence, not portable pass criteria. The single durable R1/R2 summary
+now lives under `docs/history`; its obsolete host checklist and duplicate
+compact acceptance file were removed.
 The unreferenced Phase-4 `JitSectionProbe.c` predecessor was removed after the
 canonical W-025 section-policy case subsumed its low-view, R/RX/RW, execution,
 low-VA failure/recovery, and commit-pressure contracts with stronger native and

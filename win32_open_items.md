@@ -472,7 +472,7 @@ Summary (details below; do not delete history):
 - **Boundary / non-goal:** Fixed file-view replacement over an ordinary `VirtualAlloc` reservation remains unsupported and unused by the imageless/JIT product path. Any future placeholder-overlay or reserve-only/lazy-commit design is separate work.
 - **Code anchors:** `art-dlmalloc.{h,cc}`; `dlmalloc.c` Win32 defaults and `malloc_state::extp/exts`; `dlmalloc_space.cc`; `malloc_space.cc`; `jit_memory_region.cc`; `mem_map.{h,cc}`; `mem_map_windows.cc`; `runtime.cc`
 - **Design:** [win32_heap_memory.md](win32_heap_memory.md)
-- **Evidence:** `tools/verify/windows_x64_w013/RESULT.md`; `tools/verify/windows_x64_w013/evidence/native_r2/ACCEPTANCE.md`; returned archive SHA-256 `456e297d70c2f166308c869812ddec262fa38bc6dcd2852ea56edd5b2205078e`; external dlmalloc `f3356ce`; ART `8c900a9e4b`, `d011d72d56`, `2fa301a13b`, `9ea15456a2`, `6253d01afc`, `47567cebcc`, `1509b1f95e`, `27a1ac74a4`; root `c943f1f`, `caad337`; libcore `67ec4ab8dd70`
+- **Evidence:** `docs/history/windows_x64_w013_result.md`; returned archive SHA-256 `456e297d70c2f166308c869812ddec262fa38bc6dcd2852ea56edd5b2205078e`; external dlmalloc `f3356ce`; ART `8c900a9e4b`, `d011d72d56`, `2fa301a13b`, `9ea15456a2`, `6253d01afc`, `47567cebcc`, `1509b1f95e`, `27a1ac74a4`; root `c943f1f`, `caad337`; libcore `67ec4ab8dd70`
 - **Opened:** 2026-07-16
 - **Closed:** 2026-07-25 — native Windows R2 acceptance plus final evidence review
 
