@@ -15,6 +15,7 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
         art-dex2oat
         artpalette
         crypto_static
+        elffile
         expat
         fdlibm
         icui18n

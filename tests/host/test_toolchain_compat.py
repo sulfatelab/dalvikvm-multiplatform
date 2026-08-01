@@ -37,6 +37,7 @@ def test_windows_platform_prelude_has_reviewed_target_scope():
         "art-dex2oat",
         "artpalette",
         "crypto_static",
+        "elffile",
         "expat",
         "fdlibm",
         "icui18n",
