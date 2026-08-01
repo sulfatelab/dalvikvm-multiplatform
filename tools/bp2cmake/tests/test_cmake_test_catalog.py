@@ -67,10 +67,10 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         (binary / "art-tests" / "art_test_catalog.json").read_text(encoding="utf-8")
     )
     assert catalog["target_id"] == "windows-x86_64-msvc"
-    assert len(catalog["probes"]) == 91
-    assert sum(probe["applicable"] for probe in catalog["probes"]) == 89
+    assert len(catalog["probes"]) == 92
+    assert sum(probe["applicable"] for probe in catalog["probes"]) == 90
     assert sum(bool(probe["target_ids"]) for probe in catalog["probes"]) == 27
-    assert sum(not probe["target_ids"] for probe in catalog["probes"]) == 64
+    assert sum(not probe["target_ids"] for probe in catalog["probes"]) == 65
     w002_attach = next(
         probe for probe in catalog["probes"] if probe["name"] == "managed_w002_attach"
     )
@@ -168,6 +168,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "windows_w010_boundary_unwind_structure",
         "windows_w013_source_policy",
         "windows_x64_w025_jit_structure",
+        "windows_w027_unicode_api_policy",
     ]
     w025 = [probe for probe in catalog["probes"] if probe["stage"] == "w025"]
     assert len(w025) == 12
@@ -177,6 +178,14 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     assert [probe["name"] for probe in w025 if probe["ctest_registered"]] == [
         "windows_x64_w025_jit_structure",
     ]
+    w027 = [probe for probe in catalog["probes"] if probe["stage"] == "w027"]
+    assert len(w027) == 1
+    assert w027[0]["name"] == "windows_w027_unicode_api_policy"
+    assert w027[0]["execution"] == "host-review"
+    assert w027[0]["ctest_registered"] is True
+    assert w027[0]["platforms"] == ["windows"]
+    assert w027[0]["target_arches"] == ["x86_64"]
+    assert w027[0]["target_abis"] == ["msvc"]
 
     variant_binary = tmp_path / "variant-build"
     (source / "CMakeLists.txt").write_text(
@@ -294,7 +303,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         (binary / "art-tests" / "art_test_catalog.json").read_text(encoding="utf-8")
     )
     applicable = [probe for probe in catalog["probes"] if probe["applicable"]]
-    assert len(catalog["probes"]) == 91
+    assert len(catalog["probes"]) == 92
     assert [probe["name"] for probe in applicable] == [
         "managed_imageless_hello",
         "managed_gc_stress",

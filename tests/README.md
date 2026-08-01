@@ -177,6 +177,13 @@ Windows cross stage passed its reviewer; both stage builds repeated as Ninja
 no-ops. Test assets are copied as regular files into output-owned work roots,
 while the original absolute `dalvikvm.exe` is launched to preserve its product
 DLL lookup order. No machine path is serialized in result JSON.
+W-027 is a typed Windows x86-64/MSVC `host-review` gate over the active
+translation-unit graph. Its scanner reads `compile_commands.json`, de-duplicates
+sources, strips comments and literals, distinguishes JNI `Call*MethodA` from
+Win32 suffix-`A` APIs, and fails on either a known ANSI call or an unclassified
+suffix-`A` family. The active 1,441-source graph has zero ANSI calls, source
+files, or API families. The Linux-hosted Windows-cross stage passes; native
+Windows acceptance remains pending.
 Remaining legacy shell runners and retained per-probe CMake entry points use
 canonical files as temporary compatibility shims; they must be replaced by the
 unified Python/CMake/Ninja path before `tools/verify` can be removed. W-003 has
@@ -207,9 +214,10 @@ W-025 has removed its four package producers,
 package-only PowerShell/Bash/Wine orchestration, and superseded Phase-4 JIT
 wrappers after unified native acceptance. Retained aggregate package flows
 acquire required DLL/JAR inputs from an explicitly configured unified build.
-Eight shared Windows x86-64 source/object/PE reviewers now live under
+Nine shared Windows x86-64 source/object/PE/API reviewers now live under
 `support/windows/`: six moved from the retired Phase-1 product graph, and the
-W-013 and W-025 policy reviewers were added directly to the unified system.
+W-013, W-025, and W-027 policy reviewers were added directly to the unified
+system.
 Their defaults or explicit arguments consume canonical
 `out/<target-id>/<build-type>` artifacts.
 The last W-013 host package producer and repository-side PowerShell runner were

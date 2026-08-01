@@ -431,7 +431,7 @@ endfunction()
 
 add_custom_target(art-tests)
 add_custom_target(art-managed-tests)
-foreach(stage w002 w003 w004 w010 w013 w014 w025)
+foreach(stage w002 w003 w004 w010 w013 w014 w025 w027)
     art_define_test_stage("${stage}")
 endforeach()
 
@@ -1707,6 +1707,19 @@ art_add_target_probe(
         --llvm-readobj "${ART_LLVM_READOBJ}"
         --result
             "${CMAKE_CURRENT_BINARY_DIR}/results/w025-structure/result.json")
+
+# W-027: reject ANSI Win32 entry points in every active Windows translation
+# unit while classifying JNI's unrelated Call*MethodA family explicitly.
+art_add_target_probe(
+    NAME windows_w027_unicode_api_policy STAGE w027 TYPE GATE
+    EXECUTION host-review ${_art_windows_current_selector}
+    DEPENDS art
+    CONTRACTS unicode win32-api source-policy
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_test_repo_root}/tests/support/windows/check_win32_unicode_api_policy.py"
+        --repo "${_art_test_repo_root}"
+        --compile-commands "${CMAKE_BINARY_DIR}/compile_commands.json")
 
 get_property(_art_test_catalog_records GLOBAL PROPERTY ART_TEST_CATALOG_RECORDS)
 string(JOIN ",\n" _art_test_catalog_body ${_art_test_catalog_records})
