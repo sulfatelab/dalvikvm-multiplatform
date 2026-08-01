@@ -1,5 +1,0 @@
-W025_POLICY_OBSERVED dynamic_prohibit=0 dynamic_thread_opt_out=0 cfg_enabled=1 cfg_strict=0 cfg_export_suppression=0
-W025_SECTION_MAPPING label=default capacity_bytes=67108864 primary=0000000000410000 alias=0000023269A60000 roles=R_RX_RW type=MEM_MAPPED rwx=0 mapped_names=0 primary_name_error=1006 alias_name_error=1006 execute=1
-W025_SECTION_POLICY_PASS mode=cfg-call
-W025_POLICY_CHILD policy=cfg dynamic_prohibit=0 dynamic_thread_opt_out=0 cfg_enabled=1 cfg_strict=0
-W025_POLICY_LAUNCHER_PASS policy=cfg child_exit=0 expected=zero

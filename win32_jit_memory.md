@@ -1013,10 +1013,10 @@ independent package.
 | Order | Work | Exit gate |
 |------:|------|-----------|
 | JIT-1 (done) | Direct range checks at every signed-int32 JIT-root patch and uint32 CodeInfo construction site, with positive boundary and deterministic overflow tests | Accepted 2026-07-29: focused checks, Windows x64/Linux builds, Wine JIT/unwind gates, and native Windows Server 2025 W-004 regression pass without changing the encoded format; see `RESULT-jit-encoding-guards.md` |
-| JIT-2 (done) | Build one W-025 native closure package for mapping protections, no-filesystem/no-RWX assertions, CFG, unsupported-policy rejection, low-VA failure, and large `SEC_COMMIT` pressure | Accepted 2026-07-29 on Windows Server 2025 build 26100: nine cases and 14 aggregate checks pass; the `ProhibitDynamicCode` child cleanly rejects J-2/J-1 operations with error 1655 as a negative boundary, no dump or JIT temp remains, and the returned archive passes independent review; see `RESULT-jit2-native.md` |
-| JIT-3 (done) | Run default J-2 allocation/compile/invalidate/collect/reuse stress with concurrent `RtlLookupFunctionEntry()` and virtual-unwind sampling; retain J-1 only as a comparison arm | Accepted 2026-07-29 on Windows Server 2025 build 26100: four cases complete 52 collections, 1,344 compilations, 1,248 exact reuses, and 696,969 virtual unwinds with no missing live record, stale dead record, unwind failure, dump, or JIT temp; see `RESULT-jit3-native.md` |
-| JIT-4 (done) | Repeat smoke, matrix, JIT-disabled, and representative managed/native/OSR/fatal gates on the accepted default build | Accepted 2026-07-29 on Windows Server 2025 build 26100: 28 default-J-2 cases and 34/34 aggregate records pass with eight lifecycle cycles, three valid fatal dumps, empty JIT temp, no trace, and no J-1 arm; see `RESULT-jit4-native.md` |
-| JIT-5 (done) | Remove `ART_WINDOWS_X64_JIT_DUAL=0` and its single-view Windows diagnostic branch | Accepted 2026-07-29 on Windows Server 2025 build 26100: 29 cases and 36/36 records pass; source and `art.dll` lack the opt-out/fallback; the retired key remains inert; Wine and Linux regressions pass; see `RESULT-jit5-native.md` |
+| JIT-2 (done) | Build one W-025 native closure package for mapping protections, no-filesystem/no-RWX assertions, CFG, unsupported-policy rejection, low-VA failure, and large `SEC_COMMIT` pressure | Accepted 2026-07-29 on Windows Server 2025 build 26100: nine cases and 14 aggregate checks pass; the `ProhibitDynamicCode` child cleanly rejects J-2/J-1 operations with error 1655 as a negative boundary, no dump or JIT temp remains, and the returned archive passes independent review; see `docs/history/windows_x64_w025_jit2_result.md` |
+| JIT-3 (done) | Run default J-2 allocation/compile/invalidate/collect/reuse stress with concurrent `RtlLookupFunctionEntry()` and virtual-unwind sampling; retain J-1 only as a comparison arm | Accepted 2026-07-29 on Windows Server 2025 build 26100: four cases complete 52 collections, 1,344 compilations, 1,248 exact reuses, and 696,969 virtual unwinds with no missing live record, stale dead record, unwind failure, dump, or JIT temp; see `docs/history/windows_x64_w025_jit3_result.md` |
+| JIT-4 (done) | Repeat smoke, matrix, JIT-disabled, and representative managed/native/OSR/fatal gates on the accepted default build | Accepted 2026-07-29 on Windows Server 2025 build 26100: 28 default-J-2 cases and 34/34 aggregate records pass with eight lifecycle cycles, three valid fatal dumps, empty JIT temp, no trace, and no J-1 arm; see `docs/history/windows_x64_w025_jit4_result.md` |
+| JIT-5 (done) | Remove `ART_WINDOWS_X64_JIT_DUAL=0` and its single-view Windows diagnostic branch | Accepted 2026-07-29 on Windows Server 2025 build 26100: 29 cases and 36/36 records pass; source and `art.dll` lack the opt-out/fallback; the retired key remains inert; Wine and Linux regressions pass; see `docs/history/windows_x64_w025_jit5_result.md` |
 
 The shared FS-3 dynamic-table churn requirement is complete through JIT-3.
 FS-2 now closes the native debugger continuation, CET policy classification,
@@ -1091,10 +1091,10 @@ completed JIT-1 through JIT-5 gates.
 | D-1 Thread-address helper | `vendor/art/compiler/utils/x86_64/assembler_x86_64.*` |
 | W-002 OSR entry adapters | `vendor/art/runtime/arch/x86_64/quick_entrypoints_x86_64.S`; `vendor/art/runtime/interpreter/mterp/x86_64ng/main.S` |
 | W-003 frame-family/XMM acceptance | unified `managed_w003_frame` and `managed_w003_xmm_sentinel`; `tests/cases/w003-frame-probe/RESULT.md`; `tests/cases/w003-xmm-sentinel/RESULT.md`; historical `tools/verify/windows_x64_phase4/evidence/w003_host/ACCEPTANCE.md` |
-| W-025 JIT-2 mapping/policy acceptance | `tools/verify/windows_x64_w025/RESULT-jit2-native.md`; `tools/verify/windows_x64_w025/evidence/jit2_native/ACCEPTANCE.md` |
-| W-025 JIT-3/FS-3 lifecycle/unwind acceptance | `tools/verify/windows_x64_w025/RESULT-jit3-native.md`; `tools/verify/windows_x64_w025/evidence/jit3_native/ACCEPTANCE.md` |
-| W-025 JIT-4 final native regression | `tools/verify/windows_x64_w025/RESULT-jit4-native.md`; `tools/verify/windows_x64_w025/evidence/jit4_native/ACCEPTANCE.md` |
-| W-025 JIT-5 removal and closure | `tools/verify/windows_x64_w025/RESULT-jit5-native.md`; `tools/verify/windows_x64_w025/evidence/jit5_native/ACCEPTANCE.md` |
+| W-025 JIT-2 mapping/policy acceptance | `docs/history/windows_x64_w025_jit2_result.md` |
+| W-025 JIT-3/FS-3 lifecycle/unwind acceptance | `docs/history/windows_x64_w025_jit3_result.md` |
+| W-025 JIT-4 final native regression | `docs/history/windows_x64_w025_jit4_result.md` |
+| W-025 JIT-5 removal and closure | `docs/history/windows_x64_w025_jit5_result.md` |
 | nterp hard-float result adapter | `vendor/art/runtime/interpreter/mterp/x86_64ng/main.S` |
 | JNI XMM argument moves | `vendor/art/compiler/utils/x86_64/jni_macro_assembler_x86_64.cc`; `assembler_x86_64_test.cc` |
 | Native JIT gate | `vendor/art/runtime/jit/jit.cc` |

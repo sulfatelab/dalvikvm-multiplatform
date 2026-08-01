@@ -100,8 +100,9 @@ Independent review returned:
 W-025 JIT-4 native host result review: PASS cases=28 aggregate_pass=34 failures=0 fatal_dumps=3 archive_sha256=843391f11e22225516162b25de0412d790c9ea669d0383a996e739aae8480096
 ```
 
-Immutable identities and compact native records are archived in
-[`evidence/jit4_native/`](evidence/jit4_native/).
+This summary retains the immutable package/archive identities and independent
+review conclusion. The package-era per-process log bundle was removed after
+the same contracts migrated to the unified W-010/W-025 stages.
 
 ## Next gate
 

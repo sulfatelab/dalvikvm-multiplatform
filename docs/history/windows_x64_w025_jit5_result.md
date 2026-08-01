@@ -49,8 +49,9 @@ Independent review:
 W-025 JIT-5 native host result review: PASS cases=29 aggregate_pass=36 failures=0 fatal_dumps=3 archive_sha256=2bddf51924a7ca6b9719ffde433e859007465babf6bf2ca7a12f417eecd6289f
 ```
 
-Compact evidence is under
-[`evidence/jit5_native/`](evidence/jit5_native/).
+This summary retains the immutable package/archive identities and independent
+review conclusion. The package-era per-process log bundle was removed after
+the same contracts migrated to the unified W-010/W-025 stages.
 
 ## Closure decision
 

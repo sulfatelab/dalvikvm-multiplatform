@@ -215,8 +215,11 @@ workloads. Its source-less FloatProbe JAR remains historical evidence rather
 than a reason to keep an alternative package build.
 W-025 has removed its four package producers,
 package-only PowerShell/Bash/Wine orchestration, and superseded Phase-4 JIT
-wrappers after unified native acceptance. Retained aggregate package flows
-acquire required DLL/JAR inputs from an explicitly configured unified build.
+wrappers after unified native acceptance. Its four durable JIT-2 through JIT-5
+acceptance summaries now live under `docs/history`; obsolete package checklists,
+checkers/reviewers, and per-process log bundles were removed. Retained aggregate
+package flows acquire required DLL/JAR inputs from an explicitly configured
+unified build.
 Nine shared Windows x86-64 source/object/PE/API reviewers now live under
 `support/windows/`: six moved from the retired Phase-1 product graph, and the
 W-013, W-025, and W-027 policy reviewers were added directly to the unified

@@ -1,3 +1,0 @@
-W025_POLICY_OBSERVED dynamic_prohibit=0 dynamic_thread_opt_out=0 cfg_enabled=1 cfg_strict=0 cfg_export_suppression=0
-W025_SEC_COMMIT_PASS capacity_bytes=1073741824 commit_before=1740259328 commit_after_create=2816098304 commit_delta=1075838976 commit_after_close=1756774400 commit_limit=20196007936 primary_low=1 alias=1
-W025_SECTION_POLICY_PASS mode=pressure

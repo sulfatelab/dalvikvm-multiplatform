@@ -64,8 +64,9 @@ policy-marker, dump, trace, and JIT-temporary-file review:
 W-025 JIT-2 native host result review: PASS cases=9 aggregate_pass=14 failures=0 archive_sha256=3d32e3a15f4e4ad8b5e98a769ea02e638abeb975755064177b1a4d3a6bf9364e
 ```
 
-Immutable identities and compact native records are archived in
-[`evidence/jit2_native/`](evidence/jit2_native/).
+This summary retains the immutable package/archive identities and independent
+review conclusion. The package-era per-process log bundle was removed after
+the same contracts migrated to the unified W-025 stage.
 
 ## Next gate
 

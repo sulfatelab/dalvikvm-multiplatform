@@ -2533,8 +2533,8 @@ and debugger evidence.
 | `runtime/multiplatform/windows/jit_unwind_windows.{h,cc}` and `runtime/jit/jit_code_cache.*` | Implemented stable one-entry dynamic-function registry, publish-after-register rule, exact deletion, unregister-before-free/reuse, and clear-before-teardown ownership |
 | `runtime/jit/jit_memory_region.*` | Implemented overflow-checked aligned xdata tail in each existing data allocation, written through the RW alias and referenced through the primary low-4-GiB view |
 | `tests/cases/jit-lifecycle-stress/probe.cc` and its adjacent `RESULT.md` | Native-accepted JIT-3/FS-3 optimizing/JNI compile-invalidate-collect-reuse stress with concurrent lookup/virtual unwind and independent returned-archive review |
-| `tools/verify/windows_x64_w025/RESULT-jit4-native.md` | Native-accepted JIT-4 default-J-2 final regression, including eight lifecycle cycles and three valid static/JIT/OSR fatal dumps with independent returned-archive review |
-| `tools/verify/windows_x64_w025/RESULT-jit5-native.md` | Native-accepted JIT-5 removal proof: Windows J-1 absent, retired key inert, fail-closed source/binary contract, eight lifecycle cycles, and three valid fatal dumps with independent review |
+| `docs/history/windows_x64_w025_jit4_result.md` | Native-accepted JIT-4 default-J-2 final regression, including eight lifecycle cycles and three valid static/JIT/OSR fatal dumps with independent returned-archive review |
+| `docs/history/windows_x64_w025_jit5_result.md` | Native-accepted JIT-5 removal proof: Windows J-1 absent, retired key inert, fail-closed source/binary contract, eight lifecycle cycles, and three valid fatal dumps with independent review |
 | `runtime/thread.cc` | Implemented exact current-stack acceptance and attach failure; Windows x64 performs no fixed-page installation and adjusts common bounds by the platform-reported excluded-low sum |
 | `runtime/multiplatform/windows/stack_windows.{h,cc}` | Read-only E9 layout inspection accounts for inaccessible prefix + configured guarantee + moving guard; Stage-B select/protect/restore helpers remain diagnostic-only |
 | `runtime/multiplatform/windows/thread_windows.cc` | Queries, raises/preserves, re-queries, and validates the four-page minimum guarantee, then supplies guarantee-aware layout accounting; no alternate signal stack |
@@ -2634,8 +2634,8 @@ The runner returns 14/14 aggregate checks, clean forbidden-log scanning,
 `NO_DMP_FILES`, and an empty JIT temporary directory. This was the prerequisite
 mapping/policy boundary; the separate FS-3 result below adds collection/reuse
 sampling. Neither replaces E9 fatal-origin unwind acceptance. JIT-2's
-independently reviewed identities and compact records are archived under
-`tools/verify/windows_x64_w025/evidence/jit2_native/`.
+independently reviewed identities and conclusion remain in
+`docs/history/windows_x64_w025_jit2_result.md`.
 
 ### JIT-3 / FS-3 shared native acceptance - 2026-07-29
 
@@ -2662,8 +2662,8 @@ and ART `43f866830eee0ee666b1cf3e9d2b3abffc45180b`. Its SHA-256 is
 `8446a41d72aba32e19ce53cba8ac4b518b182bdebcd68c8023ce6e2ac6d0759f`;
 the independently accepted returned archive SHA-256 is
 `dcd3062a95a00296ca939062cc52fb7907405cc7c4e08ae72723a318063284fd`.
-Compact records are archived under
-`tools/verify/windows_x64_w025/evidence/jit3_native/`. This closes FS-3; it
+The compact acceptance conclusion remains in
+`docs/history/windows_x64_w025_jit3_result.md`. This closes FS-3; it
 does not replace E9 fatal-origin acceptance or the remaining debugger,
 forced-policy, exception-XMM, pending-range, embedding, reservation-correlation,
 and second-host work.
@@ -2697,8 +2697,8 @@ The issued package records root
 `411671ab378dab9fa4c4732934deb575d7dfb5873b5ab75ffe605514afcc8cf1`.
 The independently accepted returned archive SHA-256 is
 `843391f11e22225516162b25de0412d790c9ea669d0383a996e739aae8480096`.
-Compact records are archived under
-`tools/verify/windows_x64_w025/evidence/jit4_native/`.
+The compact acceptance conclusion remains in
+`docs/history/windows_x64_w025_jit4_result.md`.
 
 ### JIT-5 post-removal native fatal/unwind cross-regression - 2026-07-29
 
@@ -2728,8 +2728,8 @@ archive SHA-256 is
 `7b35eab8001ee2ba4881985b63d8df6921a954e023f8e70289f964499f57cd32`;
 the independently accepted returned archive SHA-256 is
 `2bddf51924a7ca6b9719ffde433e859007465babf6bf2ca7a12f417eecd6289f`.
-Compact evidence is under
-`tools/verify/windows_x64_w025/evidence/jit5_native/`.
+The compact acceptance conclusion remains in
+`docs/history/windows_x64_w025_jit5_result.md`.
 
 This closes W-025 and cross-regresses the accepted E9 and FS-3 behavior. It
 does not replace E9's 30-record core archive or close the independent

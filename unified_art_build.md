@@ -905,9 +905,10 @@ items are closed.
 - [x] After native W-025 acceptance, its four host-package producers, four
   package-only PowerShell runners, five W-025 Bash build/preflight runners,
   two package-only Wine smoke wrappers, and six superseded Phase-4 JIT
-  section/unwind/fatal runners were removed. Historical accepted results,
-  checklists, package checkers/reviewers, and compact text evidence remain
-  readable; maintained reproduction is only the unified W-010/W-025 stages.
+  section/unwind/fatal runners were removed. The four durable JIT-2 through
+  JIT-5 acceptance summaries moved to flat names under `docs/history`; obsolete
+  package checklists, package checkers/reviewers, and per-process log bundles
+  were removed. Maintained reproduction is only the unified W-010/W-025 stages.
 - [x] The eight early Linux converter bring-up harnesses under `tools/verify`
   were removed after the unified graph, show-version gate, and maintained
   historical scope document subsumed their product and evidence roles. Their

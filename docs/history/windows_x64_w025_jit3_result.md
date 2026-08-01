@@ -83,8 +83,9 @@ trace, and temporary-file review:
 W-025 JIT-3 native host result review: PASS cases=4 aggregate_pass=9 failures=0 collections=52 compilations=1344 exact_reuse=1248 archive_sha256=dcd3062a95a00296ca939062cc52fb7907405cc7c4e08ae72723a318063284fd
 ```
 
-Immutable identities and compact native records are archived in
-[`evidence/jit3_native/`](evidence/jit3_native/).
+This summary retains the immutable package/archive identities and independent
+review conclusion. The package-era per-process log bundle was removed after
+the same contracts migrated to the unified W-025 stage.
 
 ## Next gate and J-1 boundary
 

@@ -1,4 +1,0 @@
-Hello from dalvikvm!
-java.version=1.8.0
-W025_POLICY_CHILD policy=dynamic dynamic_prohibit=1 dynamic_thread_opt_out=0 cfg_enabled=0 cfg_strict=0
-W025_POLICY_LAUNCHER_PASS policy=dynamic child_exit=0 expected=zero

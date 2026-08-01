@@ -1,2 +1,0 @@
-W025_JIT3_PASS methods=24 managed=16 jni=8 unique_allocations=24 cycles=24 collections=24 compilations=600 exact_reuse=576 live_lookups=297312 dead_lookups=2867348 transition_lookups=2485756 virtual_unwinds=297330 missing_live=0 stale_dead=0 unwind_failures=0 lookup_average_ns=0 lookup_maximum_ns=706100 callback_tables=0
-W025JitLifecycleStressProbe PASS cycles=24 managed_checksum=-1979683887 jni_values=pass
