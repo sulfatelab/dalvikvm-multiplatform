@@ -19,6 +19,7 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
         base
         crypto_static
         dalvikvm
+        dexfile
         dex2oat
         elffile
         expat
@@ -96,8 +97,14 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
         APPEND PROPERTY COMPILE_DEFINITIONS MDVM_WINDOWS_NO_CALLBACK_MACRO)
 endif()
 file(GLOB _DEX_CC ${MDVM_NATIVE_SRC_ROOT_DIR}/art/libdexfile/dex/*.cc)
-set_source_files_properties(${_DEX_CC}
-    PROPERTIES COMPILE_OPTIONS "-include;${_PRELUDE};-Wno-strict-primary-template-shadow")
+if(ART_TARGET_PLATFORM STREQUAL "windows")
+    set_source_files_properties(${_DEX_CC}
+        PROPERTIES COMPILE_OPTIONS "-Wno-strict-primary-template-shadow")
+else()
+    set_source_files_properties(${_DEX_CC}
+        PROPERTIES COMPILE_OPTIONS
+            "-include;${_PRELUDE};-Wno-strict-primary-template-shadow")
+endif()
 if(ART_TARGET_PLATFORM STREQUAL "linux")
     set_property(SOURCE
         ${MDVM_GENSRC_DIR}/art/libdexfile/dex/invoke_type.h.operator_out.cc

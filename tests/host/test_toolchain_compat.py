@@ -41,6 +41,7 @@ def test_windows_platform_prelude_has_reviewed_target_scope():
         "base",
         "crypto_static",
         "dalvikvm",
+        "dexfile",
         "dex2oat",
         "elffile",
         "expat",

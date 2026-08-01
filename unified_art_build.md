@@ -319,6 +319,16 @@ items are closed.
   job limits and repeated as Ninja no-ops. Cross and native compile databases
   agree at 1,816 commands with all 21 `javacore` commands prelude-free, both
   CET contracts pass 58/58, and all 186 host tests pass.
+- [x] The 22-command Windows `dexfile` static library now compiles without the
+  ART prelude on both build hosts. Its existing headers expose the complete
+  Windows contract; the 15 direct `libdexfile/dex/*.cc` commands retain only
+  their source-scoped `-Wno-strict-primary-template-shadow` suppression. The
+  Linux-only toolchain prelude remains unchanged. Forced-prelude compile
+  commands fell from 630 to 608. Linux and both Windows products passed at
+  their required 32/32/16 job limits and repeated as Ninja no-ops. Cross and
+  native compile databases agree at 1,816 commands with all 22 `dexfile`
+  commands prelude-free, both CET contracts pass 58/58, and all 186 host tests
+  pass.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to
