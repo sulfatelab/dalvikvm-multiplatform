@@ -178,8 +178,10 @@ unified native acceptance. Its accepted Phase-3 libcore slices removed all 26
 superseded Bash build/run wrappers; native-open cases remain compile-only in
 the same catalog instead of retaining an alternative product or runtime graph.
 The accepted Phase-4 managed stress slice also removed its generic builder,
-generic Wine runner, aggregate Wine runner, and four per-case wrappers. W-025 has
-removed its four package producers,
+generic Wine runner, aggregate Wine runner, and four per-case wrappers. W-010's
+redundant Phase-4 managed-abort Wine wrapper is also retired; the native-crash
+wrapper remains until its additional PE unwind audit migrates. W-025 has removed
+its four package producers,
 package-only PowerShell/Bash/Wine orchestration, and superseded Phase-4 JIT
 wrappers after unified native acceptance. Retained aggregate package flows
 acquire required DLL/JAR inputs from an explicitly configured unified build.

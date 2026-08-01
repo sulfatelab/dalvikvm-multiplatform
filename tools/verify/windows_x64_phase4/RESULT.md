@@ -140,7 +140,7 @@ still consume them; they are not the current W-010 reproduction path.
 | P4_G2 Thread heavy | **PASS in unified native stage; historical Wine PASS** | `art.w004.managed_threadheavyprobe` |
 | P4_G3 Handle leak smoke | **PASS in unified native stage; historical Wine PASS** | `art.w004.managed_handleleakprobe` |
 | P4_G4 Perf smoke | **PASS in unified native stage; historical Wine PASS** | `art.w004.managed_perfsmokeprobe` |
-| P4_G5 Java abort path | **PASS** | `run_crashabort.sh` |
+| P4_G5 Java abort path | **PASS in unified native stage; historical Wine PASS** | `art.w010.managed_crashabortprobe` |
 | P4_G5b Native AV + minidump | **PASS** | `run_crashnative.sh` (VEH+UEF+`.dmp`) |
 | P4_G6 GoldenApp regression | **PASS** | historical Phase-3 evidence; maintained as `art.w004.managed_goldenapp` |
 | W-002 structural managed entries | **PASS in unified native stage** | `windows_w002_managed_entry_structure` |

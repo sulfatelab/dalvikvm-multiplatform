@@ -373,6 +373,10 @@ items are closed.
   Passing the frontend-resolved absolute product EXE to the debugger preserves
   its product DLL directory while the jars, data, logs, and dumps remain in an
   isolated output-owned working tree. No machine path is serialized.
+- [x] The redundant Phase-4 managed-abort Wine wrapper was removed after the
+  stricter unified W-010 abort gate passed twice natively. The separate
+  native-crash compatibility wrapper remains temporarily because it also owns
+  a PE boundary-unwind audit that must first become a unified declaration.
 - [x] W-025 now owns seven shell-free target-runnable gates plus one
   `host-review` gate. Windows Server 2025 passed all 8/8 twice in 8.80 and
   8.61 seconds. The stage covers six unwind-info encodings, runtime-function
@@ -494,7 +498,7 @@ verification directories. All 89 declarations own canonical source under
 source cases and all 48 Java sources have adjacent results, and shared stage
 analysis remains under `tests/stages/`. The old verification tree now contains
 zero Java sources and two uncatalogued native sources retained by unfinished
-legacy evidence paths. It still contains seven shell scripts, two PowerShell
+legacy evidence paths. It still contains six shell scripts, two PowerShell
 scripts, and 25 Python scripts. Python checkers
 and reviewers may remain, but the unified frontend must invoke them through a
 declared stage instead of a phase-local product build.
