@@ -55,7 +55,7 @@ items are closed.
 ### Latest verification baseline (2026-08-01)
 
 - [x] `PYTHONPATH=tools/bp2cmake python3 -m pytest tools/bp2cmake/tests tests/host -q`:
-  182 passed, including generated PE-header, Linux/Windows test-catalog,
+  185 passed, including generated PE-header, Linux/Windows test-catalog,
   shell-free runtime/managed-artifact gates, parallel-frontend, JDK validation,
   deterministic JAR, Windows-path/DSO-name, reviewer ownership, W-010
   nonzero/fault/debugger/fatal-dump orchestration, W-013 source-policy,
@@ -280,6 +280,14 @@ items are closed.
   repeated as Ninja no-ops. Cross and native compile databases agree at 1,816
   commands with both `dex2oat` commands prelude-free, both CET contracts pass
   58/58, and all 185 host tests pass.
+- [x] The 13-source `icu_jni` DSO now compiles without the ART prelude on both
+  Windows build hosts. Its ICU bridge sources and existing target definitions
+  already expose the complete Windows contract, so this stage needs no new
+  compatibility shim. Forced-prelude compile commands fell from 702 to 689.
+  Linux and both Windows products passed at their required 32/32/16 job limits
+  and repeated as Ninja no-ops. Cross and native compile databases agree at
+  1,816 commands with all 13 `icu_jni` commands prelude-free, both CET
+  contracts pass 58/58, and all 185 host tests pass.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to

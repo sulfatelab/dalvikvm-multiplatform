@@ -24,6 +24,7 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
         fdlibm
         icui18n
         icu
+        icu_jni
         icuuc
         icuuc_stubdata
         log
