@@ -114,10 +114,13 @@ target-local boot JAR first, so Android/libcore APIs and ART annotations are
 resolved from the same AOSP boot classes on Linux and Windows build hosts.
 Three W-004 managed declarations are `target-runnable` on the exact current
 Linux and Windows x86-64 identities. `support/runtime_gate.py` runs imageless
-Hello, allocation/collection stress, and Math CriticalNative with a declared
-native DSO closure, isolated target-local runtime directories, pinned ICU data,
-strict exit/marker checks, timeouts, and sanitized JSON results. Linux also
-registers its show-version and compiler-DSO topology gates, for five W-004
+Hello and allocation/collection stress; the case-local `math-critical/run.py`
+runs Math CriticalNative in `-Xint` and threshold-zero JIT twice each. All
+three use a declared native DSO closure, isolated target-local runtime
+directories, pinned ICU data, strict exit/marker checks, timeouts, and
+sanitized JSON results. The Math aggregate additionally rejects filesystem
+links/reparse points, and Windows JIT requires a matching compiler record.
+Linux also registers its show-version and compiler-DSO topology gates, for five W-004
 CTest gates. Windows adds its BoringSSL SHA executable plus the exact
 `windows-x86_64-msvc` JVMTI managed gate and runtime-load/assembly-dependency
 reviewer. Fifteen more accepted Phase-3 libcore behaviors use one checked-in
@@ -186,6 +189,10 @@ The accepted Phase-4 managed stress slice also removed its generic builder,
 generic Wine runner, aggregate Wine runner, and four per-case wrappers. W-010's
 redundant Phase-4 managed-abort Wine wrapper is also retired; the native-crash
 wrapper followed after its additional PE unwind audit migrated into W-010.
+The final Phase-4 shell wrapper, for Math CriticalNative, was retired after its
+two-mode matrix moved beside the case and passed twice on native Windows plus
+the fresh Linux W-004 build. The W-024 source cleanup is now enforced by the
+live W-004 reviewer on native and cross hosts.
 W-025 has removed its four package producers,
 package-only PowerShell/Bash/Wine orchestration, and superseded Phase-4 JIT
 wrappers after unified native acceptance. Retained aggregate package flows

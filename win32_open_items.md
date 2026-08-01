@@ -620,7 +620,7 @@ Summary (details below; do not delete history):
   11. The Windows x64 `openjdkjvmti` target builds all 29 upstream translation units as a separate plugin DLL. The JVMTI probe enables thread-scoped single-step, observes events only while enabled, and preserves exact values across registered/unresolved normal, FastNative, and CriticalNative calls in three runs per memory mode.
   12. PE cannot import C++ `thread_local` data, so optional ART plugins call an exported `Thread::CurrentFromGdb()` accessor while `art.dll` retains the direct TLS fast path. Explicit PE data annotations are limited to the zero-initialized ART runtime fields actually consumed by the plugin.
   13. Math.ceil/floor are restored to the exact pre-`f16cd44db5fe` source state. The shared Math registration table is also restored exactly; Windows x64 and Linux rebuild from the same source.
-  14. `MathCriticalProbe` verifies native modifiers, 23 direct and reflective edge cases, signed-zero bits, 2,000 repeated calls, and source-level absence of `gMethodsWin`. It passes 3/3 in dual, J-1, and Windows x64 `-Xint`, plus Linux `-Xint` and threshold-zero JIT on identical boot.jar bytes.
+  14. `MathCriticalProbe` verifies native modifiers, 23 direct and reflective edge cases, signed-zero bits, 2,000 repeated calls, and source-level absence of `gMethodsWin`. The maintained case-local Python matrix runs `-Xint` and threshold-zero JIT twice for each exact Linux/Windows x86-64 target; native Windows requires a matching compile record. It passes twice in unified native Windows W-004 and in the fresh Linux W-004 build. The earlier 3/3 dual/J-1/Wine and shared-boot results remain historical evidence.
   15. Windows x64 ZipProbe/HashMap and conscrypt SslProviderProbe pass after restoration; Linux ZipProbe/HashMap and L-005 pass. The Linux converter does not currently build `libjavacrypto.so`, which is a native-module packaging difference rather than a boot-jar or CriticalNative blocker.
   16. Per-method `Windows x64 CompileMethod done` output is now opt-in. Log-dependent harnesses explicitly set `ART_WINDOWS_X64_JIT_LOG_COMPILES=1`; JIT smoke verifies a normal quiet product run.
   17. The opt-in fatal-tripwire build disabled both runtime-started `InterpreterJni` call sites. Windows x64 `-Xint`, direct/unresolved CriticalNative, normal/FastNative, method tracing, and JVMTI forced interpretation all passed under Wine; Clang reported `InterpreterJni` unused. The then-product-default OFF build and final controls passed before the option was retired. See `RESULT-interpreter-jni-fallback.md`.
@@ -653,7 +653,7 @@ Summary (details below; do not delete history):
   - Registered and unresolved CriticalNative suites pass during and after method tracing in both memory modes with trace cleanup.
   - Full JVMTI forced-interpreter transition coverage passes 3/3 in J-1 and dual-view modes over registered and unresolved normal, FastNative, and CriticalNative calls.
   - Math.ceil/floor are native CriticalNative methods again, and one shared registration table builds for ELF and PE.
-  - Math native modifiers and edge behavior pass 3/3 dual, 3/3 J-1, 3/3 Windows x64 `-Xint`, Linux `-Xint`, and Linux threshold-zero JIT using identical shared boot.jar bytes.
+  - Math native modifiers and edge behavior pass the maintained two-repeat `-Xint`/threshold-zero-JIT matrix on native Windows and Linux x86-64. The live W-004 reviewer enforces the native declarations and common registration table on native and cross hosts; earlier shared-boot Wine results remain historical evidence.
   - Windows x64 Math/HashMap/conscrypt and Linux Math/HashMap/shared-boot smokes pass. Linux conscrypt is unavailable only because the converter graph has no `libjavacrypto.so` target.
   - The Wine fallback-reachability tripwire matrix passed without entering runtime-started `InterpreterJni`; the then-product-default OFF restoration and final Windows x64/Linux controls passed before the option was retired.
   - The native Windows 10 tripwire matrix passes all nine cases with exact required native compilation records, no fatal marker, and no crash dump.
@@ -675,7 +675,7 @@ Summary (details below; do not delete history):
   - `tests/cases/jni-native-abi/` (canonical source/result) plus unified `managed_native_abi`
   - `tests/cases/jni-critical-native/` (canonical source/result) plus unified `managed_critical_native`
   - `tests/cases/jvmti-force/` plus the transitional managed runner and historical result under `tools/verify/windows_x64_phase4/`
-  - `tools/verify/windows_x64_phase4/{run_math_critical_probe.sh,src/MathCriticalProbe.java,RESULT-math-critical.md}`
+  - `tests/cases/math-critical/` (canonical source, shell-free runner, and adjacent result) plus the live W-024 cleanup audit in `tests/support/w024_cleanup.py`
   - `tools/verify/windows_x64_phase4/RESULT-interpreter-jni-fallback.md` (accepted Wine and native-Windows tripwire reachability audit)
   - `tools/verify/windows_x64_phase4/W024_HOST_CHECKLIST.md` (native Windows 10 acceptance and returned-evidence procedure)
   - `vendor/art/openjdkjvmti/` and `native/CMakeLists.txt` (separate Windows x64 JVMTI plugin)
@@ -685,7 +685,7 @@ Summary (details below; do not delete history):
     `vendor/art/openjdkjvm/openjdkjvm_memory_windows.cc` (`JVM_NativeLoad` and
     `ART_LoadNativeLibrary` product boundary)
   - AOSP history: `d021f1d8475c` FastNative→CriticalNative Math; multipath `f16cd44db5fe` pure-Java ceil/floor; `b9265e7b5da6` CriticalNative register fix; art `7ea144b073` / `4c17423714` interpreter Critical/FastNative bridge
-- **Closed by:** ART `42a03f2ea0`; native Windows evidence under `tools/verify/windows_x64_phase4/evidence/w024_host/`; final Linux/Windows x64 regressions on 2026-07-24
+- **Closed by:** ART `42a03f2ea0`; native Windows evidence under `tools/verify/windows_x64_phase4/evidence/w024_host/`; final historical regressions on 2026-07-24; unified Linux/Windows W-004 acceptance on 2026-08-01
 - **Related:** W-019 (CLOSED temporary Math ABI fix), W-011/W-012 (legacy InterpreterJni fallback), W-025 (JIT memory; threshold-zero proved unrelated)
 - **Opened:** 2026-07-17
 - **Closed:** 2026-07-24 — upstream interpreter scope and default native-JIT policy restored after complete native-host and post-change regression acceptance

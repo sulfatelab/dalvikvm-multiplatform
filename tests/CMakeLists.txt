@@ -910,21 +910,16 @@ art_add_target_probe(
     OUTPUT_NAME mathcriticalprobe
     COMMAND
         "${Python3_EXECUTABLE}"
-        "${_art_test_repo_root}/tests/support/runtime_gate.py"
-        managed
+        "${_art_test_cases_root}/math-critical/run.py"
         --target-id "${ART_TARGET_ID}"
         --dalvikvm "$<TARGET_FILE:dalvikvm>"
         --boot-jar "${_art_boot_jar}"
         --app-jar "${_art_managed_root}/mathcriticalprobe.jar"
-        --main-class MathCriticalProbe
         --work-root "${CMAKE_CURRENT_BINARY_DIR}/results/math-critical"
         --icu-data "${_art_icu_data}"
         ${_art_managed_runtime_library_args}
-        --vm-option=-Xint
-        --expect "MathCriticalProbe native ceil=true floor=true"
-        --expect "MathCriticalProbe OK"
-        --expect "main end exception=0"
-        --forbid AssertionError)
+        --repeat 2
+        --timeout 180)
 
 # These managed libcore probes remain Windows-specific until each behavioral
 # contract is reviewed on another exact target.

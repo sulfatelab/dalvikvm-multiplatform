@@ -11,6 +11,13 @@ import subprocess
 import sys
 
 
+_SUPPORT_ROOT = Path(__file__).parents[1]
+if str(_SUPPORT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_SUPPORT_ROOT))
+
+import w024_cleanup  # noqa: E402
+
+
 RUNTIME_INSTANCE = "?instance_@Runtime@art@@0PEAV12@EA"
 RETIRED_HELPER = "art_Runtime_instance_ptr"
 
@@ -169,6 +176,9 @@ def main() -> int:
     ]
 
     check_source(repo)
+    cleanup_errors = w024_cleanup.audit_w024_cleanup(repo)
+    if cleanup_errors:
+        fail("W-024 source cleanup failed: " + "; ".join(cleanup_errors))
     counts = {
         label: check_object(readobj, objdump, label, path)
         for label, path in objects.items()

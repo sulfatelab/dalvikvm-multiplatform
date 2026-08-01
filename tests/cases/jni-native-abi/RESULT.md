@@ -180,8 +180,8 @@ instrumentation and JVMTI forced-interpreter transitions pass with native
 methods compiled by default. Per-method compile records remain opt-in. Native
 Windows 10 acceptance, upstream interpreter fallback restoration, native-JIT
 gate removal, and post-change Linux/Windows x64 regressions are complete.
-The Math/libcore native demotion is restored in
-`../../../tools/verify/windows_x64_phase4/RESULT-math-critical.md`.
+The Math/libcore native demotion and maintained two-mode gate are recorded in
+`../math-critical/RESULT.md`.
 CriticalNative method tracing is covered by the adjacent
 `../jni-critical-native/RESULT.md`; JVMTI single-step/deoptimization coverage
 is recorded in

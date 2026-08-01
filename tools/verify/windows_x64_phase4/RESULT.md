@@ -88,18 +88,23 @@ python tools/build_art.py test --target-id windows-x86_64-msvc --build-type RelW
 ```
 
 Windows Server 2025 x86-64 passed 26/26, including the retained Phase-4 GC,
-heavy-thread, handle-leak, and performance-smoke contracts. HandleLeakProbe,
-PerfSmokeProbe, and ThreadHeavyProbe run through the shared Python managed
-runtime gate in interpreter mode with exact marker checks and isolated
-output-owned work roots. The first expanded run completed in 35.93 seconds;
-the identical repeat reported `ninja: no work to do.` and passed 26/26 in
-34.21 seconds.
+heavy-thread, handle-leak, performance-smoke, and restored Math
+CriticalNative contracts. HandleLeakProbe, PerfSmokeProbe, and
+ThreadHeavyProbe run through the shared Python managed runtime gate in
+interpreter mode. The case-local Math runner executes `-Xint` and
+threshold-zero JIT twice each, requires its Windows compiler record, and runs
+the W-024 source-surface cleanup audit through the live structural reviewer.
+Two final invocations both reported `ninja: no work to do.` and passed 26/26
+in 38.48 and 46.85 seconds; their Math matrices passed in 5.59 and 5.64
+seconds. All runners use exact marker checks and isolated output-owned work
+roots.
 
-A Linux-hosted Windows cross run with `--parallel 32` passed the W-004
-structural reviewer, and its immediate repeat was also a Ninja no-op. The old
-generic managed builder and Wine runner, four per-case wrappers, and aggregate
-Wine runner were retired. Historical Wine logs remain evidence, not a
-maintained reproduction path.
+A Linux-hosted Windows cross run with `--parallel 32` rebuilt 66 affected
+test/JVMTI edges and passed the W-004 structural reviewer; its immediate repeat
+was a Ninja no-op and passed again in 0.64 seconds. The old generic managed
+builder and Wine runner, the Math wrapper, four other per-case wrappers, and
+the aggregate Wine runner were retired. Historical Wine logs remain evidence,
+not a maintained reproduction path.
 
 ## Unified W-010 acceptance (2026-08-01)
 

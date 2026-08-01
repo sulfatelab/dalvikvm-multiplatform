@@ -53,12 +53,13 @@ items are closed.
 ### Latest verification baseline (2026-08-01)
 
 - [x] `PYTHONPATH=tools/bp2cmake python3 -m pytest tools/bp2cmake/tests tests/host -q`:
-  164 passed, including generated PE-header, Linux/Windows test-catalog,
+  165 passed, including generated PE-header, Linux/Windows test-catalog,
   shell-free runtime/managed-artifact gates, parallel-frontend, JDK validation,
   deterministic JAR, Windows-path/DSO-name, reviewer ownership, W-010
   nonzero/fault/debugger/fatal-dump orchestration, W-013 source-policy,
   W-025 JIT lifecycle/mapping/process-policy/reviewer orchestration, fatal
-  contracts, W-024 cleanup, and VCS binary/source-ownership coverage.
+  contracts, the shell-free Math CriticalNative matrix, W-024 cleanup, and VCS
+  binary/source-ownership coverage.
 - [x] Fresh generation loads the same 260 Blueprint files for both targets and
   emits 34 generated modules for `linux-x86_64-gnu` and 33 for
   `windows-x86_64-msvc`. Both graphs emit the separate `openjdkjvmti` DSO;
@@ -502,6 +503,16 @@ items are closed.
   31-edge build links `libopenjdkjvmti.so`; its immediate repeat is a Ninja
   no-op. The Windows cross W-004 graph remained a no-op and passed its reviewer
   after the same common-CMake change.
+- [x] Math CriticalNative now has one case-local Python matrix for the exact
+  Linux and Windows x86-64 targets. It runs `-Xint` and threshold-zero JIT twice
+  each, requires an explicit Windows compile record, writes portable aggregate
+  JSON, and rejects dumps and filesystem links/reparse points. Its W-024 source
+  cleanup audit is part of the live W-004 reviewer instead of a legacy shell
+  preflight. Native Windows no-op runs passed 26/26 twice at `--parallel 16`
+  (Math 5.59/5.64 seconds); the fresh Linux W-004 build and repeat passed 5/5
+  at `--parallel 32` (Math 1.31 seconds). The Linux-hosted Windows cross graph
+  rebuilt 66 affected edges, passed the reviewer, and immediately repeated as
+  a Ninja no-op in 0.64 seconds.
 
 ### Unified stage migration coverage
 
@@ -525,8 +536,8 @@ verification directories. All 91 declarations own canonical source under
 source cases and all 48 Java sources have adjacent results, and shared stage
 analysis remains under `tests/stages/`. The old verification tree now contains
 zero Java sources and two uncatalogued native sources retained by unfinished
-legacy evidence paths. It still contains one shell script, two PowerShell
-scripts, and 24 Python scripts. Python checkers
+legacy evidence paths. It contains zero shell scripts, two PowerShell scripts,
+and 24 Python scripts. Python checkers
 and reviewers may remain, but the unified frontend must invoke them through a
 declared stage instead of a phase-local product build.
 

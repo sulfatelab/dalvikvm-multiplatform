@@ -24,6 +24,10 @@ def audit_w024_cleanup(repo_root: Path = REPO_ROOT) -> list[str]:
     interpreter_path = art / "runtime" / "interpreter" / "interpreter.cc"
     jit_path = art / "runtime" / "jit" / "jit.cc"
     product_graph = repo_root / "native" / "CMakeLists.txt"
+    math_java_path = (
+        repo_root / "vendor/libcore/ojluni/src/main/java/java/lang/Math.java"
+    )
+    math_native_path = repo_root / "vendor/libcore/ojluni/src/main/native/Math.c"
 
     interpreter = _read_regular_text(interpreter_path, repo_root, errors)
     for retired in (
@@ -46,11 +50,7 @@ def audit_w024_cleanup(repo_root: Path = REPO_ROOT) -> list[str]:
         / "cases"
         / "jvmti-force"
         / "run.py",
-        repo_root
-        / "tools"
-        / "verify"
-        / "windows_x64_phase4"
-        / "run_math_critical_probe.sh",
+        repo_root / "tests" / "cases" / "math-critical" / "run.py",
         repo_root
         / "tests"
         / "support"
@@ -62,6 +62,24 @@ def audit_w024_cleanup(repo_root: Path = REPO_ROOT) -> list[str]:
             errors.append(
                 "legacy native-JIT gate remains: " + path.relative_to(repo_root).as_posix()
             )
+
+    math_java = _read_regular_text(math_java_path, repo_root, errors)
+    for declaration in (
+        "public static native double ceil(double a);",
+        "public static native double floor(double a);",
+    ):
+        if declaration not in math_java:
+            errors.append(f"restored Math native declaration is missing: {declaration}")
+    math_native = _read_regular_text(math_native_path, repo_root, errors)
+    for registration in (
+        'FAST_NATIVE_METHOD(Math, ceil, "(D)D")',
+        'FAST_NATIVE_METHOD(Math, floor, "(D)D")',
+    ):
+        if registration not in math_native:
+            errors.append(f"shared Math native registration is missing: {registration}")
+    for retired in ("gMethodsWin", "defined(_WIN32)"):
+        if retired in math_native:
+            errors.append(f"Windows-only Math registration remains: {retired}")
 
     product_text = _read_regular_text(product_graph, repo_root, errors)
     if "MDVM_WINDOWS_X64_INTERPRETER_JNI_TRIPWIRE" in product_text:

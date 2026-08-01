@@ -1,8 +1,9 @@
 # Shared Math CriticalNative restoration result
 
-**Status:** PASS under Wine and Linux
-**Date:** 2026-07-24
-**Scope:** W-024 product demotion and PE registration-table removal
+**Status:** PASS in the unified Linux and native Windows W-004 stages
+**Date:** 2026-08-01
+**Scope:** W-024 product demotion, PE registration-table removal, and maintained
+CriticalNative interpreter/JIT acceptance
 
 ## Source result
 
@@ -31,7 +32,7 @@ An audit of local Windows x64 libcore commits and `ART-WinNT` markers found no o
 CriticalNative/FastNative Java demotion. Existing annotated native surfaces
 remain intact; the only explicit pure-Java demotion was Math ceil/floor.
 
-## Focused acceptance
+## Unified focused acceptance
 
 `MathCriticalProbe` verifies that reflection reports both methods as native.
 For 23 edge inputs it compares direct and reflective calls against
@@ -39,14 +40,22 @@ For 23 edge inputs it compares direct and reflective calls against
 signed zero while accepting any NaN payload. It then executes 2,000 direct-call
 rounds to exercise compiled callers.
 
-```text
-dual run=1..3 PASS
-j1 run=1..3 PASS
-xint run=1..3 PASS
-linux-xint PASS
-linux-jit PASS
-Math CriticalNative acceptance: dual=3/3 j1=3/3 xint=3/3 linux-xint=1/1 linux-jit=1/1
-```
+The case-local, shell-free `run.py` runs both `-Xint` and threshold-zero JIT
+twice. It accepts only the exact `linux-x86_64-gnu` and
+`windows-x86_64-msvc` target IDs. Windows JIT runs enable the narrow
+`MathCriticalProbe` compiler filter and require an explicit successful compile
+record; Linux uses its ordinary JIT diagnostics. Every child must report the
+native modifiers, 23 edge cases, 2,000 rounds, the exact checksum, clean ART
+termination, and no fatal or dump marker.
+
+On Windows Server 2025 x86-64, two consecutive unified W-004 invocations
+started from `ninja: no work to do.` and passed 26/26. The Math matrix passed
+in 5.59 and 5.64 seconds. On Linux x86-64, the fresh 1,586-edge W-004 build and
+its no-op repeat passed 5/5; the four-process Math matrix completed in 1.31
+seconds. A Linux-hosted Windows cross run rebuilt 66 affected test/JVMTI edges,
+passed the W-004 source/object reviewer, and immediately repeated as a Ninja
+no-op. PE runtime execution remains a native-Windows gate, not a cross-host
+claim.
 
 The current deterministic checksum is:
 
@@ -54,10 +63,13 @@ The current deterministic checksum is:
 0x2900b87ac0cf269a
 ```
 
-The script also rejects a reintroduced `gMethodsWin`/`_WIN32` branch or missing
-native declarations/common registrations.
+The live W-004 reviewer invokes the shared W-024 source audit, which rejects a
+reintroduced `gMethodsWin`/`_WIN32` branch or missing native declarations and
+common registrations. The runner writes one portable aggregate `result.json`,
+rejects filesystem links/reparse points in its work tree, and records no
+machine absolute paths.
 
-## Regression verification
+## Historical regression verification
 
 The same rebuilt source and shared boot artifact passed:
 
@@ -89,16 +101,17 @@ entries classes.dex, classes2.dex, java/security/security.properties
 Linux and Windows x64 do not have separate boot jars; only their native modules
 differ by platform.
 
-## Command
+## Maintained commands
 
 ```text
-tools/verify/windows_x64_phase4/run_math_critical_probe.sh
+python3 tools/build_art.py test --target-id linux-x86_64-gnu --build-type RelWithDebInfo --stage w004 --parallel 32
+python tools/build_art.py test --target-id windows-x86_64-msvc --build-type RelWithDebInfo --stage w004 --parallel 16
 ```
 
 Related files:
 
-- `run_math_critical_probe.sh`
-- `src/MathCriticalProbe.java`
+- `run.py`
+- `MathCriticalProbe.java`
 - `../../../tests/cases/jni-critical-native/RESULT.md`
-- `RESULT-jvmti-force.md`
+- `../jvmti-force/RESULT.md`
 - `../../../win32_open_items.md` W-024

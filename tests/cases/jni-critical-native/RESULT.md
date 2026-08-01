@@ -187,7 +187,7 @@ accepted host text evidence remains temporarily under
 Native Windows 10 acceptance, native-JIT gate removal, upstream interpreter
 fallback restoration, and post-change Linux/Windows x64 regressions are complete.
 Math.ceil/floor and the shared ELF/PE registration table are restored; see
-`../../../tools/verify/windows_x64_phase4/RESULT-math-critical.md`. Registered
+`../math-critical/RESULT.md`. Registered
 and unresolved CriticalNative calls also pass the JVMTI forced-interpreter
 transition in both memory modes; see
 `../../../tools/verify/windows_x64_phase4/RESULT-jvmti-force.md`.
