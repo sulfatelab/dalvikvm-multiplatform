@@ -739,6 +739,15 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
         "${MDVM_ART_ROOT_DIR}/art/dex2oat/dex2oat.cc"
         APPEND PROPERTY COMPILE_OPTIONS
             "-include;${_art_windows_runtime_options_header}")
+    # Clang's quoted-include fallback for a forced generated header differs
+    # between Windows and Linux hosts.  Keep the projected jit_code_cache.h
+    # explicitly anchored to its unchanged source siblings on both hosts.
+    set_property(SOURCE
+        "${MDVM_ART_ROOT_DIR}/art/runtime/runtime_options.cc"
+        "${MDVM_ART_ROOT_DIR}/art/dex2oat/dex2oat.cc"
+        "${MDVM_ART_ROOT_DIR}/art/runtime/jit/jit_code_cache.cc"
+        APPEND PROPERTY INCLUDE_DIRECTORIES
+            "${MDVM_ART_ROOT_DIR}/art/runtime/jit")
 
     # The PE product boundary stays source-level and bounded.  Only the two
     # defining translation units see the JVMTI-specific header overlays; the

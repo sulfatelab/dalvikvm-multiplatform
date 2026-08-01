@@ -63,6 +63,20 @@ def test_art_consumers_use_a_bounded_source_level_export_boundary():
     assert '"LINKER:/EXPORT:mspace_usable_size"' in cmake
 
 
+def test_projected_jit_header_has_host_independent_sibling_lookup():
+    cmake = (REPO_ROOT / "native" / "CMakeLists.txt").read_text(encoding="utf-8")
+    include_block = re.search(
+        r'set_property\(SOURCE\s+'
+        r'"\$\{MDVM_ART_ROOT_DIR\}/art/runtime/runtime_options\.cc"\s+'
+        r'"\$\{MDVM_ART_ROOT_DIR\}/art/dex2oat/dex2oat\.cc"\s+'
+        r'"\$\{MDVM_ART_ROOT_DIR\}/art/runtime/jit/jit_code_cache\.cc"\s+'
+        r'APPEND PROPERTY INCLUDE_DIRECTORIES\s+'
+        r'"\$\{MDVM_ART_ROOT_DIR\}/art/runtime/jit"\)',
+        cmake,
+    )
+    assert include_block is not None
+
+
 def test_w003_variant_links_internal_counters_but_exports_only_probe_api():
     cmake = (REPO_ROOT / "native" / "CMakeLists.txt").read_text(encoding="utf-8")
     quick = (
