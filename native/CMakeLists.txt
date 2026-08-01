@@ -21,14 +21,16 @@ include("${ART_PROFILE_FILE}")
 set(ART_TEST_VARIANT "product" CACHE STRING
     "Build identity: product or an explicit test-only instrumentation variant")
 set_property(CACHE ART_TEST_VARIANT PROPERTY STRINGS
-    product win32-stack-high-water)
-if(NOT ART_TEST_VARIANT MATCHES "^(product|win32-stack-high-water)$")
+    product win32-frame-attribution win32-stack-high-water)
+if(NOT ART_TEST_VARIANT MATCHES
+   "^(product|win32-frame-attribution|win32-stack-high-water)$")
     message(FATAL_ERROR "Unknown ART_TEST_VARIANT: ${ART_TEST_VARIANT}")
 endif()
-if(ART_TEST_VARIANT STREQUAL "win32-stack-high-water" AND
+if((ART_TEST_VARIANT STREQUAL "win32-frame-attribution" OR
+    ART_TEST_VARIANT STREQUAL "win32-stack-high-water") AND
    NOT ART_TARGET_ID STREQUAL "windows-x86_64-msvc")
     message(FATAL_ERROR
-        "win32-stack-high-water is an exact windows-x86_64-msvc test variant")
+        "${ART_TEST_VARIANT} is an exact windows-x86_64-msvc test variant")
 endif()
 if(NOT ART_TARGET_PLATFORM MATCHES "^(linux|windows)$")
     message(FATAL_ERROR
@@ -101,6 +103,14 @@ if(NOT ART_GRAPH_FILE)
     message(FATAL_ERROR
         "ART_GRAPH_FILE is required; generate through tools/build_art.py")
 endif()
+set(ART_LLVM_READOBJ "" CACHE FILEPATH "Configured host llvm-readobj executable")
+set(ART_LLVM_OBJDUMP "" CACHE FILEPATH "Configured host llvm-objdump executable")
+foreach(_art_llvm_tool ART_LLVM_READOBJ ART_LLVM_OBJDUMP)
+    if(NOT ${_art_llvm_tool})
+        message(FATAL_ERROR
+            "${_art_llvm_tool} is required; configure through tools/build_art.py")
+    endif()
+endforeach()
 # Extra source trees. art + libcore are bumped to android-16.0.0_r4 in the
 # project-owned vendor/ tree (resolves the libart<->libcore skew); the rest come
 # from nested vendor/ where present. MDVM_ART_ROOT_DIR is vendor/ itself because art
@@ -570,6 +580,17 @@ set_source_files_properties(${_DEX_CC}
 get_property(_all_targets DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" PROPERTY BUILDSYSTEM_TARGETS)
 foreach(_t IN LISTS _all_targets)
     get_target_property(_ttype ${_t} TYPE)
+    if(ART_TEST_VARIANT STREQUAL "win32-frame-attribution" AND
+       _t STREQUAL "art")
+        target_compile_definitions(${_t} PRIVATE ART_W003_FRAME_PROBE=1)
+        # The internal counters are global only so generated nterp assembly can
+        # reference their defining quick-entrypoint object. Export only the two
+        # functions consumed by the frame probe; product art.dll receives
+        # neither this macro nor these linker directives.
+        target_link_options(${_t} PRIVATE
+            "LINKER:/EXPORT:art_w003_frame_probe_reset"
+            "LINKER:/EXPORT:art_w003_frame_probe_snapshot")
+    endif()
     if(ART_TEST_VARIANT STREQUAL "win32-stack-high-water" AND
        NOT _ttype STREQUAL "UTILITY" AND
        NOT _ttype STREQUAL "INTERFACE_LIBRARY")

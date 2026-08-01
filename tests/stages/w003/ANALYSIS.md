@@ -241,6 +241,41 @@ Run:
 Close W-003 only after all four frame families have attributed coverage and
 the Microsoft XMM nonvolatile sentinel passes.
 
+## Unified stage acceptance (2026-08-01)
+
+The current acceptance path is the common Python frontend, generated product
+graph, CMake, Ninja, and CTest. On Windows Server 2025 x86-64 the product
+`stage:w003` passed four gates: quick-boundary structure, CriticalNative,
+normal/FastNative, and the XMM sentinel. The exact
+`win32-frame-attribution` variant passed those four plus the four-family frame
+matrix. Product and variant repeated with `ninja: no work to do` and passed
+4/4 and 5/5 again.
+
+The managed process counts per tree are four CriticalNative, four
+normal/FastNative, and six XMM executions; the variant adds eight frame
+executions. All seven aggregate JSON results record zero dumps and contain no
+machine absolute path. A non-following audit found no reparse point in the
+source, product, or variant tree. Product `art.dll` exports no W-003 symbol;
+the variant exports only `art_w003_frame_probe_reset` and
+`art_w003_frame_probe_snapshot`.
+
+The variant macro applies to the complete `art` target so generated nterp and
+quick assembly count the same frame macros. That exposed and fixed a real
+cross-object linkage gap: the four counters need global object linkage, but
+remain absent from the DLL export table. The two test API functions are added
+to the link only for the variant. The fingerprinted variant output cannot be
+staged as a product.
+
+A final-source Linux-hosted `windows-x86_64-msvc` cross build completed all
+1,492 W-003 edges and ran the structural reviewer through CTest. Its identical
+repeat was a Ninja no-op. `llvm-readobj` and `llvm-objdump` are explicit
+frontend-resolved host tools and build-fingerprint inputs, fixing the prior
+host/target suffix ambiguity for cross builds.
+
+Native reproduction uses `--parallel 16` on the 16 GiB Windows VM; agent01 can
+use 32 for cross builds. The historical Wine/package material below remains
+evidence context while the standalone orchestration is retired separately.
+
 ## Implementation result (2026-07-26)
 
 Stages A, B, and the Wine portion of Stage C are implemented:

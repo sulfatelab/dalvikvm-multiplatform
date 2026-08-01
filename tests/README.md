@@ -138,6 +138,18 @@ compile-only to target-runnable. Its shell-free runtime gate runs switch,
 nterp, and JIT modes, while a `host-review` gate inspects the generated offsets
 and target objects for allocation-free direct stack sampling. Product builds
 keep both FS-1 declarations compile-only and receive no instrumentation macro.
+W-003 uses the same variant discipline for frame-family attribution. Product
+`stage:w003` runs the structural reviewer plus CriticalNative,
+normal/FastNative, and XMM matrices; the exact `win32-frame-attribution`
+variant adds the frame matrix and defines `ART_W003_FRAME_PROBE` only for
+`art`. Its fingerprinted tree cannot be staged. The four counters have object
+linkage only because generated nterp assembly consumes the common frame
+macros; only reset and snapshot are variant DLL exports, and product `art.dll`
+has no W-003 hook. Native Windows passed product 4/4 and variant 5/5, with
+Ninja no-op repeats, sanitized aggregate JSON, no dumps, and no source/output
+reparse points. A Linux-hosted Windows cross build also passed the structural
+gate through the same CTest declaration using explicit host LLVM reviewer
+tools.
 
 Until `catalog.py` generation replaces the declarations, add or migrate test
 targets through the common API in `tests/CMakeLists.txt`. Do not add another

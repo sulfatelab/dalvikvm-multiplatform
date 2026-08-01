@@ -27,6 +27,8 @@ project(ArtTestCatalogFixture C CXX ASM)
 include("{profile.as_posix()}")
 set(ART_ENABLE_TARGET_RUNTIME_TESTS OFF)
 set(ART_JDK_ROOT "{(tmp_path / 'jdk-21').as_posix()}")
+set(ART_LLVM_READOBJ "{(tmp_path / 'llvm-readobj').as_posix()}")
+set(ART_LLVM_OBJDUMP "{(tmp_path / 'llvm-objdump').as_posix()}")
 set(ART_TARGET_BUNDLE_ROOT "{(tmp_path / 'bundle').as_posix()}")
 set(MDVM_COMPAT_INCLUDE_DIR "{(repo / 'compat' / 'include').as_posix()}")
 set(MDVM_GENSRC_DIR "{(tmp_path / 'gensrc').as_posix()}")
@@ -61,9 +63,9 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         (binary / "art-tests" / "art_test_catalog.json").read_text(encoding="utf-8")
     )
     assert catalog["target_id"] == "windows-x86_64-msvc"
-    assert len(catalog["probes"]) == 86
-    assert sum(probe["applicable"] for probe in catalog["probes"]) == 84
-    assert sum(bool(probe["target_ids"]) for probe in catalog["probes"]) == 23
+    assert len(catalog["probes"]) == 87
+    assert sum(probe["applicable"] for probe in catalog["probes"]) == 85
+    assert sum(bool(probe["target_ids"]) for probe in catalog["probes"]) == 24
     assert sum(not probe["target_ids"] for probe in catalog["probes"]) == 63
     w002_attach = next(
         probe for probe in catalog["probes"] if probe["name"] == "managed_w002_attach"
@@ -84,9 +86,16 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     assert w002_osr["ctest_registered"] is False
     assert w002_structure["execution"] == "host-review"
     assert w002_structure["ctest_registered"] is True
+    w003_structure = next(
+        probe
+        for probe in catalog["probes"]
+        if probe["name"] == "windows_w003_quick_boundary_structure"
+    )
+    assert w003_structure["execution"] == "host-review"
+    assert w003_structure["ctest_registered"] is True
     assert sum(
         probe["execution"] == "target-runnable" for probe in catalog["probes"]
-    ) == 22
+    ) == 25
     assert {
         probe["name"]: probe["timeout_seconds"]
         for probe in catalog["probes"]
@@ -94,6 +103,9 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     } == {
         "managed_w002_attach": 600,
         "managed_w002_osr": 600,
+        "managed_critical_native": 1200,
+        "managed_native_abi": 900,
+        "managed_w003_xmm_sentinel": 1200,
         "windows_x64_w013_mem_map_probe": 60,
         "windows_x64_w013_mspace_owner_probe": 60,
         "windows_x64_w013_dlmalloc_config_probe": 60,
@@ -109,7 +121,11 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     }
     assert [
         probe["name"] for probe in catalog["probes"] if probe["ctest_registered"]
-    ] == ["windows_w002_managed_entry_structure", "windows_w013_source_policy"]
+    ] == [
+        "windows_w002_managed_entry_structure",
+        "windows_w003_quick_boundary_structure",
+        "windows_w013_source_policy",
+    ]
 
     variant_binary = tmp_path / "variant-build"
     (source / "CMakeLists.txt").write_text(
@@ -148,6 +164,36 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     assert fs1_structure["execution"] == "host-review"
     assert fs1_structure["ctest_registered"] is True
 
+    frame_binary = tmp_path / "frame-variant-build"
+    (source / "CMakeLists.txt").write_text(
+        cmake_lists.replace(
+            "set(ART_ENABLE_TARGET_RUNTIME_TESTS OFF)",
+            "set(ART_ENABLE_TARGET_RUNTIME_TESTS ON)\n"
+            "set(ART_TEST_VARIANT win32-frame-attribution)",
+        ),
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [cmake, "-S", str(source), "-B", str(frame_binary), "-G", "Ninja"],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    frame_catalog = json.loads(
+        (frame_binary / "art-tests" / "art_test_catalog.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    frame = next(
+        probe
+        for probe in frame_catalog["probes"]
+        if probe["name"] == "managed_w003_frame"
+    )
+    assert frame["execution"] == "target-runnable"
+    assert frame["timeout_seconds"] == 1800
+    assert frame["ctest_registered"] is True
+
 
 def test_linux_catalog_registers_runtime_and_dso_command_gates(tmp_path):
     cmake = shutil.which("cmake")
@@ -168,6 +214,8 @@ project(ArtLinuxTestCatalogFixture C CXX ASM)
 include("{profile.as_posix()}")
 set(ART_ENABLE_TARGET_RUNTIME_TESTS ON)
 set(ART_JDK_ROOT "{(tmp_path / 'jdk-21').as_posix()}")
+set(ART_LLVM_READOBJ "{(tmp_path / 'llvm-readobj').as_posix()}")
+set(ART_LLVM_OBJDUMP "{(tmp_path / 'llvm-objdump').as_posix()}")
 add_executable(dalvikvm IMPORTED GLOBAL)
 set_target_properties(dalvikvm PROPERTIES IMPORTED_LOCATION "{tmp_path / 'dalvikvm'}")
 foreach(_art_runtime_library IN ITEMS icu_jni javacore openjdk)
@@ -195,7 +243,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         (binary / "art-tests" / "art_test_catalog.json").read_text(encoding="utf-8")
     )
     applicable = [probe for probe in catalog["probes"] if probe["applicable"]]
-    assert len(catalog["probes"]) == 86
+    assert len(catalog["probes"]) == 87
     assert [probe["name"] for probe in applicable] == [
         "managed_imageless_hello",
         "managed_gc_stress",

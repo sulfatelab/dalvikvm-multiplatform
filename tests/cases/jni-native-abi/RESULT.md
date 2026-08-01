@@ -7,12 +7,28 @@ Date: 2026-07-24. VM: agent01. Runtime: Wine 10.0. Build:
 
 | Target ID | Applicable | Build | Runtime | Last accepted |
 |---|---:|---:|---:|---|
-| `windows-x86_64-msvc` | yes | verified | verified | 2026-07-24 |
+| `windows-x86_64-msvc` | yes | verified | verified | 2026-08-01 |
 | `windows-aarch64-msvc` | not yet declared | pending | pending | — |
 | `windows-arm64ec-msvc` | not yet declared | pending | pending | — |
 
 The scalar C/JNI and Java sources are portability candidates, not evidence for
 either AArch64 target. Each target requires its own ABI and runtime acceptance.
+
+## Unified native acceptance (2026-08-01)
+
+The authoritative shell-free `stage:w003` gate passed on Windows Server 2025
+x86-64 in four processes: default and method-instrumented execution, each
+repeated twice. Every process completed the initial, unregister, and
+re-register value phases and emitted exactly seven successful target-method
+compile records. The instrumented pair additionally completed the tracing and
+post-tracing phases with mode `0 -> nonzero -> 0` and deleted its trace file.
+The frame-attribution variant repeated the same matrix. Product and variant
+stage repeats were Ninja no-ops and passed again.
+
+Each aggregate JSON records four successful runs, zero dumps, and no machine
+absolute paths. The declaration remains the typed
+`windows`/`x86_64`/`msvc` intersection pending separate AArch64 or ARM64EC ABI
+review and native runtime acceptance.
 
 ## Result
 

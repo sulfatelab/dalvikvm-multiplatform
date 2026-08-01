@@ -251,6 +251,18 @@ def test_windows_configure_uses_target_bundle_and_clang_target(tmp_path, monkeyp
         "_resolve_llvm_resource_compiler",
         lambda _local: llvm_rc,
     )
+    llvm_readobj = tmp_path / "llvm-readobj"
+    llvm_objdump = tmp_path / "llvm-objdump"
+    llvm_readobj.write_bytes(b"")
+    llvm_objdump.write_bytes(b"")
+    monkeypatch.setattr(
+        build_art,
+        "_resolve_llvm_inspection_tools",
+        lambda _local: {
+            "llvm-readobj": llvm_readobj,
+            "llvm-objdump": llvm_objdump,
+        },
+    )
     jdk = tmp_path / "jdk-21"
     (jdk / "bin").mkdir(parents=True)
     monkeypatch.setattr(build_art, "_resolve_jdk", lambda _local: jdk)
@@ -269,6 +281,8 @@ def test_windows_configure_uses_target_bundle_and_clang_target(tmp_path, monkeyp
     assert "-DCMAKE_SYSTEM_NAME=Windows" in commands[0]
     assert "-DCMAKE_CXX_COMPILER_TARGET=x86_64-pc-windows-msvc" in commands[0]
     assert f"-DCMAKE_RC_COMPILER={llvm_rc.as_posix()}" in commands[0]
+    assert f"-DART_LLVM_READOBJ={llvm_readobj}" in commands[0]
+    assert f"-DART_LLVM_OBJDUMP={llvm_objdump}" in commands[0]
     assert f"-DART_JDK_ROOT={jdk}" in commands[0]
     assert any(arg.startswith("-DART_TARGET_BUNDLE_ROOT=") for arg in commands[0])
     assert "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL" in commands[0]
@@ -298,6 +312,22 @@ def test_test_variant_has_distinct_output_and_cannot_be_staged(tmp_path):
             build_art.resolve_target("linux-x86_64-gnu"),
             "win32-stack-high-water",
             "configure",
+        )
+
+    frame_binary = build_art._binary_dir(
+        tmp_path, target, "RelWithDebInfo", "win32-frame-attribution"
+    )
+    assert frame_binary == (
+        tmp_path
+        / "windows-x86_64-msvc"
+        / "RelWithDebInfo-win32-frame-attribution"
+    )
+    build_art._validate_build_variant(
+        target, "win32-frame-attribution", "configure"
+    )
+    with pytest.raises(build_art.BuildFrontendError, match="cannot be staged"):
+        build_art._validate_build_variant(
+            target, "win32-frame-attribution", "stage"
         )
 
 

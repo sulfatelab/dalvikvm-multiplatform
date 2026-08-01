@@ -36,6 +36,17 @@ assert _W002_SPEC is not None and _W002_SPEC.loader is not None
 w002_gate = importlib.util.module_from_spec(_W002_SPEC)
 _W002_SPEC.loader.exec_module(w002_gate)
 
+_W003_GATE_PATH = (
+    Path(__file__).parents[1]
+    / "support"
+    / "windows"
+    / "w003_managed_gate.py"
+)
+_W003_SPEC = importlib.util.spec_from_file_location("art_w003_gate", _W003_GATE_PATH)
+assert _W003_SPEC is not None and _W003_SPEC.loader is not None
+w003_gate = importlib.util.module_from_spec(_W003_SPEC)
+_W003_SPEC.loader.exec_module(w003_gate)
+
 
 def test_elf_needed_reads_host_python_without_external_tools():
     executable = Path(sys.executable).resolve()
@@ -238,6 +249,74 @@ def test_fs1_gate_runs_three_managed_modes_and_validator_without_shell(
     assert record["dump_files"] == []
     assert str(tmp_path) not in record_text
     assert "modes=3, art_reserve=8192, dumps=0" in capsys.readouterr().out
+
+
+def test_w003_frame_gate_runs_four_modes_twice_and_records_sanitized_result(
+    tmp_path, monkeypatch, capsys
+):
+    files = {}
+    for name in ("dalvikvm.exe", "boot.jar", "probe.jar", "probe.dll", "icudt.dat"):
+        path = tmp_path / name
+        path.write_bytes(name.encode())
+        files[name] = path
+    calls = []
+
+    def run_managed(**kwargs):
+        calls.append(kwargs)
+        case_root = kwargs["work_root"]
+        mode = next(
+            option.split("=", 1)[1]
+            for option in kwargs["vm_options"]
+            if option.startswith("-Dw003.mode=")
+        )
+        lines = []
+        for phase in ("refs_only", "refs_and_args", "all_callee_saves", "everything"):
+            lines.append(
+                f"W003FrameProbe mode={mode} phase={phase} "
+                "counts=refs_only:1,refs_and_args:1,"
+                "all_callee_saves:1,everything:1 checksum=1"
+            )
+        lines.append(f"W003FrameProbe OK mode={mode} checksum=1")
+        (case_root / "stdout.txt").write_text("\n".join(lines), encoding="utf-8")
+        (case_root / "stderr.txt").write_text("", encoding="utf-8")
+        (case_root / "result.json").write_text(
+            json.dumps({"target_id": kwargs["target_id"]}) + "\n",
+            encoding="utf-8",
+        )
+
+    monkeypatch.setattr(w003_gate.runtime_gate, "run_managed", run_managed)
+    work = tmp_path / "out" / "w003-frame"
+    w003_gate.run_gate(
+        case="frame",
+        target_id="windows-x86_64-msvc",
+        dalvikvm=files["dalvikvm.exe"],
+        boot_jar=files["boot.jar"],
+        app_jar=files["probe.jar"],
+        probe=files["probe.dll"],
+        work_root=work,
+        icu_data=files["icudt.dat"],
+        library_dirs=[tmp_path],
+        repetitions=2,
+        timeout=10,
+    )
+
+    assert len(calls) == 8
+    assert [call["environment_overrides"]["ART_WINDOWS_X64_NTERP"] for call in calls] == [
+        "0",
+        "0",
+        "0",
+        "0",
+        "1",
+        "1",
+        "1",
+        "1",
+    ]
+    result_text = (work / "result.json").read_text(encoding="utf-8")
+    result = json.loads(result_text)
+    assert result["completed_runs"] == 8
+    assert result["dump_files"] == []
+    assert str(tmp_path) not in result_text
+    assert "repetitions=2, runs=8, dumps=0" in capsys.readouterr().out
 
 
 def test_w002_contract_keeps_osr_return_path_mode_specific():

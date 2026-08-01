@@ -5,7 +5,7 @@ follow-up accepted on native Windows
 
 **Date:** 2026-07-26
 
-**Updated:** 2026-07-28
+**Updated:** 2026-08-01
 
 **Host:** agent01
 
@@ -13,7 +13,7 @@ follow-up accepted on native Windows
 
 | Target ID | Applicable | Build | Runtime | Last accepted |
 |---|---:|---:|---:|---|
-| `windows-x86_64-msvc` | yes | verified | verified | 2026-07-28 |
+| `windows-x86_64-msvc` | yes | verified | verified | 2026-08-01 |
 | `windows-aarch64-msvc` | no | not applicable | not applicable | — |
 | `windows-arm64ec-msvc` | no | not applicable | not applicable | — |
 
@@ -52,7 +52,21 @@ away or wired to only a subset of the registers.
 
 ## Structural checks
 
-The transitional
+The unified `windows_w003_quick_boundary_structure` reviewer verifies:
+
+- the JNI symbol is exported from `libw003xmmsentinel.dll`;
+- the PE object reserves/releases exactly 200 bytes;
+- XMM6 and XMM15 endpoint saves/restores surround the callback;
+- the callback relocation targets `W003InvokeManagedCallback`; and
+- PE unwind information names both sentinel functions and records exactly
+  twenty `SAVE_XMM128` operations.
+
+It consumes explicit frontend-resolved host LLVM tools, so a Linux-hosted
+Windows cross build does not append the target `.exe` suffix. The following
+transitional runner description is retained as historical context; that runner
+is no longer the maintained command path.
+
+The former
 `../../../tools/verify/windows_x64_phase4/run_w003_xmm_sentinel.sh` verifies:
 
 - the JNI symbol is exported from `libw003xmmsentinel.dll`;
@@ -99,6 +113,17 @@ The JIT pair additionally records successful baseline compilation of
 `W003XmmSentinelProbe.managedCallback(double, ... double)`.
 
 ## Native Windows acceptance
+
+The unified product `stage:w003` and exact frame-attribution variant each ran
+the nterp, switch, and threshold-zero JIT modes twice on Windows Server 2025
+x86-64. All six processes in each tree reported `mask=0`,
+`selfTestMask=63`, `fullSelfTestMask=1023`, `exceptionMask=0`, and
+`exceptionSelfTestMask=1023`; both JIT processes emitted the required normal
+and exception-callback compile records. Product passed 4/4 CTest gates and the
+variant passed 5/5, then both repeated as Ninja no-ops. Each XMM aggregate
+contains six successful runs, no dumps, and no machine absolute paths.
+
+The records below remain historical native-package and E9 acceptance context.
 
 The accepted Windows 10 build 19044 evidence predates the W-010 expansion and
 passes the original XMM6-XMM11 sentinel 2/2 in nterp, switch, and threshold-zero

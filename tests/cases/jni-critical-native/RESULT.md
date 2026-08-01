@@ -7,12 +7,27 @@ Date: 2026-07-24. VM: agent01. Runtime: Wine 10.0. Build:
 
 | Target ID | Applicable | Build | Runtime | Last accepted |
 |---|---:|---:|---:|---|
-| `windows-x86_64-msvc` | yes | verified | verified | 2026-07-24 |
+| `windows-x86_64-msvc` | yes | verified | verified | 2026-08-01 |
 | `windows-aarch64-msvc` | not yet declared | pending | pending | — |
 | `windows-arm64ec-msvc` | not yet declared | pending | pending | — |
 
 The shared C/Java source is a portability candidate, not evidence for either
 AArch64 target. Each target requires its own build and runtime acceptance.
+
+## Unified native acceptance (2026-08-01)
+
+The authoritative shell-free `stage:w003` gate passed on Windows Server 2025
+x86-64 in four processes: default and method-instrumented execution for both
+library-name and absolute-path loading. Every process ran the registered and
+unresolved signature matrix with exact values; the instrumented pair also
+proved tracing mode `0 -> nonzero -> 0`, exact during/after values, and trace
+file deletion. The frame-attribution variant repeated the same four-process
+matrix. Product and variant stage repeats were Ninja no-ops and passed again.
+
+Each aggregate JSON records four successful runs, zero dumps, and no machine
+absolute paths. The declaration remains the typed
+`windows`/`x86_64`/`msvc` intersection; portability-candidate source does not
+broaden runtime acceptance to AArch64 or ARM64EC.
 
 ## Result
 
@@ -33,7 +48,7 @@ Transitional compatibility command:
 bash tools/verify/windows_x64_phase4/run_critical_native_probe.sh
 ```
 
-The harness requires both the probe success marker and
+The transitional compatibility harness requires both the probe success marker and
 `main end exception=0`. Its final summary was:
 
 ```text

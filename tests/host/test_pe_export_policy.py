@@ -48,3 +48,35 @@ def test_optimized_pe_inline_specializations_have_one_explicit_owner():
     assert "ArtMethod::GetDeclaringClass<kWithReadBarrier>()" in source
     assert "Object::SetField32<false, false, kVerifyNone, false>" in source
     assert "Object::SetField32<false, true, kVerifyNone, false>" in source
+
+
+def test_w003_variant_links_internal_counters_but_exports_only_probe_api():
+    cmake = (REPO_ROOT / "native" / "CMakeLists.txt").read_text(encoding="utf-8")
+    quick = (
+        REPO_ROOT
+        / "vendor"
+        / "art"
+        / "runtime"
+        / "arch"
+        / "x86_64"
+        / "quick_entrypoints_x86_64.S"
+    ).read_text(encoding="utf-8")
+    for symbol in (
+        "art_w003_frame_probe_refs_only",
+        "art_w003_frame_probe_refs_and_args",
+        "art_w003_frame_probe_all_callee_saves",
+        "art_w003_frame_probe_everything",
+    ):
+        assert f".globl {symbol}" in quick
+        assert f"LINKER:/EXPORT:{symbol}" not in cmake
+    for symbol in (
+        "art_w003_frame_probe_reset",
+        "art_w003_frame_probe_snapshot",
+    ):
+        assert f'"LINKER:/EXPORT:{symbol}"' in cmake
+
+    reviewer = (
+        REPO_ROOT / "tests" / "support" / "windows" / "check_w003_quick_boundaries.py"
+    ).read_text(encoding="utf-8")
+    assert "len(win_traps) != 212" not in reviewer
+    assert "sum(win_traps.values()) != 401" not in reviewer

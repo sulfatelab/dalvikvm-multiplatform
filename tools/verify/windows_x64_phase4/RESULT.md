@@ -51,6 +51,32 @@ adjacent `art.pdb` with DbgHelp wide-character APIs before exercising
 `RtlVirtualUnwind`; it no longer assumes those implementation symbols are DLL
 exports.
 
+## Unified W-003 acceptance (2026-08-01)
+
+The current authoritative W-003 path is the shell-free unified frontend and
+virtual stage. The product and its exact test-only variant use distinct
+fingerprinted output directories:
+
+```text
+python tools/build_art.py configure --target-id windows-x86_64-msvc --build-type RelWithDebInfo
+python tools/build_art.py test --target-id windows-x86_64-msvc --build-type RelWithDebInfo --stage w003 --parallel 16
+python tools/build_art.py configure --target-id windows-x86_64-msvc --variant win32-frame-attribution --build-type RelWithDebInfo
+python tools/build_art.py test --target-id windows-x86_64-msvc --variant win32-frame-attribution --build-type RelWithDebInfo --stage w003 --parallel 16
+```
+
+On Windows Server 2025 x86-64, product passed 4/4 and the frame-attribution
+variant passed 5/5. Both identical repeats reported `ninja: no work to do` and
+passed again. The matrices comprise four CriticalNative, four normal/FastNative,
+six XMM, and variant-only eight frame-family processes. All aggregate JSON
+records have zero dumps and no machine absolute path.
+
+The structural gate reports 212 quick functions, 401 traps, and twenty XMM
+unwind saves. Product `art.dll` has zero W-003 exports; the variant exports
+only reset and snapshot while its four cross-object counters remain internal.
+Non-following scans found zero reparse points in the source and both output
+trees. A final-source Linux-hosted Windows cross build completed all 1,492
+edges, passed the structural CTest gate, and repeated as a Ninja no-op.
+
 ## Scope (from win32_art_port §Phase 4)
 
 - GC stress, multi-thread stress, crash dumps, resource/handle leaks
@@ -70,13 +96,13 @@ exports.
 | P4_G5b Native AV + minidump | **PASS** | `run_crashnative.sh` (VEH+UEF+`.dmp`) |
 | P4_G6 GoldenApp regression | **PASS** | phase3 `run_goldenapp.sh` |
 | W-002 structural managed entries | **PASS in unified native stage** | `windows_w002_managed_entry_structure` |
-| W-003 quick boundary/trap parity | **PASS** | `check_w003_quick_boundaries.py` |
+| W-003 quick boundary/trap parity | **PASS in unified product and variant** | `windows_w003_quick_boundary_structure` |
 | W-010 static OSR/invoke lookup and virtual unwind | **PASS** | `run_osr_unwind_probe.sh` (R12-anchored variable RSP entry, explicit RBP JIT handoff, managed-clobbered RBP return, GPR plus XMM6-XMM15 restore, invoke records, epilogue) |
 | W-010 GenericJNI native-return virtual unwind | **PASS** | same probe: captured `+0xc5` return, variable native RSP, 5120-byte R12 anchor, repaired RDI `offset=0x1400`, caller RIP/RSP and all nonvolatile GPRs |
 | W-010 switch-wrapper unwind | **PASS on native build 26100** | E5: live `ExecuteSwitchImplAsm + 0xd` lookup succeeds after the Windows-only RBX/home-area/unwind repair |
 | W-010 interpreter-bridge unwind | **PASS on native build 26100** | E6: live primary `+0x82` lookup plus all later frames reach zero PC/UEF/dump; pending record remains structural/synthetic |
-| W-003 attributed frame families | **PASS, 8/8** | `run_w003_frame_probe.sh` |
-| W-003 historical XMM6-XMM11 / W-010 full XMM6-XMM15 sentinel | **PASS, 6/6** | `run_w003_xmm_sentinel.sh` (`selfTestMask=63`, `fullSelfTestMask=1023`) |
+| W-003 attributed frame families | **PASS, unified variant 8/8** | `managed_w003_frame` |
+| W-003 historical XMM6-XMM11 / W-010 full XMM6-XMM15 sentinel | **PASS, unified 6/6 per tree** | `managed_w003_xmm_sentinel` (`selfTestMask=63`, `fullSelfTestMask=1023`) |
 | W-002 OSR matrix | **PASS, unified 4/4 executions; historical 8/8** | `managed_w002_osr`; nterp/switch twice each |
 | W-002 attached-thread matrix | **PASS, unified 4/4 executions; historical 8/8** | `managed_w002_attach`; each raw thread detaches, uses native stack, and reattaches |
 | W-014 thread reservation/lifetime/guarantee-aware bounds | **PASS** | unified `stage:w014` native gates; E9 raises/preserves/queries the guarantee and debits prefix + guarantee + moving guard |

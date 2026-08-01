@@ -504,7 +504,12 @@ set(_art_linux_x86_64_gnu_selector
     TARGET_IDS linux-x86_64-gnu)
 set(_art_current_native_ids_selector
     TARGET_IDS linux-x86_64-gnu windows-x86_64-msvc)
-get_filename_component(_art_test_llvm_bin "${CMAKE_CXX_COMPILER}" DIRECTORY)
+foreach(_art_test_llvm_tool ART_LLVM_READOBJ ART_LLVM_OBJDUMP)
+    if(NOT ${_art_test_llvm_tool})
+        message(FATAL_ERROR
+            "${_art_test_llvm_tool} is required for shell-free object reviewers")
+    endif()
+endforeach()
 set(_art_managed_runtime_library_args
     --library-dir "$<TARGET_FILE_DIR:dalvikvm>")
 if(ART_TARGET_PLATFORM STREQUAL "windows")
@@ -539,9 +544,9 @@ art_add_target_probe(
         "${_art_test_repo_root}/tests/support/windows/check_w002_managed_entries.py"
         --build "${CMAKE_BINARY_DIR}"
         --llvm-readobj
-            "${_art_test_llvm_bin}/llvm-readobj${CMAKE_EXECUTABLE_SUFFIX}"
+            "${ART_LLVM_READOBJ}"
         --llvm-objdump
-            "${_art_test_llvm_bin}/llvm-objdump${CMAKE_EXECUTABLE_SUFFIX}")
+            "${ART_LLVM_OBJDUMP}")
 art_add_target_probe(
     NAME managed_w002_attach STAGE w002 TYPE MANAGED EXECUTION target-runnable
     TIMEOUT 600
@@ -625,31 +630,120 @@ art_add_target_probe(
     CONTRACTS jni native-abi xmm
     PREFIX lib WINDOWS_EXPORT_ALL_SYMBOLS)
 art_add_target_probe(
-    NAME managed_critical_native STAGE w003 TYPE MANAGED EXECUTION compile-only
+    NAME windows_w003_quick_boundary_structure STAGE w003 TYPE GATE
+    EXECUTION host-review
+    ${_art_windows_x86_64_msvc_selector}
+    DEPENDS art w003xmmsentinel
+    CONTRACTS stack native-abi xmm codegen source-policy
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_test_repo_root}/tests/support/windows/check_w003_quick_boundaries.py"
+        --build "${CMAKE_BINARY_DIR}"
+        --variant "${ART_TEST_VARIANT}"
+        --llvm-readobj
+            "${ART_LLVM_READOBJ}"
+        --llvm-objdump
+            "${ART_LLVM_OBJDUMP}")
+art_add_target_probe(
+    NAME managed_critical_native STAGE w003 TYPE MANAGED EXECUTION target-runnable
+    TIMEOUT 1200
     ${_art_windows_current_selector}
     SOURCES
         "${_art_test_cases_root}/jni-critical-native/CriticalNativeProbe.java"
         "${_art_test_cases_root}/jni-critical-native/CriticalNativeDlsymProbe.java"
+    DEPENDS criticalnativeprobe dalvikvm icu_jni javacore openjdk
     CONTRACTS jni native-abi
-    OUTPUT_NAME criticalnativeprobe)
+    OUTPUT_NAME criticalnativeprobe
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_test_repo_root}/tests/support/windows/w003_managed_gate.py"
+        --case critical-native
+        --target-id "${ART_TARGET_ID}"
+        --dalvikvm "$<TARGET_FILE:dalvikvm>"
+        --boot-jar "${_art_boot_jar}"
+        --app-jar "${_art_managed_root}/criticalnativeprobe.jar"
+        --probe "$<TARGET_FILE:criticalnativeprobe>"
+        --work-root "${CMAKE_CURRENT_BINARY_DIR}/results/w003-critical-native"
+        --icu-data "${_art_icu_data}"
+        ${_art_managed_runtime_library_args}
+        --repeat 2
+        --timeout 180)
 art_add_target_probe(
-    NAME managed_native_abi STAGE w003 TYPE MANAGED EXECUTION compile-only
+    NAME managed_native_abi STAGE w003 TYPE MANAGED EXECUTION target-runnable
+    TIMEOUT 900
     ${_art_windows_current_selector}
     SOURCES "${_art_test_cases_root}/jni-native-abi/FastNativeAbiProbe.java"
+    DEPENDS nativeabiprobe dalvikvm icu_jni javacore openjdk
     CONTRACTS jni native-abi
-    OUTPUT_NAME fastnativeabiprobe)
+    OUTPUT_NAME fastnativeabiprobe
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_test_repo_root}/tests/support/windows/w003_managed_gate.py"
+        --case native-abi
+        --target-id "${ART_TARGET_ID}"
+        --dalvikvm "$<TARGET_FILE:dalvikvm>"
+        --boot-jar "${_art_boot_jar}"
+        --app-jar "${_art_managed_root}/fastnativeabiprobe.jar"
+        --probe "$<TARGET_FILE:nativeabiprobe>"
+        --work-root "${CMAKE_CURRENT_BINARY_DIR}/results/w003-native-abi"
+        --icu-data "${_art_icu_data}"
+        ${_art_managed_runtime_library_args}
+        --repeat 2
+        --timeout 180)
 art_add_target_probe(
-    NAME managed_w003_frame STAGE w003 TYPE MANAGED EXECUTION compile-only
-    ${_art_windows_current_selector}
-    SOURCES "${_art_test_cases_root}/w003-frame-probe/W003FrameProbe.java"
-    CONTRACTS jni stack
-    OUTPUT_NAME w003frameprobe)
-art_add_target_probe(
-    NAME managed_w003_xmm_sentinel STAGE w003 TYPE MANAGED EXECUTION compile-only
+    NAME managed_w003_xmm_sentinel STAGE w003 TYPE MANAGED EXECUTION target-runnable
+    TIMEOUT 1200
     ${_art_windows_x86_64_msvc_selector}
     SOURCES "${_art_test_cases_root}/w003-xmm-sentinel/W003XmmSentinelProbe.java"
+    DEPENDS w003xmmsentinel dalvikvm icu_jni javacore openjdk
     CONTRACTS jni native-abi xmm
-    OUTPUT_NAME w003xmmsentinelprobe)
+    OUTPUT_NAME w003xmmsentinelprobe
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_test_repo_root}/tests/support/windows/w003_managed_gate.py"
+        --case xmm
+        --target-id "${ART_TARGET_ID}"
+        --dalvikvm "$<TARGET_FILE:dalvikvm>"
+        --boot-jar "${_art_boot_jar}"
+        --app-jar "${_art_managed_root}/w003xmmsentinelprobe.jar"
+        --probe "$<TARGET_FILE:w003xmmsentinel>"
+        --work-root "${CMAKE_CURRENT_BINARY_DIR}/results/w003-xmm"
+        --icu-data "${_art_icu_data}"
+        ${_art_managed_runtime_library_args}
+        --repeat 2
+        --timeout 180)
+if(ART_TEST_VARIANT STREQUAL "win32-frame-attribution")
+    art_add_target_probe(
+        NAME managed_w003_frame STAGE w003 TYPE MANAGED EXECUTION target-runnable
+        TIMEOUT 1800
+        ${_art_windows_current_selector}
+        SOURCES "${_art_test_cases_root}/w003-frame-probe/W003FrameProbe.java"
+        DEPENDS w003frameprobe dalvikvm icu_jni javacore openjdk
+        CONTRACTS jni stack
+        OUTPUT_NAME w003frameprobe
+        COMMAND
+            "${Python3_EXECUTABLE}"
+            "${_art_test_repo_root}/tests/support/windows/w003_managed_gate.py"
+            --case frame
+            --target-id "${ART_TARGET_ID}"
+            --dalvikvm "$<TARGET_FILE:dalvikvm>"
+            --boot-jar "${_art_boot_jar}"
+            --app-jar "${_art_managed_root}/w003frameprobe.jar"
+            --probe "$<TARGET_FILE:w003frameprobe>"
+            --work-root "${CMAKE_CURRENT_BINARY_DIR}/results/w003-frame"
+            --icu-data "${_art_icu_data}"
+            ${_art_managed_runtime_library_args}
+            --repeat 2
+            --timeout 240)
+else()
+    art_add_target_probe(
+        NAME managed_w003_frame STAGE w003 TYPE MANAGED EXECUTION compile-only
+        ${_art_windows_current_selector}
+        SOURCES "${_art_test_cases_root}/w003-frame-probe/W003FrameProbe.java"
+        DEPENDS w003frameprobe
+        CONTRACTS jni stack
+        OUTPUT_NAME w003frameprobe)
+endif()
 
 # W-004: runtime embedding and forced-interpreter/JVMTI transitions.
 art_add_target_probe(
@@ -1157,9 +1251,9 @@ art_add_target_probe(
         --repo "${_art_test_repo_root}"
         --probe-build "${CMAKE_BINARY_DIR}"
         --llvm-readobj
-            "${_art_test_llvm_bin}/llvm-readobj${CMAKE_EXECUTABLE_SUFFIX}"
+            "${ART_LLVM_READOBJ}"
         --llvm-objdump
-            "${_art_test_llvm_bin}/llvm-objdump${CMAKE_EXECUTABLE_SUFFIX}")
+            "${ART_LLVM_OBJDUMP}")
 if(ART_TEST_VARIANT STREQUAL "win32-stack-high-water")
     art_add_target_probe(
         NAME managed_fs1_stack_high_water STAGE w014 TYPE MANAGED

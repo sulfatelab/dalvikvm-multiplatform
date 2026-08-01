@@ -4,13 +4,15 @@
 
 **Date:** 2026-07-26
 
+**Unified acceptance:** 2026-08-01
+
 **Host:** agent01
 
 ## Target status
 
 | Target ID | Applicable | Build | Runtime | Last accepted |
 |---|---:|---:|---:|---|
-| `windows-x86_64-msvc` | yes | verified | verified | 2026-07-26 |
+| `windows-x86_64-msvc` | yes | verified | verified | 2026-08-01 |
 | `windows-aarch64-msvc` | no current implementation | not applicable | not applicable | — |
 | `windows-arm64ec-msvc` | no current implementation | not applicable | not applicable | — |
 
@@ -103,7 +105,30 @@ fallback; no null-check workaround was added to ART or nterp.
 
 ## Verification
 
-Primary command:
+The authoritative path is the exact `win32-frame-attribution` build variant:
+
+```text
+python tools/build_art.py configure --target-id windows-x86_64-msvc --variant win32-frame-attribution --build-type RelWithDebInfo
+python tools/build_art.py test --target-id windows-x86_64-msvc --variant win32-frame-attribution --build-type RelWithDebInfo --stage w003 --parallel 16
+```
+
+On Windows Server 2025 x86-64 the variant built from a distinct fingerprinted
+directory and passed all 5/5 W-003 CTest gates. `managed_w003_frame` completed
+int, switch, nterp, and JIT twice each; nterp and JIT reached all four frame
+families. The identical command reported `ninja: no work to do` and passed
+5/5 again. The aggregate records eight successful runs, no dumps, and no
+machine absolute paths.
+
+Only this variant defines `ART_W003_FRAME_PROBE`, and only for the `art`
+target. Generated nterp and quick assembly share its four internal counters,
+while the DLL exposes only reset and snapshot. The product DLL exposes no
+W-003 symbol. A non-following audit found no reparse point in the source,
+product, or variant tree.
+
+The following command and output are the historical Wine qualification that
+preceded the unified native path.
+
+Historical command:
 
 ```bash
 REPEATS=2 bash tools/verify/windows_x64_phase4/run_w003_frame_probe.sh

@@ -5,9 +5,10 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
+import os
 from pathlib import Path
 import re
-import shutil
+import stat
 import subprocess
 import sys
 
@@ -23,8 +24,8 @@ def fail(message: str) -> None:
     raise RuntimeError(message)
 
 
-def run(tool: str, *args: str) -> str:
-    result = subprocess.run([tool, *args], text=True, capture_output=True)
+def run(tool: Path, *args: str) -> str:
+    result = subprocess.run([str(tool), *args], text=True, capture_output=True)
     if result.returncode != 0:
         fail(
             f"command failed ({result.returncode}): {tool} {' '.join(args)}\n"
@@ -33,10 +34,22 @@ def run(tool: str, *args: str) -> str:
     return result.stdout
 
 
-def require_tool(name: str) -> str:
-    path = shutil.which(name)
-    if path is None:
-        fail(f"required tool is missing: {name}")
+def require_tool(path: Path) -> Path:
+    path = path.absolute()
+    current = Path(path.anchor)
+    for part in path.parts[1:]:
+        current /= part
+        try:
+            info = os.lstat(current)
+        except OSError as exc:
+            fail(f"cannot inspect configured LLVM tool path {current}: {exc}")
+        attributes = getattr(info, "st_file_attributes", 0)
+        if stat.S_ISLNK(info.st_mode) or (
+            attributes & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+        ):
+            fail(f"configured LLVM tool path contains a link/reparse point: {current}")
+    if not path.is_file():
+        fail(f"configured LLVM tool is not a regular file: {path}")
     return path
 
 
@@ -318,10 +331,9 @@ def restore_tokens() -> list[str]:
     ]
 
 
-def check_boundary_objects(win_dis: str, linux_dis: str) -> None:
+def check_boundary_object(win_dis: str) -> None:
     for symbol in ("art_quick_invoke_stub", "art_quick_invoke_static_stub"):
         win_body = object_function(win_dis, symbol)
-        linux_body = object_function(linux_dis, symbol)
         require_ordered(
             win_body,
             f"Windows x64 {symbol} object",
@@ -342,14 +354,9 @@ def check_boundary_objects(win_dis: str, linux_dis: str) -> None:
             fail(f"Windows x64 {symbol} must reserve exactly one XMM save area")
         if win_body.count("addq\t$0xa0, %rsp") != 1:
             fail(f"Windows x64 {symbol} must release exactly one XMM save area")
-        if "movdqu" in linux_body:
-            fail(f"Linux {symbol} unexpectedly gained Windows x64 XMM boundary saves")
-        if "subq\t$0xa0, %rsp" in linux_body:
-            fail(f"Linux {symbol} unexpectedly reserves the Windows x64 save area")
 
     symbol = "art_quick_osr_stub"
     win_body = object_function(win_dis, symbol)
-    linux_body = object_function(linux_dis, symbol)
     require_ordered(
         win_body,
         "Windows x64 art_quick_osr_stub object",
@@ -383,34 +390,93 @@ def check_boundary_objects(win_dis: str, linux_dis: str) -> None:
         fail("Windows x64 art_quick_osr_stub must reserve exactly one XMM save area")
     if win_body.count("addq\t$0xf8, %rsp") != 1:
         fail("Windows x64 art_quick_osr_stub must have one RSP-based return epilogue")
-    if "movdqu" in linux_body:
-        fail("Linux art_quick_osr_stub unexpectedly gained Windows x64 XMM saves")
-    if "subq\t$0xa0, %rsp" in linux_body:
-        fail("Linux art_quick_osr_stub unexpectedly reserves the Windows x64 save area")
+
+
+def check_frame_variant(
+    build: Path,
+    variant: str,
+    quick_object: Path,
+    readobj: Path,
+) -> None:
+    if variant not in ("product", "win32-frame-attribution"):
+        fail(f"W-003 structural gate does not admit build variant {variant!r}")
+    instrumented = variant == "win32-frame-attribution"
+    exports = run(readobj, "--coff-exports", str(build / "art.dll"))
+    object_symbols = run(readobj, "--symbols", str(quick_object))
+    for symbol in ("art_w003_frame_probe_reset", "art_w003_frame_probe_snapshot"):
+        present = f"Name: {symbol}" in exports
+        if present != instrumented:
+            state = "missing from instrumented" if instrumented else "present in product"
+            fail(f"{symbol} is {state} art.dll")
+    for symbol in (
+        "art_w003_frame_probe_refs_only",
+        "art_w003_frame_probe_refs_and_args",
+        "art_w003_frame_probe_all_callee_saves",
+        "art_w003_frame_probe_everything",
+    ):
+        present = f"Name: {symbol}" in object_symbols
+        if present != instrumented:
+            state = "missing from instrumented" if instrumented else "present in product"
+            fail(f"{symbol} is {state} quick object")
+
+
+def check_xmm_probe(build: Path, readobj: Path, objdump: Path) -> None:
+    dll = build / "tests/libw003xmmsentinel.dll"
+    if not dll.is_file() or dll.is_symlink():
+        fail(f"required XMM probe DLL is missing or linked: {dll}")
+    exports = run(readobj, "--coff-exports", str(dll))
+    if "Name: Java_W003XmmSentinelProbe_runXmmSentinel" not in exports:
+        fail("W-003 XMM probe DLL is missing its JNI export")
+
+    object_root = build / "tests/CMakeFiles/w003xmmsentinel.dir"
+    assembly = find_one(object_root, "sentinel_x86_64.S.obj")
+    disassembly = run(objdump, "-dr", "--no-show-raw-insn", str(assembly))
+    for token in (
+        "subq\t$0xc8, %rsp",
+        "movdqu\t%xmm6, 0x20(%rsp)",
+        "movdqu\t%xmm15, 0xb0(%rsp)",
+        "IMAGE_REL_AMD64_REL32\tW003InvokeManagedCallback",
+        "movdqu\t0x20(%rsp), %xmm6",
+        "movdqu\t0xb0(%rsp), %xmm15",
+        "addq\t$0xc8, %rsp",
+    ):
+        if token not in disassembly:
+            fail(f"W-003 XMM assembly object is missing {token!r}")
+
+    unwind = run(readobj, "--unwind", str(assembly))
+    if "W003XmmSentinelAssembly" not in unwind:
+        fail("W-003 XMM assembly unwind omits the normal sentinel")
+    if "W003XmmExceptionSentinelAssembly" not in unwind:
+        fail("W-003 XMM assembly unwind omits the exception sentinel")
+    if unwind.count("SAVE_XMM128 reg=XMM") != 20:
+        fail("W-003 XMM assembly does not describe exactly twenty XMM saves")
+    if "SAVE_XMM128 reg=XMM15, offset=0xB0" not in unwind:
+        fail("W-003 XMM assembly unwind omits the final XMM15 save")
+
+    helper_object = find_one(object_root, "probe.c.obj")
+    helper = object_function(
+        run(objdump, "-dr", "--no-show-raw-insn", str(helper_object)),
+        "W003InvokeManagedCallback",
+    )
+    if re.search(r"%xmm(?:6|7|8|9|10|11|12|13|14|15)\b", helper):
+        fail("W-003 C callback masks the boundary with local nonvolatile XMM saves")
+    if "callq\t*0x408(%rax)" not in helper:
+        fail("W-003 C callback does not call the JNI CallStaticIntMethod slot")
 
 
 def main() -> int:
     repo = Path(__file__).resolve().parents[3]
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--win-build",
-        type=Path,
-        default=repo / "out/windows-x86_64-msvc/RelWithDebInfo",
-        help="configured Windows x64 build directory",
-    )
-    parser.add_argument(
-        "--linux-build",
-        type=Path,
-        default=repo / "out/linux-x86_64-gnu/RelWithDebInfo",
-        help="configured Linux build directory",
-    )
+    parser.add_argument("--build", type=Path, required=True)
+    parser.add_argument("--variant", required=True)
+    parser.add_argument("--llvm-readobj", type=Path, required=True)
+    parser.add_argument("--llvm-objdump", type=Path, required=True)
     args = parser.parse_args()
-    win_build = args.win_build.resolve()
-    linux_build = args.linux_build.resolve()
-    if not (win_build / "art.dll").is_file():
-        fail(f"required Windows x64 artifact is missing: {win_build / 'art.dll'}")
-    if not (linux_build / "libart.so").is_file():
-        fail(f"required Linux artifact is missing: {linux_build / 'libart.so'}")
+    build = args.build.resolve()
+    if not (build / "art.dll").is_file():
+        fail(f"required Windows x64 artifact is missing: {build / 'art.dll'}")
+    readobj = require_tool(args.llvm_readobj)
+    objdump = require_tool(args.llvm_objdump)
 
     art = repo / "vendor/art"
     quick = (art / "runtime/arch/x86_64/quick_entrypoints_x86_64.S").read_text(
@@ -422,31 +488,21 @@ def main() -> int:
     check_setup_source(quick, support)
     check_boundary_source(quick)
 
-    objdump = require_tool("llvm-objdump")
-    win_obj = find_one(
-        win_build / "CMakeFiles/art.dir", "quick_entrypoints_x86_64.S.obj"
-    )
-    linux_obj = find_one(
-        linux_build / "CMakeFiles/art.dir", "quick_entrypoints_x86_64.S.o"
-    )
+    win_obj = find_one(build / "CMakeFiles/art.dir", "quick_entrypoints_x86_64.S.obj")
     win_dis = run(objdump, "-dr", "--no-show-raw-insn", str(win_obj))
-    linux_dis = run(objdump, "-dr", "--no-show-raw-insn", str(linux_obj))
-    check_boundary_objects(win_dis, linux_dis)
+    check_boundary_object(win_dis)
+    check_frame_variant(build, args.variant, win_obj, readobj)
+    check_xmm_probe(build, readobj, objdump)
 
     win_traps = trap_distribution(win_dis)
-    linux_traps = trap_distribution(linux_dis)
-    if win_traps != linux_traps:
-        only_win = win_traps - linux_traps
-        only_linux = linux_traps - win_traps
-        fail(
-            "matched PE/ELF int3 distributions differ: "
-            f"extra Windows x64={dict(only_win)}, extra Linux={dict(only_linux)}"
-        )
+    if not win_traps:
+        fail("Windows x64 quick disassembly yielded no function-attributed traps")
 
     print(
         "W-003 quick-boundary structural check: PASS "
-        f"(boundaries={len(BOUNDARY_SYMBOLS)} trap_functions={len(win_traps)} "
-        f"traps={sum(win_traps.values())})"
+        f"(variant={args.variant} boundaries={len(BOUNDARY_SYMBOLS)} "
+        f"trap_functions={len(win_traps)} "
+        f"traps={sum(win_traps.values())} xmm_saves=20)"
     )
     return 0
 

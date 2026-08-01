@@ -31,7 +31,11 @@ from bp2cmake.target import TARGET_PROFILES, TargetError, TargetProfile, resolve
 
 DEFAULT_BUILD_TYPE = "RelWithDebInfo"
 BUILD_TYPES = ("RelWithDebInfo", "Debug")
-BUILD_VARIANTS = ("product", "win32-stack-high-water")
+BUILD_VARIANTS = (
+    "product",
+    "win32-frame-attribution",
+    "win32-stack-high-water",
+)
 ROOT_MODULES = (
     "dalvikvm",
     "dex2oat",
@@ -165,9 +169,11 @@ def _validate_build_variant(
 ) -> None:
     if variant == "product":
         return
-    if variant == "win32-stack-high-water" and target.target_id != "windows-x86_64-msvc":
+    if variant in ("win32-frame-attribution", "win32-stack-high-water") and (
+        target.target_id != "windows-x86_64-msvc"
+    ):
         raise BuildFrontendError(
-            "win32-stack-high-water is an exact windows-x86_64-msvc test variant"
+            f"{variant} is an exact windows-x86_64-msvc test variant"
         )
     if command == "stage":
         raise BuildFrontendError(
@@ -266,6 +272,7 @@ def _configure(
     variant: str = "product",
 ) -> None:
     tools = _resolve_tools(local, need_compiler=True)
+    tools.update(_resolve_llvm_inspection_tools(local))
     jdk = _resolve_jdk(local)
     tools["java"] = jdk / "bin" / ("java.exe" if os.name == "nt" else "java")
     tools["javac"] = jdk / "bin" / ("javac.exe" if os.name == "nt" else "javac")
@@ -296,6 +303,8 @@ def _configure(
         f"-DART_JDK_ROOT={jdk}",
         f"-DART_PROFILE_FILE={generated / 'target_profile.cmake'}",
         f"-DART_GRAPH_FILE={generated / 'art_graph.cmake'}",
+        f"-DART_LLVM_READOBJ={tools['llvm-readobj']}",
+        f"-DART_LLVM_OBJDUMP={tools['llvm-objdump']}",
         "-DART_ENABLE_TARGET_RUNTIME_TESTS="
         + ("ON" if _host_can_run_target(target) else "OFF"),
         f"-DART_TEST_VARIANT={variant}",
@@ -697,6 +706,25 @@ def _resolve_llvm_resource_compiler(local: LocalBuildConfig) -> Path:
             f"LLVM resource compiler required; got {resolved.name!r}"
         )
     return resolved
+
+
+def _resolve_llvm_inspection_tools(local: LocalBuildConfig) -> dict[str, Path]:
+    """Resolve regular canonical LLVM object-inspection executables."""
+    suffix = ".exe" if os.name == "nt" else ""
+    llvm_root = local.tools.get("llvm_root")
+    tools: dict[str, Path] = {}
+    for name in ("llvm-readobj", "llvm-objdump"):
+        executable = f"{name}{suffix}"
+        candidate = llvm_root / "bin" / executable if llvm_root is not None else None
+        if candidate is None or not candidate.is_file():
+            candidate = _discover(executable).resolve()
+        resolved = validate_managed_path(candidate)
+        if resolved.name not in (name, f"{name}.exe"):
+            raise BuildFrontendError(
+                f"LLVM inspection tool {name} required; got {resolved.name!r}"
+            )
+        tools[name] = resolved
+    return tools
 
 
 def _resolve_jdk(local: LocalBuildConfig) -> Path:
