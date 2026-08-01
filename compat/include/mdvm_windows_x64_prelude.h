@@ -166,15 +166,6 @@ typedef long suseconds_t;
 #define __LP64__ 1
 #endif
 
-/* Prefer C11 aligned_alloc / CRT; declare posix_memalign for leftover call sites. */
-#ifdef __cplusplus
-extern "C" {
-#endif
-int posix_memalign(void** memptr, size_t alignment, size_t size);
-#ifdef __cplusplus
-}
-#endif
-
 #include <unistd.h>
 #include <sched.h>
 #include <pthread.h>

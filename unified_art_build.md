@@ -232,6 +232,17 @@ items are closed.
   Linux and both Windows products passed at the required 32/32/16 job limits
   and repeated as Ninja no-ops. Cross and native compile databases agree, both
   CET contracts pass 58/58, and all 183 host tests pass.
+- [x] The three-source `openjdkjvm` DSO now compiles without the ART prelude on
+  both Windows build hosts. `OpenjdkJvm.cc` directly includes `sched.h`,
+  `atomic_pair.h` uses fixed-width `uint32_t` counters from `cstdint`, and the
+  project `stdlib.h` wrapper owns the Windows `posix_memalign` declaration that
+  is implemented by `windows_x64_posix_stubs`; the duplicate declaration was
+  removed from the broad prelude. Forced-prelude compile commands fell from
+  710 to 707. The affected Linux, Windows-cross, and native Windows graphs
+  completed with their required 32/32/16 job limits and repeated as Ninja
+  no-ops. Cross and native compile databases agree at 1,816 commands with all
+  three `openjdkjvm` commands prelude-free, both CET contracts pass 58/58, and
+  all 184 host tests pass.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to

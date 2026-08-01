@@ -30,6 +30,7 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
         nativehelper
         nativeloader
         odrstatslog
+        openjdkjvm
         profile
         procinfo
         unwindstack

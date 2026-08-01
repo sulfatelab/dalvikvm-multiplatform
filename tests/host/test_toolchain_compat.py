@@ -52,6 +52,7 @@ def test_windows_platform_prelude_has_reviewed_target_scope():
         "nativehelper",
         "nativeloader",
         "odrstatslog",
+        "openjdkjvm",
         "profile",
         "procinfo",
         "unwindstack",
@@ -92,6 +93,33 @@ def test_windows_sdk_macro_hygiene_is_header_owned():
     assert "#undef CONST" not in prelude
     assert "#undef ERROR" not in prelude
     assert "#undef __reserved" not in prelude
+
+
+def test_windows_openjdkjvm_uses_explicit_source_and_header_contracts():
+    source = (REPO_ROOT / "vendor" / "art" / "openjdkjvm" / "OpenjdkJvm.cc").read_text(
+        encoding="utf-8"
+    )
+    atomic_pair = (
+        REPO_ROOT / "vendor" / "art" / "runtime" / "base" / "atomic_pair.h"
+    ).read_text(encoding="utf-8")
+    stdlib = (REPO_ROOT / "compat" / "include" / "stdlib.h").read_text(
+        encoding="utf-8"
+    )
+    prelude = (
+        REPO_ROOT / "compat" / "include" / "mdvm_windows_x64_prelude.h"
+    ).read_text(encoding="utf-8")
+    stubs = (
+        REPO_ROOT / "compat" / "src" / "windows_x64_posix_stubs.c"
+    ).read_text(encoding="utf-8")
+
+    assert "#include <sched.h>" in source
+    assert "#include <cstdint>" in atomic_pair
+    assert "static constexpr uint32_t kAtomicPairMaxSpins" in atomic_pair
+    assert "for (uint32_t i = 0;; ++i)" in atomic_pair
+    assert "#include_next <stdlib.h>" in stdlib
+    assert "int posix_memalign(void** memptr, size_t alignment, size_t size);" in stdlib
+    assert "int posix_memalign(void** memptr, size_t alignment, size_t size);" not in prelude
+    assert "int posix_memalign(void** memptr, size_t alignment, size_t size)" in stubs
 
 
 def test_windows_unwindstack_uses_posix_header_ownership():
