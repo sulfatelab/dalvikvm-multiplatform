@@ -291,6 +291,11 @@ The W-010/W-014 E4–E6 diagnosis fragments were deduplicated into the existing
 consolidated diagnostics analysis. All package/source/result/dump identities,
 live lookup boundaries, and the rejected fixed-page SOE outcome remain there;
 four compact fragments and one raw aggregate record were removed.
+FS-2 native acceptance is now one sanitized history summary. It retains the
+package identity, exact debugger/CET/XMM/embedding contracts, final result,
+and all six intentional dump identities. Absolute host paths, duplicate
+structural/result/scan records, and verbose process logs were removed after
+the unified W-010 gates assumed live ownership.
 The unreferenced W-025 JIT-2/JIT-3 source preflights and the broken JIT-4
 preflight were removed as well. The unified W-025 reviewer owns their current
 mapping, lifecycle, nterp floating-point, JIT-control, PE-import/export, and

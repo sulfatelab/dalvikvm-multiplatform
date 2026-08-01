@@ -49,17 +49,27 @@ listed with size and SHA-256 in `FATAL_DMP_SCAN.txt`.
   destroys/unloads ART, and verifies the later UEF remains installed while no
   stale ART callback runs.
 
-Selected native logs and the complete result record are retained beside this
-file. The package archive and host location are recorded in `ARCHIVE_SHA256SUMS.txt`
-and `HOST_INFO.txt`; minidump binaries remain in the returned Windows package
-rather than in the source tree.
+The six intentional dumps were valid `MDMP` files:
+
+| Origin | Bytes | SHA-256 |
+|---|---:|---|
+| embedding | 747,313 | `f756285bae33eee4e38a5204cf08b01838a824f64099c1c655ff597cf3053554` |
+| static native | 743,403 | `5e5b82a323fb2b76e8520784d23935b65e597091181c9be33ff570f4da34c387` |
+| JIT J-1 | 747,481 | `f3175bd9a334bd93b0401a0e2e8464666299ac1a1391e81fe7ed53efb76c54eb` |
+| JIT J-2 | 749,881 | `4f85587487a33e2050ee3a5a28b573ed74611d4d1858bf4cc1d9814cbc176ec0` |
+| OSR J-1 | 751,663 | `c4ccd5af7552f1fa89162b5733aa94e54711e0ba28346f8bd82d001e5bd6abbc` |
+| OSR J-2 | 751,039 | `4a589079c93e0fdea8ab56b7a62ef677362f1bf08174400c9b1c76aa39667e5f` |
+
+The minidump binaries and package remain outside VCS. The duplicate host,
+structural, result, dump-scan, and verbose process logs were removed after
+their durable contract and identities were consolidated here.
 
 ## Current lab policy and remaining work
 
 The former Windows 10 acceptance host is no longer available after the lab
 environment change. Windows Server 2025 build 26100 is the sole authoritative
 native gate for future reruns; the canonical policy is
-[`win32_host_gate_policy.md`](../../../../../win32_host_gate_policy.md).
+[`win32_host_gate_policy.md`](../../win32_host_gate_policy.md).
 
 FS-2 closes its four requested native proof points. Remaining W-010/W-014 work
 is limited to reservation-correlation/pending-range conditional probes,

@@ -179,7 +179,7 @@ after their maintained semantics moved to unified W-010/W-025 declarations.
 | W-010/W-014 isolated failure diagnostics | **PASS on native build 19044** | runs 3-4: fixed-page SOE invalidated; UEF replacement ruled out; JNI hardware/raised AVs miss UEF while the JNI-created native worker reaches UEF/dump, isolating traversal through managed/GenericJNI frames. |
 | W-010/W-014 complete E9 native host matrix | **PASS, 30/30 on build 26100** | guarantee-aware excluded-low accounting; switch/nterp/JIT managed SOE; zero handled dumps; five valid static/JIT/OSR fatal dumps |
 | FS-1 RelWithDebInfo/Debug stack high-water | **PASS in unified native Stage-8 and historical package on build 26100** | unified `win32-stack-high-water` variant: switch/nterp/JIT, four complete records each; current RelWithDebInfo minimum margin 6448 bytes, Debug quick minimum 37120 bytes; no dumps; structural reviewer passed |
-| FS-2 native debugger/CET/embedding/exception-XMM matrix | **PASS on native build 26100** | `evidence/fs2_w010_w014_native/ACCEPTANCE.md`; first-chance JIT NPE continue, explicit SOE no AV, nine incompatible CET rejections plus safe-policy acceptance, JNI UEF teardown, and 2x nterp/switch/JIT exception-XMM runs |
+| FS-2 native debugger/CET/embedding/exception-XMM matrix | **PASS on native build 26100** | `../../../docs/history/windows_x64_fs2_w010_w014_result.md`; first-chance JIT NPE continue, explicit SOE no AV, nine incompatible CET rejections plus safe-policy acceptance, JNI UEF teardown, and 2x nterp/switch/JIT exception-XMM runs |
 | Historical full Wine suite | **PASS** | retained `evidence/all_wine_gates.txt`; the aggregate runner is retired and maintained coverage uses unified native CTest |
 
 Evidence: `evidence/all_wine_gates.txt`, `evidence/crashnative.txt`
@@ -213,7 +213,7 @@ PASS native_crash_aborts
 | W-010 static OSR PE unwind | `quick_entrypoints_x86_64.S`; unified `tests/cases/osr-unwind/` probe; unified `windows_w010_boundary_unwind_structure` reviewer |
 | Historical W-010/W-014 Stage E package evidence | `check_w010_w014_host_package.py`; `review_w010_w014_host_result.py`; `W010_W014_HOST_CHECKLIST.md`; `W010_W014_DIAGNOSTICS.md`; accepted `evidence/` records |
 | FS-1 stack high-water probe/evidence | unified source, current result, and historical package identity under `tests/cases/stack-high-water`; shell-free gates and structural reviewer under `tests/support/windows` |
-| FS-2 debugger/CET/embedding/exception-XMM probes and evidence | `tests/cases/debugger-fault/probe.cc`; `tests/cases/cet-stack-policy/probe.cc`; `tests/cases/art-embedding/probe.cc`; `evidence/fs2_w010_w014_native/ACCEPTANCE.md` |
+| FS-2 debugger/CET/embedding/exception-XMM probes and evidence | `tests/cases/debugger-fault/probe.cc`; `tests/cases/cet-stack-policy/probe.cc`; `tests/cases/art-embedding/probe.cc`; `../../../docs/history/windows_x64_fs2_w010_w014_result.md` |
 
 ## Host
 
@@ -497,7 +497,7 @@ event. The embedding probe reports predecessor UEF resumption, foreign VEH and
 frame-SEH calls before and after ART teardown, and no stale ART callback. The
 exception sentinel reports `exceptionMask=0`, `exceptionCaught=32`, and
 `exceptionSelfTestMask=1023`. Compact native logs and the complete result are
-retained in `evidence/fs2_w010_w014_native/`.
+retained in `../../../docs/history/windows_x64_fs2_w010_w014_result.md`.
 
 ## Non-goals
 

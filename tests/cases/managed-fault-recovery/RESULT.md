@@ -197,7 +197,7 @@ run on build 26100 records first-chance JIT NPE continuation, fault-free
 explicit SOE debugging, all nine incompatible policy rejections, accepted
 dynamic/reserved policy bits, predecessor-UEF/frame-SEH teardown, and two
 repeats of the exception sentinel in nterp/switch/JIT. See
-`evidence/fs2_w010_w014_native/ACCEPTANCE.md`.
+`../../../docs/history/windows_x64_fs2_w010_w014_result.md`.
 
 FS-4's same-host repeat now passes E9/FS-1/FS-2/FS-3 plus parameterized stack
 geometry and join/detach/fiber checks. Under the acceptance policy, Windows

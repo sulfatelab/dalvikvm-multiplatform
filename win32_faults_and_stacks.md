@@ -2379,7 +2379,7 @@ contract.
   cases reject before Java/JIT, while dynamic/reserved fields remain accepted.
   The embedding probe verifies predecessor UEF, foreign VEH/frame-SEH, and
   later-UEF preservation through VM teardown. Native evidence is under
-  `tools/verify/windows_x64_phase4/evidence/fs2_w010_w014_native/`.
+  `docs/history/windows_x64_fs2_w010_w014_result.md`.
 - **Still open:** rollback injection, reservation correlation,
   negative-exception, and debugger-quality dump-stack gates. FS-5 conditionally
   closes the pending-range question because a real native fault would require
@@ -2817,7 +2817,7 @@ W-010 managed NPE/SOE Wine gate, full Linux rebuild, Linux object's seven
 unchanged implicit probes, and shared-boot imageless Linux Hello. FS-1 closes
 the handler/throw stack-budget proof point. FS-2 is now accepted on the same
 build-26100 host; compact native evidence is under
-`tools/verify/windows_x64_phase4/evidence/fs2_w010_w014_native/`.
+`docs/history/windows_x64_fs2_w010_w014_result.md`.
 
 ### FS-4 same-host repeat — 2026-07-30
 

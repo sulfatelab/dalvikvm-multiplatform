@@ -630,6 +630,12 @@ items are closed.
   identities, live lookup boundaries, repaired records, and rejected
   fixed-page SOE outcome remain; four redundant diagnosis fragments and one
   raw aggregate file were removed.
+- [x] FS-2 native acceptance is consolidated in
+  `docs/history/windows_x64_fs2_w010_w014_result.md`. The package identity,
+  exact debugger/CET/XMM/embedding contracts, final pass, and six intentional
+  dump identities remain. Absolute host paths, duplicate structural/result/
+  scan records, and ten verbose process logs were removed after unified W-010
+  assumed their live behavior.
 - [x] `art.dll` no longer uses `WINDOWS_EXPORT_ALL_SYMBOLS`. Before the change,
   a Debug scan found 80,318 candidate exports and exceeded PE's 65,535-entry
   limit, while RelWithDebInfo exposed 17,112. ART's existing `EXPORT` boundary

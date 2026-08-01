@@ -239,4 +239,4 @@ The following are still optional or conditional before W-010/W-014 close:
 FS-2 has closed the previously open debugger first-chance/continue,
 named-incompatible CET, safe dynamic/reserved policy, predecessor-UEF/frame-SEH
 teardown, and exception-unwind XMM requirements. Its compact native evidence is
-under `evidence/fs2_w010_w014_native/`.
+in `../../../docs/history/windows_x64_fs2_w010_w014_result.md`.
