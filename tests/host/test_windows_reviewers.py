@@ -49,9 +49,9 @@ def test_win32_unicode_policy_classifies_current_cross_graph():
     if not compile_commands.is_file():
         return
     record = namespace["inspect_active_graph"](REPO_ROOT, compile_commands)
-    assert record["ansi_call_count"] == 10
-    assert record["ansi_source_count"] == 6
-    assert record["ansi_api_count"] == 5
+    assert record["ansi_call_count"] == 7
+    assert record["ansi_source_count"] == 3
+    assert record["ansi_api_count"] == 3
     assert record["unclassified_call_count"] == 0
 
 

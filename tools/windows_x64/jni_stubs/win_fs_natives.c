@@ -714,16 +714,21 @@ __declspec(dllexport) jstring Java_libcore_io_Linux_strerror__I(JNIEnv* env, job
 
 __declspec(dllexport) jstring Java_libcore_io_Linux_gai_strerror(JNIEnv* env, jobject thiz, jint error) {
   (void)thiz;
-  char sys[128];
-  DWORD n = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-                           NULL, (DWORD)error, 0, sys, (DWORD)sizeof(sys), NULL);
+  wchar_t sys[128];
+  DWORD n = FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                           NULL,
+                           (DWORD)error,
+                           0,
+                           sys,
+                           (DWORD)(sizeof(sys) / sizeof(sys[0])),
+                           NULL);
   if (n > 0) {
     while (n > 0) {
-      char c = sys[n - 1];
-      if (c != 13 && c != 10 && c != 32) break;
-      sys[--n] = 0;
+      wchar_t c = sys[n - 1];
+      if (c != L'\r' && c != L'\n' && c != L' ') break;
+      sys[--n] = L'\0';
     }
-    return (*env)->NewStringUTF(env, sys);
+    return (*env)->NewString(env, (const jchar*)sys, (jsize)n);
   }
   char buf[64];
   snprintf(buf, sizeof(buf), "gai error %d", (int)error);

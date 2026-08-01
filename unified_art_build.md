@@ -470,6 +470,14 @@ items are closed.
   `art-tests` build pass at 32 jobs, both immediate repeats are true Ninja
   no-ops, and the corrected focused W-004/W-013/reviewer regressions pass
   25/25.
+- [x] W-027's error-text slice uses `FormatMessageW` for JNI and nativehelper
+  diagnostics and `gai_strerrorW` for BoringSSL. JNI consumes UTF-16 directly;
+  the two native `char*` surfaces receive strict UTF-8 conversions with stable
+  ASCII fallbacks if Windows cannot supply or convert the message. Three ANSI
+  calls and three complete source files leave seven calls in three files
+  across three families. The affected Windows-cross product and `art-tests`
+  closures pass at 32 jobs, both immediate repeats are true Ninja no-ops, and
+  the focused libcore/reviewer regressions pass 11/11.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to
