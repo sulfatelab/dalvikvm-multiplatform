@@ -28,6 +28,7 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
         icu_jni
         icuuc
         icuuc_stubdata
+        javacore
         log
         lzma
         nativebridge

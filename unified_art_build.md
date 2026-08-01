@@ -311,6 +311,14 @@ items are closed.
   all 244 `art-dex2oat` commands are broad-prelude-free and exactly one carries
   the narrow OatWriter shim. Both CET contracts pass 58/58, and all 186 host
   tests pass.
+- [x] The 21-source Windows `javacore` DSO now compiles without the ART prelude
+  on both build hosts. Its libcore JNI sources, Windows platform sources, and
+  project-owned JNI stubs already expose the complete contract, so no new shim
+  or target definition was needed. Forced-prelude compile commands fell from
+  651 to 630. Linux and both Windows products passed at their required 32/32/16
+  job limits and repeated as Ninja no-ops. Cross and native compile databases
+  agree at 1,816 commands with all 21 `javacore` commands prelude-free, both
+  CET contracts pass 58/58, and all 186 host tests pass.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to

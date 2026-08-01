@@ -50,6 +50,7 @@ def test_windows_platform_prelude_has_reviewed_target_scope():
         "icu_jni",
         "icuuc",
         "icuuc_stubdata",
+        "javacore",
         "log",
         "lzma",
         "nativebridge",
