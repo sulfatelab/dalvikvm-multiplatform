@@ -217,6 +217,10 @@ The unreferenced Phase-4 `JitSectionProbe.c` predecessor was removed after the
 canonical W-025 section-policy case subsumed its low-view, R/RX/RW, execution,
 low-VA failure/recovery, and commit-pressure contracts with stronger native and
 cross-host acceptance.
+Four unreferenced Wine-only package smoke scripts were also removed after their
+W-002/W-003/W-004/W-010 package producers and repository-side runners had been
+retired. Accepted Wine text remains evidence; new behavioral acceptance uses
+the unified native stages.
 The W-014 FS-1 stack-high-water case now uses the exact test-only build variant
 `win32-stack-high-water`. That variant has its own fingerprinted output
 directory, cannot be staged as a product, and changes the managed case from

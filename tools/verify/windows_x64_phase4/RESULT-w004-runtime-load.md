@@ -122,9 +122,9 @@ Native Windows acceptance passed on Windows 10 Enterprise LTSC x64 build
 The standalone package producer and its repository-side PowerShell runner were
 retired after their maintained behavior passed through unified W-003, W-004,
 and W-025 on Windows Server 2025, with Ninja no-op repeats. New acceptance runs
-use `tools/build_art.py test`; the package checker, Wine rechecker, independent
-reviewer, checklist, hashes, and returned text remain only for interpreting the
-already issued archive.
+use `tools/build_art.py test`; the package checker, independent reviewer,
+checklist, hashes, and returned text remain only for interpreting the already
+issued archive. The unreferenced package-only Wine rechecker was removed.
 
 The package contains the shipped product artifacts, focused
 quick/nterp/JIT/native-ABI/GC/thread probes, and a structural report generated

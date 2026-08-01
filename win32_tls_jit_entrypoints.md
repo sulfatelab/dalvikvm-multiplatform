@@ -653,8 +653,9 @@ The standalone package producer and repository-side PowerShell runner were
 retired after unified W-003, W-004, and W-025 passed natively on Windows Server
 2025 and repeated as Ninja no-ops. New acceptance uses the unified frontend.
 The historical package checker validates the inspected DLL hashes, manifest,
-PE export/import contract, and absence of the helper; its Wine rechecker and
-independent returned-result reviewer remain for the already issued archive.
+PE export/import contract, and absence of the helper; the independent
+returned-result reviewer remains for the already issued archive. The
+unreferenced package-only Wine rechecker was removed.
 
 The historical Windows 10+ PowerShell runner verified package hashes, ran both dual and
 J-1 native paths, performs ten repeated starts, scans all logs for fatal/access-

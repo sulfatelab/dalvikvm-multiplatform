@@ -214,6 +214,10 @@ items are closed.
   R/RX/RW pagefile views, generated execution, complete low-VA rejection and
   recovery, 1 GiB commit pressure, CFG, and fail-closed process policy in the
   unified native/cross stage.
+- [x] Four unreferenced package-only Wine smoke scripts for historical W-002,
+  W-003, W-004, and W-010/W-014 bundles were removed after their producers and
+  repository-side runners were retired. Their accepted text evidence remains;
+  current behavioral acceptance is owned by unified native stages.
 - [x] The shared shell-free runtime gate now owns native executable repetition,
   marker, timeout, DSO-path, log, and sanitized-result orchestration. W-014
   pthread-once passed 10/10, thread-stack preserved all five reservation sizes
@@ -559,8 +563,8 @@ verification directories. All 91 declarations own canonical source under
 source cases and all 48 Java sources have adjacent results, and shared stage
 analysis remains under `tests/stages/`. The old verification tree now contains
 zero Java sources and one uncatalogued native source retained by an unfinished
-legacy libcore/ICU graph. It contains zero shell scripts and zero PowerShell scripts,
-and 24 Python scripts. Python checkers
+legacy libcore/ICU graph. It contains zero shell scripts, zero PowerShell
+scripts, and 20 Python scripts. Python checkers
 and reviewers may remain, but the unified frontend must invoke them through a
 declared stage instead of a phase-local product build.
 
