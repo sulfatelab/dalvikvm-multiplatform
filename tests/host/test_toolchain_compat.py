@@ -47,6 +47,7 @@ def test_windows_platform_prelude_has_reviewed_target_scope():
         "lzma",
         "nativebridge",
         "nativehelper",
+        "profile",
         "procinfo",
         "unwindstack",
         "ziparchive",
@@ -67,6 +68,25 @@ def test_windows_platform_prelude_has_reviewed_target_scope():
     assert "get_target_property(_art_dex2oat_sources art-dex2oat SOURCES)" in cmake
     assert 'MATCHES "/external/boringssl/"' in cmake
     assert "_art_dex2oat_compat_source_count EQUAL 20" in cmake
+
+
+def test_windows_sdk_macro_hygiene_is_header_owned():
+    windows = (REPO_ROOT / "compat" / "include" / "windows.h").read_text(
+        encoding="utf-8"
+    )
+    prelude = (
+        REPO_ROOT / "compat" / "include" / "mdvm_windows_x64_prelude.h"
+    ).read_text(encoding="utf-8")
+
+    assert "#include_next <windows.h>" in windows
+    assert "defined(MDVM_WINDOWS_NO_CALLBACK_MACRO)" in windows
+    assert "!defined(MDVM_WINDOWS_KEEP_CONST_MACRO)" in windows
+    assert "#undef CONST" in windows
+    assert "#undef ERROR" in windows
+    assert "#undef __reserved" in windows
+    assert "#undef CONST" not in prelude
+    assert "#undef ERROR" not in prelude
+    assert "#undef __reserved" not in prelude
 
 
 def test_windows_unwindstack_uses_posix_header_ownership():

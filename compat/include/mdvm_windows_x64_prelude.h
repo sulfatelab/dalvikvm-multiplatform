@@ -24,15 +24,6 @@
 #endif
 #include <winsock2.h>
 #include <windows.h>
-#if defined(MDVM_WINDOWS_NO_CALLBACK_MACRO) && defined(CALLBACK)
-#undef CALLBACK
-#endif
-#if defined(__cplusplus) && defined(CONST) && !defined(MDVM_WINDOWS_KEEP_CONST_MACRO)
-#undef CONST
-#endif
-#ifdef __reserved
-#undef __reserved
-#endif
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>
@@ -79,10 +70,6 @@ typedef int64_t off64_t;
 #endif
 #ifndef strcasecmp
 #define strcasecmp _stricmp
-#endif
-
-#ifdef ERROR
-#undef ERROR
 #endif
 
 /* File mode tests (sys/stat.h on Windows is incomplete vs POSIX). */
@@ -197,14 +184,6 @@ int posix_memalign(void** memptr, size_t alignment, size_t size);
 #include <signal.h>
 
 #include <direct.h>
-
-/* minwindef.h defines CONST as const; ART dex opcodes use identifier CONST. */
-#if defined(__cplusplus) && defined(CONST) && !defined(MDVM_WINDOWS_KEEP_CONST_MACRO)
-#undef CONST
-#endif
-#ifdef __reserved
-#undef __reserved
-#endif
 
 #ifndef O_CLOEXEC
 #define O_CLOEXEC 0x80000

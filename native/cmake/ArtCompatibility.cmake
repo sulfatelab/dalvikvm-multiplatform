@@ -25,6 +25,7 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
         lzma
         nativebridge
         nativehelper
+        profile
         procinfo
         unwindstack
         ziparchive)

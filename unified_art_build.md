@@ -213,6 +213,17 @@ items are closed.
   zero `elffile` consumers. Linux and both Windows products passed at their
   required 32/32/16 job limits and repeated as Ninja no-ops; cross and native
   CET contracts pass 58/58, and all 182 host tests pass.
+- [x] Windows SDK macro hygiene now belongs to a project `windows.h` wrapper
+  instead of the forced ART prelude. The wrapper supplies the common lean SDK
+  definitions, delegates to the real SDK with `include_next`, and removes the
+  `CONST`, `ERROR`, and reserved-identifier macros plus the opt-in `CALLBACK`
+  collision at the Windows-header boundary. This fixes the SDK `CONST` versus
+  DEX-opcode collision for the two-source `profile` library and makes both of
+  its compile commands prelude-free. Forced-prelude commands fell from 718 to
+  716. The complete Windows-cross and native graphs rebuilt 640 and 726
+  affected actions at 32 and 16 jobs, then repeated as Ninja no-ops; Linux
+  remained a no-op at 32 jobs. Cross and native compile databases agree, both
+  CET contracts pass 58/58, and all 183 host tests pass.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to
