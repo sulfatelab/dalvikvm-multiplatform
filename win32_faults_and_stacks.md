@@ -2612,7 +2612,7 @@ pass and the recursive dump scan reports `NO_DMP_FILES`.
 This is a cross-regression for the already accepted E9 fault/unwind design; it
 does not replace the 30-record E9 fatal/managed-fault archive. The independently
 reviewed identities and result are archived under
-`tools/verify/windows_x64_phase4/evidence/jit1_encoding_guards/`.
+`docs/history/windows_x64_w025_jit1_result.md`.
 
 ### JIT-2 shared native cross-regression - 2026-07-29
 

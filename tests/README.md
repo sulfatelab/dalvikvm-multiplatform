@@ -268,6 +268,11 @@ archive identities, and historical 28/28 acceptance now form one
 The old Phase-4 pthread-once note was folded into its canonical case result:
 the diagnosis, three-state publication fix, historical controls, and current
 native `--parallel 16` reproduction now live beside the probe source.
+The retired JIT-1 encoding summary now precedes the existing JIT-2 through
+JIT-5 series under `docs/history`; it also retains the durable 12-control and
+14-workload Wine conclusions. Duplicate smoke/matrix notes and raw host,
+build-path, checksum, dump-scan, and aggregate files were removed after their
+identities and acceptance contract were consolidated into that summary.
 The unreferenced W-025 JIT-2/JIT-3 source preflights and the broken JIT-4
 preflight were removed as well. The unified W-025 reviewer owns their current
 mapping, lifecycle, nterp floating-point, JIT-control, PE-import/export, and

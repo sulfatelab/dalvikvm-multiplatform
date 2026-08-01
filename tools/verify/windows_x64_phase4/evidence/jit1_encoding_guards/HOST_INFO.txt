@@ -1,5 +1,0 @@
-caption=Microsoft Windows Server 2025 Datacenter Evaluation
-version=10.0.26100
-build_number=26100
-architecture=64-bit
-powershell_version=5.1.26100.7462

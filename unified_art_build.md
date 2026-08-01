@@ -603,6 +603,12 @@ items are closed.
   design documents that consume it. All live and historical references now
   resolve there, and the policy records the 16-job ceiling for the current
   16 GiB Server 2025 VM while retaining 32 jobs for agent01 cross work.
+- [x] W-025 history now has a complete JIT-1 through JIT-5 sequence under
+  `docs/history`. The JIT-1 summary retains the encoding guards, immutable
+  package/return identities, independent native 28/28 review, and durable
+  12-control/14-workload Wine conclusions. Its duplicate smoke/matrix notes
+  and raw host/build/checksum/result records were removed; maintained behavior
+  remains in the unified W-025 cases and stage.
 - [x] `art.dll` no longer uses `WINDOWS_EXPORT_ALL_SYMBOLS`. Before the change,
   a Debug scan found 80,318 candidate exports and exceeded PE's 65,535-entry
   limit, while RelWithDebInfo exposed 17,112. ART's existing `EXPORT` boundary

@@ -53,8 +53,11 @@ compiled targets in both memory modes.
 
 The final package records root commit
 `f18d1b53cb3033c87a8ca07361025578bfd4ec14` and ART commit
-`146016f83e5c6df8481eab6119f30c9077141179`. Its SHA-256 was verified after
-transfer to `administrator@10.127.137.62` before extraction.
+`146016f83e5c6df8481eab6119f30c9077141179`. The issued package SHA-256 is
+`3e892b9290850d03d35a8ffc7e8562f59a45431ce61532012f03082622e88624`;
+the returned review archive SHA-256 is
+`63c8068028a184ffd432c65ac29005216189139fc8d9df36b0c043b6e34e3534`.
+The issued hash was verified after transfer and before extraction.
 
 The packaged PowerShell runner returned `OVERALL PASS` with 22 child cases,
 28 aggregate PASS records, zero failures, no timeout, and zero nonzero child
@@ -71,8 +74,30 @@ ZIP:
 W-004 native host result review: PASS cases=22 aggregate_pass=28 failures=0 archive_sha256=63c8068028a184ffd432c65ac29005216189139fc8d9df36b0c043b6e34e3534
 ```
 
-Immutable identities and the aggregate native result are archived in
-[`evidence/jit1_encoding_guards/`](evidence/jit1_encoding_guards/).
+The returned archive preserves portable paths and passes CRC, path-safety,
+symlink, package-metadata, and structural-report identity checks. All 22 child
+processes exit zero, trace/log scans pass, and the recursive dump scan reports
+`NO_DMP_FILES`. Returned archives remain outside VCS; the identities and
+independent review above are the durable evidence.
+
+## Historical smoke and workload matrix
+
+The retired Wine smoke covered 12 controls: default pagefile-backed dual-view
+creation and managed/native compilation, exact Hello completion, compile
+disable through `ART_WINDOWS_X64_JIT=0` and `-Xusejit:false`, include/exclude
+filters, and opt-in versus quiet compile diagnostics. The final run recorded
+30 successful compilations. Its gate was tightened to require
+`main end exception=0` because the Hello text can be printed before a later
+failure.
+
+The retired 14-workload matrix passed CEnc, CEnc2, CELike, CFloat, FloatProbe,
+IFloat, JLFloat, RFloat, SFloat, Math, file I/O, loopback network, GC, and the
+expected-nonzero throw contract. Each workload compiled 15–34 managed methods
+through the corrected low R/RX primary plus coherent RW alias, without a
+filesystem-backed JIT file. Ten small historical JARs no longer have source in
+the repository; unified W-002/W-003 owns their ABI purpose, while current
+W-025 runtime controls retain the supported control surface and canonical
+Math/IO/Net/GC/throw workloads.
 
 ## Next gate
 
