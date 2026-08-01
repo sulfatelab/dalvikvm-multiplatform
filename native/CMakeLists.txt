@@ -540,6 +540,14 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
     # also makes Thread::Current() call the exported accessor instead of
     # attempting to import C++ thread_local storage from art.dll.
     target_compile_definitions(art-compiler PRIVATE ART_CONSUMING_LIBART)
+    # PE cannot defer C++ runtime symbol binding until LoadLibrary the way ELF
+    # does.  Keep the standalone compiler DSO's runtime imports explicit and
+    # bounded without returning to CMake's configuration-dependent whole-DLL
+    # auto-export scan (which exceeds PE's export limit in Debug builds).
+    target_link_options(art PRIVATE
+        "LINKER:/DEF:${_repo}/compat/art_runtime_consumer_exports.def")
+    set_property(TARGET art APPEND PROPERTY LINK_DEPENDS
+        "${_repo}/compat/art_runtime_consumer_exports.def")
     target_link_options(art-compiler PRIVATE
         "LINKER:/DEF:${_repo}/compat/art_compiler_exports.def")
     # fmtlib is compiled as part of several generated libraries.  The Android

@@ -40,7 +40,7 @@ items are closed.
 | Linux x86-64 product | COMPLETE for the current W-004/W-013 runtime slice | a fresh target-local boot/runtime closure passes all five W-004 gates plus the shared W-013 128 MiB non-moving-heap gate; identical stage rebuilds are Ninja no-ops | add boot-image/security packaging and migrate the remaining behavioral stages |
 | Windows x86-64 product | PARTIAL / experimental | Linux-hosted cross and native Windows Server 2025 product builds pass; fresh native W-002 passes 4/4, W-003 product passes 4/4, W-003 frame variant passes 5/5, expanded W-004 passes 26/26, W-010 passes 8/8, W-013 passes 7/7, and expanded W-025 passes 9/9; every identical stage repeat is a Ninja no-op | run the remaining multi-stage catalog and migrate its behavioral tests |
 | Compiler DSO parity | COMPLETE for `art-compiler` | both targets emit a shared compiler DSO; Windows imports `art.dll` and exports `art_compiler_jit_create` | retain exact ABI and no-cycle gates |
-| Windows runtime DSO exports | COMPLETE for current x86-64 closure | `art.dll` uses explicit source annotations, not CMake auto-export; Debug and RelWithDebInfo stay below PE's 65,535-entry limit and pass W-014/FS-1 | grow a reviewed ABI allowlist as more consumers migrate |
+| Windows runtime DSO exports | COMPLETE for current x86-64 closure | `art.dll` combines explicit source annotations with a reviewed 187-entry runtime-consumer DEF, never CMake auto-export; Debug has 2,065 exports and RelWithDebInfo has 2,066 | keep the consumer allowlist and actual PE boundary under regression review |
 | Full DSO topology parity | PARTIAL | five module kinds and two target-specific module pairs still differ | convert each difference or record a reviewed target exception |
 | Unified phase catalog | PARTIAL | seven virtual stages declare 32 native probes, 47 managed JARs, and twelve command gates; Windows has 89 applicable items (59 target-runnable, six host-review, and 24 compile-only in the product variant), while Linux x86-64 has seven applicable items (six runnable and one compile-only artifact) | migrate the remaining behavioral runners, portable JNI expansion, and result checks |
 | Boot/runtime packaging | PARTIAL | the base boot JAR and probe JARs are Python/CMake/Ninja-owned, deterministic, target-local, and fail-fast; managed gates isolate a runtime root and stage pinned ICU data plus the mandatory native boot DSO closure | add boot images, security providers/resources, cacerts, and complete runtime packages |
@@ -53,13 +53,14 @@ items are closed.
 ### Latest verification baseline (2026-08-01)
 
 - [x] `PYTHONPATH=tools/bp2cmake python3 -m pytest tools/bp2cmake/tests tests/host -q`:
-  165 passed, including generated PE-header, Linux/Windows test-catalog,
+  166 passed, including generated PE-header, Linux/Windows test-catalog,
   shell-free runtime/managed-artifact gates, parallel-frontend, JDK validation,
   deterministic JAR, Windows-path/DSO-name, reviewer ownership, W-010
   nonzero/fault/debugger/fatal-dump orchestration, W-013 source-policy,
   W-025 JIT lifecycle/mapping/process-policy/reviewer orchestration, fatal
-  contracts, the shell-free Math CriticalNative matrix, W-024 cleanup, and VCS
-  binary/source-ownership coverage.
+  contracts, the shell-free Math CriticalNative matrix, W-024 cleanup, the
+  reviewed PE runtime-consumer export boundary, and VCS binary/source-ownership
+  coverage.
 - [x] Fresh generation loads the same 260 Blueprint files for both targets and
   emits 34 generated modules for `linux-x86_64-gnu` and 33 for
   `windows-x86_64-msvc`. Both graphs emit the separate `openjdkjvmti` DSO;
@@ -142,10 +143,30 @@ items are closed.
   now maps to producer `dllexport`; namespace/enum visibility uses the PE-safe
   `ART_VISIBILITY_EXPORT`, `Thread` keeps `self_tls_` private and exports only
   its required callable/data boundary, and three optimized inline template
-  specializations have one Windows-only producer translation unit. Native
-  inspection reports 1,938 Debug and 1,939 RelWithDebInfo `art.dll` exports.
-  `art-compiler.dll` retains its reviewed DEF allowlist; other generated DSOs
-  retain auto-export until their own explicit ABI is reviewed.
+  specializations have one Windows-only producer translation unit. The later
+  full-product linkability pass added the checked
+  `compat/art_runtime_consumer_exports.def` for direct PE imports that cannot
+  be expressed by the existing source-level producer/consumer annotations.
+  Its 187 unique entries cover the complete RelWithDebInfo and Debug compiler,
+  dex2oat, executable, and JVMTI consumer closure; CMake tracks the DEF through
+  `LINK_DEPENDS`, so changing it relinks `art.dll` and its import library.
+  Native inspection reports 2,065 Debug and 2,066 RelWithDebInfo `art.dll`
+  exports. `art-compiler.dll` separately retains its one-entry reviewed DEF
+  allowlist; other generated DSOs retain auto-export until their own explicit
+  ABI is reviewed.
+- [x] A clean full native Windows product build exposed runtime imports that
+  stage-specific compiler builds had not exercised. The repaired
+  RelWithDebInfo graph links `art.dll`, `dalvikvm.exe`, `art-compiler.dll`,
+  `art-dex2oat.dll`, `dex2oat.exe`, `openjdkjvmti.dll`, and the remaining
+  product DSOs; its identical repeat is a Ninja no-op. Staging hashes 28
+  regular-file artifacts plus the manifest, contains the complete DSO closure,
+  and has zero reparse points. The final W-004 rerun passes 26/26.
+- [x] A fresh native Windows Debug output tree generated the same 33-module,
+  260-Blueprint graph with plain Clang 21 GNU-style drivers and Ninja, then
+  completed the full 1,857-edge product graph at `--parallel 16`. The immediate
+  repeat is a Ninja no-op. In both supported build types,
+  `art-compiler.dll` has exactly the single `art_compiler_jit_create` export
+  and imports `art.dll`; no static compiler fallback was introduced.
 - [x] Every MSVC-ABI build type now selects the release dynamic CRT
   (`MultiThreadedDLL`). This preserves Debug optimization/assertion behavior
   without depending on Visual Studio's private `msvcrtd.lib`; the native CMake
@@ -486,7 +507,7 @@ items are closed.
   `art-compiler.dll`, `art-dex2oat.dll`, `dex2oat.exe`, `javacore.dll`,
   `openjdk.dll`, and `openjdkjvm.dll`; this is a build/link result and does not
   claim Windows AOT/OAT runtime capability.
-- [x] Native Windows staging records 27 hashed regular-file artifacts plus its
+- [x] Native Windows staging records 28 hashed regular-file artifacts plus its
   JSON manifest. A non-following scan finds zero reparse points in the complete
   build tree, and Python `ctypes` loads both staged `art.dll` and
   `art-compiler.dll` from the staged dependency closure.
@@ -1106,7 +1127,10 @@ compiler use `LIBART_PE_DATA` producer/consumer annotations, including regular
 header overlays generated under the target's `gensrc` tree for declarations
 that must remain out of the nested vendor checkout. PE data imports therefore
 have the required indirection while `Thread::Current()` keeps TLS inside
-`art.dll`. A Linux-hosted `windows-x86_64-msvc` cross build now links the full
+`art.dll`. Direct runtime imports not covered by those source annotations use
+the checked 187-entry `compat/art_runtime_consumer_exports.def`; it is a link
+dependency of `art.dll`, so Ninja cannot leave a stale import library after an
+allowlist change. A Linux-hosted `windows-x86_64-msvc` cross build now links the full
 1825-action product graph, including `art.dll`, `art-compiler.dll`,
 `art-dex2oat.dll`, both command-line executables, and the libcore DSOs. A
 native Windows Server
@@ -2536,7 +2560,8 @@ The measured pre-refactor candidates were 80,318 in Debug and 17,112 in
 RelWithDebInfo, so optimization level changed the accidental ABI and Debug did
 not link.
 
-The maintained boundary uses ART's source annotations:
+The maintained boundary uses ART's source annotations plus one bounded
+runtime-consumer DEF:
 
 - while building `art.dll`, `EXPORT` is `__declspec(dllexport)`;
 - consumers select `dllimport` through the existing `LIBART_PE_*` boundary;
@@ -2546,14 +2571,20 @@ The maintained boundary uses ART's source annotations:
   must remain DLL-private; only the required methods and static data are
   annotated; and
 - optimized inline specializations that become DLL-owned have one explicit
-  Windows translation-unit owner so Debug and RelWithDebInfo link identically.
+  Windows translation-unit owner so Debug and RelWithDebInfo link identically;
+  and
+- `compat/art_runtime_consumer_exports.def` names the 187 decorated direct
+  imports required by the current compiler, dex2oat, executable, and JVMTI
+  consumers across both supported build types. It is explicitly tracked with
+  CMake `LINK_DEPENDS`; it is not a generated whole-object export scan.
 
-The current accepted counts are 1,938 Debug exports and 1,939 RelWithDebInfo
+The current accepted counts are 2,065 Debug exports and 2,066 RelWithDebInfo
 exports. The one-entry difference is reviewed optimization/configuration
 surface, not a return to whole-object auto-export. Regression tests keep both
 `art` and `art-compiler` outside the generic CMake auto-export loop, exercise
-operator-out parsing of `ART_VISIBILITY_EXPORT`, and ensure `Thread::self_tls_`
-remains unannotated.
+operator-out parsing of `ART_VISIBILITY_EXPORT`, enforce the unique 187-entry
+runtime-consumer boundary and its incremental link dependency, and ensure
+`Thread::self_tls_` remains unannotated.
 
 ### Longer-term topology optimization
 

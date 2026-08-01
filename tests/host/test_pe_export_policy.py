@@ -63,6 +63,26 @@ def test_art_consumers_use_a_bounded_source_level_export_boundary():
     assert '"LINKER:/EXPORT:mspace_usable_size"' in cmake
 
 
+def test_art_runtime_consumers_have_a_reviewed_def_boundary():
+    cmake = (REPO_ROOT / "native" / "CMakeLists.txt").read_text(encoding="utf-8")
+    definitions = (
+        REPO_ROOT / "compat" / "art_runtime_consumer_exports.def"
+    ).read_text(encoding="utf-8").splitlines()
+    exports = [line.strip() for line in definitions if line.startswith("    ?")]
+    assert (
+        '"LINKER:/DEF:${_repo}/compat/art_runtime_consumer_exports.def"'
+        in cmake
+    )
+    assert (
+        'set_property(TARGET art APPEND PROPERTY LINK_DEPENDS\n'
+        '        "${_repo}/compat/art_runtime_consumer_exports.def")'
+        in cmake
+    )
+    assert definitions[:2] == ["LIBRARY art", "EXPORTS"]
+    assert len(exports) == 187
+    assert len(exports) == len(set(exports))
+
+
 def test_projected_jit_header_has_host_independent_sibling_lookup():
     cmake = (REPO_ROOT / "native" / "CMakeLists.txt").read_text(encoding="utf-8")
     include_block = re.search(
