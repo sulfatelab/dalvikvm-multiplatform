@@ -5,7 +5,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_linux_openjdkjvmti_toolchain_drift_is_module_scoped():
-    cmake = (REPO_ROOT / "native" / "CMakeLists.txt").read_text(encoding="utf-8")
+    cmake = (
+        REPO_ROOT / "native" / "cmake" / "ArtCompatibility.cmake"
+    ).read_text(encoding="utf-8")
     prelude = (
         REPO_ROOT / "compat" / "include" / "mdvm_openjdkjvmti_linux_prelude.h"
     ).read_text(encoding="utf-8")

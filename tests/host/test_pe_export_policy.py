@@ -6,7 +6,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_art_and_art_compiler_do_not_use_cmake_auto_export():
-    cmake = (REPO_ROOT / "native" / "CMakeLists.txt").read_text(encoding="utf-8")
+    cmake = (
+        REPO_ROOT / "native" / "cmake" / "ArtCompatibility.cmake"
+    ).read_text(encoding="utf-8")
     policy = re.search(
         r'if\(ART_TARGET_PLATFORM STREQUAL "windows" AND\s+'
         r'_ttype STREQUAL "SHARED_LIBRARY" AND\s+'
@@ -53,7 +55,9 @@ def test_optimized_pe_inline_specializations_have_one_explicit_owner():
 
 
 def test_art_consumers_use_a_bounded_source_level_export_boundary():
-    cmake = (REPO_ROOT / "native" / "CMakeLists.txt").read_text(encoding="utf-8")
+    cmake = (
+        REPO_ROOT / "native" / "cmake" / "ArtCompatibility.cmake"
+    ).read_text(encoding="utf-8")
     codegen = (
         REPO_ROOT / "tools" / "bp2cmake" / "bp2cmake" / "codegen.py"
     ).read_text(encoding="utf-8")
@@ -88,7 +92,9 @@ def test_art_runtime_consumers_have_a_reviewed_def_boundary():
 
 
 def test_projected_jit_header_has_host_independent_sibling_lookup():
-    cmake = (REPO_ROOT / "native" / "CMakeLists.txt").read_text(encoding="utf-8")
+    cmake = (
+        REPO_ROOT / "native" / "cmake" / "ArtCompatibility.cmake"
+    ).read_text(encoding="utf-8")
     include_block = re.search(
         r'set_property\(SOURCE\s+'
         r'"\$\{MDVM_ART_ROOT_DIR\}/art/runtime/runtime_options\.cc"\s+'
@@ -102,7 +108,9 @@ def test_projected_jit_header_has_host_independent_sibling_lookup():
 
 
 def test_w003_variant_links_internal_counters_but_exports_only_probe_api():
-    cmake = (REPO_ROOT / "native" / "CMakeLists.txt").read_text(encoding="utf-8")
+    cmake = (
+        REPO_ROOT / "native" / "cmake" / "ArtCompatibility.cmake"
+    ).read_text(encoding="utf-8")
     quick = (
         REPO_ROOT
         / "vendor"

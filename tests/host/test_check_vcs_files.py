@@ -87,6 +87,7 @@ def test_native_cmake_modules_are_common_includes_not_entry_points():
     entry = (REPO_ROOT / "native/CMakeLists.txt").read_text(encoding="utf-8")
     modules = {
         "ArtCodegen.cmake",
+        "ArtCompatibility.cmake",
         "ArtPlatform.cmake",
         "ArtTargetGraph.cmake",
     }

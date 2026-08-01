@@ -89,7 +89,7 @@ def check_source_policy(repo: Path) -> dict[str, int]:
         "vendor/art/runtime/interpreter/mterp/x86_64ng/main.S",
     )
     codegen = _read(repo, "tools/bp2cmake/bp2cmake/codegen.py")
-    native_cmake = _read(repo, "native/CMakeLists.txt")
+    compatibility_cmake = _read(repo, "native/cmake/ArtCompatibility.cmake")
     controls = _read(repo, "tests/cases/jit-runtime-controls/run.py")
 
     create_match = re.search(
@@ -218,7 +218,7 @@ def check_source_policy(repo: Path) -> dict[str, int]:
         "EXPORT LIBART_PE_API JitMemoryRegion* GetCurrentRegion();",
     )
     _require(
-        native_cmake,
+        compatibility_cmake,
         "JIT inspection defining-translation-unit overlay",
         '"${MDVM_ART_ROOT_DIR}/art/runtime/jit/jit_code_cache.cc"',
         "art/windows-pe-headers/art/runtime/jit/jit_code_cache.h",

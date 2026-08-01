@@ -90,6 +90,13 @@ items are closed.
   no compile/link work, immediate repeats were Ninja no-ops, and the native
   58-file CET contract passed. Linux/cross used 32 jobs and native Windows used
   16 jobs.
+- [x] Source/toolchain drift shims, test-variant instrumentation, generated
+  target compile/link policy, and Windows PE-header overlays moved unchanged
+  into common `native/cmake/ArtCompatibility.cmake`. Linux, Windows-cross, and
+  native Windows Server 2025 reconfiguration produced no compile/link work;
+  immediate repeats were Ninja no-ops, all 170 host regressions passed, and
+  both cross and native 58-file CET contracts passed. Linux/cross used 32 jobs
+  and native Windows used 16 jobs.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to
