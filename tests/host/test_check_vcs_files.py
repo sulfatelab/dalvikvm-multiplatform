@@ -81,3 +81,17 @@ def test_retired_checked_linux_product_graph_does_not_reappear():
         REPO_ROOT / "native/generated/dalvikvm.cmake",
     )
     assert not [path for path in retired if path.exists() or path.is_symlink()]
+
+
+def test_native_cmake_modules_are_common_includes_not_entry_points():
+    entry = (REPO_ROOT / "native/CMakeLists.txt").read_text(encoding="utf-8")
+    modules = {
+        "ArtCodegen.cmake",
+        "ArtPlatform.cmake",
+    }
+    assert {path.name for path in (REPO_ROOT / "native/cmake").glob("*.cmake")} == modules
+    for name in modules:
+        text = (REPO_ROOT / "native/cmake" / name).read_text(encoding="utf-8")
+        assert "cmake_minimum_required(" not in text
+        assert "project(" not in text
+        assert f'/cmake/{name}")' in entry

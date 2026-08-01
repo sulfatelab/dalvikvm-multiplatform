@@ -76,6 +76,12 @@ items are closed.
   into common `native/cmake/ArtPlatform.cmake`. Linux and Windows-cross CMake
   regeneration produced no compile/link work, and immediate repeats were
   Ninja no-ops at `--parallel 32`.
+- [x] Configure-time aconfig, mterp, asm-defines, and Windows PE-header
+  generation moved unchanged into common `native/cmake/ArtCodegen.cmake`.
+  Linux and Windows-cross reconfiguration again produced no compile/link work,
+  followed by immediate Ninja no-ops at `--parallel 32`. VCS regression
+  coverage rejects either focused module becoming an independent CMake entry
+  point.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to
