@@ -109,6 +109,10 @@ items are closed.
   longer invoke those runners; current W-002 reproduction is only the unified
   frontend and virtual stage. Historical checklists, returned evidence, and
   archive hashes remain readable.
+- [x] The remaining Phase-4 OSR leaf wrapper was retired after its complete
+  R12/RBP, GPR/XMM, invoke, GenericJNI, switch, interpreter-bridge, and
+  epilogue matrix passed as `art.w002.win32_osr_unwind_probe` on native
+  Windows. Its source and adjacent result remain under `tests/cases/osr-unwind/`.
 - [x] W-003 now owns shell-free CriticalNative, normal/FastNative, XMM, and
   frame-family matrices plus one source/object/PE-unwind reviewer. Product
   `stage:w003` passed 4/4 on Windows Server 2025 and its exact
@@ -506,7 +510,7 @@ verification directories. All 90 declarations own canonical source under
 source cases and all 48 Java sources have adjacent results, and shared stage
 analysis remains under `tests/stages/`. The old verification tree now contains
 zero Java sources and two uncatalogued native sources retained by unfinished
-legacy evidence paths. It still contains five shell scripts, two PowerShell
+legacy evidence paths. It still contains four shell scripts, two PowerShell
 scripts, and 25 Python scripts. Python checkers
 and reviewers may remain, but the unified frontend must invoke them through a
 declared stage instead of a phase-local product build.

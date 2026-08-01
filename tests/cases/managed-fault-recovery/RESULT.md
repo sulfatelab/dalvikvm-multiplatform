@@ -116,7 +116,8 @@ requires no change.
 - Static OSR unwind: the emitted audit verifies the R12-anchored entry range,
   explicit RBP-to-copied-RSP handoff, and its contiguous zero-prologue RSP-based
   return range, including exact completed-frame XMM offsets.
-  `run_osr_unwind_probe.sh` resolves both records, virtually unwinds from 256
+  The unified `art.w002.win32_osr_unwind_probe` gate resolves both records,
+  virtually unwinds from 256
   bytes below the fixed frame with RBP clobbered, restores RBP/RDI/RSI/RBX/R12-R15
   and XMM6-XMM15, repeats return unwinding with managed RBP deliberately
   clobbered, synthetically unwinds both invoke records, and verifies the

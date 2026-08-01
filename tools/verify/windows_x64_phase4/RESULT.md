@@ -147,7 +147,7 @@ still consume them; they are not the current W-010 reproduction path.
 | P4_G6 GoldenApp regression | **PASS** | historical Phase-3 evidence; maintained as `art.w004.managed_goldenapp` |
 | W-002 structural managed entries | **PASS in unified native stage** | `windows_w002_managed_entry_structure` |
 | W-003 quick boundary/trap parity | **PASS in unified product and variant** | `windows_w003_quick_boundary_structure` |
-| W-010 static OSR/invoke lookup and virtual unwind | **PASS** | `run_osr_unwind_probe.sh` (R12-anchored variable RSP entry, explicit RBP JIT handoff, managed-clobbered RBP return, GPR plus XMM6-XMM15 restore, invoke records, epilogue) |
+| W-010 static OSR/invoke lookup and virtual unwind | **PASS in unified native W-002** | `art.w002.win32_osr_unwind_probe` (R12-anchored variable RSP entry, explicit RBP JIT handoff, managed-clobbered RBP return, GPR plus XMM6-XMM15 restore, invoke records, epilogue) |
 | W-010 GenericJNI native-return virtual unwind | **PASS** | same probe: captured `+0xc5` return, variable native RSP, 5120-byte R12 anchor, repaired RDI `offset=0x1400`, caller RIP/RSP and all nonvolatile GPRs |
 | W-010 switch-wrapper unwind | **PASS on native build 26100** | E5: live `ExecuteSwitchImplAsm + 0xd` lookup succeeds after the Windows-only RBX/home-area/unwind repair |
 | W-010 interpreter-bridge unwind | **PASS on native build 26100** | E6: live primary `+0x82` lookup plus all later frames reach zero PC/UEF/dump; pending record remains structural/synthetic |
@@ -198,7 +198,7 @@ PASS native_crash_aborts
 | W-010 Stage C adapter and probes | `tests/cases/fault-record/probe.cc`; `tests/cases/sigchain-fault/probe.cc`; `vendor/art/runtime/multiplatform/windows/sigchain_windows.cc` |
 | W-010 Stage D activation and stress | `tests/cases/managed-fault-recovery/{W010ManagedFaultProbe.java,run.py}`; common runtime null/SO flags and early nterp range registration |
 | W-010 dynamic-JIT PE unwind | `runtime/multiplatform/windows/jit_unwind_windows.*`; `runtime/jit/{jit_code_cache,jit_memory_region}.*`; `run_jit_unwind_{info,registry,lifecycle}.sh`; `run_jit_fatal_unwind.sh` |
-| W-010 static OSR PE unwind | `quick_entrypoints_x86_64.S`; `tests/cases/osr-unwind/probe.cc`; `run_osr_unwind_probe.sh`; unified `windows_w010_boundary_unwind_structure` reviewer |
+| W-010 static OSR PE unwind | `quick_entrypoints_x86_64.S`; unified `tests/cases/osr-unwind/` probe; unified `windows_w010_boundary_unwind_structure` reviewer |
 | Historical W-010/W-014 Stage E package evidence | `check_w010_w014_host_package.py`; `review_w010_w014_host_result.py`; `W010_W014_HOST_CHECKLIST.md`; `W010_W014_DIAGNOSTICS.md`; accepted `evidence/` records |
 | FS-1 stack high-water probe/evidence | unified sources under `tests/cases/stack-high-water`; shell-free gates and structural reviewer under `tests/support/windows`; historical package identity under `evidence/fs1_stack_high_water/ACCEPTANCE.md` |
 | FS-2 debugger/CET/embedding/exception-XMM probes and evidence | `tests/cases/debugger-fault/probe.cc`; `tests/cases/cet-stack-policy/probe.cc`; `tests/cases/art-embedding/probe.cc`; `evidence/fs2_w010_w014_native/ACCEPTANCE.md` |
