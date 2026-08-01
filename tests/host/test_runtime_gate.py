@@ -557,3 +557,42 @@ def test_managed_gate_fails_closed_on_missing_marker(tmp_path, monkeypatch):
             expected_exit=0,
             timeout=30,
         )
+
+
+def test_managed_gate_accepts_declared_nonzero_fatal_exit(tmp_path, monkeypatch):
+    files = []
+    for name in ("dalvikvm.exe", "boot.jar", "fatal.jar", "icudt.dat"):
+        path = tmp_path / name
+        path.write_bytes(name.encode())
+        files.append(path)
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda command, **kwargs: SimpleNamespace(
+            returncode=0xC0000005,
+            stdout="fatal marker\n",
+            stderr="minidump written\n",
+        ),
+    )
+    work = tmp_path / "work"
+    runtime_gate.run_managed(
+        target_id="windows-x86_64-msvc",
+        dalvikvm=files[0],
+        boot_jar=files[1],
+        app_jar=files[2],
+        main_class="FatalProbe",
+        work_root=work,
+        icu_data=files[3],
+        library_dirs=[tmp_path],
+        vm_options=[],
+        main_args=[],
+        expected=["fatal marker", "minidump written"],
+        forbidden=["unexpected return"],
+        expected_exit=0,
+        timeout=30,
+        require_nonzero=True,
+    )
+    result = json.loads((work / "result.json").read_text(encoding="utf-8"))
+    assert result["exit_contract"] == "nonzero"
+    assert result["expected_exit"] is None
+    assert result["actual_exit"] == 0xC0000005

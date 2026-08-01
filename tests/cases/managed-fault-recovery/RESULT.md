@@ -1,12 +1,28 @@
 # W-010 Stage D managed-fault activation
 
-**Status:** focused Wine/Linux verification PASS; W-010/W-014 E9, FS-1, and
-FS-2 native acceptance complete on Windows Server 2025 build 26100
-**Date:** 2026-07-30
+**Status:** unified native W-010 gate PASS; historical Wine/Linux verification
+and W-010/W-014 E9, FS-1, and FS-2 native acceptance retained
+**Date:** 2026-08-01
 
 All future native reruns use the Windows Server 2025 build-26100 lab gate. The
 former Windows 10 host is unavailable; older Windows 10 records below are
 historical evidence only. See [HOST_GATE_POLICY.md](HOST_GATE_POLICY.md).
+
+## Unified stage acceptance
+
+The shell-free `stage:w010` gate passed twice on the authoritative Windows
+Server 2025 host. It runs six isolated cases: started-runtime
+`-Xno-sig-chain` rejection, switch SOE, nterp NPE/SOE, and threshold-zero JIT
+NPE/SOE. The NPE cases require 64 reads, 64 writes, 128 recovery checks, and 16
+GC calls. The SOE cases require two main-thread and two child-thread catches,
+four recovery checks, and four GC calls. JIT cases require the exact faulting
+methods to compile; switch/nterp cases reject compilation records.
+
+All handled cases exited zero, emitted no fatal VEH/UEF or minidump marker,
+and created no dump. The deliberate no-sig-chain rejection satisfied its
+declared nonzero exit contract. Aggregate JSON is path-sanitized. The final
+native stage build and repeated Linux-hosted cross stage build were Ninja
+no-ops.
 
 ## Product behavior
 
@@ -38,9 +54,9 @@ small pre-prologue `RSP < Thread::stack_end_` check, allow equality, and
 tail-jump through the same `Thread::pThrowStackOverflow` entrypoint. The
 fixed-page machinery is no longer part of product SOE delivery.
 
-## Focused Wine gate
+## Historical focused Wine gate
 
-Command:
+The retired Bash command was:
 
 ```bash
 bash tools/verify/windows_x64_phase4/run_w010_managed_fault_probe.sh

@@ -36,8 +36,9 @@ const char* ModeArgument(const char* mode) {
 }  // namespace
 
 int main(int argc, char** argv) {
-  if (argc != 2 || ModeArgument(argv[1]) == nullptr) {
-    std::fputs("usage: win32_debugger_probe.exe <npe|so>\n", stderr);
+  if (argc != 3 || ModeArgument(argv[2]) == nullptr) {
+    std::fputs(
+        "usage: win32_debugger_probe.exe <dalvikvm.exe> <npe|so>\n", stderr);
     return 2;
   }
 
@@ -45,13 +46,14 @@ int main(int argc, char** argv) {
   const int length = std::snprintf(
       command_line,
       sizeof(command_line),
-      "dalvikvm.exe -Xbootclasspath:run\\boot.jar "
+      "\"%s\" -Xbootclasspath:run\\boot.jar "
       "-Xbootclasspath-locations:run\\boot.jar "
       "-Ximage:/nonexistent-no-boot-image -XjdwpProvider:none "
       "-Xms64m -Xmx512m -verbose:jit -Xjitwarmupthreshold:0 "
       "-Xjitthreshold:0 "
       "-cp run\\w010managedfaultprobe.jar W010ManagedFaultProbe %s",
-      ModeArgument(argv[1]));
+      argv[1],
+      ModeArgument(argv[2]));
   if (length <= 0 || static_cast<size_t>(length) >= sizeof(command_line)) {
     std::fputs("WIN32_DEBUGGER_PROBE FAIL command line overflow\n", stderr);
     return 1;
@@ -65,9 +67,9 @@ int main(int argc, char** argv) {
   startup.hStdError = GetStdHandle(STD_ERROR_HANDLE);
   PROCESS_INFORMATION process = {};
   std::printf("WIN32_DEBUGGER_PROBE start mode=%s continue=DBG_EXCEPTION_NOT_HANDLED\n",
-              argv[1]);
+              argv[2]);
   std::fflush(stdout);
-  if (!CreateProcessA("dalvikvm.exe",
+  if (!CreateProcessA(argv[1],
                       command_line,
                       nullptr,
                       nullptr,
@@ -175,7 +177,7 @@ int main(int argc, char** argv) {
       "WIN32_DEBUGGER_PROBE result mode=%s child_exit=%lu first_av=%u "
       "first_stack_overflow=%u first_guard_page=%u first_other_hardware=%u "
       "first_hardware=%u second_chance=%u\n",
-      argv[1],
+      argv[2],
       static_cast<unsigned long>(child_exit),
       counts.first_access_violation,
       counts.first_stack_overflow,
@@ -184,15 +186,15 @@ int main(int argc, char** argv) {
       first_hardware,
       second_chance);
 
-  const bool npe_ok = std::strcmp(argv[1], "npe") != 0 ||
+  const bool npe_ok = std::strcmp(argv[2], "npe") != 0 ||
       (counts.first_access_violation != 0u &&
        counts.first_stack_overflow == 0u &&
        counts.first_other_hardware == 0u);
-  const bool so_ok = std::strcmp(argv[1], "so") != 0 || first_hardware == 0u;
+  const bool so_ok = std::strcmp(argv[2], "so") != 0 || first_hardware == 0u;
   if (!wait_ok || child_exit != 0u || second_chance != 0u || !npe_ok || !so_ok) {
     std::puts("WIN32_DEBUGGER_PROBE FAIL");
     return 1;
   }
-  std::printf("WIN32_DEBUGGER_PROBE PASS mode=%s\n", argv[1]);
+  std::printf("WIN32_DEBUGGER_PROBE PASS mode=%s\n", argv[2]);
   return 0;
 }

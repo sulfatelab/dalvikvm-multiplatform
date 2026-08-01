@@ -1,5 +1,11 @@
 # W-010/W-014 native Windows diagnostics
 
+This is the interpretation guide for the already issued historical package.
+Its repository-side package producer and PowerShell diagnostic runner are
+retired; the immutable returned evidence remains useful for explaining the
+rejected fixed-page design. Current W-010 reproduction uses unified
+`stage:w010`.
+
 **Current state:** E9 is accepted 30/30 on Windows Server 2025 build 26100.
 These probes preserve the historical diagnosis that led from the rejected
 fixed-page design through the accepted explicit-check and configured-guarantee
@@ -17,12 +23,12 @@ The returned run-3 and run-4 diagnostics establish three facts:
   minidump path when a JNI-created native worker faults without ART frames on
   the crashing thread.
 
-The current package retains those probes for repetition and includes the
+The issued package retained those probes and included the
 repaired, realistic GenericJNI virtual-unwind gate plus three exception-shape
 cases. Their fixed-page modes test direct page state only; E9 product SOE does
 not install or depend on a fixed page.
 
-Run from the unpacked package root in PowerShell 5.1 or later:
+The historical run command inside that already issued package was:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
@@ -566,4 +572,3 @@ Interpretation:
 - Logs:
   - `tools/verify/windows_x64_phase1/logs/pregrow_e9_matrix_2026-07-29.log`
   - `tools/verify/windows_x64_phase1/logs/pregrow_e9_commit_scale_hold_2026-07-29.log`
-

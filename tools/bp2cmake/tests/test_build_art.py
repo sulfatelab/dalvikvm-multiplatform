@@ -85,6 +85,47 @@ def test_stage_selector_builds_one_virtual_group_and_filters_ctest(
     assert catalog["probes"][0]["runtime_verified"] is False
 
 
+def test_stage_reload_preserves_catalog_regenerated_during_ninja_build(
+    tmp_path, monkeypatch
+):
+    binary_dir = _configured_build(tmp_path)
+    catalog_path = binary_dir / "tests" / "art_test_catalog.json"
+    stale = json.loads(catalog_path.read_text(encoding="utf-8"))
+    stale["probes"][0]["execution"] = "compile-only"
+    stale["probes"][0]["ctest_registered"] = False
+    catalog_path.write_text(json.dumps(stale) + "\n", encoding="utf-8")
+    tool_dir = tmp_path / "tools"
+    tool_dir.mkdir()
+    cmake = tool_dir / "cmake"
+    ctest = tool_dir / "ctest"
+    cmake.write_text("", encoding="utf-8")
+    ctest.write_text("", encoding="utf-8")
+    commands = []
+
+    monkeypatch.setattr(
+        build_art,
+        "_resolve_tools",
+        lambda _local, *, need_compiler: {"cmake": cmake, "ninja": tool_dir / "ninja"},
+    )
+
+    def run(command):
+        commands.append(command)
+        if command[-2:] == ["--target", "art-test-stage-w002"]:
+            refreshed = json.loads(catalog_path.read_text(encoding="utf-8"))
+            refreshed["probes"][0]["execution"] = "target-runnable"
+            refreshed["probes"][0]["ctest_registered"] = True
+            catalog_path.write_text(json.dumps(refreshed) + "\n", encoding="utf-8")
+
+    monkeypatch.setattr(build_art, "_run_checked", run)
+    build_art._test(binary_dir, LocalBuildConfig(), [], ["w002"])
+
+    catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+    assert catalog["probes"][0]["execution"] == "target-runnable"
+    assert catalog["probes"][0]["ctest_registered"] is True
+    assert catalog["probes"][0]["build_verified"] is True
+    assert len(commands) == 2
+
+
 def test_without_stage_builds_all_probes_and_records_runtime_status(
     tmp_path, monkeypatch
 ):

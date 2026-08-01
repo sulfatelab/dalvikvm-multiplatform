@@ -402,6 +402,17 @@ def _test(
                 f"all {len(declared)} declarations were excluded by their selectors"
             )
         build_test_target(f"art-test-stage-{stage}")
+        # Ninja may have re-run CMake because the catalog declaration changed.
+        # Reload before recording status so an old in-memory catalog cannot
+        # overwrite the freshly configured execution/CTest metadata.
+        catalog_path, catalog, probes = _load_test_catalog(binary_dir)
+        target_id = str(catalog["target_id"])
+        declared = [probe for probe in probes if probe["stage"] == stage]
+        applicable = [probe for probe in declared if probe["applicable"]]
+        if not declared or not applicable:
+            raise BuildFrontendError(
+                f"test stage {stage} changed applicability during CMake regeneration"
+            )
         for probe in applicable:
             probe["build_verified"] = True
             probe["build_status"] = "verified"
@@ -417,6 +428,14 @@ def _test(
                 f"target {target_id} has zero applicable probes in the selected test scope"
             )
         build_test_target("art-tests")
+        catalog_path, catalog, probes = _load_test_catalog(binary_dir)
+        target_id = str(catalog["target_id"])
+        selected = probes
+        applicable_selected = [probe for probe in probes if probe["applicable"]]
+        if not applicable_selected:
+            raise BuildFrontendError(
+                f"target {target_id} changed to zero applicable probes during CMake regeneration"
+            )
         for probe in applicable_selected:
             probe["build_verified"] = True
             probe["build_status"] = "verified"

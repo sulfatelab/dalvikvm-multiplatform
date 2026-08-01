@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Smoke the staged W-010/W-014 native package under Wine before transfer."""
+"""Re-run the historical staged W-010/W-014 package under Wine."""
 
 from __future__ import annotations
 

@@ -77,6 +77,30 @@ Non-following scans found zero reparse points in the source and both output
 trees. A final-source Linux-hosted Windows cross build completed all 1,492
 edges, passed the structural CTest gate, and repeated as a Ninja no-op.
 
+## Unified W-010 acceptance (2026-08-01)
+
+The current authoritative W-010 path is the shell-free unified frontend and
+virtual stage:
+
+```text
+python tools/build_art.py configure --target-id windows-x86_64-msvc --build-type RelWithDebInfo
+python tools/build_art.py test --target-id windows-x86_64-msvc --build-type RelWithDebInfo --stage w010 --parallel 16
+```
+
+Windows Server 2025 passed all seven CTest gates twice. The stage covers UEF,
+fault-record, sigchain/frame-SEH, debugger NPE/SOE continuation, managed abort,
+static/JIT/OSR fatal dispatch, and switch/nterp/JIT managed recovery. Handled
+paths created no dump; the three fatal origins each created exactly one valid
+`MDMP`. Aggregate JSON contains no machine absolute path. The final build was
+a Ninja no-op. A Linux-hosted Windows cross stage built the same four EXEs and
+three managed JARs and also repeated as a no-op.
+
+The standalone W-010/W-014 package producer, its package-only PowerShell
+runners, and the redundant fault/managed-fault Bash runners were retired.
+Accepted E9/FS evidence and package checkers remain historical records. Fatal
+JIT/OSR compatibility runners remain temporarily because W-025 package flows
+still consume them; they are not the current W-010 reproduction path.
+
 ## Scope (from win32_art_port §Phase 4)
 
 - GC stress, multi-thread stress, crash dumps, resource/handle leaks
@@ -106,14 +130,14 @@ edges, passed the structural CTest gate, and repeated as a Ninja no-op.
 | W-002 OSR matrix | **PASS, unified 4/4 executions; historical 8/8** | `managed_w002_osr`; nterp/switch twice each |
 | W-002 attached-thread matrix | **PASS, unified 4/4 executions; historical 8/8** | `managed_w002_attach`; each raw thread detaches, uses native stack, and reattaches |
 | W-014 thread reservation/lifetime/guarantee-aware bounds | **PASS** | unified `stage:w014` native gates; E9 raises/preserves/queries the guarantee and debits prefix + guarantee + moving guard |
-| W-010 fault record/context adapter | **PASS** | `run_fault_adapter_probe.sh` (`failures=0 cases=8`; live probe `calls=2 first=0 second=0`) |
+| W-010 fault record/context adapter | **PASS in unified native stage** | `win32_fault_record_probe` (`failures=0 cases=8`) plus `win32_sigchain_probe` (`calls=2 first=0 second=0`) |
 | W-010 JIT unwind serializer | **PASS, 6/6** | `run_jit_unwind_info_probe.sh` |
 | W-010 JIT runtime registry | **PASS** | `run_jit_unwind_registry_probe.sh` (lookup, virtual unwind, delete, re-register) |
 | W-010 JIT collection/reuse lifecycle | **PASS, J-2/J-1** | `run_jit_unwind_lifecycle.sh` (real collection, lookup disappearance, exact address reuse) |
-| W-010 active nterp/JIT managed faults | **PASS on Wine and native build 26100** | `run_w010_managed_fault_probe.sh`; Windows x64 explicit pre-prologue stack checks, common implicit null handling, repeated main/child SOEs, and no handled-fault diagnostics/dump change |
+| W-010 active switch/nterp/JIT managed faults | **PASS in unified native stage** | `managed_w010_fault_recovery`; six cases, repeated main/child SOEs, and no handled-fault diagnostics or dump |
 | W-010 threshold-zero JIT fatal dispatch | **PASS, J-2/J-1** | `run_jit_fatal_unwind.sh` (VEH, UEF, changed/new valid `MDMP`) |
 | W-010 OSR-origin fatal dispatch | **PASS, J-2/J-1** | `run_osr_fatal_unwind.sh` (real switch OSR jump, VEH, UEF, new valid `MDMP`) |
-| W-010/W-014 native package preflight | **PASS under Wine** | `package_windows_x64_w010_w014.sh` (E9 30-record acceptance runner plus separate historical stack-growth/UEF diagnostics) |
+| Historical W-010/W-014 native package preflight | **PASS under Wine** | retired E9 package producer; immutable 30-record return and diagnostics remain accepted evidence |
 | W-010/W-014 isolated failure diagnostics | **PASS on native build 19044** | runs 3-4: fixed-page SOE invalidated; UEF replacement ruled out; JNI hardware/raised AVs miss UEF while the JNI-created native worker reaches UEF/dump, isolating traversal through managed/GenericJNI frames. |
 | W-010/W-014 complete E9 native host matrix | **PASS, 30/30 on build 26100** | guarantee-aware excluded-low accounting; switch/nterp/JIT managed SOE; zero handled dumps; five valid static/JIT/OSR fatal dumps |
 | FS-1 RelWithDebInfo/Debug stack high-water | **PASS in unified native Stage-8 and historical package on build 26100** | unified `win32-stack-high-water` variant: switch/nterp/JIT, four complete records each; current RelWithDebInfo minimum margin 6448 bytes, Debug quick minimum 37120 bytes; no dumps; structural reviewer passed |
@@ -144,13 +168,14 @@ PASS native_crash_aborts
 | W-003 unified managed gates | `../../../tests/cases/{jni-critical-native,jni-native-abi,w003-frame-probe,w003-xmm-sentinel}/`; `../../../tests/support/windows/w003_managed_gate.py` |
 | W-003 historical native package evidence | `evidence/w003_host/ACCEPTANCE.md`; `W003_HOST_CHECKLIST.md` |
 | W-014 native stack/pthread/page/growth/RX/CET gates | `tests/cases/pthread-once/`; `tests/cases/thread-stack/`; `tests/cases/stack-page-growth/`; `tests/cases/stack-executable-memory/`; `tests/cases/cet-stack-policy/`; `tests/support/runtime_gate.py` |
-| W-010 Stage C adapter and probes | `tests/cases/fault-record/probe.cc`; `tests/cases/sigchain-fault/probe.cc`; `run_fault_adapter_probe.sh`; `vendor/art/runtime/multiplatform/windows/sigchain_windows.cc` |
-| W-010 Stage D activation and stress | `src/W010ManagedFaultProbe.java`; `run_w010_managed_fault_probe.sh`; common runtime null/SO flags and early nterp range registration |
+| W-010 unified gates | `tests/cases/{unhandled-exception-filter,fault-record,sigchain-fault,debugger-fault,fatal-runtime,managed-fault-recovery}`; `tests/CMakeLists.txt` |
+| W-010 Stage C adapter and probes | `tests/cases/fault-record/probe.cc`; `tests/cases/sigchain-fault/probe.cc`; `vendor/art/runtime/multiplatform/windows/sigchain_windows.cc` |
+| W-010 Stage D activation and stress | `tests/cases/managed-fault-recovery/{W010ManagedFaultProbe.java,run.py}`; common runtime null/SO flags and early nterp range registration |
 | W-010 dynamic-JIT PE unwind | `runtime/multiplatform/windows/jit_unwind_windows.*`; `runtime/jit/{jit_code_cache,jit_memory_region}.*`; `run_jit_unwind_{info,registry,lifecycle}.sh`; `run_jit_fatal_unwind.sh` |
 | W-010 static OSR PE unwind | `quick_entrypoints_x86_64.S`; `tests/cases/osr-unwind/probe.cc`; `run_osr_unwind_probe.sh`; `check_win32_boundary_unwind.py` |
-| W-010/W-014 native Stage E package and diagnostics | `package_windows_x64_w010_w014.sh`; `host/RUN_W010_W014_HOST.ps1`; `host/RUN_W010_W014_DIAGNOSTICS.ps1`; `check_w010_w014_host_package.py`; `review_w010_w014_host_result.py`; `W010_W014_HOST_CHECKLIST.md`; `W010_W014_DIAGNOSTICS.md` |
+| Historical W-010/W-014 Stage E package evidence | `check_w010_w014_host_package.py`; `review_w010_w014_host_result.py`; `W010_W014_HOST_CHECKLIST.md`; `W010_W014_DIAGNOSTICS.md`; accepted `evidence/` records |
 | FS-1 stack high-water probe/evidence | unified sources under `tests/cases/stack-high-water`; shell-free gates and structural reviewer under `tests/support/windows`; historical package identity under `evidence/fs1_stack_high_water/ACCEPTANCE.md` |
-| FS-2 debugger/CET/embedding/exception-XMM probes and evidence | `tests/cases/debugger-fault/probe.cc`; `tests/cases/cet-stack-policy/probe.cc`; `tests/cases/art-embedding/probe.cc`; `host/RUN_W010_W014_HOST.ps1`; `evidence/fs2_w010_w014_native/ACCEPTANCE.md` |
+| FS-2 debugger/CET/embedding/exception-XMM probes and evidence | `tests/cases/debugger-fault/probe.cc`; `tests/cases/cet-stack-policy/probe.cc`; `tests/cases/art-embedding/probe.cc`; `evidence/fs2_w010_w014_native/ACCEPTANCE.md` |
 
 ## Host
 
@@ -188,14 +213,16 @@ children, clean fatal/dump scans, 8/8 attributed frame runs, and 6/6 XMM
 sentinel runs. That package is historical and its producer and repository-side
 runner are retired; see `evidence/w003_host/ACCEPTANCE.md`.
 
-Focused W-010/W-014 native Stage E gate:
+Focused W-010 native gate on the 16 GiB Windows VM:
 
-```bash
-JOBS=32 WINEDEBUG=-all \
-  bash tools/windows_x64/host_package/package_windows_x64_w010_w014.sh
-# Native PowerShell: .\scripts\RUN_W010_W014_HOST.ps1
-# Failure diagnosis: .\scripts\RUN_W010_W014_DIAGNOSTICS.ps1
+```text
+python tools/build_art.py configure --target-id windows-x86_64-msvc --build-type RelWithDebInfo
+python tools/build_art.py test --target-id windows-x86_64-msvc --build-type RelWithDebInfo --stage w010 --parallel 16
 ```
+
+The old coupled W-010/W-014 package commands below this point describe issued
+historical evidence only. Their producer and repository-side PowerShell
+runners are retired; do not reconstruct them for a new acceptance run.
 
 Focused FS-1 RelWithDebInfo/Debug stack high-water gate:
 

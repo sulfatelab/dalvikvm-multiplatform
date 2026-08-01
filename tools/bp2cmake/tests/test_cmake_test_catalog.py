@@ -97,7 +97,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     assert w003_structure["ctest_registered"] is True
     assert sum(
         probe["execution"] == "target-runnable" for probe in catalog["probes"]
-    ) == 26
+    ) == 33
     assert {
         probe["name"]: probe["timeout_seconds"]
         for probe in catalog["probes"]
@@ -109,6 +109,13 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "managed_native_abi": 900,
         "managed_w003_xmm_sentinel": 1200,
         "managed_jvmti_force": 1200,
+        "win32_uef_probe": 600,
+        "win32_fault_record_probe": 60,
+        "win32_sigchain_probe": 60,
+        "win32_debugger_probe": 600,
+        "managed_crashabortprobe": 300,
+        "managed_crashnativeprobe": 900,
+        "managed_w010_fault_recovery": 1200,
         "windows_x64_w013_mem_map_probe": 60,
         "windows_x64_w013_mspace_owner_probe": 60,
         "windows_x64_w013_dlmalloc_config_probe": 60,

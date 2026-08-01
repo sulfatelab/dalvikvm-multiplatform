@@ -478,6 +478,7 @@ def run_managed(
     expected_exit: int,
     timeout: int,
     environment_overrides: dict[str, str] | None = None,
+    require_nonzero: bool = False,
 ) -> None:
     dalvikvm = _regular_file(str(dalvikvm))
     boot_jar = _regular_file(str(boot_jar))
@@ -555,11 +556,13 @@ def run_managed(
     combined = result.stdout + "\n" + result.stderr
     missing = [marker for marker in expected if marker not in combined]
     present_forbidden = [marker for marker in forbidden if marker in combined]
+    exit_ok = result.returncode != 0 if require_nonzero else result.returncode == expected_exit
     record = {
         "schema_version": 1,
         "target_id": target_id,
         "main_class": main_class,
-        "expected_exit": expected_exit,
+        "exit_contract": "nonzero" if require_nonzero else "exact",
+        "expected_exit": None if require_nonzero else expected_exit,
         "actual_exit": result.returncode,
         "missing_markers": missing,
         "forbidden_markers": present_forbidden,
@@ -569,10 +572,12 @@ def run_managed(
     (work_root / "result.json").write_text(
         json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
-    if result.returncode != expected_exit or missing or present_forbidden:
+    if not exit_ok or missing or present_forbidden:
         tail = "\n".join(combined.splitlines()[-80:])
+        expected_description = "nonzero" if require_nonzero else str(expected_exit)
         raise GateError(
-            f"{main_class} failed: exit={result.returncode}, expected={expected_exit}, "
+            f"{main_class} failed: exit={result.returncode}, "
+            f"expected={expected_description}, "
             f"missing={missing}, forbidden={present_forbidden}\n{tail}"
         )
     print(
@@ -640,6 +645,7 @@ def _parser() -> argparse.ArgumentParser:
     managed.add_argument("--expect", action="append", default=[])
     managed.add_argument("--forbid", action="append", default=[])
     managed.add_argument("--expected-exit", type=int, default=0)
+    managed.add_argument("--require-nonzero", action="store_true")
     managed.add_argument("--timeout", type=int, default=180)
     return parser
 
@@ -697,6 +703,7 @@ def main(argv: list[str] | None = None) -> int:
                 forbidden=args.forbid,
                 expected_exit=args.expected_exit,
                 timeout=args.timeout,
+                require_nonzero=args.require_nonzero,
             )
         return 0
     except (GateError, OSError, UnicodeError) as exc:

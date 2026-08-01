@@ -947,18 +947,27 @@ art_add_target_probe(
 
 # W-010: exception dispatch, fault records, sigchain, and debugger interaction.
 art_add_target_probe(
-    NAME win32_uef_probe STAGE w010 TYPE EXECUTABLE EXECUTION compile-only
+    NAME win32_uef_probe STAGE w010 TYPE EXECUTABLE EXECUTION target-runnable
+    TIMEOUT 600
     ${_art_windows_current_selector}
     SOURCES "${_art_test_cases_root}/unhandled-exception-filter/probe.cc"
-    CONTRACTS fault seh PRODUCT_POLICY)
+    CONTRACTS fault seh PRODUCT_POLICY
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_test_cases_root}/unhandled-exception-filter/run.py"
+        --target-id "${ART_TARGET_ID}"
+        --probe "$<TARGET_FILE:win32_uef_probe>"
+        --work-root "${CMAKE_CURRENT_BINARY_DIR}/results/w010-uef")
 art_add_target_probe(
-    NAME win32_fault_record_probe STAGE w010 TYPE EXECUTABLE EXECUTION compile-only
+    NAME win32_fault_record_probe STAGE w010 TYPE EXECUTABLE
+    EXECUTION target-runnable TIMEOUT 60
     ${_art_windows_current_selector}
     SOURCES "${_art_test_cases_root}/fault-record/probe.cc"
     INCLUDE_DIRS "${_art_test_repo_root}/vendor/art"
     CONTRACTS fault seh PRODUCT_POLICY)
 art_add_target_probe(
-    NAME win32_sigchain_probe STAGE w010 TYPE EXECUTABLE EXECUTION compile-only
+    NAME win32_sigchain_probe STAGE w010 TYPE EXECUTABLE
+    EXECUTION target-runnable TIMEOUT 60
     ${_art_windows_x86_64_msvc_selector}
     SOURCES
         "${_art_test_cases_root}/sigchain-fault/probe.cc"
@@ -970,27 +979,75 @@ art_add_target_probe(
     LINK_LIBRARIES sigchain
     CONTRACTS fault sigchain PRODUCT_POLICY)
 art_add_target_probe(
-    NAME win32_debugger_probe STAGE w010 TYPE EXECUTABLE EXECUTION compile-only
+    NAME win32_debugger_probe STAGE w010 TYPE EXECUTABLE
+    EXECUTION target-runnable TIMEOUT 600
     ${_art_windows_current_selector}
     SOURCES "${_art_test_cases_root}/debugger-fault/probe.cc"
-    CONTRACTS debugger fault PRODUCT_POLICY)
+    DEPENDS dalvikvm icu_jni javacore openjdk openjdkjvm
+    CONTRACTS debugger fault PRODUCT_POLICY
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_test_cases_root}/debugger-fault/run.py"
+        --target-id "${ART_TARGET_ID}"
+        --probe "$<TARGET_FILE:win32_debugger_probe>"
+        --dalvikvm "$<TARGET_FILE:dalvikvm>"
+        --boot-jar "${_art_boot_jar}"
+        --app-jar "${_art_managed_root}/w010managedfaultprobe.jar"
+        --work-root "${CMAKE_CURRENT_BINARY_DIR}/results/w010-debugger"
+        --icu-data "${_art_icu_data}"
+        ${_art_managed_runtime_library_args})
 foreach(_art_fatal_class CrashAbortProbe CrashNativeProbe)
     string(TOLOWER "${_art_fatal_class}" _art_fatal_name)
+    if(_art_fatal_class STREQUAL "CrashAbortProbe")
+        set(_art_fatal_mode abort)
+        set(_art_fatal_timeout 300)
+    else()
+        set(_art_fatal_mode native)
+        set(_art_fatal_timeout 900)
+    endif()
     art_add_target_probe(
         NAME "managed_${_art_fatal_name}" STAGE w010
-        TYPE MANAGED EXECUTION compile-only
+        TYPE MANAGED EXECUTION target-runnable TIMEOUT ${_art_fatal_timeout}
         ${_art_windows_current_selector}
         SOURCES "${_art_test_cases_root}/fatal-runtime/${_art_fatal_class}.java"
+        DEPENDS dalvikvm icu_jni javacore openjdk openjdkjvm
         CONTRACTS fault fatal-unwind
-        OUTPUT_NAME "${_art_fatal_name}")
+        OUTPUT_NAME "${_art_fatal_name}"
+        COMMAND
+            "${Python3_EXECUTABLE}"
+            "${_art_test_cases_root}/fatal-runtime/run.py"
+            --mode "${_art_fatal_mode}"
+            --target-id "${ART_TARGET_ID}"
+            --dalvikvm "$<TARGET_FILE:dalvikvm>"
+            --boot-jar "${_art_boot_jar}"
+            --app-jar "${_art_managed_root}/${_art_fatal_name}.jar"
+            --work-root
+                "${CMAKE_CURRENT_BINARY_DIR}/results/w010-${_art_fatal_mode}"
+            --icu-data "${_art_icu_data}"
+            ${_art_managed_runtime_library_args})
 endforeach()
 art_add_target_probe(
-    NAME managed_w010_fault_recovery STAGE w010 TYPE MANAGED EXECUTION compile-only
+    NAME managed_w010_fault_recovery STAGE w010 TYPE MANAGED
+    EXECUTION target-runnable TIMEOUT 1200
     ${_art_windows_current_selector}
     SOURCES
         "${_art_test_cases_root}/managed-fault-recovery/W010ManagedFaultProbe.java"
+    DEPENDS dalvikvm icu_jni javacore openjdk openjdkjvm
     CONTRACTS fault managed-recovery
-    OUTPUT_NAME w010managedfaultprobe)
+    OUTPUT_NAME w010managedfaultprobe
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_test_cases_root}/managed-fault-recovery/run.py"
+        --target-id "${ART_TARGET_ID}"
+        --dalvikvm "$<TARGET_FILE:dalvikvm>"
+        --boot-jar "${_art_boot_jar}"
+        --app-jar "${_art_managed_root}/w010managedfaultprobe.jar"
+        --work-root "${CMAKE_CURRENT_BINARY_DIR}/results/w010-managed-fault"
+        --icu-data "${_art_icu_data}"
+        ${_art_managed_runtime_library_args})
+if(TARGET win32_debugger_probe AND TARGET managed_w010_fault_recovery)
+    add_dependencies(win32_debugger_probe managed_w010_fault_recovery)
+endif()
 
 # W-013: ART-owned Windows virtual-memory and allocator contracts.
 art_add_target_probe(

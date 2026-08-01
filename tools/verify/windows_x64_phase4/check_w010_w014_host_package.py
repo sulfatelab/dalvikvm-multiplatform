@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the focused W-010/W-014 native-Windows Stage E package."""
+"""Validate an already issued historical W-010/W-014 Stage E package."""
 
 from __future__ import annotations
 

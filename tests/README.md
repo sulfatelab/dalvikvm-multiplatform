@@ -129,6 +129,16 @@ Linux and Windows x86-64 identities. Its heavier 1024 MiB gate is separately
 Windows-specific. This is intentional per-test applicability: sharing one Java
 source and Python runner does not imply that every resource profile or future
 architecture is supported.
+W-010's four native EXEs and three managed declarations are now all
+`target-runnable` for `windows-x86_64-msvc`. Case-local Python runners own the
+four-mode UEF contract, two debugger modes, managed abort, three fatal
+static/JIT/OSR origins with exact minidump validation, and six managed-fault
+recovery modes. Direct native fault-record and sigchain probes remain separate
+CTest processes. Windows Server 2025 passed the seven-gate stage twice with a
+Ninja no-op repeat; the Linux-hosted cross stage built the same artifacts and
+also repeated as a no-op. The debugger launches the frontend-resolved product
+EXE rather than copying it away from its matching DLL directory, while all
+writable runtime state remains isolated below the output tree.
 Remaining legacy shell runners and retained per-probe CMake entry points use
 canonical files as temporary compatibility shims; they must be replaced by the
 unified Python/CMake/Ninja path before `tools/verify` can be removed. W-003 has

@@ -366,7 +366,7 @@ The diagnostic package now contains:
   chain, and worker-thread modes;
 - `CrashNativeProbe uef`, which installs a late diagnostic UEF, identifies the
   predecessor module, and chains directly to it; and
-- `scripts/RUN_W010_W014_DIAGNOSTICS.ps1`, which writes a separate
+- the issued historical package's diagnostic runner, which wrote a separate
   `diagnostic_logs` result without changing the 30-record acceptance runner.
 
 Wine verifies the baseline/writable/direct stack modes, all four standalone
@@ -2289,13 +2289,14 @@ contract.
   publication, unregisters before reuse, and clears before teardown. Focused
   J-2/J-1 registry, collection/reuse, and threshold-zero fatal UEF/minidump
   gates pass.
-- **Native package candidate:** `package_windows_x64_w010_w014.sh` stages the coupled
-  automated matrix and passes its Linux-side Wine preflight. The PowerShell
-  runner requires 30 PASS records, covers static, J-2/J-1 JIT-origin, and
+- **Historical native package:** the retired W-010/W-014 producer staged the
+  coupled automated matrix and passed its Linux-side Wine preflight. Its
+  PowerShell runner required 30 PASS records, covered static, J-2/J-1 JIT-origin, and
   J-2/J-1 OSR-origin fatal AVs, validates a new `MDMP` for every fatal process,
   immediately preserves each dump under a case-prefixed filename to avoid
   one-second timestamp collisions, and requires at least five returned dumps.
-  This is package readiness, not native acceptance.
+  The returned E9 package is accepted historical evidence. Current reproduction
+  uses the shell-free unified W-010 and W-014 stages.
 - **Second native result:** the corrected build-19044 run passes 20 checks and
   fails 12. CET, reservations, direct page operations, sigchain, NPE, OSR
   unwind, and XMM sentinels pass. All three SOE modes terminate with native

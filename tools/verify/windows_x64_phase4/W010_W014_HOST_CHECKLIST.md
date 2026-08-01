@@ -1,11 +1,18 @@
-# W-010/W-014 native Windows Stage E acceptance
+# Historical W-010/W-014 native Windows Stage E acceptance
+
+This checklist applies only to the already issued package and its immutable
+returned evidence. The repository package producer and packaged-runner sources
+were retired after unified `stage:w010` and `stage:w014` passed on Windows
+Server 2025 and repeated as Ninja no-ops. For a new W-010 run, use
+`tools/build_art.py test --stage w010 --parallel 16`; do not reconstruct this
+package.
 
 **Authoritative lab gate:** Windows Server 2025 Datacenter Evaluation, x64,
 build 26100. The former Windows 10 host is no longer available. The Windows
 10 RS4 requirement below is only the product API compatibility baseline.
 See [HOST_GATE_POLICY.md](HOST_GATE_POLICY.md).
 
-**State:** E9 configured-guarantee explicit-stack-check, FS-1 stack high-water,
+**State:** HISTORICAL PACKAGE PROCEDURE; E9 configured-guarantee explicit-stack-check, FS-1 stack high-water,
 and FS-2 debugger/CET/embedding/exception-XMM native acceptance accepted on
 Windows Server 2025 build 26100
 
