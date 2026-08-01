@@ -13,7 +13,7 @@ Updated: 2026-07-30
 
 Future native-gate policy: use only Windows Server 2025 Datacenter Evaluation
 x64 build 26100. See
-[HOST_GATE_POLICY.md](tools/verify/windows_x64_phase4/HOST_GATE_POLICY.md).
+[native Windows gate policy](win32_host_gate_policy.md).
 
 **Living tracker (leftovers + temporary workarounds):** [win32_open_items.md](win32_open_items.md)
 Product goal (owner requirement): **full native Windows NT support** for this repo’s ART runtime — a real `dalvikvm.exe` + DLLs + `boot.jar` that runs plain Java on Win32 x64 **without** Android platform APIs and **without** WSL/VM indirection.

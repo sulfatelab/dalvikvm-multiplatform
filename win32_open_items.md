@@ -19,7 +19,7 @@ Do **not** list permanent non-goals as OPEN workarounds—list them under §Non-
 | [win32_aot_oat.md](win32_aot_oat.md) | Selected restricted ELF64 OAT coat, dedicated loader, PE rejection, and AOT risk/gate design |
 | [win32_heap_memory.md](win32_heap_memory.md) | W-013 heap / embedded-dlmalloc ownership, low-address, and MoreCore target design |
 | [win32_libcore_os_natives.md](win32_libcore_os_natives.md) | Os/`Linux` natives: Implemented / Needed / ENOSYS |
-| [HOST_GATE_POLICY.md](tools/verify/windows_x64_phase4/HOST_GATE_POLICY.md) | Current native lab host and future-gate policy |
+| [win32_host_gate_policy.md](win32_host_gate_policy.md) | Current native lab host and future-gate policy |
 | `tools/verify/windows_x64_phase*/RESULT.md` | Gate evidence |
 
 ---
@@ -59,7 +59,7 @@ environment change. Windows Server 2025 Datacenter Evaluation, x64 build
 acceptance matrices, regression gates, and release claims. Wine/Linux remain
 development and structural checks only. Existing Windows 10 result bundles are
 historical evidence and do not provide current cross-version coverage. The
-canonical policy is [HOST_GATE_POLICY.md](tools/verify/windows_x64_phase4/HOST_GATE_POLICY.md).
+canonical policy is [win32_host_gate_policy.md](win32_host_gate_policy.md).
 
 ---
 

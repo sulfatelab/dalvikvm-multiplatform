@@ -14,6 +14,10 @@ and release claims must run on the Windows Server 2025 build-26100 host. The
 host identity and connection details are recorded in the returned evidence;
 credentials must not be stored in source documentation.
 
+The current VM has 16 GiB RAM. Native configure, build, and test commands must
+use at most `--parallel 16`; the 32-job policy applies only to Linux and
+Windows-cross work on agent01.
+
 Wine, Linux, WSL, and compatibility layers remain useful development or
 structural checks, but they do not replace the authoritative native gate.
 
@@ -29,6 +33,7 @@ structural checks, but they do not replace the authoritative native gate.
 - When a checklist retains an API compatibility baseline such as Windows 10
   RS4, that is a product/platform minimum, not the current acceptance host.
 
-The policy is referenced by the phase-4 result summaries and native host
+The policy is referenced by the Windows design documents, unified test
+documentation, historical result summaries, and any retained native-host
 checklists. Update this file first if the lab's authoritative host changes
 again.

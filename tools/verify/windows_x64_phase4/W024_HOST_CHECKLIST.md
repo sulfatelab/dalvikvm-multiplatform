@@ -3,7 +3,7 @@
 **Future gate host:** Windows Server 2025 Datacenter Evaluation x64 build
 26100. The Windows 10 build-19044 result below is historical, and the former
 Windows 10 host is no longer available for future reruns. See
-[HOST_GATE_POLICY.md](HOST_GATE_POLICY.md).
+[native Windows gate policy](../../../win32_host_gate_policy.md).
 
 **Latest result:** PASS on Windows 10 Enterprise LTSC 2021, build 19044, on
 2026-07-24. Accepted evidence is stored under `evidence/w024_host/`.

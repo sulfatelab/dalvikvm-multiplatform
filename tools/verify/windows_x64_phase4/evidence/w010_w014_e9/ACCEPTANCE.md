@@ -77,4 +77,4 @@ in `../fs2_w010_w014_native/ACCEPTANCE.md`. Conditional pending-range,
 reservation-correlation, and debugger-quality dump-stack work do not reopen the
 accepted E9 managed-SOE mechanism. The former Windows 10 host is unavailable;
 future native reruns use the Server 2025 gate under
-`../HOST_GATE_POLICY.md`.
+[`win32_host_gate_policy.md`](../../../../../win32_host_gate_policy.md).

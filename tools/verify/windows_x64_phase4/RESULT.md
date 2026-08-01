@@ -20,7 +20,8 @@ conditionally closes the pending bridge tail.
 **Current lab policy:** All future native Windows gates use Windows Server
 2025 Datacenter Evaluation x64 build 26100. The former Windows 10 host is no
 longer available; the Windows 10 records in this file are retained as
-historical evidence only. See [HOST_GATE_POLICY.md](HOST_GATE_POLICY.md).
+historical evidence only. See the
+[native Windows gate policy](../../../win32_host_gate_policy.md).
 
 ## Unified W-002 acceptance (2026-08-01)
 

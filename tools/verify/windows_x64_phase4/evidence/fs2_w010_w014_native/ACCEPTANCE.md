@@ -59,7 +59,7 @@ rather than in the source tree.
 The former Windows 10 acceptance host is no longer available after the lab
 environment change. Windows Server 2025 build 26100 is the sole authoritative
 native gate for future reruns; the canonical policy is
-`tools/verify/windows_x64_phase4/HOST_GATE_POLICY.md`.
+[`win32_host_gate_policy.md`](../../../../../win32_host_gate_policy.md).
 
 FS-2 closes its four requested native proof points. Remaining W-010/W-014 work
 is limited to reservation-correlation/pending-range conditional probes,

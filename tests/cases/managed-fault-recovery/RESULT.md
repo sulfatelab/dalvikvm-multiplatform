@@ -6,7 +6,8 @@ and W-010/W-014 E9, FS-1, and FS-2 native acceptance retained
 
 All future native reruns use the Windows Server 2025 build-26100 lab gate. The
 former Windows 10 host is unavailable; older Windows 10 records below are
-historical evidence only. See [HOST_GATE_POLICY.md](HOST_GATE_POLICY.md).
+historical evidence only. See the
+[native Windows gate policy](../../../win32_host_gate_policy.md).
 
 ## Unified stage acceptance
 

@@ -598,6 +598,11 @@ items are closed.
   diagnosis, three-state publication fix, historical controls, and current
   native W-014 reproduction remain readable beside the source; the obsolete
   `tools/verify` copy is removed.
+- [x] The live native-Windows lab policy moved out of legacy verification
+  storage to root-level `win32_host_gate_policy.md`, alongside the Windows
+  design documents that consume it. All live and historical references now
+  resolve there, and the policy records the 16-job ceiling for the current
+  16 GiB Server 2025 VM while retaining 32 jobs for agent01 cross work.
 - [x] `art.dll` no longer uses `WINDOWS_EXPORT_ALL_SYMBOLS`. Before the change,
   a Debug scan found 80,318 candidate exports and exceeded PE's 65,535-entry
   limit, while RelWithDebInfo exposed 17,112. ART's existing `EXPORT` boundary

@@ -28,4 +28,4 @@ The selected raw logs are retained beside this file. The host is Server 2025.
 The former Windows 10 host is no longer available after the lab environment
 change, and the authoritative-host policy makes a second-host repeat
 unnecessary for H-002/FS-4. See
-`tools/verify/windows_x64_phase4/HOST_GATE_POLICY.md`.
+[`win32_host_gate_policy.md`](../../../../../win32_host_gate_policy.md).

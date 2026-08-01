@@ -10,7 +10,7 @@ package.
 **Authoritative lab gate:** Windows Server 2025 Datacenter Evaluation, x64,
 build 26100. The former Windows 10 host is no longer available. The Windows
 10 RS4 requirement below is only the product API compatibility baseline.
-See [HOST_GATE_POLICY.md](HOST_GATE_POLICY.md).
+See the [native Windows gate policy](../../../win32_host_gate_policy.md).
 
 **State:** HISTORICAL PACKAGE PROCEDURE; E9 configured-guarantee explicit-stack-check, FS-1 stack high-water,
 and FS-2 debugger/CET/embedding/exception-XMM native acceptance accepted on

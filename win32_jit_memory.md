@@ -7,7 +7,7 @@ regressions. Section construction now fails closed instead of downgrading W^X.
 **Updated:** 2026-07-30
 **Native gate:** Windows Server 2025 Datacenter Evaluation x64 build 26100;
 the former Windows 10 lab host is unavailable for future gates. See
-[HOST_GATE_POLICY.md](tools/verify/windows_x64_phase4/HOST_GATE_POLICY.md).
+[native Windows gate policy](win32_host_gate_policy.md).
 **Product API baseline:** Windows 10 version 1803 or later (NTDDI_WIN10_RS4)
 **Related:** [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md),
 [win32_heap_memory.md](win32_heap_memory.md),
