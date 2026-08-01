@@ -98,7 +98,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     assert w003_structure["ctest_registered"] is True
     assert sum(
         probe["execution"] == "target-runnable" for probe in catalog["probes"]
-    ) == 57
+    ) == 60
     assert {
         probe["name"]: probe["timeout_seconds"]
         for probe in catalog["probes"]
@@ -117,14 +117,17 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "managed_gcforced": 600,
         "managed_gcprobe": 600,
         "managed_goldenapp": 600,
+        "managed_handleleakprobe": 600,
         "managed_interruptprobe": 600,
         "managed_ioprobe": 600,
         "managed_execprobe": 600,
         "managed_ipv6probe": 600,
         "managed_netprobe": 600,
         "managed_oserrnoprobe": 600,
+        "managed_perfsmokeprobe": 600,
         "managed_propsprobe": 600,
         "managed_rtmem": 600,
+        "managed_threadheavyprobe": 600,
         "managed_threadstressprobe": 600,
         "managed_throwprobe": 600,
         "win32_uef_probe": 600,

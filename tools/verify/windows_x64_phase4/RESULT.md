@@ -77,6 +77,30 @@ Non-following scans found zero reparse points in the source and both output
 trees. A final-source Linux-hosted Windows cross build completed all 1,492
 edges, passed the structural CTest gate, and repeated as a Ninja no-op.
 
+## Unified W-004 acceptance (2026-08-01)
+
+The current authoritative W-004 path is the shell-free unified frontend and
+virtual stage:
+
+```text
+python tools/build_art.py configure --target-id windows-x86_64-msvc --build-type RelWithDebInfo
+python tools/build_art.py test --target-id windows-x86_64-msvc --build-type RelWithDebInfo --stage w004 --parallel 16
+```
+
+Windows Server 2025 x86-64 passed 26/26, including the retained Phase-4 GC,
+heavy-thread, handle-leak, and performance-smoke contracts. HandleLeakProbe,
+PerfSmokeProbe, and ThreadHeavyProbe run through the shared Python managed
+runtime gate in interpreter mode with exact marker checks and isolated
+output-owned work roots. The first expanded run completed in 35.93 seconds;
+the identical repeat reported `ninja: no work to do.` and passed 26/26 in
+34.21 seconds.
+
+A Linux-hosted Windows cross run with `--parallel 32` passed the W-004
+structural reviewer, and its immediate repeat was also a Ninja no-op. The old
+generic managed builder and Wine runner, four per-case wrappers, and aggregate
+Wine runner were retired. Historical Wine logs remain evidence, not a
+maintained reproduction path.
+
 ## Unified W-010 acceptance (2026-08-01)
 
 The current authoritative W-010 path is the shell-free unified frontend and
@@ -108,14 +132,14 @@ still consume them; they are not the current W-010 reproduction path.
   and forced-interpreter transitions
 - **Gate:** A5–A8 stable; no WSL
 
-## Gates (wine64)
+## Gate history and maintained reproduction
 
 | Gate | Status | Command |
 |------|--------|---------|
-| P4_G1 GC stress | **PASS** | `run_gcstress.sh` |
-| P4_G2 Thread heavy | **PASS** | `run_threadheavy.sh` |
-| P4_G3 Handle leak smoke | **PASS** | `run_handleleak.sh` |
-| P4_G4 Perf smoke | **PASS** | `run_perfsmoke.sh` |
+| P4_G1 GC stress | **PASS in unified native stage; historical Wine PASS** | `art.w004.managed_gc_stress` |
+| P4_G2 Thread heavy | **PASS in unified native stage; historical Wine PASS** | `art.w004.managed_threadheavyprobe` |
+| P4_G3 Handle leak smoke | **PASS in unified native stage; historical Wine PASS** | `art.w004.managed_handleleakprobe` |
+| P4_G4 Perf smoke | **PASS in unified native stage; historical Wine PASS** | `art.w004.managed_perfsmokeprobe` |
 | P4_G5 Java abort path | **PASS** | `run_crashabort.sh` |
 | P4_G5b Native AV + minidump | **PASS** | `run_crashnative.sh` (VEH+UEF+`.dmp`) |
 | P4_G6 GoldenApp regression | **PASS** | historical Phase-3 evidence; maintained as `art.w004.managed_goldenapp` |
@@ -142,7 +166,7 @@ still consume them; they are not the current W-010 reproduction path.
 | W-010/W-014 complete E9 native host matrix | **PASS, 30/30 on build 26100** | guarantee-aware excluded-low accounting; switch/nterp/JIT managed SOE; zero handled dumps; five valid static/JIT/OSR fatal dumps |
 | FS-1 RelWithDebInfo/Debug stack high-water | **PASS in unified native Stage-8 and historical package on build 26100** | unified `win32-stack-high-water` variant: switch/nterp/JIT, four complete records each; current RelWithDebInfo minimum margin 6448 bytes, Debug quick minimum 37120 bytes; no dumps; structural reviewer passed |
 | FS-2 native debugger/CET/embedding/exception-XMM matrix | **PASS on native build 26100** | `evidence/fs2_w010_w014_native/ACCEPTANCE.md`; first-chance JIT NPE continue, explicit SOE no AV, nine incompatible CET rejections plus safe-policy acceptance, JNI UEF teardown, and 2x nterp/switch/JIT exception-XMM runs |
-| Historical full Wine suite | **PASS** | `run_all_wine_gates.sh`; W-003 runtime coverage has since moved to unified native CTest |
+| Historical full Wine suite | **PASS** | retained `evidence/all_wine_gates.txt`; the aggregate runner is retired and maintained coverage uses unified native CTest |
 
 Evidence: `evidence/all_wine_gates.txt`, `evidence/crashnative.txt`
 
@@ -501,7 +525,8 @@ Focused Wine acceptance passes:
 - no managed-fault diagnostic VEH/UEF marker and no dump-state change; and
 - unmanaged native AV still reaching fatal diagnostics.
 
-The rebuilt complete Phase-4 aggregate reports `PASS all wine Phase 4 gates`.
+The historical rebuilt complete Phase-4 aggregate reported
+`PASS all wine Phase 4 gates`; its runner is now retired.
 Windows x64 `art`/`dalvikvm`, Linux `art`/`dalvikvm`,
 `dalvikvm -showversion`, and shared-boot imageless Hello also pass. Wine is
 development evidence; native Windows Stage E remains required. See

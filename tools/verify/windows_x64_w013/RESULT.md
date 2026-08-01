@@ -261,18 +261,14 @@ seconds. The legacy dual-target Bash/Wine runner was then removed.
 ## Integration verification
 
 ```text
-cmake --build build/windows_x64_phase1 --target art dalvikvm -j16
-python tests/support/windows/check_w013_source_policy.py
-python tools/build_art.py test --target-id windows-x86_64-msvc --stage w013 --parallel 32
+python tools/build_art.py test --target-id windows-x86_64-msvc --stage w013 --parallel 16
 python tools/build_art.py test --target-id linux-x86_64-gnu --stage w013 --parallel 32
-tools/verify/windows_x64_phase4/run_jit_smoke.sh
-tools/verify/windows_x64_phase4/run_gcstress.sh
-tools/verify/windows_x64_phase4/run_threadheavy.sh
-tools/verify/windows_x64_phase4/run_handleleak.sh
-cmake --build build/native --target art dalvikvm -j16
-retired Linux shell runners; historical Hello result moved to
-tests/cases/imageless-runtime/RESULT.md and unified managed gates remain pending
+python tools/build_art.py test --target-id windows-x86_64-msvc --stage w004 --parallel 16
 ```
+
+Use `--parallel 32` for the Linux-hosted Windows cross reviewer. The stage
+commands own their source-policy checks and managed gates; the former Phase-4
+Wine wrappers and direct legacy build-tree commands are retired.
 
 Results:
 

@@ -846,16 +846,56 @@ art_add_target_probe(
         --expect "GcStressProbe.done=ok"
         --expect "main end exception=0"
         --forbid AssertionError)
+set(_art_runtime_stress_expected_HandleLeakProbe
+    "files.ok=true n=400"
+    "socks.ok=true n=80"
+    "final=handle-final"
+    "handleleak.ok=true"
+    "HandleLeakProbe.done=ok")
+set(_art_runtime_stress_expected_PerfSmokeProbe
+    "perf.ok=true"
+    "PerfSmokeProbe.done=ok")
+set(_art_runtime_stress_expected_ThreadHeavyProbe
+    "threads=24 iters=3000 counter=72000"
+    "interrupt.ok=true"
+    "threadheavy.ok=true"
+    "ThreadHeavyProbe.done=ok")
 foreach(_art_runtime_stress_class HandleLeakProbe PerfSmokeProbe ThreadHeavyProbe)
     string(TOLOWER "${_art_runtime_stress_class}" _art_runtime_stress_name)
+    set(_art_runtime_stress_marker_arguments)
+    foreach(_art_runtime_stress_marker IN LISTS
+            _art_runtime_stress_expected_${_art_runtime_stress_class})
+        list(APPEND _art_runtime_stress_marker_arguments
+            --expect "${_art_runtime_stress_marker}")
+    endforeach()
     art_add_target_probe(
         NAME "managed_${_art_runtime_stress_name}" STAGE w004
-        TYPE MANAGED EXECUTION compile-only
+        TYPE MANAGED EXECUTION target-runnable
         ${_art_windows_current_selector}
         SOURCES
             "${_art_test_cases_root}/managed-runtime-stress/${_art_runtime_stress_class}.java"
+        TIMEOUT 600
+        DEPENDS dalvikvm icu_jni javacore openjdk
         CONTRACTS runtime-load stress
-        OUTPUT_NAME "${_art_runtime_stress_name}")
+        OUTPUT_NAME "${_art_runtime_stress_name}"
+        COMMAND
+            "${Python3_EXECUTABLE}"
+            "${_art_test_repo_root}/tests/support/runtime_gate.py"
+            managed
+            --target-id "${ART_TARGET_ID}"
+            --dalvikvm "$<TARGET_FILE:dalvikvm>"
+            --boot-jar "${_art_boot_jar}"
+            --app-jar "${_art_managed_root}/${_art_runtime_stress_name}.jar"
+            --main-class "${_art_runtime_stress_class}"
+            --work-root
+                "${CMAKE_CURRENT_BINARY_DIR}/results/${_art_runtime_stress_name}"
+            --icu-data "${_art_icu_data}"
+            ${_art_managed_runtime_library_args}
+            --vm-option=-Xint
+            ${_art_runtime_stress_marker_arguments}
+            --expect "main end exception=0"
+            --forbid AssertionError
+            --timeout 180)
 endforeach()
 art_add_target_probe(
     NAME managed_math_critical STAGE w004 TYPE MANAGED EXECUTION target-runnable

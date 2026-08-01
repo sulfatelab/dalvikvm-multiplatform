@@ -122,7 +122,7 @@ CTest gates. Windows adds its BoringSSL SHA executable plus the exact
 `windows-x86_64-msvc` JVMTI managed gate and runtime-load/assembly-dependency
 reviewer. Fifteen more accepted Phase-3 libcore behaviors use one checked-in
 JSON contract matrix and one case-local, shell-free Python runner. The expanded
-native W-004 stage has 23 gates: core/charset/monitor, DNS, ordinary and forced
+native W-004 stage has 26 gates: core/charset/monitor, DNS, ordinary and forced
 GC, GoldenApp, interruption, file I/O, TCP loopback, errno/UTF-8 paths,
 properties/clocks, runtime memory, thread stress, and expected-nonzero uncaught
 exception behavior join the earlier six. Exec validates `Runtime.exec` and
@@ -130,7 +130,9 @@ exception behavior join the earlier six. Exec validates `Runtime.exec` and
 AbsPathProbe add a
 standalone Hello regression, multi-JAR `;` classpath, structured
 drive/mixed/UNC checks, three absolute path forms, and two required `:`
-negative cases. Windows Server 2025 passed 23/23
+negative cases. The retained Phase-4 HandleLeak, PerfSmoke, and ThreadHeavy
+cases now run through the same shell-free gate in interpreter mode with exact
+marker contracts. Windows Server 2025 passed 26/26
 twice with `--parallel 16`, including a true Ninja no-op repeat. Its first DNS
 run exposed recursive `getnameinfo` JNI behavior; the maintained bridge now
 uses `GetNameInfoW` with explicit bionic-to-Winsock flag mapping. The remaining
@@ -175,7 +177,8 @@ W-004 has likewise removed the standalone JVMTI CMake/Bash orchestration after
 unified native acceptance. Its accepted Phase-3 libcore slices removed all 26
 superseded Bash build/run wrappers; native-open cases remain compile-only in
 the same catalog instead of retaining an alternative product or runtime graph.
-W-025 has
+The accepted Phase-4 managed stress slice also removed its generic builder,
+generic Wine runner, aggregate Wine runner, and four per-case wrappers. W-025 has
 removed its four package producers,
 package-only PowerShell/Bash/Wine orchestration, and superseded Phase-4 JIT
 wrappers after unified native acceptance. Retained aggregate package flows
