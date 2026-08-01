@@ -197,6 +197,14 @@ items are closed.
   products passed at their required 32/32/16 job limits and repeated as Ninja
   no-ops. Cross and native CET contracts pass 58/58, and all 182 host tests
   pass.
+- [x] The seven-source `nativehelper` dependency now compiles without the ART
+  prelude on both Windows build hosts. Its C sources and owned headers already
+  expose the complete Windows contract, so this stage needs no new platform
+  shim or target definition. Forced-prelude compile commands fell from 730 to
+  723, and the cross and native compile databases agree on zero `nativehelper`
+  consumers. Linux and both Windows products passed at their required 32/32/16
+  job limits and repeated as Ninja no-ops. Cross and native CET contracts pass
+  58/58, and all 182 host tests pass.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to

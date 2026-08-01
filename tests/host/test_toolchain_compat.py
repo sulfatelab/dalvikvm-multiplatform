@@ -45,6 +45,7 @@ def test_windows_platform_prelude_has_reviewed_target_scope():
         "log",
         "lzma",
         "nativebridge",
+        "nativehelper",
         "procinfo",
         "unwindstack",
         "ziparchive",

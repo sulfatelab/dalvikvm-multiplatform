@@ -23,6 +23,7 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
         log
         lzma
         nativebridge
+        nativehelper
         procinfo
         unwindstack
         ziparchive)
