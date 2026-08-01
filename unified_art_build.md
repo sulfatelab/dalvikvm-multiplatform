@@ -3,7 +3,7 @@
 Status: live refactor tracker; the x86-64 product build is unified, while test,
 packaging, topology-parity, and legacy-removal work remains active
 
-Last updated: 2026-08-01
+Last updated: 2026-08-02
 
 This document is the authoritative live tracker and design record for replacing
 the repository's split Linux and Windows ART build paths. Keep the tracker near
@@ -40,30 +40,30 @@ items are closed.
 |---|---|---|---|
 | Python frontend | COMPLETE for the initial slice | `generate`, `check-generated`, `configure`, `build`, `test`, and `stage` exist; subprocesses are shell-free; configured JDK 21 is validated and passed to CMake | keep regression coverage current |
 | Linux x86-64 product | COMPLETE for the current W-004/W-013 runtime slice | a fresh target-local boot/runtime closure passes all five W-004 gates plus the shared W-013 128 MiB non-moving-heap gate; identical stage rebuilds are Ninja no-ops | add boot-image/security packaging and migrate the remaining behavioral stages |
-| Windows x86-64 product | PARTIAL / experimental | Linux-hosted cross and native Windows Server 2025 product builds pass; the accepted native baseline passes 65/65 across W-002, W-003, W-004, W-010, W-013, W-014, and W-025, and identical product/test repeats are Ninja no-ops | accept W-027 natively, then add boot-image/security packaging and migrate the remaining behavioral coverage |
+| Windows x86-64 product | PARTIAL / experimental | Linux-hosted cross and native Windows Server 2025 product builds pass; the accepted native baseline passes 66/66 across W-002, W-003, W-004, W-010, W-013, W-014, W-025, and W-027, and identical product/test repeats are Ninja no-ops | add boot-image/security packaging and migrate the remaining behavioral coverage |
 | Compiler DSO parity | COMPLETE for `art-compiler` | both targets emit a shared compiler DSO; Windows imports `art.dll` and exports `art_compiler_jit_create` | retain exact ABI and no-cycle gates |
 | Windows runtime DSO exports | COMPLETE for current x86-64 closure | `art.dll` combines explicit source annotations with a reviewed 187-entry runtime-consumer DEF, never CMake auto-export; Debug has 2,065 exports and RelWithDebInfo has 2,066 | keep the consumer allowlist and actual PE boundary under regression review |
 | Full DSO topology parity | PARTIAL | five module kinds and two target-specific module pairs still differ | convert each difference or record a reviewed target exception |
 | Unified phase catalog | PARTIAL | eight virtual stages declare 32 native probes, 47 managed JARs, and 13 command gates; Windows has 90 applicable items (59 target-runnable, seven host-review, and 24 compile-only in the product variant), while Linux x86-64 has seven applicable items (six runnable and one compile-only artifact) | migrate the remaining behavioral runners, portable JNI expansion, and result checks |
 | Boot/runtime packaging | PARTIAL | the base boot JAR and probe JARs are Python/CMake/Ninja-owned, deterministic, target-local, and fail-fast; managed gates isolate a runtime root and stage pinned ICU data plus the mandatory native boot DSO closure | add boot images, security providers/resources, cacerts, and complete runtime packages |
-| POSIX-free Windows build host | COMPLETE for the accepted native baseline; PARTIAL end to end | Server 2025 uses configured official JDK 21, Python, CMake, Ninja, and plain Clang drivers; all 65 previously accepted native tests and the product/test no-op gates pass without POSIX tooling | accept W-027 natively, migrate every retained behavioral gate, and complete runtime packaging |
+| POSIX-free Windows build host | COMPLETE for the accepted native baseline; PARTIAL end to end | Server 2025 uses configured official JDK 21, Python, CMake, Ninja, and plain Clang drivers; all 66 accepted native tests and the product/test no-op gates pass without POSIX tooling | migrate every retained behavioral gate and complete runtime packaging |
 | Legacy build removal | PARTIAL | active product ownership was demoted, project-owned symlink overlays were removed, and the superseded Linux miniature, Windows Phase-0/Phase-1, and libcore/ICU product graphs were deleted; the checked-in Linux graph and split overlay datasets remain | remove or demote every alternative product path after gate migration |
 | CI/acceptance automation | NOT STARTED | no in-repository CI workflow owns the acceptance matrix | fresh-build, no-op, graph, command, artifact, and native-host gates run automatically |
 | Additional architectures | BLOCKED by capability gates | all 17 canonical identities are registered; only `linux-x86_64-gnu` and experimental `windows-x86_64-msvc` generate | admit each profile only after its architecture and runtime gates pass |
 | Windows AOT/OAT | BLOCKED / separate track | compiler DSO parity does not provide Windows OAT production or loading | satisfy `win32_aot_oat.md`; do not imply capability from `art-compiler.dll` |
 
-### Latest verification baseline (2026-08-01)
+### Latest verification baseline (2026-08-02)
 
 - [x] `PYTHONPATH=tools/bp2cmake python3 -m pytest tools/bp2cmake/tests tests/host -q`:
-  190 passed, including generated PE-header, Linux/Windows test-catalog,
+  192 passed, including generated PE-header, Linux/Windows test-catalog,
   shell-free runtime/managed-artifact gates, parallel-frontend, JDK validation,
   deterministic JAR, Windows-path/DSO-name, reviewer ownership, W-010
   nonzero/fault/debugger/fatal-dump orchestration, W-013 source-policy,
   W-025 JIT lifecycle/mapping/process-policy/reviewer orchestration, fatal
   contracts, the shell-free Math CriticalNative matrix, W-024 cleanup, the
   reviewed PE runtime-consumer export boundary, retired libcore-product-path
-  absence, VCS binary/source-ownership coverage, and schema-2 build-fingerprint
-  graph/tool/target-binding identity coverage.
+  absence, VCS binary/source-ownership coverage, W-027 Unicode API policy, and
+  schema-2 build-fingerprint graph/tool/target-binding identity coverage.
 - [x] Fresh generation loads the same 260 Blueprint files for both targets and
   emits 34 generated modules for `linux-x86_64-gnu` and 33 for
   `windows-x86_64-msvc`. Both graphs emit the separate `openjdkjvmti` DSO;
@@ -418,7 +418,17 @@ items are closed.
   calls. Its live `host-review` gate passed a fresh Linux-hosted Windows-cross
   stage after rebuilding the 616-action `art` dependency closure; its immediate
   repeat was a Ninja no-op and passed 1/1 in 10.04 seconds. Native Windows
-  acceptance is still pending. The initial deduplicated scan of the
+  Server 2025 acceptance now passes the complete catalog twice at 66/66: 59
+  target-runnable gates and seven host reviewers, including W-004 `ExecProbe`,
+  all eight W-010 gates, stack pregrow, the CET runtime-policy probe, and W-027.
+  The first W-027 native run passed in 12.38 seconds and the no-op repeat passed
+  in 12.33 seconds; the product and `art-tests` repeats were both true Ninja
+  no-ops. The separate CET link/PE contract passed all 58 targets and files,
+  native `check-generated` passed the 33-module/260-Blueprint graph, and the
+  source and output trees contain zero reparse points. The symlink-free vendor
+  export contains 38,844 regular files: 38,759 archive files plus 85 files
+  materialized from two tracked directory links; nine broken formatting-only
+  upstream links are intentionally absent. The initial deduplicated scan of the
   1,816-command Windows-cross compilation database
   finds 55 real calls in 21 source files across 22 explicit ANSI entry points.
   The count strips C/C++ comments and literals, so the diagnostic string
@@ -511,8 +521,8 @@ items are closed.
   and W-027 Unicode API policy reviewers are separately registered
   `host-review` declarations. Twenty-four applicable
   declarations remain compile-only. The complete W-002, W-003, W-004, W-010,
-  W-013, and W-025 runnable/reviewer slices are accepted on the authoritative
-  native host.
+  W-013, W-025, and W-027 runnable/reviewer slices are accepted on the
+  authoritative native host.
 - [x] FS-1 is now an exact `windows-x86_64-msvc` test-only build variant with a
   fingerprinted output directory. Product staging rejects the variant and the
   product graph receives no instrumentation macro. The variant applies the
