@@ -5,7 +5,7 @@ import java.net.InetSocketAddress;
 import libcore.io.Libcore;
 import android.system.OsConstants;
 
-/** L-003 IPv6 dual-stack Os.socket bind; avoid IPv6 reverse-DNS (wine hang). */
+/** L-003 IPv6 dual-stack Os.socket bind without reverse-DNS side effects. */
 public class Ipv6Probe {
   private static void say(String s) { System.out.println(s); System.out.flush(); }
   private static String hexAddr(InetAddress a) {
@@ -38,7 +38,7 @@ public class Ipv6Probe {
     } finally {
       try { Libcore.os.close(fd); } catch (Throwable t) { say("close=" + t); }
     }
-    say("ipv6.tcp.note=host_matrix_or_wine_partial");
+    say("ipv6.tcp.note=not_part_of_udp_bind_contract");
     say("Ipv6Probe.done=ok");
   }
 }

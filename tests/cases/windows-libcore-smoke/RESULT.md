@@ -1,8 +1,8 @@
 # Windows libcore smoke — result
 
-**Status:** **COMPLETE** — unified native probes pass on the authoritative
-Windows Server 2025 host; A4–A7 + Option H + product golden app also pass on
-the historical Windows 10 host and Wine oracle
+**Status:** **COMPLETE for the promoted native matrix** — 17 unified libcore
+behaviors pass on the authoritative Windows Server 2025 host; L-003 Locale,
+UDP, and Zip remain explicitly native-open and compile-only
 
 **Latest acceptance:** 2026-08-01
 
@@ -11,7 +11,7 @@ the historical Windows 10 host and Wine oracle
 
 ## Scope delivered
 
-Phase 3 libcore bring-up for Windows x64 imageless ART:
+Phase 3 libcore bring-up for Windows x86-64 imageless ART:
 
 - Option H filesystem + `;` classpath + absolute/mixed `C:\` paths
 - Classic `java.io` + Os PE natives (errno + UTF-8)
@@ -49,7 +49,7 @@ Ninja 1.13.2, LLVM 21.1.8 GNU-style Clang drivers, and the official configured
 JDK 21.0.12. No POSIX shell, Make, NMake, PowerShell, WSL, Cygwin, MSVC
 compiler driver, or `clang-cl` participated.
 
-Fifteen accepted Phase-3 behaviors are now target-runnable through the common
+Seventeen accepted Phase-3 behaviors are now target-runnable through the common
 W-004 catalog and one case-local Python runner with a checked-in JSON contract
 matrix. Core/charset/monitor, DNS, ordinary and forced GC, GoldenApp,
 interruption, file I/O, TCP loopback, errno/UTF-8 paths, properties/clocks,
@@ -57,15 +57,20 @@ runtime memory, thread stress, and the expected-nonzero uncaught-exception path
 all run without Bash, Wine, PowerShell, or a package handoff. PathProbe and
 AbsPathProbe add eight shell-free subcases covering multi-JAR semicolon
 classpath, structured drive/mixed/UNC paths, three absolute JAR path forms,
-and two required colon-separator failures. The separate L-003 matrix remains
-compile-only pending its next migration slice.
+and two required colon-separator failures. ExecProbe adds `Runtime.exec` and
+`ProcessBuilder` marker/exit validation; Ipv6Probe adds AF_INET6 bind and
+`getsockname` validation without reverse-DNS side effects. The other L-003
+artifacts stay compile-only: LocaleProbe and ZipProbe each timed out after 120
+seconds on native Windows, while UdpProbe failed during `DatagramSocket`
+construction with `setsockopt failed: EINVAL`. Historical Wine success is
+evidence only and does not broaden this native result.
 
 ```text
 python tools/build_art.py test --target-id windows-x86_64-msvc --stage w004 --parallel 16
 
-W-004: 21/21 PASS in 27.79 seconds
-repeat: ninja: no work to do; 21/21 PASS in 27.97 seconds
-Linux-hosted Windows cross reviewer: PASS with --parallel 32
+W-004: 23/23 PASS in 30.70 seconds
+repeat: ninja: no work to do; 23/23 PASS in 32.58 seconds
+Linux-hosted Windows cross reviewer: PASS; repeat Ninja no-op with --parallel 32
 ```
 
 The first native DNS run exposed that the Win32 `getnameinfo` JNI bridge called
@@ -73,8 +78,10 @@ Java `InetAddress.getHostAddress()`, which calls the same native bridge and
 recursed. The maintained bridge now converts the Java address to `sockaddr`,
 maps bionic name-info flag values to Winsock values, and calls Unicode
 `GetNameInfoW`; the rebuilt `javacore.dll` passes DNS resolution and loopback
-payload acceptance. The superseded Phase-3 Bash producers and runners for
-these migrated cases were removed after native acceptance.
+payload acceptance. All superseded Phase-3 Bash producers and runners were
+removed after the supported behavior moved into the native catalog. The three
+native-open L-003 cases remain ordinary compile-only declarations rather than
+a second runner.
 
 The generated binaries, managed artifacts, routine logs, and build trees
 remain outside VCS. W-027 tracks the probe's current `GetTempPathA`,

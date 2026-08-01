@@ -120,20 +120,24 @@ strict exit/marker checks, timeouts, and sanitized JSON results. Linux also
 registers its show-version and compiler-DSO topology gates, for five W-004
 CTest gates. Windows adds its BoringSSL SHA executable plus the exact
 `windows-x86_64-msvc` JVMTI managed gate and runtime-load/assembly-dependency
-reviewer. Thirteen more accepted Phase-3 libcore behaviors use one checked-in
+reviewer. Fifteen more accepted Phase-3 libcore behaviors use one checked-in
 JSON contract matrix and one case-local, shell-free Python runner. The expanded
-native W-004 stage has 21 gates: core/charset/monitor, DNS, ordinary and forced
+native W-004 stage has 23 gates: core/charset/monitor, DNS, ordinary and forced
 GC, GoldenApp, interruption, file I/O, TCP loopback, errno/UTF-8 paths,
 properties/clocks, runtime memory, thread stress, and expected-nonzero uncaught
-exception behavior join the earlier six. PathProbe and AbsPathProbe add a
+exception behavior join the earlier six. Exec validates `Runtime.exec` and
+`ProcessBuilder`; IPv6 validates AF_INET6 bind and `getsockname`. PathProbe and
+AbsPathProbe add a
 standalone Hello regression, multi-JAR `;` classpath, structured
 drive/mixed/UNC checks, three absolute path forms, and two required `:`
-negative cases. Windows Server 2025 passed 21/21
+negative cases. Windows Server 2025 passed 23/23
 twice with `--parallel 16`, including a true Ninja no-op repeat. Its first DNS
 run exposed recursive `getnameinfo` JNI behavior; the maintained bridge now
-uses `GetNameInfoW` with explicit bionic-to-Winsock flag mapping. L-003 and the
-remaining unregistered libcore behaviors stay compile-only
-until their exact contracts migrate. The JVMTI runner, native agent, managed
+uses `GetNameInfoW` with explicit bionic-to-Winsock flag mapping. The remaining
+L-003 Locale and Zip probes timed out after 120 seconds natively, and UDP failed
+at `DatagramSocket` construction with `setsockopt EINVAL`; all three stay
+compile-only until their exact native contracts pass. Historical Wine results
+do not promote them. The JVMTI runner, native agent, managed
 source, and result live together under `cases/jvmti-force/`; its current
 selector is deliberately not generalized to another Windows architecture or
 ABI.
@@ -168,10 +172,10 @@ canonical files as temporary compatibility shims; they must be replaced by the
 unified Python/CMake/Ninja path before `tools/verify` can be removed. W-003 has
 removed its four standalone CMake graphs, shell runners, and package producer;
 W-004 has likewise removed the standalone JVMTI CMake/Bash orchestration after
-unified native acceptance. Its accepted Phase-3 libcore slices removed 23
-superseded Bash build/run wrappers; the retained generic builder/runner and
-L-003 script still mark incomplete semantics, not an alternative product
-graph. W-025 has
+unified native acceptance. Its accepted Phase-3 libcore slices removed all 26
+superseded Bash build/run wrappers; native-open cases remain compile-only in
+the same catalog instead of retaining an alternative product or runtime graph.
+W-025 has
 removed its four package producers,
 package-only PowerShell/Bash/Wine orchestration, and superseded Phase-4 JIT
 wrappers after unified native acceptance. Retained aggregate package flows

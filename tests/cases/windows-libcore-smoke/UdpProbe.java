@@ -4,7 +4,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketTimeoutException;
 
-/** L-003 smoke: classic UDP IPv4. IPv6 bind is best-effort under wine. */
+/** L-003 smoke: classic UDP IPv4. Ipv6Probe owns the separate IPv6 bind. */
 public class UdpProbe {
   public static void main(String[] args) throws Exception {
     byte[] payload = "udp.probe.ok".getBytes("UTF-8");
@@ -31,7 +31,7 @@ public class UdpProbe {
       client.close();
       server.close();
     }
-    System.out.println("udp6.note=skipped_under_wine_gate");
+    System.out.println("udp6.note=covered_by_Ipv6Probe");
     System.out.println("UdpProbe.done=ok");
   }
 }

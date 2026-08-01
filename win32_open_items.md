@@ -765,7 +765,7 @@ Summary (details below; do not delete history):
 - **Closed:** 2026-07-17
 
 ### L-003 — Process/exec, rich locale, zip edge, UDP/IPv6 matrix
-- **State:** CLOSED (2026-07-17)
+- **State:** PARTIAL (historical Wine matrix closed 2026-07-17; native subset reviewed 2026-08-01)
 - **Kind:** leftover
 - **Area:** libcore / openjdk hybrid
 - **Gap:** Phase-3 product matrix for process/exec, locale (without full ICU4J bundles), zip edges, UDP IPv4, dual-stack IPv6 Os.socket bind.
@@ -776,12 +776,12 @@ Summary (details below; do not delete history):
   - ZipFile CEN: Windows heap-read + DirectByteBuffer mirror (mmap CEN invalid under wine)
   - LocaleProbe uses Calendar/String case without ICU DecimalFormatSymbols bundles
   - Ipv6Probe: Os.socket AF_INET6 bind on raw `::` (avoid reverse-DNS hang)
-  - Gate: `tools/verify/windows_x64_phase3/run_l003_wine.sh` — OVERALL PASS
-- **Exit criteria:** Process/UDP/locale/zip/IPv6 gates documented + wine green **met**.
-- **Non-goals / host residual:** TCP IPv4-mapped dual-stack under wine; full ICU Collator resources; zip STORED empty-dir edges beyond DEFLATED multi-entry.
+  - Current gate: unified W-004 runs ExecProbe and Ipv6Probe natively; the historical all-pass Wine script is retired
+- **Exit criteria:** Native Exec and IPv6 **met**; Locale and Zip time out after 120 seconds, and UDP fails `DatagramSocket` construction with `setsockopt EINVAL`, so those three remain open and compile-only.
+- **Non-goals / host residual:** TCP IPv4-mapped dual-stack; full ICU Collator resources; zip STORED empty-dir edges beyond DEFLATED multi-entry.
 - **Code anchors:** `win_process_natives.c`, `win_net_natives.c`, `ZipFile.java` (Win CEN), `FileInputStream.c` available0, historical `interpreter.cc` 12-slot fallback, probes under `tests/cases/windows-libcore-smoke/`
 - **Opened:** 2026-07-17
-- **Closed:** 2026-07-17
+- **Last reviewed:** 2026-08-01
 
 ### L-004 — Shrink or replace multi-name DLL staging
 - **State:** CLOSED (2026-07-17) — product ships one PE soname each: `libicu_jni`/`libjavacore`/`libopenjdk`/`libopenjdkjvm`/`libcrypto`/`libssl`/`libjavacrypto` (+ `icuuc`/`icui18n`); short-name twins removed from packaging

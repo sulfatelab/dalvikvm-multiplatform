@@ -30,6 +30,17 @@
       ],
       "timeout_seconds": 120
     },
+    "ExecProbe": {
+      "expected_markers": [
+        "exec.out=exec.probe.ok",
+        "exec.code=0",
+        "runtime.out=runtime.exec.ok",
+        "runtime.code=0",
+        "ExecProbe.done=ok"
+      ],
+      "forbidden_markers": ["ExecProbe.fail="],
+      "timeout_seconds": 120
+    },
     "GcForced": {
       "expected_markers": [
         "tiny.ok=true",
@@ -72,6 +83,16 @@
         "rename=true",
         "delete=true",
         "IoProbe.done=ok"
+      ],
+      "timeout_seconds": 120
+    },
+    "Ipv6Probe": {
+      "expected_markers": [
+        "Ipv6Probe.start=true",
+        "is6=true",
+        "ipv6.bind.ok=true",
+        "ipv6.getsockname.class=java.net.InetSocketAddress",
+        "Ipv6Probe.done=ok"
       ],
       "timeout_seconds": 120
     },

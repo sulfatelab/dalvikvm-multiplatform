@@ -377,7 +377,10 @@ CoreProbe.done=ok
 NetProbe.done=ok
 ```
 
-Probes: `tests/cases/windows-libcore-smoke/{Bn,Xml}Probe.java` via the historical `build_one.sh` / `run_one.sh` path.
+Probes: `tests/cases/windows-libcore-smoke/{Bn,Xml}Probe.java`. The result above
+came from the now-retired generic Phase-3 builder/runner; the maintained common
+catalog builds both artifacts as compile-only until each native contract is
+promoted.
 `libjavacore.dll` ~335K after L-001 (was ~92K at B0).
 
 ## L-001 AsynchronousCloseMonitor (2026-07-17)
