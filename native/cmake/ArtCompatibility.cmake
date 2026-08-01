@@ -77,8 +77,7 @@ foreach(_t IN LISTS _all_targets)
     if(NOT _ttype STREQUAL "INTERFACE_LIBRARY" AND
        (NOT _t STREQUAL "base" OR ART_TARGET_PLATFORM STREQUAL "windows"))
         target_compile_options(${_t} PRIVATE
-            "$<$<COMPILE_LANGUAGE:C,CXX>:SHELL:-include ${_PRELUDE}>"
-            "$<$<COMPILE_LANGUAGE:C,CXX>:-Wno-strict-primary-template-shadow>")
+            "$<$<COMPILE_LANGUAGE:C,CXX>:SHELL:-include ${_PRELUDE}>")
         # Project-owned compat shim headers (//compat). Provides android-base/
         # stringify.h, which android-16.0.0_r4 art's macros.h now includes but
         # the archive-pinned 2023 libbase does not ship. Lowest priority (after

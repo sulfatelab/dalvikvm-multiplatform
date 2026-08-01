@@ -53,7 +53,7 @@ items are closed.
 ### Latest verification baseline (2026-08-01)
 
 - [x] `PYTHONPATH=tools/bp2cmake python3 -m pytest tools/bp2cmake/tests tests/host -q`:
-  176 passed, including generated PE-header, Linux/Windows test-catalog,
+  177 passed, including generated PE-header, Linux/Windows test-catalog,
   shell-free runtime/managed-artifact gates, parallel-frontend, JDK validation,
   deterministic JAR, Windows-path/DSO-name, reviewer ownership, W-010
   nonzero/fault/debugger/fatal-dump orchestration, W-013 source-policy,
@@ -102,7 +102,7 @@ items are closed.
   `native/cmake/ArtTests.cmake`; `native/CMakeLists.txt` remains the sole CMake
   entry point. Linux, Windows-cross, and native Windows Server 2025
   reconfiguration produced no compile/link work, immediate repeats were Ninja
-  no-ops, all 176 host regressions passed, and both cross and native 58-file
+  no-ops, all 177 host regressions passed, and both cross and native 58-file
   CET contracts passed. Linux/cross used 32 jobs and native Windows used 16.
 - [x] Build-manifest schema 2 records the full serialized target profile;
   SHA-256 identities for the generated graph, graph manifest, and generated
@@ -130,6 +130,14 @@ items are closed.
   1,806-edge Windows graph at `--parallel 16` on the 16 GiB VM. All three
   products passed and immediately repeated as Ninja no-ops, and both cross and
   native CET contracts remained 58/58.
+- [x] The target-wide `-Wno-strict-primary-template-shadow` suppression was
+  removed while the reviewed exceptions for `file_utils.cc`, `utils.cc`, and
+  libdexfile sources remain source-scoped. A host regression rejects the
+  blanket generator expression without rejecting those explicit exceptions.
+  The resulting policy rebuilt all 1,771 Linux edges and 1,806 Windows-cross
+  edges at `--parallel 32`, then rebuilt all 1,806 native Windows edges at
+  `--parallel 16`. All three products passed and immediately repeated as Ninja
+  no-ops; cross and native CET contracts remained 58/58.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to
@@ -1100,9 +1108,10 @@ an unreviewed module-set or kind change.
 - [x] Remove the redundant product-wide `-Wno-error` demotion after proving
   Layer 2 already strips upstream `-Werror` and complete Linux, Windows-cross,
   and native Windows rebuilds pass without it.
-- [ ] Retire the remaining global toolchain-drift shadow demotion and forced
-  preludes as vendored dependencies are updated or required compatibility
-  becomes explicit per module/source.
+- [x] Remove the target-wide strict-primary-template-shadow demotion while
+  retaining only the reviewed source-specific exceptions.
+- [ ] Retire forced toolchain-drift preludes as vendored dependencies are
+  updated or required compatibility becomes explicit per module/source.
 - [ ] Prove a second identical build is a true Ninja no-op and that Blueprint,
   overlay, and codegen input changes rebuild only affected outputs.
 

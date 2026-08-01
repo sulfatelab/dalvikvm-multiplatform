@@ -25,3 +25,15 @@ def test_product_graph_has_no_tree_wide_warning_as_error_demotion():
     ).read_text(encoding="utf-8")
 
     assert "-Wno-error" not in cmake
+
+
+def test_template_shadow_demotion_is_source_scoped():
+    cmake = (
+        REPO_ROOT / "native" / "cmake" / "ArtCompatibility.cmake"
+    ).read_text(encoding="utf-8")
+
+    assert "-Wno-strict-primary-template-shadow" in cmake
+    assert (
+        '"$<$<COMPILE_LANGUAGE:C,CXX>:-Wno-strict-primary-template-shadow>"'
+        not in cmake
+    )
