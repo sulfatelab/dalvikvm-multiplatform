@@ -29,6 +29,8 @@ items are closed.
   is not presently practical.
 - Record machine paths only in ignored local configuration. Tracker evidence
   uses canonical target IDs and stable repository-relative names.
+- Use `--parallel 32` for Linux and Windows-cross work on agent01, and
+  `--parallel 16` for native builds on the 16 GiB Windows Server 2025 VM.
 - Update the dated evidence below after any change to the frontend, generated
   graph, target bundle contract, test registry, staging rules, or topology.
 
@@ -53,7 +55,7 @@ items are closed.
 ### Latest verification baseline (2026-08-01)
 
 - [x] `PYTHONPATH=tools/bp2cmake python3 -m pytest tools/bp2cmake/tests tests/host -q`:
-  177 passed, including generated PE-header, Linux/Windows test-catalog,
+  179 passed, including generated PE-header, Linux/Windows test-catalog,
   shell-free runtime/managed-artifact gates, parallel-frontend, JDK validation,
   deterministic JAR, Windows-path/DSO-name, reviewer ownership, W-010
   nonzero/fault/debugger/fatal-dump orchestration, W-013 source-policy,
@@ -138,6 +140,16 @@ items are closed.
   edges at `--parallel 32`, then rebuilt all 1,806 native Windows edges at
   `--parallel 16`. All three products passed and immediately repeated as Ninja
   no-ops; cross and native CET contracts remained 58/58.
+- [x] The target-wide Linux `mdvm_toolchain_prelude.h` force-include was
+  removed. Linux toolchain drift is now confined to the reviewed libbase,
+  libdexfile, runtime, and `openjdkjvmti` source/module shims; direct standard
+  headers for `file_utils.cc`, `time_utils.cc`, `runtime_common.cc`, and the
+  generated `invoke_type` source are guarded explicitly as Linux-only policy.
+  Windows retains its required graph-wide platform prelude. The full Linux
+  product rebuilt successfully and immediately repeated as a Ninja no-op at
+  `--parallel 32`; the final Windows-cross policy passed and repeated as a
+  Ninja no-op at `--parallel 32`. Host regressions prove the platform boundary
+  and all 179 host tests pass.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
   JDK 21 emits a 91-declaration catalog. Seven declarations apply to

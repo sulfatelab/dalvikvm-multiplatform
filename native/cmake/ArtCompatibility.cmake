@@ -35,6 +35,17 @@ set_source_files_properties(
     ${MDVM_NATIVE_SRC_ROOT_DIR}/art/libartbase/base/file_utils.cc
     ${MDVM_NATIVE_SRC_ROOT_DIR}/art/libartbase/base/utils.cc
     PROPERTIES COMPILE_OPTIONS "-Wno-strict-primary-template-shadow")
+if(ART_TARGET_PLATFORM STREQUAL "linux")
+    set_property(SOURCE
+        ${MDVM_NATIVE_SRC_ROOT_DIR}/art/libartbase/base/file_utils.cc
+        APPEND PROPERTY COMPILE_OPTIONS "-include;filesystem")
+    set_property(SOURCE
+        ${MDVM_NATIVE_SRC_ROOT_DIR}/art/libartbase/base/time_utils.cc
+        APPEND PROPERTY COMPILE_OPTIONS "-include;limits")
+    set_property(SOURCE
+        ${MDVM_NATIVE_SRC_ROOT_DIR}/art/runtime/runtime_common.cc
+        APPEND PROPERTY COMPILE_OPTIONS "-include;signal.h")
+endif()
 if(ART_TARGET_PLATFORM STREQUAL "windows")
     # Windows headers define CALLBACK as __stdcall, but ICU's ucnvisci.cpp
     # uses CALLBACK as a private goto label. Keep the forced compatibility
@@ -46,12 +57,15 @@ endif()
 file(GLOB _DEX_CC ${MDVM_NATIVE_SRC_ROOT_DIR}/art/libdexfile/dex/*.cc)
 set_source_files_properties(${_DEX_CC}
     PROPERTIES COMPILE_OPTIONS "-include;${_PRELUDE};-Wno-strict-primary-template-shadow")
+if(ART_TARGET_PLATFORM STREQUAL "linux")
+    set_property(SOURCE
+        ${MDVM_GENSRC_DIR}/art/libdexfile/dex/invoke_type.h.operator_out.cc
+        APPEND PROPERTY COMPILE_OPTIONS "-include;stdint.h")
+endif()
 
-# Per-target prelude + shadow demotion, applied to EVERY generated target,
-# scoped to C/CXX so .S assembly sources are not fed C headers via -include.
-# (The bumped art+libcore at android-16.0.0_r4 need <optional>/<cstring>/<ctime>/... that
-# clang-21 libc++ no longer pulls in transitively; the prelude provides them.)
-# strlcpy: glibc 2.38 declares it -> ART's host shim self-skips on ANDROID_HOST_MUSL.
+# Common generated-target policy. Windows receives its platform compatibility
+# prelude for C/CXX only, so .S assembly sources are not fed C headers via
+# -include. Linux toolchain drift stays source- or module-scoped above.
 get_property(_all_targets DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" PROPERTY BUILDSYSTEM_TARGETS)
 foreach(_t IN LISTS _all_targets)
     get_target_property(_ttype ${_t} TYPE)
@@ -76,8 +90,14 @@ foreach(_t IN LISTS _all_targets)
     # deliberate `#undef _GNU_SOURCE`, breaking its POSIX strerror_r selection.
     if(NOT _ttype STREQUAL "INTERFACE_LIBRARY" AND
        (NOT _t STREQUAL "base" OR ART_TARGET_PLATFORM STREQUAL "windows"))
-        target_compile_options(${_t} PRIVATE
-            "$<$<COMPILE_LANGUAGE:C,CXX>:SHELL:-include ${_PRELUDE}>")
+        # The Windows compatibility header supplies target-platform APIs and
+        # declarations to every generated PE target. Linux toolchain drift is
+        # kept in the explicit source/module shims above instead of forcing a
+        # standard-header prelude into the complete product graph.
+        if(ART_TARGET_PLATFORM STREQUAL "windows")
+            target_compile_options(${_t} PRIVATE
+                "$<$<COMPILE_LANGUAGE:C,CXX>:SHELL:-include ${_PRELUDE}>")
+        endif()
         # Project-owned compat shim headers (//compat). Provides android-base/
         # stringify.h, which android-16.0.0_r4 art's macros.h now includes but
         # the archive-pinned 2023 libbase does not ship. Lowest priority (after
