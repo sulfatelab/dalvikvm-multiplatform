@@ -16,8 +16,9 @@ against the vendor default (`"0"`).
 
 **Original fix:** Recompile
 `vendor/libcore/ojluni/src/main/java/sun/misc/Version.java` together with the
-Windows `AndroidHardcodedSystemProperties.java` overlay. The legacy
-`tools/bootjar/build_windows_x64.sh` still demonstrates that fallback, while
-`tools/bootjar/build.sh` implements the current shared-source policy.
+Windows `AndroidHardcodedSystemProperties.java` overlay. The Windows-only
+fallback and shell builders are retired. The current `art-managed-boot-jar`
+CMake/Ninja edge selects the shared ojluni source directly and delegates the
+portable javac/D8 work to `tests/support/managed_artifact.py`.
 
 **Verify:** Hello / PropsProbe print `java.version=1.8.0`.

@@ -41,6 +41,11 @@ set(_art_boot_source_roots
     "${_art_test_repo_root}/vendor/java-external/conscrypt/repackaged/common/src/main/java"
     "${_art_test_repo_root}/vendor/java-external/conscrypt/repackaged/platform/src/main/java"
     "${_art_test_repo_root}/vendor/java-external/conscrypt/publicapi/src/main/java"
+    "${_art_test_repo_root}/vendor/java-external/okhttp/repackaged/android/src/main/java"
+    "${_art_test_repo_root}/vendor/java-external/okhttp/repackaged/okhttp/src/main/java"
+    "${_art_test_repo_root}/vendor/java-external/okhttp/repackaged/okhttp-urlconnection/src/main/java"
+    "${_art_test_repo_root}/vendor/java-external/okhttp/repackaged/okhttp-android-support/src/main/java"
+    "${_art_test_repo_root}/vendor/java-external/okhttp/repackaged/okio/okio/src/main/java"
     "${_art_test_repo_root}/compat/java-stubs")
 set(_art_boot_sources)
 foreach(_art_boot_source_root IN LISTS _art_boot_source_roots)
@@ -217,6 +222,11 @@ add_custom_command(
         --source-tree "${_art_test_repo_root}/vendor/java-external/conscrypt/repackaged/common/src/main/java"
         --source-tree "${_art_test_repo_root}/vendor/java-external/conscrypt/repackaged/platform/src/main/java"
         --source-tree "${_art_test_repo_root}/vendor/java-external/conscrypt/publicapi/src/main/java"
+        --source-tree "${_art_test_repo_root}/vendor/java-external/okhttp/repackaged/android/src/main/java"
+        --source-tree "${_art_test_repo_root}/vendor/java-external/okhttp/repackaged/okhttp/src/main/java"
+        --source-tree "${_art_test_repo_root}/vendor/java-external/okhttp/repackaged/okhttp-urlconnection/src/main/java"
+        --source-tree "${_art_test_repo_root}/vendor/java-external/okhttp/repackaged/okhttp-android-support/src/main/java"
+        --source-tree "${_art_test_repo_root}/vendor/java-external/okhttp/repackaged/okio/okio/src/main/java"
         --source-tree "${_art_test_repo_root}/compat/java-stubs"
         --source "${_art_conscrypt_constants_java}"
         --resource

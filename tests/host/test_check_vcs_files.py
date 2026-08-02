@@ -83,6 +83,19 @@ def test_retired_checked_linux_product_graph_does_not_reappear():
     assert not [path for path in retired if path.exists() or path.is_symlink()]
 
 
+def test_unified_boot_jar_owns_okhttp_and_retired_shells_do_not_reappear():
+    assert not (REPO_ROOT / "tools" / "bootjar").exists()
+    cmake = (REPO_ROOT / "tests" / "CMakeLists.txt").read_text(encoding="utf-8")
+    roots = (
+        "okhttp/repackaged/android/src/main/java",
+        "okhttp/repackaged/okhttp/src/main/java",
+        "okhttp/repackaged/okhttp-urlconnection/src/main/java",
+        "okhttp/repackaged/okhttp-android-support/src/main/java",
+        "okhttp/repackaged/okio/okio/src/main/java",
+    )
+    assert all(cmake.count(root) == 2 for root in roots)
+
+
 def test_native_cmake_modules_are_common_includes_not_entry_points():
     entry = (REPO_ROOT / "native/CMakeLists.txt").read_text(encoding="utf-8")
     assert "set(CMAKE_BUILD_RPATH_USE_ORIGIN ON)" in entry

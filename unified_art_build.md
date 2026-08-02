@@ -45,7 +45,7 @@ items are closed.
 | Windows runtime DSO exports | COMPLETE for current x86-64 closure | `art.dll` combines explicit source annotations with a reviewed 187-entry runtime-consumer DEF, never CMake auto-export; Debug has 2,065 exports and RelWithDebInfo has 2,066 | keep the consumer allowlist and actual PE boundary under regression review |
 | Full DSO topology parity | PARTIAL / mechanically controlled | the fresh graphs have five reviewed module-kind differences and one reviewed generated/platform module mapping; every current difference is checked against a versioned contract | convert reviewed exceptions where practical; reject every unreviewed graph change |
 | Unified phase catalog | PARTIAL | eight virtual stages declare 32 native probes, 47 managed JARs, and 13 command gates; Windows has 90 applicable items (69 target-runnable, seven host-review, and 14 compile-only in the product variant), while Linux x86-64 has eleven applicable items (eight runnable and three compile-only artifacts) | migrate the remaining behavioral runners, portable JNI expansion, and result checks |
-| Boot/runtime packaging | PARTIAL | deterministic target-local boot/probe JARs now include Conscrypt and security properties; staging starts empty, selects only current Ninja link outputs, validates the complete DSO import closure, records approved system dependencies, and packages pinned ICU data, 121 CA roots, writable keychain directories, and the native DSO closure | add boot images and their runtime acceptance |
+| Boot/runtime packaging | PARTIAL | deterministic target-local boot/probe JARs now include Conscrypt, OkHttp/Okio, and security properties; staging starts empty, selects only current Ninja link outputs, validates the complete DSO import closure, records approved system dependencies, and packages pinned ICU data, 121 CA roots, writable keychain directories, and the native DSO closure | add boot images and their runtime acceptance |
 | POSIX-free Windows build host | COMPLETE for the accepted native baseline; PARTIAL end to end | Server 2025 uses configured official JDK 21, Python, CMake, Ninja, and plain Clang drivers; all 76 accepted native tests, provider/security packaging, and product/test no-op gates pass without POSIX tooling | migrate every retained behavioral gate and complete boot-image/runtime packaging |
 | Legacy build removal | PARTIAL | active product ownership was demoted, project-owned symlink overlays were removed, and the superseded Linux miniature, Windows Phase-0/Phase-1, and libcore/ICU product graphs were deleted; the checked-in Linux graph and split overlay datasets remain | remove or demote every alternative product path after gate migration |
 | CI/acceptance automation | IMPLEMENTED / activation pending | checked-in shell-free Python driver and GitHub workflow define host, fresh Linux, Windows-cross, and native Windows cells; machine paths enter only through an external CI TOML binding | register/provision the two self-hosted runner labels and obtain accepted workflow runs |
@@ -55,8 +55,9 @@ items are closed.
 ### Latest verification baseline (2026-08-02)
 
 - [x] `PYTHONPATH=tools/bp2cmake python3 -m pytest tools/bp2cmake/tests tests/host -q`:
-  218 passed, including the fresh Linux/Windows topology contract, ART
-  embedding, UDP socket-option, scoped Locale,
+  219 passed, including the unified boot-JAR ownership gate, fresh
+  Linux/Windows topology contract, ART embedding, UDP socket-option, scoped
+  Locale,
   Zip, NativeBN BigInteger, OS-constants, SAX/Expat XML, and direct `Os`
   socket-address plus async-close gates,
   generated PE-header,
@@ -75,10 +76,18 @@ items are closed.
   DSOs. Linux names them `libcrypto.so`, `libssl.so`, and
   `libjavacrypto.so`; Windows keeps the same logical `lib` names as
   `libcrypto.dll`, `libssl.dll`, and `libjavacrypto.dll`. Conscrypt Java plus
-  generated `NativeConstants.java` and the tracked
+  generated `NativeConstants.java`, the five repackaged OkHttp/Okio source
+  roots, and the tracked
   `java/security/security.properties` resource join the ordinary boot-JAR
-  edge. The boot manifest records 3,072 sources, 6,178 classes, one
-  `classes.dex`, relative source/resource identities, and no machine path.
+  edge. The boot manifest records 3,199 sources, 6,407 classes, two DEX
+  entries, relative source/resource identities, and no machine path.
+- [x] The retired boot-JAR shell chain and its shared `/tmp/bootbuild` state are
+  removed after the common CMake/Ninja edge absorbed the final OkHttp/Okio
+  content. Fresh Linux, Linux-hosted Windows-cross, and native Windows Server
+  2025 builds produce identical boot-JAR SHA-256
+  `45e19b8cc4a4161d7b7b011e268bf262069d9a7b70c9cfd9c37e324feb249eae`;
+  all contain `HttpHandler`, `HttpsHandler`, and Okio `Buffer`. Immediate
+  32/32/16-job repeats are true Ninja no-ops.
 - [x] The first native Windows provider build found a host/target separation
   defect that cross builds could not expose: the Conscrypt constants helper
   invoked host `clang++.exe` without Windows SDK include/link arguments and
@@ -101,7 +110,7 @@ items are closed.
   acronym endings such as `_CA`, `_RSA`, and `_DATA` while continuing to
   reject known or unclassified encoding-selecting suffix-`A` calls; its native
   and cross gates pass. The focused host regressions and full maintained host
-  suite pass at 218/218.
+  suite pass at 219/219.
 - [x] The native generated-graph freshness check reports 36 modules from the
   same 260 Blueprint files. Running the complete product build after runtime
   testing built the remaining 350 edges, including `art-compiler.dll`,
@@ -1794,7 +1803,7 @@ differences.
   until the self-hosted `linux/x64/art-build` and `windows/x64/art-build`
   runners are registered and the checked-in workflow has accepted all cells.
   The actual `host-checks` entry point currently passes the VCS audit, fresh
-  topology audit, and 218/218 tests; official actionlint 1.7.12 accepts the
+  topology audit, and 219/219 tests; official actionlint 1.7.12 accepts the
   workflow and its custom runner-label configuration.
 
 #### P2: remove migration scaffolding and harden orchestration
@@ -2526,17 +2535,13 @@ sensitive: Windows and Linux produce different `Runtime` offsets. The Windows
 entry point, however, reconstructs target include paths and definitions
 manually.
 
-The boot-jar scripts are not yet suitable as a common product stage:
-
-- `tools/bootjar/build_windows_x64.sh` ignores `build.sh` failure with
-  `|| true`;
-- `build.sh` and `dex.sh` do not use fail-fast shell behavior; and
-- every invocation reuses `/tmp/bootbuild`, allowing cross-build contamination.
-
-Boot-jar work does not need to be folded into `bp2cmake`, but it should be an
-ordinary, fail-fast stage owned by the same frontend and build directory.
-Likewise, the Bash-only Linux generator and boot-jar entry points cannot be the
-portable frontend for a native Windows build host.
+The former boot-jar shell chain reused `/tmp/bootbuild`, ignored selected
+failures, and could contaminate another target. Its product role is now an
+ordinary fail-fast CMake/Ninja edge using `tests/support/managed_artifact.py`
+and the configured JDK 21 plus pinned D8. It owns a target-local source list,
+classes, two-DEX boot JAR, logs, and relative manifest under the configured
+binary directory. The common edge includes libcore/ICU, Conscrypt, and all five
+reviewed OkHttp/Okio source roots; the obsolete shell entry points are removed.
 
 ### Symlink audit
 
@@ -3481,23 +3486,21 @@ command generation.
 
 ## Boot jar and staging
 
-Replace the product role of the current shell chain with a host Python stage,
-for example `tools/build_bootjar.py`, invoked by `build_art.py` and represented
-as a Ninja custom target when part of the full product.
+The product role of the old shell chain is implemented by
+`tests/support/managed_artifact.py`, invoked through a Ninja custom target in
+the full product. It:
 
-It should:
-
-- use the target binary directory's `bootjar`, never shared `/tmp/bootbuild`
+- uses the target binary directory's `tests/managed`, never shared temporary
   state;
-- treat javac and D8 failures as fatal;
-- launch `javac`/`java` with argument vectors and response files, never a shell
+- treats javac and D8 failures as fatal;
+- launches `javac`/`java` with argument vectors and response files, never a shell
   command string;
-- use Python timeouts, file/archive APIs, and byte inspection instead of Unix
+- uses Python timeouts, file/archive APIs, and byte inspection instead of Unix
   utilities;
-- declare the selected JDK, R8/D8, Java sources, aconfig inputs, and target
+- declares the selected JDK, R8/D8, Java sources, aconfig inputs, and target
   profile in a manifest;
-- write atomically; and
-- stage into the target binary directory's `stage` without also copying to
+- writes atomically; and
+- stages into the target binary directory's `stage` without also copying to
   unrelated Linux and Windows directories.
 
 The boot jar can remain logically shared when its bytecode is deliberately

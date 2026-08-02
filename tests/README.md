@@ -110,8 +110,11 @@ The managed-source slice moved all 48 retained Java probe sources into logical
 cases. The catalog now declares 47 managed JAR artifacts (the paired
 CriticalNative sources intentionally share one JAR), built by
 `support/managed_artifact.py` through CMake/Ninja. The same helper builds the
-target-local boot JAR first, so Android/libcore APIs and ART annotations are
-resolved from the same AOSP boot classes on Linux and Windows build hosts.
+target-local boot JAR first, including the shared libcore/ICU classes,
+Conscrypt provider, OkHttp/Okio URL handlers, generated aconfig and Conscrypt
+sources, and security properties. Android/libcore APIs and ART annotations are
+therefore resolved from the same AOSP boot classes on Linux and Windows build
+hosts.
 Three W-004 managed declarations are `target-runnable` on the exact current
 Linux and Windows x86-64 identities. `support/runtime_gate.py` runs imageless
 Hello and allocation/collection stress; the case-local `math-critical/run.py`
@@ -485,8 +488,10 @@ The frontend validates regular `java` and `javac` executables and the exact
 major version, then passes `ART_JDK_ROOT` to CMake. Do not add that absolute
 path to CMake source, a tracked preset, a result, or a manifest.
 
-`art-managed-boot-jar` compiles the selected libcore/ICU source closure,
-generates aconfig Java sources, and invokes the pinned `vendor/r8/r8.jar`.
+`art-managed-boot-jar` compiles the selected libcore/ICU, Conscrypt, and
+OkHttp/Okio source closure, generates aconfig and Conscrypt Java sources,
+embeds `java/security/security.properties`, and invokes the pinned
+`vendor/r8/r8.jar`.
 Each applicable managed probe depends on those boot classes. The aggregate
 `art-managed-tests` target builds only applicable managed artifacts:
 

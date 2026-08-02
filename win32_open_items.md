@@ -567,7 +567,7 @@ Summary (details below; do not delete history):
 - **Kind:** packaging / compatibility
 - **Area:** java.net URL / HTTPS
 - **Root cause:** Android resolves `http/https` via `com.android.okhttp.HttpHandler`/`HttpsHandler`, not packaged in multipath boot.jar. After packaging, pure-ASCII OkHttp/TLS paths still required ICU4J StringPrep/Normalizer tables not present in boot.jar.
-- **Fix:** `tools/bootjar/build_okhttp_windows_x64.sh` merges repackaged OkHttp+okio into boot; `IDN.toASCII` and `java.text.Normalizer` short-circuit pure-ASCII; product ICU data preferred over stub in `libicu_jni` Register.cpp; cacerts already staged.
+- **Fix:** the common `art-managed-boot-jar` CMake/Ninja edge merges the five reviewed repackaged OkHttp/Okio source roots into the target-local boot JAR through `tests/support/managed_artifact.py`; `IDN.toASCII` and `java.text.Normalizer` short-circuit pure-ASCII; product ICU data is preferred over the stub in `libicu_jni` Register.cpp; cacerts are staged by `tools/build_art.py`.
 - **Exit criteria:** HttpsProbe handler resolution + `https://example.com/` status 200 under wine.
 - **Opened/Closed:** 2026-07-17
 
@@ -807,8 +807,7 @@ Summary (details below; do not delete history):
 - **Gap:** ~~Residual MinDalvikVM-Archive path assumptions in product scripts~~ **pure-vendor**.
 - **Fix / evidence:**
   - The maintained product CMake resolves `${MDVM_NATIVE_SRC_ROOT_DIR}` to **`vendor/`**; the former Windows phase/libcore alternative graphs were retired.
-  - `tools/bootjar/build.sh` no longer auto-discovers sibling `MinDalvikVM-Archive(_)` for ICU/annotation stubs; requires nested `vendor/icu` + in-tree `compat/java-stubs` (expanded minimal android.annotation / android.compat.annotation set).
-  - `MDVM_ARCHIVE` remains an optional non-default escape hatch only.
+  - The common `art-managed-boot-jar` edge reads only nested `vendor/icu`, the project `compat/java-stubs`, and its other declared repository source roots; no sibling archive or `MDVM_ARCHIVE` escape hatch remains.
   - Docs/tests scrubbed: `README.md`, `native/{CMakeLists,generate}.sh`, `tools/bp2cmake` CODEGEN/codegen + unit tests point at multipath `vendor/`.
   - Historical absolute archive paths remain only inside documents under `docs/history/`; they are not product inputs.
 - **Opened:** 2026-07-17
@@ -827,11 +826,11 @@ Summary (details below; do not delete history):
 - **Injection:** `vendor/art/runtime/runtime.cc` after `PropertiesList` release (PE=`windows`, ELF=`unix` if unset)
 - **Detection ladder:** `VMRuntime.properties()` → System props / `os.name` → default `unix` (`VMRuntime.isWindowsOs`)
 - **Separators:** removed from `AndroidHardcodedSystemProperties`; set in `System.initUnchangeableSystemProperties`
-- **Boot:** `tools/bootjar/build_windows_x64.sh` stages shared jar (no WinNT-only overlay); jar embeds both FS + `isWindowsOs`
+- **Boot:** the common `art-managed-boot-jar` target emits identical target-local bytes on Linux and Windows build hosts (no WinNT-only overlay); the JAR embeds both filesystems plus `isWindowsOs`
 - **Exit criteria (met):** single shared boot pipeline produces one jar used for Linux imageless Hello (L-005 PASS on shared multipath bytes)
 - **Non-goals for this close:** dual-host acceptance that Windows always selects `WinNTFileSystem` and Unix always selects `UnixFileSystem` under product PE/wine — those are ordinary product smoke, not D-001 scope
 - **Follow-up (orthogonal):** wine/host Hello on same bytes; PE `art.dll` inject path when PE product is rebuilt
-- **Code anchors:** `dalvik/system/VMRuntime.java` (`isWindowsOs*`), `DefaultFileSystem.java`, `System.java`, `runtime.cc`, `build_windows_x64.sh`
+- **Code anchors:** `dalvik/system/VMRuntime.java` (`isWindowsOs*`), `DefaultFileSystem.java`, `System.java`, `runtime.cc`, `tests/CMakeLists.txt`, `tests/support/managed_artifact.py`
 - **Opened:** 2026-07-17
 - **Closed:** 2026-07-17
 

@@ -4,8 +4,9 @@ Project-owned, **SOURCE/CLASS-retention** stubs for framework annotations that
 android-16 libcore references but that live outside `vendor/libcore` (AOSP
 frameworks / android-annotation-stub).
 
-Used by `tools/bootjar/build.sh` so boot.jar builds are **pure-vendor**: they
-do not require a sibling `MinDalvikVM-Archive` tree.
+Used by the `art-managed-boot-jar` CMake/Ninja edge through
+`tests/support/managed_artifact.py`, so boot.jar builds are **pure-vendor**:
+they do not require a sibling `MinDalvikVM-Archive` tree.
 
 | Package | Role |
 |---------|------|
