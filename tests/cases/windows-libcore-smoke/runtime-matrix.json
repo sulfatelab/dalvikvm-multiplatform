@@ -12,6 +12,12 @@
       "mode": "absolute-path",
       "timeout_seconds": 120
     },
+    "BnProbe": {
+      "expected_markers": [
+        "BnProbe.done=ok sum=1111111110111111111011111111100 mod=9000000000900000000090 pow=483792039048379203904837920390"
+      ],
+      "timeout_seconds": 60
+    },
     "CoreProbe": {
       "expected_markers": [
         "arraycopy=true",

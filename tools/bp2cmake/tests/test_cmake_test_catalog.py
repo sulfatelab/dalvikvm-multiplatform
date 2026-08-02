@@ -148,9 +148,18 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     assert zip_probe["execution"] == "target-runnable"
     assert zip_probe["timeout_seconds"] == 600
     assert zip_probe["ctest_registered"] is False
+    bn = next(
+        probe for probe in catalog["probes"] if probe["name"] == "managed_bnprobe"
+    )
+    assert bn["platforms"] == ["windows"]
+    assert bn["target_arches"] == ["x86_64"]
+    assert bn["target_abis"] == ["msvc"]
+    assert bn["execution"] == "target-runnable"
+    assert bn["timeout_seconds"] == 600
+    assert bn["ctest_registered"] is False
     assert sum(
         probe["execution"] == "target-runnable" for probe in catalog["probes"]
-    ) == 65
+    ) == 66
     assert {
         probe["name"]: probe["timeout_seconds"]
         for probe in catalog["probes"]
@@ -165,6 +174,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "managed_jvmti_force": 1200,
         "managed_pathprobe": 600,
         "managed_abspathprobe": 600,
+        "managed_bnprobe": 600,
         "managed_coreprobe": 600,
         "managed_dnsprobe": 600,
         "managed_gcforced": 600,

@@ -24,6 +24,7 @@ def test_windows_libcore_runtime_matrix_matches_promoted_cases():
     matrix = runner.load_matrix()
     assert set(matrix) == {
         "AbsPathProbe",
+        "BnProbe",
         "CoreProbe",
         "DnsProbe",
         "ExecProbe",
@@ -61,6 +62,10 @@ def test_windows_libcore_runtime_matrix_matches_promoted_cases():
         "zipfile.entries=3",
         "zip.cleanup=true",
         "ZipProbe.done=ok",
+    ]
+    assert matrix["BnProbe"]["expected_markers"] == [
+        "BnProbe.done=ok sum=1111111110111111111011111111100 "
+        "mod=9000000000900000000090 pow=483792039048379203904837920390"
     ]
     assert matrix["PathProbe"]["mode"] == "path"
     assert matrix["AbsPathProbe"]["mode"] == "absolute-path"
