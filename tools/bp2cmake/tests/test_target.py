@@ -164,6 +164,10 @@ def test_supported_and_experimental_targets_are_admitted():
     linux = resolve_target("linux-x86_64-gnu")
     linux.require_generation()
     assert "boot_image" in linux.capabilities
+    linux_aarch64 = resolve_target("linux-aarch64-gnu")
+    linux_aarch64.require_generation()
+    assert linux_aarch64.support_status == "experimental"
+    assert "boot_image" not in linux_aarch64.capabilities
     assert "boot_image" not in resolve_target("windows-x86_64-msvc").capabilities
     resolve_target("windows-x86_64-msvc").require_generation()
 

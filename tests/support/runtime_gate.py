@@ -145,9 +145,35 @@ def _elf_needed(path: Path) -> list[str]:
     return needed
 
 
-def run_show_version(dalvikvm: Path, expected: str) -> None:
+def _runner_prefix(
+    runner: Path | None, runner_args: list[str] | None
+) -> tuple[list[str], dict[str, object]]:
+    arguments = list(runner_args or [])
+    if runner is None:
+        if arguments:
+            raise GateError("target runner arguments require a target runner")
+        return [], {"mode": "native"}
+    runner = _regular_file(str(runner))
+    if any(not isinstance(argument, str) or "\0" in argument for argument in arguments):
+        raise GateError("target runner arguments must be NUL-free strings")
+    return [str(runner), *arguments], {
+        "mode": "external",
+        "name": runner.name,
+        "sha256": _sha256(runner),
+        "argument_count": len(arguments),
+    }
+
+
+def run_show_version(
+    dalvikvm: Path,
+    expected: str,
+    *,
+    runner: Path | None = None,
+    runner_args: list[str] | None = None,
+) -> None:
+    prefix, _runner = _runner_prefix(runner, runner_args)
     result = subprocess.run(
-        [str(dalvikvm), "-showversion"],
+        [*prefix, str(dalvikvm), "-showversion"],
         cwd=dalvikvm.parent,
         shell=False,
         check=False,
@@ -482,6 +508,8 @@ def run_managed(
     cacerts_dir: Path | None = None,
     security_properties: Path | None = None,
     boot_image_dir: Path | None = None,
+    runner: Path | None = None,
+    runner_args: list[str] | None = None,
 ) -> None:
     dalvikvm = _regular_file(str(dalvikvm))
     boot_jar = _regular_file(str(boot_jar))
@@ -550,7 +578,9 @@ def run_managed(
         boot_image_option = runtime_root / "boot-image" / "boot.art"
         boot_classpath_location = "/system/framework/boot.jar"
 
+    prefix, runner_record = _runner_prefix(runner, runner_args)
     command = [
+        *prefix,
         str(dalvikvm),
         f"-Xbootclasspath:{boot_jar}",
         f"-Xbootclasspath-locations:{boot_classpath_location}",
@@ -621,6 +651,7 @@ def run_managed(
         "boot_jar": {"name": boot_jar.name, "sha256": _sha256(boot_jar)},
         "app_jar": {"name": app_jar.name, "sha256": _sha256(app_jar)},
         "boot_image": boot_image_record,
+        "runner": runner_record,
         "runtime_assets": runtime_assets,
     }
     (work_root / "result.json").write_text(
@@ -757,6 +788,7 @@ def _parser() -> argparse.ArgumentParser:
     show = subparsers.add_parser("show-version")
     show.add_argument("--dalvikvm", type=_regular_file, required=True)
     show.add_argument("--expect", required=True)
+    _add_runner_arguments(show)
     topology = subparsers.add_parser("dso-topology")
     topology.add_argument("--runtime", type=_regular_file, required=True)
     topology.add_argument("--compiler", type=_regular_file, required=True)
@@ -800,14 +832,25 @@ def _parser() -> argparse.ArgumentParser:
     managed.add_argument("--expected-exit", type=int, default=0)
     managed.add_argument("--require-nonzero", action="store_true")
     managed.add_argument("--timeout", type=int, default=180)
+    _add_runner_arguments(managed)
     return parser
+
+
+def _add_runner_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--runner", type=_regular_file)
+    parser.add_argument("--runner-arg", action="append", default=[])
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
         if args.command == "show-version":
-            run_show_version(args.dalvikvm, args.expect)
+            run_show_version(
+                args.dalvikvm,
+                args.expect,
+                runner=args.runner,
+                runner_args=args.runner_arg,
+            )
         elif args.command == "dso-topology":
             run_dso_topology(
                 args.runtime,
@@ -860,6 +903,8 @@ def main(argv: list[str] | None = None) -> int:
                 cacerts_dir=args.cacerts_dir,
                 security_properties=args.security_properties,
                 boot_image_dir=args.boot_image_dir,
+                runner=args.runner,
+                runner_args=args.runner_arg,
             )
         return 0
     except (GateError, OSError, UnicodeError) as exc:

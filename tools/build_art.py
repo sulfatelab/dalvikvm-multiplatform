@@ -90,6 +90,13 @@ _WINDOWS_SYSTEM_NEEDED = frozenset(
         "ws2_32.dll",
     }
 )
+_QEMU_USER_RUNNER_NAMES = {
+    "x86": "qemu-i386",
+    "x86_64": "qemu-x86_64",
+    "armv7": "qemu-arm",
+    "aarch64": "qemu-aarch64",
+    "riscv64": "qemu-riscv64",
+}
 _FORBIDDEN_COMMAND_TOOLS = frozenset(
     {
         "ash",
@@ -407,6 +414,9 @@ def _configure(
         tools["llvm-rc"] = _resolve_llvm_resource_compiler(local)
         tools["llvm-pdbutil"] = _resolve_llvm_pdbutil(local)
     bindings = _target_bindings(target, local)
+    target_runner = _resolve_target_runner(target, local, bindings)
+    if target_runner is not None:
+        tools["target-runner"] = target_runner
     generated = binary_dir / "generated"
     fingerprint = _build_fingerprint(
         target,
@@ -441,10 +451,15 @@ def _configure(
         f"-DART_LLVM_READOBJ={tools['llvm-readobj']}",
         f"-DART_LLVM_OBJDUMP={tools['llvm-objdump']}",
         "-DART_ENABLE_TARGET_RUNTIME_TESTS="
-        + ("ON" if _host_can_run_target(target) else "OFF"),
+        + ("ON" if _host_can_run_target(target) or target_runner else "OFF"),
         f"-DART_BOOT_IMAGE_PARALLEL={_boot_image_parallel_limit()}",
         f"-DART_TEST_VARIANT={variant}",
     ]
+    if target_runner is not None:
+        command.extend((
+            f"-DART_TARGET_RUNNER={target_runner}",
+            f"-DART_TARGET_RUNNER_ROOT={bindings['sysroot']}",
+        ))
     if target.target_platform == "windows":
         bundle = bindings.get("bundle_root")
         if bundle is None:
@@ -1906,6 +1921,43 @@ def _target_bindings(target: TargetProfile, local: LocalBuildConfig) -> dict[str
     for path in bindings.values():
         validate_managed_path(path)
     return bindings
+
+
+def _resolve_target_runner(
+    target: TargetProfile,
+    local: LocalBuildConfig,
+    bindings: dict[str, Path],
+) -> Path | None:
+    """Resolve an explicit QEMU user-mode runner for a cross-Linux target."""
+    runner = local.target_runners.get(target.target_id)
+    if runner is None:
+        return None
+    runner = validate_managed_path(runner)
+    if not runner.is_file():
+        raise BuildFrontendError(f"target runner must be a regular file: {runner}")
+    if _host_can_run_target(target):
+        raise BuildFrontendError(
+            f"target runner is unnecessary for native target {target.target_id}"
+        )
+    if platform.system().lower() != "linux":
+        raise BuildFrontendError(
+            "external target runners currently require a Linux build host"
+        )
+    if target.target_platform != "linux" or target.target_abi != "gnu":
+        raise BuildFrontendError(
+            "external target runners currently support only cross-Linux GNU targets"
+        )
+    expected_name = _QEMU_USER_RUNNER_NAMES.get(target.target_arch)
+    if expected_name is None or runner.name != expected_name:
+        expected = expected_name or "no registered runner"
+        raise BuildFrontendError(
+            f"target runner for {target.target_id} must be {expected}; got {runner.name}"
+        )
+    if "sysroot" not in bindings:
+        raise BuildFrontendError(
+            f"target runner for {target.target_id} requires its target sysroot binding"
+        )
+    return runner
 
 
 def _configured_or_discovered(

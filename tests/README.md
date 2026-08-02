@@ -477,9 +477,10 @@ status exactly like a compiled probe. Shared runner logic belongs under
 
 Use command gates only for artifact, loader, topology, package, or reviewer
 contracts that genuinely need no target source. A C/C++ behavior probe remains
-an executable or shared library. Every native command gate must use
+an executable or shared library. Every target-executed command gate must use
 `target-runnable` and is registered only when the frontend proves that the
-build host can execute the exact target identity.
+build host can execute the exact target identity natively or through its
+explicit local target runner.
 
 ### Managed JARs
 
@@ -502,6 +503,29 @@ jdk_root = "<absolute regular path to an official JDK 21>"
 The frontend validates regular `java` and `javac` executables and the exact
 major version, then passes `ART_JDK_ROOT` to CMake. Do not add that absolute
 path to CMake source, a tracked preset, a result, or a manifest.
+
+A Linux build host may run a cross-Linux runtime through one explicitly bound
+QEMU user-mode executable:
+
+```toml
+[targets."linux-aarch64-gnu"]
+sysroot = "<absolute regular target sysroot>"
+runtime_root = "<absolute regular GNU runtime root>"
+
+[target_runners]
+"linux-aarch64-gnu" = "<absolute regular qemu-aarch64 executable>"
+```
+
+This runner contract is intentionally unavailable on Windows build hosts; its
+Linux user-mode and sysroot semantics have not been validated there. The runner
+path is a machine fact, not target policy: it stays in the ignored
+TOML, is validated against the exact target architecture, and is fingerprinted
+as a host tool. The frontend supplies its already-declared sysroot as QEMU's
+loader root and enables CTest runtime registration only for that configured
+target. The Python runtime gate prefixes the target command as an argument
+list with `shell=False`; it records only the runner basename, digest, mode, and
+argument count. A configured emulator never broadens a probe selector by
+itself.
 
 `art-managed-boot-jar` compiles the selected libcore/ICU, Conscrypt, and
 OkHttp/Okio source closure, generates aconfig and Conscrypt Java sources,
@@ -554,8 +578,13 @@ a regular file, optionally verifies and copies the declared boot image, supplies
 only declared DSO directories, rejects link/reparse components, and fails closed
 on a non-zero exit, timeout, missing marker, or forbidden marker. Its
 `result.json` records target identity, class, exit status, marker status, JAR
-hashes, and normalized image identity without recording machine paths or
-environment dumps.
+hashes, normalized image identity, and normalized native/external runner
+identity without recording machine paths or environment dumps.
+
+The current `linux-aarch64-gnu` experimental slice deliberately registers only
+`art_runtime_show_version` and imageless interpreter `Hello`. It does not infer
+GC, JNI, JIT, boot-image, compiler-DSO load, or another stage's applicability
+from successful emulation.
 
 Linkage describes the binary boundary under test. It is independent of whether
 the test is compile-only, run locally, transferred to another machine, or
@@ -575,7 +604,8 @@ reviewed from returned evidence.
 
 `target-runnable`
 
-: The configured build host can natively execute the exact target and CTest may
+: The configured build host can execute the exact target either natively or
+  through its explicit, fingerprinted local target runner, and CTest may
   register the command.
 
   A declaration-level `TIMEOUT` is a positive whole number of seconds. CMake

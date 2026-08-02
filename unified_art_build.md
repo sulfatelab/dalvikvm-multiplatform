@@ -44,12 +44,12 @@ items are closed.
 | Compiler DSO parity | COMPLETE for `art-compiler` | both targets emit a shared compiler DSO; Windows imports `art.dll` and exports `art_compiler_jit_create` | retain exact ABI and no-cycle gates |
 | Windows runtime DSO exports | COMPLETE for current x86-64 closure | `art.dll` combines explicit source annotations with a reviewed 187-entry runtime-consumer DEF, never CMake auto-export; Debug has 2,065 exports and RelWithDebInfo has 2,066 | keep the consumer allowlist and actual PE boundary under regression review |
 | Full DSO topology parity | PARTIAL / mechanically controlled | the fresh graphs have five reviewed module-kind differences and one reviewed generated/platform module mapping; every current difference is checked against a versioned contract | convert reviewed exceptions where practical; reject every unreviewed graph change |
-| Unified phase catalog | COMPLETE for current declaration truthfulness; PARTIAL target expansion | eight virtual stages declare 32 native probes, 47 managed JARs, and 14 command gates; Windows has 90 applicable items (69 target-runnable, eight host-review, and 13 compile-only in the product variant), while Linux x86-64 has 12 applicable items (nine runnable and three compile-only artifacts); CMake rejects runnable shared libraries and compile-only command gates | expand exact-target applicability only with matching behavioral acceptance |
-| Boot/runtime packaging | COMPLETE for Linux x86-64; capability-gated elsewhere | deterministic target-local boot/probe JARs include Conscrypt, OkHttp/Okio, and security properties; native Linux builds generate, runtime-test, and stage a relocatable ART/OAT/VDEX boot image; unsupported and cross-host cases are explicit; staging also validates the complete DSO closure and packages pinned ICU data, 121 CA roots, and writable keychain directories | retain the image/runtime-package gates while adding target capabilities independently |
+| Unified phase catalog | COMPLETE for current declaration truthfulness; PARTIAL target expansion | eight virtual stages declare 32 native probes, 47 managed JARs, and 14 command gates; Windows has 90 applicable items (69 target-runnable, eight host-review, and 13 compile-only in the product variant), Linux x86-64 has 12 applicable items (nine runnable and three compile-only artifacts), and experimental Linux AArch64 has exactly two runner-backed W-004 smokes; CMake rejects runnable shared libraries and compile-only command gates | expand exact-target applicability only with matching behavioral acceptance |
+| Boot/runtime packaging | COMPLETE for Linux x86-64; experimental imageless Linux AArch64; capability-gated elsewhere | deterministic target-local boot/probe JARs include Conscrypt, OkHttp/Okio, and security properties; native Linux x86-64 generates, runtime-tests, and stages a relocatable ART/OAT/VDEX boot image; AArch64 passes exact imageless Hello under its explicit runner and records boot image unsupported; staging also validates the complete DSO closure and packages pinned ICU data, 121 CA roots, and writable keychain directories | retain the image/runtime-package gates while adding target capabilities independently |
 | POSIX-free Windows build host | COMPLETE for the accepted native baseline; PARTIAL end to end | Server 2025 uses configured official JDK 21, Python, CMake, Ninja, and plain Clang drivers; all 76 accepted native tests, provider/security packaging, and product/test no-op gates pass without POSIX tooling | migrate every retained behavioral gate; keep Windows AOT/OAT capability work separate |
 | Legacy build removal | COMPLETE | the checked-in Linux snapshot/generator, split overlays, Linux miniature graphs, Windows Phase-0/Phase-1 and libcore/ICU graphs, product package scripts, and final POSIX-only boot-image entry points are retired; historical records remain documentation only | prevent alternative product paths from returning |
 | CI/acceptance automation | IMPLEMENTED / activation pending | checked-in shell-free Python driver and GitHub workflow define host, fresh Linux, Windows-cross, and native Windows cells; machine paths enter only through an external CI TOML binding | register/provision the two self-hosted runner labels and obtain accepted workflow runs |
-| Additional architectures | BLOCKED by capability gates | all 17 canonical identities are registered; mterp source/output layout is explicit profile data for x86, x86-64, ARMv7, AArch64/ARM64EC, and RISC-V64, but only `linux-x86_64-gnu` and experimental `windows-x86_64-msvc` generate | remove the remaining x86-64 graph/toolchain assumptions, then admit each profile only after its architecture and runtime gates pass |
+| Additional architectures | PARTIAL / Linux AArch64 experimental | all 17 canonical identities are registered; `linux-aarch64-gnu` now generates, builds, stages, and passes exact show-version plus imageless-Hello gates through an explicit QEMU user-mode binding; x86, ARMv7, RISC-V64, Windows AArch64/ARM64EC, and WASI remain capability-gated | broaden AArch64 only with matching evidence, then admit each remaining profile independently |
 | Windows AOT/OAT | BLOCKED / separate track | compiler DSO parity does not provide Windows OAT production or loading | satisfy `win32_aot_oat.md`; do not imply capability from `art-compiler.dll` |
 
 ### Latest verification baseline (2026-08-02)
@@ -102,7 +102,8 @@ items are closed.
   `asm_defines.h`, mterp assembly, and 37/36-module CMake graphs are
   byte-identical to the preceding fully built products.
 - [x] `PYTHONPATH=tools/bp2cmake python3 -m pytest tools/bp2cmake/tests tests/host -q`:
-  235 passed, including the Linux AArch64 pre-admission graph,
+  244 passed, including the Linux AArch64 experimental graph and explicit
+  target-runner contract,
   planned-Linux overlay selection,
   exact profile-owned LLVM file identities,
   profile-driven staged artifact inspection,
@@ -2051,7 +2052,27 @@ differences.
   SONAMEs. Boot-image execution remains unsupported on this x86-64 cross host,
   so this closes build/package portability without claiming native AArch64
   runtime acceptance or target admission.
-- [ ] Validate and admit Linux AArch64, x86, ARMv7, and RISC-V64 separately.
+- [x] Admit Linux AArch64 as an experimental target with a deliberately narrow
+  runtime slice. Ignored local TOML now accepts an exact target-runner
+  executable separately from SDK/sysroot bindings; the frontend validates
+  `qemu-aarch64` against `linux-aarch64-gnu`, fingerprints it as a host tool,
+  supplies the already-declared target sysroot as QEMU's loader root, and
+  enables CTest without a shell. The shared runtime gate records only the
+  runner basename, digest, mode, and argument count. A fresh 38-module product
+  configured under the 2,110-compile-command, 2,196-Ninja-command, and
+  32-product-link audits, completed 2,197 edges at 32 jobs, and exposed exactly
+  two applicable W-004 gates. Official Ubuntu `qemu-user` 10.2.1 ran
+  show-version (`ART version 2.1.0 arm64`) and imageless interpreter Hello;
+  both passed in 1.91 seconds. Staging produced 158 regular files including
+  its manifest, validated 32 AArch64 executable/DSO identities, retained only
+  `$ORIGIN` runtime paths, and found no links. The immediate full repeat was a
+  true Ninja no-op, and all 244 host/bp2cmake tests pass. GC, JNI, JIT,
+  boot-image, compiler-DSO loading, and native-AArch64-host claims remain
+  excluded. Common runtime diagnostics still contain stale `Windows x64`
+  wording from bring-up instrumentation; this is cleanup debt, not an
+  architecture selector or acceptance marker.
+- [ ] Promote Linux AArch64 beyond the experimental two-smoke slice, and
+  validate/admit Linux x86, ARMv7, and RISC-V64 separately.
 - [x] Migrate the ARM64EC identity from transitional
   `windows-aarch64-arm64ec/cpu_arch=aarch64` to
   distinct `windows-arm64ec-gnu` and `windows-arm64ec-msvc` profiles with
@@ -2569,7 +2590,7 @@ combination is implicitly available:
 | `linux-x86-gnu` | `x86` | GNU | ELF32 | `planned` |
 | `linux-x86_64-gnu` | `x86_64` | GNU | ELF64 | `supported` after ID migration |
 | `linux-armv7-gnu` | `armv7` | GNU EABI hard-float fixed by this profile | ELF32 | `planned` |
-| `linux-aarch64-gnu` | `aarch64` | GNU | ELF64 | `planned` |
+| `linux-aarch64-gnu` | `aarch64` | GNU | ELF64 | `experimental`; complete product plus exact show-version/imageless-Hello runner gates |
 | `linux-riscv64-gnu` | `riscv64` | GNU | ELF64 | `planned` |
 | `windows-x86-gnu` | `x86` | GNU | PE32 | valid `planned` placeholder; no near/far implementation commitment; also blocked by the no-MinGW contract |
 | `windows-x86-msvc` | `x86` | MSVC | PE32 | valid `planned` placeholder; no near/far implementation commitment |
@@ -2963,7 +2984,9 @@ The local schema may bind only machine facts such as:
 - CMake, Ninja, LLVM, and JDK roots;
 - an optional output root;
 - SDK/sysroot or target-bundle roots keyed by canonical target ID; and
-- optional target dependency package roots.
+- optional target dependency package roots; and
+- an exact QEMU user-mode executable keyed by a cross-Linux target ID under
+  `[target_runners]`.
 
 It cannot define target identity fields, module policy, compiler/linker flags,
 source lists, or topology exceptions. Those remain reviewed repository data.
@@ -2982,6 +3005,20 @@ is canonicalized, checked for symlink/reparse components, and recorded in the
 ignored build manifest. The frontend then passes required roots to CMake as
 cache bindings. It never copies their absolute values into
 `target_profile.cmake` or `art_graph.cmake`.
+
+An explicit target runner is a build-host tool, not a target capability or a
+test selector. The frontend validates its regular, non-link path and exact
+architecture-specific QEMU basename, requires the target's existing sysroot
+binding, fingerprints the executable, and passes the runner/root only through
+ignored CMake cache state. CTest then invokes the shared Python gate with an
+argument-list prefix and `shell=False`. Result JSON contains no runner or
+sysroot path. Merely configuring a runner cannot make an unselected probe
+applicable.
+
+The accepted contract is restricted to a Linux build host. A Windows host may
+still cross-build Linux, but cannot enable these runtime gates: Windows-hosted
+Linux QEMU user-mode path and loader semantics are not part of the validated
+contract.
 
 `CMakeUserPresets.json` is also ignored to prevent an expert/debug CMake flow
 from committing local paths, but it is not a second supported product
@@ -3833,8 +3870,9 @@ unified product targets instead of alternative ways to build those targets.
   concatenation in CMake or Python.
 - Remove the x86-64 triple, prelude, mterp, BoringSSL assembly, and verification
   assumptions identified in the current-state audit.
-- Validate Linux AArch64, x86, ARMv7, and RISC-V64 independently; source-tree
-  presence alone is not an admission gate.
+- Promote experimental Linux AArch64 and validate Linux x86, ARMv7, and
+  RISC-V64 independently; source-tree presence or one emulator smoke alone is
+  not full support admission.
 - Treat Windows x86, x86-64, ARMv7, AArch64, and ARM64EC as separate
   target-architecture profiles with their own SDK, triple, source/macro
   selection, exports, object inspection, and runtime gates. ARM64EC uses
@@ -3936,6 +3974,8 @@ Audit `compile_commands.json` and `ninja -t commands` for every matrix cell:
 
 - clean `RelWithDebInfo` builds pass for each provisioned matrix cell;
 - native Linux smoke tests pass;
+- cross-Linux runtime smokes may run only through an exact target runner bound
+  in ignored local TOML; each test still needs explicit target applicability;
 - Windows x86-64 and other cross-built artifacts pass smoke tests only under an
   explicit target runner or emulation environment where provisioned; the
   Windows 10 ARM64 build gate does not depend on x86-64 emulation and no runner

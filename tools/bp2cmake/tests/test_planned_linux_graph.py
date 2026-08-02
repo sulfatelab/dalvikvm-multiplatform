@@ -7,7 +7,7 @@ from bp2cmake.overlay import load_overlay_factory
 from bp2cmake.target import resolve_target
 
 
-def test_linux_aarch64_pre_admission_graph_uses_selected_architecture(tmp_path):
+def test_linux_aarch64_experimental_graph_uses_selected_architecture(tmp_path):
     repo = Path(__file__).resolve().parents[3]
     vendor = repo / "vendor"
     target = resolve_target("linux-aarch64-gnu")
@@ -53,7 +53,7 @@ def test_linux_aarch64_pre_admission_graph_uses_selected_architecture(tmp_path):
     args = parser.parse_args(arguments)
     overlay = load_overlay_factory(args.overlay_factory, target)
 
-    assert target.support_status == "planned"
+    assert target.support_status == "experimental"
     assert _generate(args, parser, target, Config.from_target(target), overlay) == 0
 
     manifest = json.loads(

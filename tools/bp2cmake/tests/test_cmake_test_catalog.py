@@ -475,3 +475,72 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "linux-x86_64-gnu",
         "windows-x86_64-msvc",
     ]
+
+
+def test_linux_aarch64_catalog_registers_only_evidenced_runner_smokes(tmp_path):
+    cmake = shutil.which("cmake")
+    if cmake is None:
+        pytest.skip("CMake is unavailable")
+
+    repo = Path(__file__).resolve().parents[3]
+    source = tmp_path / "source"
+    binary = tmp_path / "build"
+    source.mkdir()
+    profile = source / "target_profile.cmake"
+    profile.write_text(
+        resolve_target("linux-aarch64-gnu").to_cmake(), encoding="utf-8"
+    )
+    cmake_lists = f"""
+cmake_minimum_required(VERSION 3.16)
+project(ArtLinuxAarch64TestCatalogFixture C CXX ASM)
+include("{profile.as_posix()}")
+set(ART_ENABLE_TARGET_RUNTIME_TESTS ON)
+set(ART_TARGET_RUNNER "{(tmp_path / 'qemu-aarch64').as_posix()}")
+set(ART_TARGET_RUNNER_ROOT "{(tmp_path / 'sysroot').as_posix()}")
+set(ART_JDK_ROOT "{(tmp_path / 'jdk-21').as_posix()}")
+set(ART_LLVM_READOBJ "{(tmp_path / 'llvm-readobj').as_posix()}")
+set(ART_LLVM_OBJDUMP "{(tmp_path / 'llvm-objdump').as_posix()}")
+add_executable(dalvikvm IMPORTED GLOBAL)
+set_target_properties(dalvikvm PROPERTIES IMPORTED_LOCATION "{tmp_path / 'dalvikvm'}")
+add_executable(dex2oat IMPORTED GLOBAL)
+set_target_properties(dex2oat PROPERTIES IMPORTED_LOCATION "{tmp_path / 'dex2oat'}")
+foreach(_art_runtime_library IN ITEMS icu_jni javacore openjdk)
+  add_library(${{_art_runtime_library}} SHARED IMPORTED GLOBAL)
+endforeach()
+add_library(art SHARED IMPORTED GLOBAL)
+set_target_properties(art PROPERTIES IMPORTED_LOCATION "{tmp_path / 'libart.so'}")
+add_library(art-compiler SHARED IMPORTED GLOBAL)
+set_target_properties(art-compiler PROPERTIES
+    IMPORTED_LOCATION "{tmp_path / 'libart-compiler.so'}")
+enable_testing()
+add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
+"""
+    (source / "CMakeLists.txt").write_text(cmake_lists, encoding="utf-8")
+
+    result = subprocess.run(
+        [cmake, "-S", str(source), "-B", str(binary), "-G", "Ninja"],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    catalog = json.loads(
+        (binary / "art-tests" / "art_test_catalog.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    applicable = [probe for probe in catalog["probes"] if probe["applicable"]]
+    assert [probe["name"] for probe in applicable] == [
+        "managed_imageless_hello",
+        "art_runtime_show_version",
+    ]
+    assert all(probe["execution"] == "target-runnable" for probe in applicable)
+    assert all(probe["ctest_registered"] for probe in applicable)
+    ctest = (binary / "art-tests" / "CTestTestfile.cmake").read_text(
+        encoding="utf-8"
+    )
+    assert "--runner" in ctest
+    assert "qemu-aarch64" in ctest
+    assert "--runner-arg=-L" in ctest
+    assert "ART version 2.1.0 arm64" in ctest

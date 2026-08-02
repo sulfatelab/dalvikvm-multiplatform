@@ -738,8 +738,12 @@ set(_art_windows_x86_64_msvc_selector
     TARGET_IDS windows-x86_64-msvc)
 set(_art_linux_x86_64_gnu_selector
     TARGET_IDS linux-x86_64-gnu)
+set(_art_linux_runtime_smoke_ids_selector
+    TARGET_IDS linux-x86_64-gnu linux-aarch64-gnu)
 set(_art_current_native_ids_selector
     TARGET_IDS linux-x86_64-gnu windows-x86_64-msvc)
+set(_art_imageless_runtime_ids_selector
+    TARGET_IDS linux-x86_64-gnu linux-aarch64-gnu windows-x86_64-msvc)
 foreach(_art_test_llvm_tool ART_LLVM_READOBJ ART_LLVM_OBJDUMP)
     if(NOT ${_art_test_llvm_tool})
         message(FATAL_ERROR
@@ -755,6 +759,17 @@ set(_art_managed_runtime_library_args
 if(ART_TARGET_PLATFORM STREQUAL "windows")
     list(APPEND _art_managed_runtime_library_args
         --library-dir "${ART_TARGET_BUNDLE_ROOT}/lib/libcxx/bin")
+endif()
+set(_art_target_runner_args)
+if(ART_TARGET_RUNNER OR ART_TARGET_RUNNER_ROOT)
+    if(NOT ART_TARGET_RUNNER OR NOT ART_TARGET_RUNNER_ROOT)
+        message(FATAL_ERROR
+            "ART_TARGET_RUNNER and ART_TARGET_RUNNER_ROOT must be set together")
+    endif()
+    list(APPEND _art_target_runner_args
+        --runner "${ART_TARGET_RUNNER}"
+        --runner-arg=-L
+        "--runner-arg=${ART_TARGET_RUNNER_ROOT}")
 endif()
 
 # W-002: managed-entry and attach/OSR transitions.
@@ -1054,7 +1069,7 @@ art_add_target_probe(
         --build "${CMAKE_BINARY_DIR}")
 art_add_target_probe(
     NAME managed_imageless_hello STAGE w004 TYPE MANAGED EXECUTION target-runnable
-    ${_art_current_native_ids_selector}
+    ${_art_imageless_runtime_ids_selector}
     SOURCES "${_art_test_cases_root}/imageless-runtime/Hello.java"
     DEPENDS dalvikvm icu_jni javacore openjdk
     CONTRACTS runtime-load imageless smoke
@@ -1071,6 +1086,7 @@ art_add_target_probe(
         --work-root "${CMAKE_CURRENT_BINARY_DIR}/results/imageless-hello"
         --icu-data "${_art_icu_data}"
         ${_art_managed_runtime_library_args}
+        ${_art_target_runner_args}
         --vm-option=-Xint
         --expect "Hello from dalvikvm!"
         --expect "main end exception=0"
@@ -1101,6 +1117,7 @@ art_add_target_probe(
         --work-root "${CMAKE_CURRENT_BINARY_DIR}/results/boot-image-hello"
         --icu-data "${_art_icu_data}"
         ${_art_managed_runtime_library_args}
+        ${_art_target_runner_args}
         --expect "Hello from dalvikvm!"
         --expect "main end exception=0"
         --forbid AssertionError)
@@ -1123,6 +1140,7 @@ art_add_target_probe(
         --work-root "${CMAKE_CURRENT_BINARY_DIR}/results/gc-stress"
         --icu-data "${_art_icu_data}"
         ${_art_managed_runtime_library_args}
+        ${_art_target_runner_args}
         --vm-option=-Xint
         --expect "gcstress.ok=true"
         --expect "GcStressProbe.done=ok"
@@ -1286,7 +1304,7 @@ art_add_target_probe(
     CONTRACTS libcore socket fd PRODUCT_POLICY)
 art_add_target_probe(
     NAME art_runtime_show_version STAGE w004 TYPE GATE
-    EXECUTION target-runnable ${_art_linux_x86_64_gnu_selector}
+    EXECUTION target-runnable ${_art_linux_runtime_smoke_ids_selector}
     DEPENDS dalvikvm
     CONTRACTS runtime-load smoke
     COMMAND
@@ -1296,7 +1314,8 @@ art_add_target_probe(
         "${_art_test_repo_root}/tests/support/runtime_gate.py"
         show-version
         --dalvikvm "$<TARGET_FILE:dalvikvm>"
-        --expect "ART version 2.1.0 x86_64")
+        ${_art_target_runner_args}
+        --expect "ART version 2.1.0 ${ART_TARGET_AOSP_ARCH}")
 art_add_target_probe(
     NAME art_compiler_dso_topology STAGE w004 TYPE GATE
     EXECUTION target-runnable ${_art_linux_x86_64_gnu_selector}

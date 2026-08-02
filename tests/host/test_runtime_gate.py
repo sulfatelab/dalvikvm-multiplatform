@@ -84,6 +84,40 @@ def test_show_version_requires_exit_zero_and_marker(tmp_path, monkeypatch, capsy
     assert capsys.readouterr().out == "ART version test\n"
 
 
+def test_show_version_uses_explicit_runner_without_shell(
+    tmp_path, monkeypatch, capsys
+):
+    runner = tmp_path / "qemu-aarch64"
+    dalvikvm = tmp_path / "dalvikvm"
+    runner.write_bytes(b"runner")
+    dalvikvm.write_bytes(b"runtime")
+    commands = []
+
+    def run(command, **kwargs):
+        commands.append((command, kwargs))
+        return SimpleNamespace(
+            returncode=0, stdout="ART version 2.1.0 arm64\n", stderr=""
+        )
+
+    monkeypatch.setattr(subprocess, "run", run)
+    runtime_gate.run_show_version(
+        dalvikvm,
+        "ART version 2.1.0 arm64",
+        runner=runner,
+        runner_args=["-L", str(tmp_path / "sysroot")],
+    )
+
+    assert commands[0][0] == [
+        str(runner),
+        "-L",
+        str(tmp_path / "sysroot"),
+        str(dalvikvm),
+        "-showversion",
+    ]
+    assert commands[0][1]["shell"] is False
+    assert capsys.readouterr().out == "ART version 2.1.0 arm64\n"
+
+
 def test_native_gate_repeats_without_shell_and_records_sanitized_result(
     tmp_path, monkeypatch, capsys
 ):
@@ -557,7 +591,70 @@ def test_managed_gate_uses_isolated_runtime_and_records_result(
     assert '"target_id": "linux-x86_64-gnu"' in result
     assert str(tmp_path) not in result
     assert '"count": 1' in result
+    assert '"mode": "native"' in result
     assert "Hello passed" in capsys.readouterr().out
+
+
+def test_managed_gate_prefixes_and_sanitizes_explicit_target_runner(
+    tmp_path, monkeypatch
+):
+    runner = tmp_path / "qemu-aarch64"
+    dalvikvm = tmp_path / "bin" / "dalvikvm"
+    boot = tmp_path / "managed" / "boot.jar"
+    app = tmp_path / "managed" / "hello.jar"
+    icu = tmp_path / "source" / "icudt72l.dat"
+    for path, content in (
+        (runner, b"runner"),
+        (dalvikvm, b"vm"),
+        (boot, b"boot"),
+        (app, b"app"),
+        (icu, b"icu"),
+    ):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+    commands = []
+
+    def run(command, **kwargs):
+        commands.append((command, kwargs))
+        return SimpleNamespace(
+            returncode=0,
+            stdout="Hello from dalvikvm!\nmain end exception=0\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", run)
+    work = tmp_path / "out" / "runner-hello"
+    sysroot = tmp_path / "sysroot"
+    runtime_gate.run_managed(
+        target_id="linux-aarch64-gnu",
+        dalvikvm=dalvikvm,
+        boot_jar=boot,
+        app_jar=app,
+        main_class="Hello",
+        work_root=work,
+        icu_data=icu,
+        library_dirs=[dalvikvm.parent],
+        vm_options=["-Xint"],
+        main_args=[],
+        expected=["Hello from dalvikvm!", "main end exception=0"],
+        forbidden=["AssertionError"],
+        expected_exit=0,
+        timeout=30,
+        runner=runner,
+        runner_args=["-L", str(sysroot)],
+    )
+
+    assert commands[0][0][:4] == [str(runner), "-L", str(sysroot), str(dalvikvm)]
+    assert commands[0][1]["shell"] is False
+    result_text = (work / "result.json").read_text(encoding="utf-8")
+    result = json.loads(result_text)
+    assert result["runner"] == {
+        "argument_count": 2,
+        "mode": "external",
+        "name": "qemu-aarch64",
+        "sha256": runtime_gate._sha256(runner),
+    }
+    assert str(tmp_path) not in result_text
 
 
 def test_managed_gate_stages_and_uses_verified_boot_image(tmp_path, monkeypatch):

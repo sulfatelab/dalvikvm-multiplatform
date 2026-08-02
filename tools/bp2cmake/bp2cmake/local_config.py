@@ -29,6 +29,7 @@ class LocalBuildConfig:
     tools: dict[str, Path] = field(default_factory=dict)
     output_root: Path | None = None
     targets: dict[str, dict[str, Path]] = field(default_factory=dict)
+    target_runners: dict[str, Path] = field(default_factory=dict)
 
     def target_bindings(self, target_id: str) -> dict[str, Path]:
         return dict(self.targets.get(target_id, {}))
@@ -58,6 +59,7 @@ def load_local_config(repo_root: Path) -> LocalBuildConfig:
         tools={**local.tools, **ci.tools},
         output_root=ci.output_root if ci.output_root is not None else local.output_root,
         targets=targets,
+        target_runners={**local.target_runners, **ci.target_runners},
     )
 
 
@@ -78,7 +80,9 @@ def _load_config_file(path: Path, *, required: bool) -> LocalBuildConfig:
         raise LocalConfigError(f"cannot read {path}: {exc}") from exc
     if not isinstance(data, dict):
         raise LocalConfigError(f"{path}: top-level TOML value must be a table")
-    _reject_unknown(data, {"tools", "build", "targets"}, "top level")
+    _reject_unknown(
+        data, {"tools", "build", "targets", "target_runners"}, "top level"
+    )
 
     tools_table = _table(data, "tools")
     _reject_unknown(tools_table, _TOOL_KEYS, "[tools]")
@@ -110,11 +114,30 @@ def _load_config_file(path: Path, *, required: bool) -> LocalBuildConfig:
             for key, value in raw_bindings.items()
         }
 
+    runners_table = _table(data, "target_runners")
+    target_runners: dict[str, Path] = {}
+    for target_id, raw_runner in runners_table.items():
+        try:
+            resolve_target(target_id)
+        except ValueError as exc:
+            raise LocalConfigError(
+                f"{path}: target_runners.{target_id}: {exc}"
+            ) from exc
+        runner = _local_path(
+            raw_runner, path, f"target_runners.{target_id}"
+        )
+        if not runner.is_file():
+            raise LocalConfigError(
+                f"{path}: target_runners.{target_id} must name a regular executable"
+            )
+        target_runners[target_id] = runner
+
     return LocalBuildConfig(
         source_file=path,
         tools=tools,
         output_root=output_root,
         targets=targets,
+        target_runners=target_runners,
     )
 
 

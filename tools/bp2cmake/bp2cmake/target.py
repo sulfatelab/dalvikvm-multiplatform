@@ -245,7 +245,7 @@ _PROFILES = {
     "linux-aarch64-gnu": _profile(
         "linux-aarch64-gnu", "linux", "aarch64", "aarch64", "arm64", "gnu",
         "elf64", 64, "aarch64-unknown-linux-gnu", "Linux",
-        status="planned", reason="architecture-specific graph/codegen is not validated",
+        status="experimental", capabilities=_NATIVE_CAPABILITIES,
     ),
     "linux-riscv64-gnu": _profile(
         "linux-riscv64-gnu", "linux", "riscv64", "riscv64", "riscv64", "gnu",

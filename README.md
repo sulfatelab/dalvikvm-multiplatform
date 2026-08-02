@@ -156,9 +156,14 @@ python tools/build_art.py stage --target-id linux-x86_64-gnu
 Use `windows-x86_64-msvc` with the same commands after binding its target bundle
 in the ignored `.art-build.local.toml`. Configure, build, and stage run the
 same generated-command audit automatically; `audit` exposes it as a focused
-gate. Linux x86-64 currently has eight runnable catalog gates and three
-compile-only artifacts. Retained historical shell scripts are not product
-build entry points and are not required on a native Windows host.
+gate. Linux x86-64 currently has nine runnable catalog gates and three
+compile-only artifacts. Experimental `linux-aarch64-gnu` uses the same
+frontend after binding its sysroot/runtime roots and an exact `qemu-aarch64`
+executable under `[target_runners]` in the ignored TOML. Its current W-004
+scope is intentionally only imageless Hello plus show-version; an emulator
+binding does not broaden any other test selector. Retained historical shell
+scripts are not product build entry points and are not required on a native
+Windows host.
 
 ## Continuous integration
 

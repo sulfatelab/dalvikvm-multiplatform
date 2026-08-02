@@ -628,6 +628,97 @@ def test_gnu_runtime_binding_uses_clang_external_toolchain(tmp_path):
     ]
 
 
+def test_cross_linux_configure_enables_explicit_qemu_runner(tmp_path, monkeypatch):
+    binary_dir = tmp_path / "out" / "linux-aarch64-gnu" / "RelWithDebInfo"
+    sysroot = tmp_path / "sysroot"
+    runtime = tmp_path / "gnu-runtime"
+    sysroot.mkdir()
+    runtime.mkdir()
+    runner = tmp_path / "qemu-aarch64"
+    runner.write_bytes(b"runner")
+    tools = {
+        name: tmp_path / name
+        for name in ("cmake", "ninja", "clang", "clang++")
+    }
+    for path in tools.values():
+        path.write_bytes(b"")
+    local = LocalBuildConfig(
+        tools={"cmake": tools["cmake"], "ninja": tools["ninja"]},
+        targets={
+            "linux-aarch64-gnu": {
+                "sysroot": sysroot,
+                "runtime_root": runtime,
+            }
+        },
+        target_runners={"linux-aarch64-gnu": runner},
+    )
+    monkeypatch.setattr(
+        build_art,
+        "_resolve_tools",
+        lambda _local, *, need_compiler: dict(tools),
+    )
+    readobj = tmp_path / "llvm-readobj"
+    objdump = tmp_path / "llvm-objdump"
+    readobj.write_bytes(b"")
+    objdump.write_bytes(b"")
+    monkeypatch.setattr(
+        build_art,
+        "_resolve_llvm_inspection_tools",
+        lambda _local: {"llvm-readobj": readobj, "llvm-objdump": objdump},
+    )
+    jdk = tmp_path / "jdk-21"
+    (jdk / "bin").mkdir(parents=True)
+    monkeypatch.setattr(build_art, "_resolve_jdk", lambda _local: jdk)
+    monkeypatch.setattr(
+        build_art,
+        "_build_fingerprint",
+        lambda *_args: {"schema_version": 2},
+    )
+    monkeypatch.setattr(build_art, "_audit_generated_commands", lambda *_args: {})
+    commands = []
+    monkeypatch.setattr(
+        build_art, "_run_checked", lambda command: commands.append(command)
+    )
+
+    build_art._configure(
+        build_art.resolve_target("linux-aarch64-gnu"),
+        "RelWithDebInfo",
+        binary_dir,
+        local,
+    )
+
+    assert "-DART_ENABLE_TARGET_RUNTIME_TESTS=ON" in commands[0]
+    assert f"-DART_TARGET_RUNNER={runner}" in commands[0]
+    assert f"-DART_TARGET_RUNNER_ROOT={sysroot}" in commands[0]
+    assert "-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY" in commands[0]
+
+
+def test_cross_linux_runner_requires_exact_qemu_name_and_sysroot(tmp_path):
+    target = build_art.resolve_target("linux-aarch64-gnu")
+    wrong = tmp_path / "emulator"
+    wrong.write_bytes(b"runner")
+    local = LocalBuildConfig(target_runners={target.target_id: wrong})
+    with pytest.raises(build_art.BuildFrontendError, match="qemu-aarch64"):
+        build_art._resolve_target_runner(target, local, {"sysroot": tmp_path})
+
+    runner = tmp_path / "qemu-aarch64"
+    runner.write_bytes(b"runner")
+    local = LocalBuildConfig(target_runners={target.target_id: runner})
+    with pytest.raises(build_art.BuildFrontendError, match="sysroot"):
+        build_art._resolve_target_runner(target, local, {})
+
+
+def test_cross_linux_runner_requires_linux_build_host(tmp_path, monkeypatch):
+    target = build_art.resolve_target("linux-aarch64-gnu")
+    runner = tmp_path / "qemu-aarch64"
+    runner.write_bytes(b"runner")
+    local = LocalBuildConfig(target_runners={target.target_id: runner})
+    monkeypatch.setattr(build_art.platform, "system", lambda: "Windows")
+
+    with pytest.raises(build_art.BuildFrontendError, match="Linux build host"):
+        build_art._resolve_target_runner(target, local, {"sysroot": tmp_path})
+
+
 def test_test_variant_has_distinct_output_and_cannot_be_staged(tmp_path):
     target = build_art.resolve_target("windows-x86_64-msvc")
     binary = build_art._binary_dir(

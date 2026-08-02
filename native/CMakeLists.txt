@@ -135,6 +135,19 @@ set(ART_TARGET_BUNDLE_ROOT "" CACHE PATH
 set(ART_TARGET_SDK_ROOT "" CACHE PATH "Target SDK root")
 set(ART_TARGET_SYSROOT "" CACHE PATH "Target sysroot")
 set(ART_TARGET_RUNTIME_ROOT "" CACHE PATH "Target runtime root")
+set(ART_TARGET_RUNNER "" CACHE FILEPATH
+    "Explicit QEMU user-mode executable for cross-target runtime gates")
+set(ART_TARGET_RUNNER_ROOT "" CACHE PATH
+    "Target loader root supplied to the explicit runtime runner")
+if((ART_TARGET_RUNNER AND NOT ART_TARGET_RUNNER_ROOT) OR
+   (ART_TARGET_RUNNER_ROOT AND NOT ART_TARGET_RUNNER))
+    message(FATAL_ERROR
+        "ART_TARGET_RUNNER and ART_TARGET_RUNNER_ROOT must be configured together")
+endif()
+if(ART_TARGET_RUNNER AND NOT ART_TARGET_PLATFORM STREQUAL "linux")
+    message(FATAL_ERROR
+        "The current explicit target-runner contract is Linux QEMU user mode")
+endif()
 
 if(ART_TARGET_PLATFORM STREQUAL "windows")
     if(NOT ART_TARGET_BUNDLE_ROOT)
