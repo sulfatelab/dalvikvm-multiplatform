@@ -9,14 +9,15 @@ There is no host-specific shell or Make workflow.
 
 ```text
 python tools/build_art.py configure --target-id linux-x86_64-gnu
+python tools/build_art.py audit --target-id linux-x86_64-gnu
 python tools/build_art.py build --target-id linux-x86_64-gnu --cmake-target dalvikvm
 python tools/build_art.py stage --target-id linux-x86_64-gnu
 # -> ART version 2.1.0 x86_64
 ```
 
-The Linux product currently has no applicable runnable catalog entries, so its
-`test` command fails explicitly instead of treating an empty CTest selection as
-success. Runnable Linux gates remain tracked migration work.
+The Linux x86-64 product currently has eight runnable catalog gates and three
+compile-only artifacts. A selected scope with no runnable CTest entry still
+fails explicitly instead of being treated as success.
 
 The same commands configure `windows-x86_64-msvc` when its target bundle is bound
 in `.art-build.local.toml` under `[targets."windows-x86_64-msvc"]`. The bundle must
@@ -40,8 +41,10 @@ Staging copies the complete top-level DSO closure and the pinned Windows
 
 The default build type is `RelWithDebInfo`. Required host tools are Python 3.11+,
 CMake, Ninja, and the plain Clang/Clang++ GNU-style drivers; LLD is selected by
-the generated target properties. Machine-specific SDK or sysroot roots belong
-in the ignored repository-root `.art-build.local.toml`.
+the generated target properties. Configure, build, and stage audit the complete
+generated command graph; the explicit `audit` command records the same result
+in `command_audit.json`. Machine-specific SDK or sysroot roots belong in the
+ignored repository-root `.art-build.local.toml`.
 
 ## What's hand-written vs generated
 

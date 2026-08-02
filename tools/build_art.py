@@ -90,6 +90,74 @@ _WINDOWS_SYSTEM_NEEDED = frozenset(
         "ws2_32.dll",
     }
 )
+_FORBIDDEN_COMMAND_TOOLS = frozenset(
+    {
+        "ash",
+        "ash.exe",
+        "awk",
+        "awk.exe",
+        "bash",
+        "bash.exe",
+        "clang-cl",
+        "clang-cl.exe",
+        "clang-mingw",
+        "clang-mingw.exe",
+        "cl",
+        "cl.exe",
+        "cp",
+        "cp.exe",
+        "cygwin",
+        "cygwin.exe",
+        "dash",
+        "dash.exe",
+        "find",
+        "find.exe",
+        "g++",
+        "g++.exe",
+        "gcc",
+        "gcc.exe",
+        "gmake",
+        "gmake.exe",
+        "grep",
+        "grep.exe",
+        "ld",
+        "ld.exe",
+        "ld.lld",
+        "ld.lld.exe",
+        "lld-link",
+        "lld-link.exe",
+        "make",
+        "make.exe",
+        "mingw32-make",
+        "mingw32-make.exe",
+        "msbuild",
+        "msbuild.exe",
+        "nmake",
+        "nmake.exe",
+        "powershell",
+        "powershell.exe",
+        "pwsh",
+        "pwsh.exe",
+        "readlink",
+        "readlink.exe",
+        "rm",
+        "rm.exe",
+        "sed",
+        "sed.exe",
+        "sh",
+        "sh.exe",
+        "stat",
+        "stat.exe",
+        "strings",
+        "strings.exe",
+        "timeout",
+        "timeout.exe",
+        "wsl",
+        "wsl.exe",
+        "zsh",
+        "zsh.exe",
+    }
+)
 
 
 def _host_can_run_target(target: TargetProfile) -> bool:
@@ -123,7 +191,15 @@ def _parser() -> argparse.ArgumentParser:
         "init-local-config", help=f"create ignored {LOCAL_CONFIG_NAME} from discovered tools"
     )
 
-    for command in ("generate", "check-generated", "configure", "build", "test", "stage"):
+    for command in (
+        "generate",
+        "check-generated",
+        "configure",
+        "audit",
+        "build",
+        "test",
+        "stage",
+    ):
         sub = subparsers.add_parser(command)
         sub.add_argument("--target-id", required=True)
         sub.add_argument("--build-type", choices=BUILD_TYPES, default=DEFAULT_BUILD_TYPE)
@@ -169,6 +245,8 @@ def main(argv: list[str] | None = None) -> int:
             )
         if args.command == "configure":
             _configure(target, args.build_type, binary_dir, local, args.variant)
+        elif args.command == "audit":
+            _audit_generated_commands(target, binary_dir, local)
         elif args.command == "build":
             _build(target, binary_dir, local, args.cmake_target, args.parallel)
         elif args.command == "test":
@@ -391,6 +469,7 @@ def _configure(
     fingerprint["configure_command"] = command
     _guard_binary_directory(binary_dir, manifest_path, fingerprint)
     _run_checked(command)
+    _audit_generated_commands(target, binary_dir, local)
     _write_json_atomic(manifest_path, fingerprint)
     print(f"configured {target.target_id} in {binary_dir}")
 
@@ -412,6 +491,7 @@ def _build(
             raise BuildFrontendError("--parallel must be positive")
         command.extend(("--parallel", str(parallel)))
     _run_checked(command)
+    _audit_generated_commands(target, binary_dir, local)
     if target.target_platform == "windows" and (
         cmake_target is None or cmake_target in ("all", "art-compiler")
     ):
@@ -574,6 +654,7 @@ def _load_test_catalog(
 def _stage(target: TargetProfile, binary_dir: Path, local: LocalBuildConfig) -> None:
     """Copy product outputs into a regular-file staging tree and record them."""
     _require_configured(binary_dir)
+    _audit_generated_commands(target, binary_dir, local)
     if target.target_platform == "windows":
         _validate_windows_art_compiler(binary_dir, target, local)
 
@@ -708,6 +789,565 @@ def _reject_managed_tree(root: Path) -> None:
     for current, directories, files in os.walk(root, topdown=True, followlinks=False):
         for name in (*directories, *files):
             validate_managed_path(Path(current) / name)
+
+
+def _audit_generated_commands(
+    target: TargetProfile,
+    binary_dir: Path,
+    local: LocalBuildConfig,
+) -> dict[str, object]:
+    """Mechanically enforce the generated Ninja/plain-Clang command contract."""
+    tools = _resolve_tools(local, need_compiler=True)
+    cache = _read_cmake_cache(binary_dir / "CMakeCache.txt")
+    expected_cache = {
+        "CMAKE_GENERATOR": "Ninja",
+        "CMAKE_SYSTEM_NAME": target.cmake_system_name,
+        "CMAKE_C_COMPILER_TARGET": target.target_triple,
+        "CMAKE_CXX_COMPILER_TARGET": target.target_triple,
+        "CMAKE_ASM_COMPILER_TARGET": target.target_triple,
+    }
+    for key, expected in expected_cache.items():
+        if cache.get(key) != expected:
+            raise BuildFrontendError(
+                f"generated-command audit: {key} must be {expected!r}, "
+                f"got {cache.get(key)!r}"
+            )
+    if _tool_basename(cache.get("CMAKE_MAKE_PROGRAM", "")) not in (
+        "ninja",
+        "ninja.exe",
+    ):
+        raise BuildFrontendError(
+            "generated-command audit: CMAKE_MAKE_PROGRAM is not Ninja"
+        )
+    for key, tool_key in (
+        ("CMAKE_C_COMPILER", "clang"),
+        ("CMAKE_CXX_COMPILER", "clang++"),
+    ):
+        if not _same_host_path(cache.get(key, ""), tools[tool_key]):
+            raise BuildFrontendError(
+                f"generated-command audit: {key} differs from configured {tool_key}"
+            )
+
+    forbidden_generator_artifacts = [
+        path.name
+        for path in binary_dir.iterdir()
+        if path.name == "Makefile"
+        or path.suffix.lower() in (".sln", ".vcxproj", ".filters")
+        or path.name.startswith("build-") and path.suffix == ".ninja"
+    ]
+    if forbidden_generator_artifacts:
+        raise BuildFrontendError(
+            "generated-command audit: forbidden generator artifacts: "
+            + ", ".join(sorted(forbidden_generator_artifacts))
+        )
+
+    compile_path = binary_dir / "compile_commands.json"
+    try:
+        compile_records = json.loads(compile_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise BuildFrontendError(
+            f"generated-command audit: cannot read {compile_path}: {exc}"
+        ) from exc
+    if not isinstance(compile_records, list) or not compile_records:
+        raise BuildFrontendError(
+            "generated-command audit: compile_commands.json is empty or malformed"
+        )
+
+    ninja = tools["ninja"]
+    inventory_text = _run_ninja_tool(binary_dir, ninja, "targets", "all")
+    link_outputs = _parse_ninja_link_outputs(inventory_text, target)
+    product_executables = {
+        _product_target_name(name, target)
+        for name, kind, _language in link_outputs
+        if kind == "executable"
+    }
+    cross_target = not _host_can_run_target(target)
+    allowed_search_roots = _command_search_roots(
+        target, binary_dir, local, tools
+    )
+    compiler_counts = {"clang": 0, "clang++": 0}
+    for index, raw_record in enumerate(compile_records):
+        if not isinstance(raw_record, dict):
+            raise BuildFrontendError(
+                f"generated-command audit: compile record {index} is not an object"
+            )
+        command = raw_record.get("command")
+        source = raw_record.get("file")
+        output = raw_record.get("output", "")
+        if not isinstance(command, str) or not isinstance(source, str):
+            raise BuildFrontendError(
+                f"generated-command audit: compile record {index} is malformed"
+            )
+        tokens = _command_tokens(command)
+        if not tokens:
+            raise BuildFrontendError(
+                f"generated-command audit: compile record {index} has no command"
+            )
+        suffix = Path(source).suffix.lower()
+        expected_driver = "clang" if suffix in (".c", ".s") else "clang++"
+        actual_driver = _tool_basename(tokens[0])
+        expected_names = {
+            expected_driver,
+            f"{expected_driver}.exe",
+        }
+        if actual_driver not in expected_names or not _same_host_path(
+            tokens[0], tools[expected_driver]
+        ):
+            raise BuildFrontendError(
+                f"generated-command audit: compile record {index} does not start "
+                f"with configured {expected_driver}"
+            )
+        compiler_counts[expected_driver] += 1
+        if not _command_has_target(tokens, target.target_triple) or "-c" not in tokens:
+            raise BuildFrontendError(
+                f"generated-command audit: compile record {index} omits target or -c"
+            )
+        if target.target_platform == "linux" and "-fPIC" not in tokens:
+            raise BuildFrontendError(
+                f"generated-command audit: Linux compile record {index} omits -fPIC"
+            )
+        normalized_output = str(output).replace("\\", "/")
+        if (
+            target.target_platform == "linux"
+            and any(
+                f"CMakeFiles/{name}.dir/" in normalized_output
+                for name in product_executables
+            )
+            and "-fPIE" not in tokens
+        ):
+            raise BuildFrontendError(
+                f"generated-command audit: product executable compile record {index} "
+                "omits -fPIE"
+            )
+        _audit_command_invocations(command)
+        if not _path_below_any(source, (REPO_ROOT, binary_dir)):
+            raise BuildFrontendError(
+                f"generated-command audit: compile source is outside source/output roots: "
+                f"{source}"
+            )
+        if cross_target:
+            _audit_search_paths(
+                command,
+                allowed_search_roots,
+                binary_dir,
+                context=f"compile record {index}",
+            )
+
+    all_commands_text = _run_ninja_tool(binary_dir, ninja, "commands")
+    all_commands = [line for line in all_commands_text.splitlines() if line.strip()]
+    if not all_commands:
+        raise BuildFrontendError("generated-command audit: Ninja command graph is empty")
+    for index, command in enumerate(all_commands):
+        _audit_command_invocations(command)
+        _audit_shell_operators(command, index)
+
+    link_counts = {"executable": 0, "shared-library": 0}
+    for name, kind, language in link_outputs:
+        target_commands = _run_ninja_tool(binary_dir, ninja, "commands", name)
+        command_lines = [
+            line for line in target_commands.splitlines() if line.strip()
+        ]
+        if not command_lines:
+            raise BuildFrontendError(
+                f"generated-command audit: Ninja emits no command for {name}"
+            )
+        link_command = command_lines[-1]
+        _audit_link_command(
+            link_command,
+            name=name,
+            kind=kind,
+            language=language,
+            target=target,
+            tools=tools,
+        )
+        if cross_target:
+            _audit_search_paths(
+                link_command,
+                allowed_search_roots,
+                binary_dir,
+                context=f"link output {name}",
+                include_absolute_libraries=True,
+            )
+        link_counts[kind] += 1
+
+    if cross_target:
+        _audit_cmake_implicit_search_paths(
+            binary_dir, allowed_search_roots
+        )
+
+    result: dict[str, object] = {
+        "schema_version": 1,
+        "target_id": target.target_id,
+        "generator": "Ninja",
+        "compile_commands": len(compile_records),
+        "ninja_commands": len(all_commands),
+        "compiler_commands": compiler_counts,
+        "product_links": link_counts,
+        "cross_search_isolation": cross_target,
+    }
+    _write_json_atomic(binary_dir / "command_audit.json", result)
+    print(
+        f"audited {len(compile_records)} compile commands, "
+        f"{len(all_commands)} Ninja commands, and {sum(link_counts.values())} "
+        f"product links for {target.target_id}"
+    )
+    return result
+
+
+def _read_cmake_cache(path: Path) -> dict[str, str]:
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError as exc:
+        raise BuildFrontendError(
+            f"generated-command audit: cannot read {path}: {exc}"
+        ) from exc
+    values: dict[str, str] = {}
+    for line in lines:
+        if not line or line.startswith(("#", "//")) or "=" not in line:
+            continue
+        field, value = line.split("=", 1)
+        name, separator, _kind = field.partition(":")
+        if separator:
+            values[name] = value
+    return values
+
+
+def _run_ninja_tool(binary_dir: Path, ninja: Path, *arguments: str) -> str:
+    result = subprocess.run(
+        [str(ninja), "-C", str(binary_dir), "-t", *arguments],
+        cwd=REPO_ROOT,
+        shell=False,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode:
+        raise BuildFrontendError(
+            "generated-command audit: Ninja tool failed for "
+            + " ".join(arguments)
+            + f" (exit {result.returncode})"
+        )
+    return result.stdout
+
+
+def _command_tokens(command: str) -> list[str]:
+    return [
+        quoted if quoted else bare
+        for quoted, bare in re.findall(r'"([^"\r\n]*)"|(\S+)', command)
+    ]
+
+
+def _tool_basename(token: str) -> str:
+    return token.strip('"').replace("\\", "/").rsplit("/", 1)[-1].lower()
+
+
+def _command_has_target(tokens: list[str], target_triple: str) -> bool:
+    if f"--target={target_triple}" in tokens:
+        return True
+    return any(
+        token in ("-target", "--target")
+        and index + 1 < len(tokens)
+        and tokens[index + 1] == target_triple
+        for index, token in enumerate(tokens)
+    )
+
+
+def _same_host_path(left: str | Path, right: str | Path) -> bool:
+    return os.path.normcase(os.path.abspath(str(left))) == os.path.normcase(
+        os.path.abspath(str(right))
+    )
+
+
+def _path_below_any(path: str | Path, roots: tuple[Path, ...]) -> bool:
+    candidate = os.path.normcase(os.path.abspath(str(path)))
+    for root in roots:
+        normalized_root = os.path.normcase(os.path.abspath(str(root)))
+        try:
+            if os.path.commonpath((candidate, normalized_root)) == normalized_root:
+                return True
+        except ValueError:
+            continue
+    return False
+
+
+def _command_search_roots(
+    target: TargetProfile,
+    binary_dir: Path,
+    local: LocalBuildConfig,
+    tools: dict[str, Path],
+) -> tuple[Path, ...]:
+    roots = [REPO_ROOT, binary_dir]
+    roots.extend(_target_bindings(target, local).values())
+    llvm_root = local.tools.get("llvm_root")
+    if llvm_root is not None:
+        roots.append(llvm_root)
+    else:
+        roots.append(tools["clang"].parent.parent)
+    return tuple(dict.fromkeys(path.resolve() for path in roots))
+
+
+def _extract_search_paths(
+    command: str,
+    *,
+    include_absolute_libraries: bool,
+) -> list[str]:
+    tokens = _command_tokens(command)
+    paths: list[str] = []
+    index = 0
+    while index < len(tokens):
+        token = tokens[index]
+        lowered = token.lower()
+        if token in ("-I", "-L", "-isystem", "--sysroot"):
+            if index + 1 < len(tokens):
+                paths.append(tokens[index + 1])
+                index += 2
+                continue
+        elif token.startswith(("-I", "-L")) and len(token) > 2:
+            paths.append(token[2:])
+        elif lowered.startswith("-isystem=") or lowered.startswith("--sysroot="):
+            paths.append(token.split("=", 1)[1])
+        elif lowered.startswith("/libpath:"):
+            paths.append(token.split(":", 1)[1])
+        elif include_absolute_libraries and lowered.endswith(
+            (".a", ".so", ".lib", ".dll.a")
+        ) and re.match(r"^/[a-z][a-z0-9_-]*:", lowered) is None:
+            paths.append(token)
+        index += 1
+    return paths
+
+
+def _audit_search_paths(
+    command: str,
+    allowed_roots: tuple[Path, ...],
+    binary_dir: Path,
+    *,
+    context: str,
+    include_absolute_libraries: bool = False,
+) -> None:
+    for spelling in _extract_search_paths(
+        command,
+        include_absolute_libraries=include_absolute_libraries,
+    ):
+        candidate = Path(spelling)
+        if not candidate.is_absolute():
+            candidate = binary_dir / candidate
+        if not _path_below_any(candidate, allowed_roots):
+            raise BuildFrontendError(
+                f"generated-command audit: undeclared host search path in "
+                f"{context}: {spelling}"
+            )
+
+
+def _audit_cmake_implicit_search_paths(
+    binary_dir: Path,
+    allowed_roots: tuple[Path, ...],
+) -> None:
+    pattern = re.compile(
+        r'^set\(CMAKE_(?:C|CXX)_IMPLICIT_(?:INCLUDE|LINK)_DIRECTORIES "([^"]*)"\)$',
+        re.MULTILINE,
+    )
+    compiler_metadata = sorted(
+        (binary_dir / "CMakeFiles").glob("*/CMake*CCompiler.cmake")
+    ) + sorted((binary_dir / "CMakeFiles").glob("*/CMakeCXXCompiler.cmake"))
+    if not compiler_metadata:
+        raise BuildFrontendError(
+            "generated-command audit: CMake compiler metadata is missing"
+        )
+    for path in compiler_metadata:
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for match in pattern.finditer(text):
+            for spelling in match.group(1).split(";"):
+                if spelling and not _path_below_any(spelling, allowed_roots):
+                    raise BuildFrontendError(
+                        "generated-command audit: undeclared implicit host search "
+                        f"path in {path.name}: {spelling}"
+                    )
+
+
+def _audit_command_invocations(command: str) -> None:
+    for tokens in _command_invocations(command):
+        if not tokens:
+            continue
+        executable = _tool_basename(tokens[0])
+        if executable == "cd":
+            continue
+        if executable in _FORBIDDEN_COMMAND_TOOLS:
+            raise BuildFrontendError(
+                f"generated-command audit: forbidden command tool {executable}"
+            )
+        if executable in ("cmake", "cmake.exe") and len(tokens) > 3:
+            try:
+                env_index = tokens.index("env", 1)
+            except ValueError:
+                continue
+            nested = env_index + 1
+            while nested < len(tokens) and "=" in tokens[nested]:
+                nested += 1
+            if nested < len(tokens):
+                nested_name = _tool_basename(tokens[nested])
+                if nested_name in _FORBIDDEN_COMMAND_TOOLS:
+                    raise BuildFrontendError(
+                        "generated-command audit: forbidden command tool "
+                        f"{nested_name} through cmake -E env"
+                    )
+
+
+def _command_invocations(command: str) -> list[list[str]]:
+    """Tokenize each payload in CMake's platform shell wrappers.
+
+    Native Windows Ninja link rules commonly use
+    ``cmd.exe /C "cd . && clang++.exe ... && cd ."``.  Splitting the command
+    first exposes the compiler payload without mistaking the quoted wrapper
+    body for one executable token.  This also matches the ``: && ... && :``
+    wrapper emitted on POSIX hosts.
+    """
+    invocations: list[list[str]] = []
+    for raw_segment in re.split(r"\s+&&\s+|\s+\|\|\s+", command):
+        segment = raw_segment.strip().lstrip(":").strip().lstrip('"')
+        tokens = _command_tokens(segment)
+        if tokens:
+            invocations.append(tokens)
+    return invocations
+
+
+def _audit_shell_operators(command: str, index: int) -> None:
+    if "$(" in command or "`" in command:
+        raise BuildFrontendError(
+            f"generated-command audit: command {index} contains command substitution"
+        )
+    if "||" in command:
+        raise BuildFrontendError(
+            f"generated-command audit: command {index} contains conditional chaining"
+        )
+    if re.search(r"(?:^|\s)[<>](?:\s|[^=])", command):
+        raise BuildFrontendError(
+            f"generated-command audit: command {index} contains redirection"
+        )
+    if re.search(r"(?:^|\s)\|(?:\s|$)", command):
+        raise BuildFrontendError(
+            f"generated-command audit: command {index} contains a pipe"
+        )
+    if re.search(r"(?:^|\s);(?:\s|$)", command):
+        raise BuildFrontendError(
+            f"generated-command audit: command {index} contains statement chaining"
+        )
+    lowered = command.lower()
+    working_directory_wrapper = command.startswith("cd ") or (
+        "cmd.exe /c \"cd /d " in lowered
+    )
+    if working_directory_wrapper and command.count(" && ") != 1:
+        raise BuildFrontendError(
+            f"generated-command audit: command {index} has multiple project payloads"
+        )
+
+
+def _parse_ninja_link_outputs(
+    output: str,
+    target: TargetProfile,
+) -> list[tuple[str, str, str]]:
+    declared: dict[str, tuple[str, str]] = {}
+    for line in output.splitlines():
+        name, separator, rule = line.rpartition(": ")
+        if not separator or "/" in name or "\\" in name:
+            continue
+        if "SHARED_LIBRARY_LINKER__" in rule:
+            kind = "shared-library"
+        elif "EXECUTABLE_LINKER__" in rule:
+            kind = "executable"
+        else:
+            continue
+        lowered = name.lower()
+        if target.target_platform == "windows":
+            expected = (
+                lowered.endswith(".dll")
+                if kind == "shared-library"
+                else lowered.endswith(".exe")
+            )
+        else:
+            expected = (
+                lowered.endswith(".so")
+                if kind == "shared-library"
+                else "." not in name
+            )
+        if not expected or name in declared:
+            continue
+        if "CXX_" in rule:
+            language = "c++"
+        elif re.search(r"(?:^|_)C_(?:SHARED|EXECUTABLE)", rule):
+            language = "c"
+        else:
+            raise BuildFrontendError(
+                f"generated-command audit: unknown link language for {name}: {rule}"
+            )
+        declared[name] = (kind, language)
+    return [
+        (name, kind, language)
+        for name, (kind, language) in sorted(declared.items())
+    ]
+
+
+def _product_target_name(name: str, target: TargetProfile) -> str:
+    if target.target_platform == "windows":
+        return name.rsplit(".", 1)[0]
+    if name.startswith("lib") and name.endswith(".so"):
+        return name[3:-3]
+    return name.rsplit(".", 1)[0]
+
+
+def _audit_link_command(
+    command: str,
+    *,
+    name: str,
+    kind: str,
+    language: str,
+    target: TargetProfile,
+    tools: dict[str, Path],
+) -> None:
+    invocations = _command_invocations(command)
+    tokens = [token for invocation in invocations for token in invocation]
+    driver = "clang++" if language == "c++" else "clang"
+    driver_tokens = [
+        invocation[0]
+        for invocation in invocations
+        if _tool_basename(invocation[0]) in (driver, f"{driver}.exe")
+    ]
+    if not driver_tokens or not any(
+        _same_host_path(token, tools[driver]) for token in driver_tokens
+    ):
+        raise BuildFrontendError(
+            f"generated-command audit: {name} does not link through configured {driver}"
+        )
+    if not _command_has_target(tokens, target.target_triple):
+        raise BuildFrontendError(
+            f"generated-command audit: {name} link omits target triple"
+        )
+    if "-fuse-ld=lld" not in tokens:
+        raise BuildFrontendError(
+            f"generated-command audit: {name} link omits driver-level LLD selection"
+        )
+    if kind == "shared-library" and "-shared" not in tokens:
+        raise BuildFrontendError(
+            f"generated-command audit: {name} shared-library link omits -shared"
+        )
+    if (
+        kind == "executable"
+        and target.target_platform == "linux"
+        and "-pie" not in tokens
+    ):
+        raise BuildFrontendError(
+            f"generated-command audit: {name} executable link omits -pie"
+        )
+    if target.target_platform == "windows":
+        upper = command.upper()
+        required = ["/DYNAMICBASE", "/NXCOMPAT"]
+        if target.target_arch in ("x86_64", "aarch64", "arm64ec"):
+            required.append("/HIGHENTROPYVA")
+        missing = [flag for flag in required if flag not in upper]
+        if missing:
+            raise BuildFrontendError(
+                f"generated-command audit: {name} omits PE image flags: "
+                + ", ".join(missing)
+            )
 
 
 def _ninja_product_outputs(

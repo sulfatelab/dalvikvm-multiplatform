@@ -14,6 +14,12 @@ import sys
 
 CET_MARKER = "IMAGE_DLL_CHARACTERISTICS_EX_CET_COMPAT"
 LINK_OPTION = "/CETCOMPAT:NO"
+IMAGE_LINK_OPTIONS = (
+    "/CETCOMPAT:NO",
+    "/DYNAMICBASE",
+    "/NXCOMPAT",
+    "/HIGHENTROPYVA",
+)
 
 
 def fail(message: str) -> None:
@@ -48,8 +54,9 @@ def check_source_policy(repo: Path) -> dict[str, int]:
         str(repo / "overlay/art_port_policy.py"),
         resolve_target("windows-x86_64-msvc"),
     )
-    if "LINKER:/CETCOMPAT:NO" not in overlay.global_policy.add_ldflags:
-        fail("Windows x64 generator overlay does not explicitly add /CETCOMPAT:NO")
+    for option in IMAGE_LINK_OPTIONS:
+        if f"LINKER:{option}" not in overlay.global_policy.add_ldflags:
+            fail(f"Windows x64 generator overlay does not explicitly add {option}")
 
     runtime = (repo / "vendor/art/runtime/runtime.cc").read_text(encoding="utf-8")
     check_index = runtime.find("if (!CheckPlatformProcessPolicy())")
@@ -65,16 +72,17 @@ def check_source_policy(repo: Path) -> dict[str, int]:
         fail("Windows test graph does not define the shared /CETCOMPAT:NO policy")
     if not re.search(
         r"target_link_options\(art-test-target-policy INTERFACE\s+"
-        r'-fuse-ld=lld "\$\{_art_no_cet\}"\)',
+        r'-fuse-ld=lld "\$\{_art_no_cet\}" \$\{_art_windows_image_options\}\)',
         test_graph,
     ):
-        fail("Windows test target policy does not propagate /CETCOMPAT:NO")
+        fail("Windows test target policy does not propagate PE image options")
 
     platform_graph = (repo / "native/cmake/ArtPlatform.cmake").read_text(
         encoding="utf-8"
     )
-    if 'target_link_options(sigchain PRIVATE "LINKER:/CETCOMPAT:NO")' not in platform_graph:
-        fail("handwritten Windows sigchain target does not disable CET compatibility")
+    for option in IMAGE_LINK_OPTIONS:
+        if f'"LINKER:{option}"' not in platform_graph:
+            fail(f"handwritten Windows sigchain target omits {option}")
 
     raw_links = []
     for path in (repo / "tools").rglob("*.sh"):
@@ -125,10 +133,13 @@ def check_link_commands(ninja: str, build: Path, targets: list[Path]) -> None:
     missing = []
     for target in targets:
         commands = run(ninja, "-C", str(build), "-t", "commands", str(target))
-        if LINK_OPTION not in commands.upper():
-            missing.append(str(target))
+        absent = [
+            option for option in IMAGE_LINK_OPTIONS if option not in commands.upper()
+        ]
+        if absent:
+            missing.append(f"{target} ({', '.join(absent)})")
     if missing:
-        fail("PE link commands missing explicit /CETCOMPAT:NO: " + ", ".join(missing))
+        fail("PE link commands missing explicit image options: " + ", ".join(missing))
 
 
 def scan_pe(readobj: str, path: Path) -> None:

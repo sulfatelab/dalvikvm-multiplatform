@@ -601,6 +601,10 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
         _CRT_SECURE_NO_WARNINGS NOMINMAX WIN32_LEAN_AND_MEAN NOGDI
         _WIN32_WINNT=0x0A00 NTDDI_VERSION=NTDDI_WIN10_RS4)
     set(_art_no_cet "LINKER:/CETCOMPAT:NO")
+    set(_art_windows_image_options
+        "LINKER:/DYNAMICBASE"
+        "LINKER:/NXCOMPAT"
+        "LINKER:/HIGHENTROPYVA")
 
 # Every probe compiles with the exact target SDK, libc++, runtime, and linker
 # policy used by the product graph. Tests are declared after the product-wide
@@ -628,7 +632,7 @@ foreach(_art_test_bundle_lib_dir
     endif()
 endforeach()
 target_link_options(art-test-target-policy INTERFACE
-    -fuse-ld=lld "${_art_no_cet}")
+    -fuse-ld=lld "${_art_no_cet}" ${_art_windows_image_options})
 target_link_libraries(art-test-target-policy INTERFACE
     art_windows_cxx windows_x64_posix_stubs ws2_32 synchronization)
 

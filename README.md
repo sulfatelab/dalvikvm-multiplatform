@@ -146,16 +146,17 @@ they must not require a sibling MinDalvikVM-Archive tree.
 ```text
 python tools/build_art.py init-local-config
 python tools/build_art.py configure --target-id linux-x86_64-gnu
+python tools/build_art.py audit --target-id linux-x86_64-gnu
 python tools/build_art.py build --target-id linux-x86_64-gnu --cmake-target dalvikvm
 python tools/build_art.py stage --target-id linux-x86_64-gnu
 ```
 
 Use `windows-x86_64-msvc` with the same commands after binding its target bundle
-in the ignored `.art-build.local.toml`. The Linux test catalog does not yet
-contain a runnable gate, so `test` reports an explicit empty-applicability
-failure. Historical shell scripts and phase CMake files remain migration
-evidence and focused probes; they are not product build entry points and are
-not required on a native Windows host.
+in the ignored `.art-build.local.toml`. Configure, build, and stage run the
+same generated-command audit automatically; `audit` exposes it as a focused
+gate. Linux x86-64 currently has eight runnable catalog gates and three
+compile-only artifacts. Retained historical shell scripts are not product
+build entry points and are not required on a native Windows host.
 
 ## Documentation map
 

@@ -250,6 +250,7 @@ def test_checked_subprocess_failure_is_frontend_error(monkeypatch):
 
 def test_stage_copies_only_regular_product_files(tmp_path, monkeypatch):
     binary_dir = _configured_build(tmp_path)
+    monkeypatch.setattr(build_art, "_audit_generated_commands", lambda *_args: {})
     (binary_dir / "dalvikvm").write_bytes(b"vm")
     (binary_dir / "libart.so").write_bytes(b"art")
     (binary_dir / "libbase.so").write_bytes(b"base")
@@ -314,6 +315,11 @@ crypto.dll: phony
         ("dalvikvm.exe", "executable"),
         ("libcrypto.dll", "shared-library"),
     ]
+    assert build_art._parse_ninja_link_outputs(output, target) == [
+        ("art.dll", "shared-library", "c++"),
+        ("dalvikvm.exe", "executable", "c++"),
+        ("libcrypto.dll", "shared-library", "c"),
+    ]
 
 
 def test_object_inspection_parsers_keep_relative_origin_and_needed_libraries():
@@ -331,6 +337,106 @@ DynamicSection [
         "$ORIGIN",
         "$ORIGIN/providers",
     ]
+
+
+def test_generated_command_invocation_audit_rejects_forbidden_tools():
+    build_art._audit_command_invocations(
+        ": && /usr/bin/cmake -E rm -f libx.a && /llvm/bin/llvm-ar qc libx.a && :"
+    )
+    with pytest.raises(build_art.BuildFrontendError, match="forbidden.*rm"):
+        build_art._audit_command_invocations("cd /work && /usr/bin/rm -f output")
+    with pytest.raises(build_art.BuildFrontendError, match="forbidden.*lld-link"):
+        build_art._audit_command_invocations("/llvm/bin/lld-link input.obj")
+
+
+def test_generated_command_operator_audit_allows_only_one_project_payload():
+    build_art._audit_shell_operators(
+        "cd /work && /usr/bin/python3 generator.py --output generated.cc",
+        7,
+    )
+    with pytest.raises(build_art.BuildFrontendError, match="multiple project payloads"):
+        build_art._audit_shell_operators(
+            "cd /work && cmake -E make_directory out && python generator.py",
+            8,
+        )
+    with pytest.raises(build_art.BuildFrontendError, match="redirection"):
+        build_art._audit_shell_operators("python generator.py > generated.cc", 9)
+
+
+def test_generated_command_search_path_audit_rejects_host_leak(tmp_path):
+    binary_dir = tmp_path / "out"
+    bundle = tmp_path / "bundle"
+    binary_dir.mkdir()
+    bundle.mkdir()
+    build_art._audit_search_paths(
+        f"clang -I{bundle / 'include'} -L{bundle / 'lib'} -c source.cc",
+        (binary_dir, bundle),
+        binary_dir,
+        context="allowed",
+    )
+    with pytest.raises(build_art.BuildFrontendError, match="host search path"):
+        build_art._audit_search_paths(
+            "clang -I/usr/include -c source.cc",
+            (binary_dir, bundle),
+            binary_dir,
+            context="leak",
+        )
+    assert "/implib:probe.lib" not in build_art._extract_search_paths(
+        "clang -shared -Xlinker /implib:probe.lib",
+        include_absolute_libraries=True,
+    )
+
+
+def test_generated_command_link_audit_requires_plain_driver_flags(tmp_path):
+    clang = tmp_path / "clang"
+    clangxx = tmp_path / "clang++"
+    clang.write_bytes(b"")
+    clangxx.write_bytes(b"")
+    tools = {"clang": clang, "clang++": clangxx}
+    command = (
+        f"{clangxx} --target=x86_64-pc-windows-msvc -shared -fuse-ld=lld "
+        "-Xlinker /DYNAMICBASE -Xlinker /NXCOMPAT "
+        "-Xlinker /HIGHENTROPYVA -o probe.dll"
+    )
+    build_art._audit_link_command(
+        command,
+        name="probe.dll",
+        kind="shared-library",
+        language="c++",
+        target=build_art.resolve_target("windows-x86_64-msvc"),
+        tools=tools,
+    )
+    with pytest.raises(build_art.BuildFrontendError, match="HIGHENTROPYVA"):
+        build_art._audit_link_command(
+            command.replace(" -Xlinker /HIGHENTROPYVA", ""),
+            name="probe.dll",
+            kind="shared-library",
+            language="c++",
+            target=build_art.resolve_target("windows-x86_64-msvc"),
+            tools=tools,
+        )
+
+
+def test_generated_command_link_audit_accepts_native_windows_cmd_wrapper(tmp_path):
+    clang = tmp_path / "clang.exe"
+    clangxx = tmp_path / "clang++.exe"
+    clang.write_bytes(b"")
+    clangxx.write_bytes(b"")
+    tools = {"clang": clang, "clang++": clangxx}
+    command = (
+        f'C:\\Windows\\System32\\cmd.exe /C "cd . && {clangxx} '
+        "--target=x86_64-pc-windows-msvc -shared -fuse-ld=lld "
+        "-Xlinker /DYNAMICBASE -Xlinker /NXCOMPAT "
+        '-Xlinker /HIGHENTROPYVA -o probe.dll && cd ."'
+    )
+    build_art._audit_link_command(
+        command,
+        name="probe.dll",
+        kind="shared-library",
+        language="c++",
+        target=build_art.resolve_target("windows-x86_64-msvc"),
+        tools=tools,
+    )
 
 
 def test_staged_topology_rejects_absolute_linux_runpath(tmp_path, monkeypatch):
@@ -425,6 +531,7 @@ def test_windows_configure_uses_target_bundle_and_clang_target(tmp_path, monkeyp
         "_build_fingerprint",
         lambda *_args: {"schema_version": 2},
     )
+    monkeypatch.setattr(build_art, "_audit_generated_commands", lambda *_args: {})
     commands = []
     monkeypatch.setattr(build_art, "_run_checked", lambda command: commands.append(command))
 

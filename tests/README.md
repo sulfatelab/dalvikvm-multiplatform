@@ -694,7 +694,12 @@ Configure through the portable frontend:
 
 ```text
 python tools/build_art.py configure --target-id windows-x86_64-msvc
+python tools/build_art.py audit --target-id windows-x86_64-msvc
 ```
+
+The configure/build/stage paths run the command audit automatically. The
+focused command checks the same Ninja graph without compiling or running a
+target artifact.
 
 Build and run the applicable catalog scope:
 

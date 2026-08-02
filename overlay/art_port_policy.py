@@ -112,7 +112,13 @@ def _global_policy(profile: TargetProfile) -> GlobalPolicy:
         ]
         # ART's long-jump/deoptimization path cannot synchronize a CET shadow
         # stack. Every generated PE must advertise that process contract.
-        common["add_ldflags"] = ["LINKER:/CETCOMPAT:NO"]
+        common["add_ldflags"] = [
+            "LINKER:/CETCOMPAT:NO",
+            "LINKER:/DYNAMICBASE",
+            "LINKER:/NXCOMPAT",
+        ]
+        if profile.target_arch in ("x86_64", "aarch64", "arm64ec"):
+            common["add_ldflags"].append("LINKER:/HIGHENTROPYVA")
         return GlobalPolicy(**common)
     raise ValueError(f"no ART overlay policy for target {profile.target_id!r}")
 

@@ -305,7 +305,6 @@ class Emitter:
             blocks.append(
                 f"add_custom_command(\n"
                 f"    OUTPUT {out_path}\n"
-                f"    COMMAND ${{CMAKE_COMMAND}} -E make_directory {_GENSRC}/{gs.bp_dir}\n"
                 f"    COMMAND ${{Python3_EXECUTABLE}} {_BP2CMAKE}/bp2cmake/capture_output.py\n"
                 f"            --output {out_path} --\n"
                 f"            ${{Python3_EXECUTABLE}} {tool_path} {reldir} {in_rel}\n"

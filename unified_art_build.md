@@ -38,7 +38,7 @@ items are closed.
 
 | Area | Status | Current position | Exit condition |
 |---|---|---|---|
-| Python frontend | COMPLETE for the initial slice | `generate`, `check-generated`, `configure`, `build`, `test`, and `stage` exist; subprocesses are shell-free; configured JDK 21 is validated and passed to CMake | keep regression coverage current |
+| Python frontend | COMPLETE for the initial slice | `generate`, `check-generated`, `configure`, `audit`, `build`, `test`, and `stage` exist; subprocesses are shell-free; configured JDK 21 is validated and passed to CMake | keep regression coverage current |
 | Linux x86-64 product | COMPLETE for the current W-003/W-004/W-013 runtime slice | exact-target CriticalNative and normal/FastNative W-003 gates join all five W-004 gates plus the shared W-013 128 MiB non-moving-heap gate; shared TLS DSOs, Conscrypt boot content, security properties, and 121 CA roots now use the same product graph/stager as Windows | add boot images and migrate the remaining behavioral stages |
 | Windows x86-64 product | PARTIAL / experimental | Linux-hosted cross and native Windows Server 2025 product builds pass; the accepted native baseline passes 76/76 across W-002, W-003, W-004, W-010, W-013, W-014, W-025, and W-027; complete-package import/stale-path acceptance and identical no-op builds pass | add boot images and migrate the remaining behavioral coverage |
 | Compiler DSO parity | COMPLETE for `art-compiler` | both targets emit a shared compiler DSO; Windows imports `art.dll` and exports `art_compiler_jit_create` | retain exact ABI and no-cycle gates |
@@ -142,6 +142,30 @@ items are closed.
   their complete stage scans contain no links/reparse points, and identical
   32-job Linux/Windows-cross plus 16-job native Windows builds are Ninja
   no-ops.
+- [x] Configure, build, and stage now enforce one command-graph audit, also
+  exposed as the focused frontend `audit` command. It reads
+  `compile_commands.json`, `ninja -t targets all`, `ninja -t commands`, CMake
+  compiler metadata, and the cache. Every C/C++/assembly compile and every
+  top-level executable/DSO link uses the configured plain Clang GNU-style
+  driver with the exact target triple; C++ links use `clang++`, shared links
+  carry `-shared`, Linux product executables carry `-fPIE`/`-pie`, and all
+  links select LLD through the driver. Windows image rules explicitly carry
+  `/DYNAMICBASE`, `/NXCOMPAT`, and `/HIGHENTROPYVA` while preserving the
+  reviewed `/CETCOMPAT:NO` policy. The scanner rejects direct GCC, MinGW,
+  MSVC, Clang-CL, Make-family, shell, POSIX-utility, `ld.lld`, and `lld-link`
+  invocations; redirection, pipes, command substitution, multiple custom-command
+  payloads, forbidden generator artifacts, and undeclared cross-target
+  include/library roots also fail. Operator-out generation now relies on its
+  atomic Python helper to create parent directories, leaving one portable
+  payload behind CMake's working-directory wrapper. Fresh post-fix validation
+  passed 209/209 host tests. Linux accepted 2,088 compile commands, 2,171
+  Ninja commands, 32 product links, a 2,172-edge build, a Ninja no-op repeat,
+  and a 157-regular-file stage. Linux-hosted Windows and native Windows Server
+  2025 each accepted 2,082 compile commands, 2,127 Ninja commands, 29 product
+  links, a 2,128-edge build, a Ninja no-op repeat, and a 156-regular-file
+  stage; the native build used 16 jobs. Native validation also covers CMake's
+  `cmd.exe /C "cd . && clang++.exe ... && cd ."` link wrapper without treating
+  its quoted body as one executable token.
 - [x] Fresh generation loads the same 260 Blueprint files for both targets and
   emits 37 generated modules for `linux-x86_64-gnu` and 36 for
   `windows-x86_64-msvc`. Both graphs emit the separate `openjdkjvmti` DSO;
@@ -1743,7 +1767,7 @@ an unreviewed module-set or kind change.
 - [x] Make staging start from an empty frontend-owned directory, select only
   current Ninja link outputs, reject a partial product build, and scan the
   complete result for links/reparse points.
-- [ ] Add generated-command audits for compiler drivers, link drivers, shell
+- [x] Add generated-command audits for compiler drivers, link drivers, shell
   operators, POSIX utilities, host include/library leakage, and forbidden
   generators.
 - [ ] Add in-repository CI for fresh Linux generation/build/test/stage and the
@@ -1879,7 +1903,7 @@ Android.bp + target profile + one Python overlay
 
 The target registry, relocatable graph/profile generation, ignored local TOML
 bindings, shell-free generated commands, and the Python `generate`,
-`check-generated`, `configure`, `build`, `test`, and `stage` frontend commands
+`check-generated`, `configure`, `audit`, `build`, `test`, and `stage` frontend commands
 are now implemented. Linux x86-64 and Windows x86-64 use the same
 `native/CMakeLists.txt` entry point with `-G Ninja`; Windows requires an
 explicit regular-file target bundle and never searches host libraries. The
@@ -2969,6 +2993,7 @@ both hosts:
 
 ```text
 python tools/build_art.py configure --target-id windows-x86_64-msvc
+python tools/build_art.py audit --target-id windows-x86_64-msvc
 python tools/build_art.py build --target-id windows-x86_64-msvc --cmake-target art-compiler
 python tools/build_art.py test --target-id windows-x86_64-msvc
 python tools/build_art.py stage --target-id windows-x86_64-msvc

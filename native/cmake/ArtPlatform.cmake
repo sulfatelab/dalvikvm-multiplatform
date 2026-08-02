@@ -132,7 +132,11 @@ if(ART_TARGET_PLATFORM STREQUAL "windows" AND NOT TARGET sigchain)
         "${MDVM_COMPAT_INCLUDE_DIR}")
     target_compile_definitions(sigchain PRIVATE
         _CRT_SECURE_NO_WARNINGS NOMINMAX WIN32_LEAN_AND_MEAN NOGDI CHAR_BIT=8)
-    target_link_options(sigchain PRIVATE "LINKER:/CETCOMPAT:NO")
+    target_link_options(sigchain PRIVATE
+        "LINKER:/CETCOMPAT:NO"
+        "LINKER:/DYNAMICBASE"
+        "LINKER:/NXCOMPAT"
+        "LINKER:/HIGHENTROPYVA")
     set_target_properties(sigchain PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
 endif()
 

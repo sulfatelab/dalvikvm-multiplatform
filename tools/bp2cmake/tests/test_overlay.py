@@ -74,6 +74,7 @@ def test_gensrc_command_uses_shell_free_capture_helper():
     )
     text = Emitter(evaluator, Overlay()).emit_module(evaluator.resolve("library"))
     assert "bp2cmake/capture_output.py" in text
+    assert "cmake -E make_directory" not in text
     assert " --\n            ${Python3_EXECUTABLE}" in text
     assert " > " not in text
 
@@ -130,7 +131,12 @@ def test_unified_overlay_factory_selects_current_target_policy():
         "MDVM_ART_ROOT_DIR", ("art", "Android.bp")
     )
     assert linux.global_policy.add_ldflags == []
-    assert windows.global_policy.add_ldflags == ["LINKER:/CETCOMPAT:NO"]
+    assert windows.global_policy.add_ldflags == [
+        "LINKER:/CETCOMPAT:NO",
+        "LINKER:/DYNAMICBASE",
+        "LINKER:/NXCOMPAT",
+        "LINKER:/HIGHENTROPYVA",
+    ]
     assert "__LP64__=1" not in linux.global_policy.art_defines
     assert "__LP64__=1" in windows.global_policy.art_defines
     assert linux.policy_for("libart-compiler").kind == "shared"
