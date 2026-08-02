@@ -69,8 +69,9 @@ the same common LLD policy, passed CriticalNative and normal/FastNative 2/2 in
 2.53 seconds, and repeated 2/2 in 2.61 seconds from a Ninja no-op. Windows keeps
 the same effective `-fuse-ld=lld` test link option it used before this policy
 was made common. This admission covers the AArch64 CriticalNative/JIT/tracing
-contract only; it does not infer normal/FastNative, another W-003 probe, or a
-native AArch64 build host.
+contract only. At this checkpoint it did not infer normal/FastNative, another
+W-003 probe, or a native AArch64 build host; the later independent
+normal/FastNative admission is recorded in `../jni-native-abi/RESULT.md`.
 
 ## Result
 

@@ -33,7 +33,11 @@ _CRITICAL_NATIVE_TARGETS = {
     "linux-aarch64-gnu",
     "windows-x86_64-msvc",
 }
-_NATIVE_ABI_TARGETS = {"linux-x86_64-gnu", "windows-x86_64-msvc"}
+_NATIVE_ABI_TARGETS = {
+    "linux-x86_64-gnu",
+    "linux-aarch64-gnu",
+    "windows-x86_64-msvc",
+}
 _JNI_ABI_TARGETS = _CRITICAL_NATIVE_TARGETS | _NATIVE_ABI_TARGETS
 
 _CRITICAL_VALUES = (

@@ -8,12 +8,13 @@ Date: 2026-07-24. VM: agent01. Runtime: Wine 10.0. Build:
 | Target ID | Applicable | Build | Runtime | Last accepted |
 |---|---:|---:|---:|---|
 | `linux-x86_64-gnu` | yes | verified | verified | 2026-08-02 |
+| `linux-aarch64-gnu` | yes | verified | verified under explicit QEMU user mode | 2026-08-02 |
 | `windows-x86_64-msvc` | yes | verified | verified | 2026-08-02 |
 | `windows-aarch64-msvc` | not yet declared | pending | pending | — |
 | `windows-arm64ec-msvc` | not yet declared | pending | pending | — |
 
-The scalar C/JNI and Java sources are accepted only for the two exact target
-IDs above. That evidence does not admit either AArch64 target or any other
+The scalar C/JNI and Java sources are accepted only for the three exact target
+IDs above. That evidence does not admit Windows AArch64, ARM64EC, or any other
 platform, architecture, or ABI.
 
 ## Unified exact-target acceptance (2026-08-02)
@@ -33,8 +34,46 @@ completed 1,492 actions at 16 jobs, passed product W-003 4/4, then repeated as
 a Ninja no-op and passed 4/4 again. Each normal/FastNative aggregate records
 four successful runs, zero dumps, and no machine absolute paths. Full
 source/output scans found no symlink or reparse point. The declaration lists
-the exact Linux and Windows IDs pending separate review and native acceptance
-for any additional target.
+only the exact x86-64 Linux and Windows IDs at this checkpoint; it did not
+infer either AArch64 target or ARM64EC.
+
+## Linux AArch64 acceptance (2026-08-02)
+
+The normal/FastNative declaration was expanded independently after the
+adjacent CriticalNative admission. Its C and Java sources contain no assembly
+or x86 register contract, the Linux path does not require Windows-only compile
+records, and the shell-free runner now receives the same explicit QEMU/root
+arguments as the other admitted AArch64 gates.
+
+A fresh configuration audited 2,112 compile commands, 2,196 Ninja commands,
+and 32 product links. The 1,519-edge W-003 build produced the AArch64 probe DSO
+and managed JAR. Four QEMU processes ran default and method-instrumented modes
+twice each. Every process returned the exact mixed integer/floating values for
+registered, unresolved, static, and instance normal/FastNative methods across
+the initial, unregister/dlsym, and alternate re-registration phases. Both
+instrumented runs additionally proved tracing mode `0 -> nonzero -> 0`, exact
+during/post-tracing values, and trace-file deletion.
+
+The normal/FastNative gate passed in 182.21 seconds. The complete two-gate
+W-003 stage passed 2/2 in 369.84 seconds and repeated 2/2 in 371.60 seconds
+after `ninja: no work to do`; the repeated normal/FastNative gate took 183.37
+seconds. Its four aggregate records have exit zero, no missing markers, no
+dumps, the normalized QEMU fingerprint, and no machine path. Source and output
+scans found no filesystem links.
+
+The accepted artifact SHA-256 values were:
+
+- `libnativeabiprobe.so`:
+  `c11c20e9d01da1a0ec23c47b68870a33e2315b2b840296b49d16a53be9fc2861`
+- `fastnativeabiprobe.jar`:
+  `c8bee80f432a14ffb604b40fe856ff01d0b17743c42a1b9e8b43db32e4cfbf46`
+
+A fresh native Linux x86-64 tree audited 2,088 compile commands, 2,172 Ninja
+commands, and 32 product links, built all 1,491 W-003 edges, and passed both
+JNI gates 2/2 in 2.57 seconds. Its immediate no-op repeat passed 2/2 in 2.53
+seconds. This admission covers the Linux AArch64 normal/FastNative mixed-call,
+rebinding, JIT, and tracing contract only; it does not infer Windows AArch64,
+ARM64EC, another JNI probe, or a native AArch64 build host.
 
 ## Result
 
@@ -51,6 +90,7 @@ Current exact-target reproductions use 32 jobs on agent01 and 16 jobs on the
 
 ```text
 python tools/build_art.py test --target-id linux-x86_64-gnu --build-type RelWithDebInfo --stage w003 --parallel 32
+python tools/build_art.py test --target-id linux-aarch64-gnu --build-type RelWithDebInfo --stage w003 --parallel 32
 python tools/build_art.py test --target-id windows-x86_64-msvc --build-type RelWithDebInfo --stage w003 --parallel 16
 ```
 

@@ -97,17 +97,16 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     )
     assert w003_structure["execution"] == "host-review"
     assert w003_structure["ctest_registered"] is True
-    for name in ("criticalnativeprobe", "managed_critical_native"):
+    for name in (
+        "criticalnativeprobe",
+        "nativeabiprobe",
+        "managed_critical_native",
+        "managed_native_abi",
+    ):
         probe = next(probe for probe in catalog["probes"] if probe["name"] == name)
         assert probe["target_ids"] == [
             "linux-x86_64-gnu",
             "linux-aarch64-gnu",
-            "windows-x86_64-msvc",
-        ]
-    for name in ("nativeabiprobe", "managed_native_abi"):
-        probe = next(probe for probe in catalog["probes"] if probe["name"] == name)
-        assert probe["target_ids"] == [
-            "linux-x86_64-gnu",
             "windows-x86_64-msvc",
         ]
     embedding = next(
@@ -536,7 +535,9 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     applicable = [probe for probe in catalog["probes"] if probe["applicable"]]
     assert [probe["name"] for probe in applicable] == [
         "criticalnativeprobe",
+        "nativeabiprobe",
         "managed_critical_native",
+        "managed_native_abi",
         "managed_imageless_hello",
         "managed_gc_stress",
         "art_runtime_show_version",
@@ -545,6 +546,8 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     ]
     assert [probe["execution"] for probe in applicable] == [
         "compile-only",
+        "compile-only",
+        "target-runnable",
         "target-runnable",
         "target-runnable",
         "target-runnable",
@@ -554,6 +557,8 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     ]
     assert [probe["ctest_registered"] for probe in applicable] == [
         False,
+        False,
+        True,
         True,
         True,
         True,
@@ -568,6 +573,17 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     assert "qemu-aarch64" in ctest
     assert "--runner-arg=-L" in ctest
     assert "ART version 2.1.0 arm64" in ctest
+    for test_name in (
+        "art.w003.managed_critical_native",
+        "art.w003.managed_native_abi",
+    ):
+        w003_line = next(
+            line
+            for line in ctest.splitlines()
+            if line.startswith("add_test(") and test_name in line
+        )
+        assert "--runner" in w003_line
+        assert "--runner-arg=-L" in w003_line
     w013_line = next(
         line
         for line in ctest.splitlines()

@@ -748,6 +748,11 @@ set(_art_critical_native_ids_selector
         linux-x86_64-gnu
         linux-aarch64-gnu
         windows-x86_64-msvc)
+set(_art_native_abi_ids_selector
+    TARGET_IDS
+        linux-x86_64-gnu
+        linux-aarch64-gnu
+        windows-x86_64-msvc)
 set(_art_gc_stress_ids_selector
     TARGET_IDS
         linux-x86_64-gnu
@@ -863,10 +868,9 @@ art_add_target_probe(
         --repeat 2
         --timeout 120)
 
-# W-003: quick-frame and native ABI preservation. CriticalNative includes the
-# separately accepted Linux AArch64 target; normal/FastNative remains limited
-# to the exact current Linux and Windows x86-64 IDs. No other target is
-# inferred from sharing their source.
+# W-003: quick-frame and native ABI preservation. CriticalNative and
+# normal/FastNative include their separately accepted Linux AArch64 target;
+# no other target is inferred from sharing their source.
 art_add_target_probe(
     NAME criticalnativeprobe STAGE w003 TYPE SHARED EXECUTION compile-only
     ${_art_critical_native_ids_selector}
@@ -877,7 +881,7 @@ art_add_target_probe(
     PREFIX lib WINDOWS_EXPORT_ALL_SYMBOLS)
 art_add_target_probe(
     NAME nativeabiprobe STAGE w003 TYPE SHARED EXECUTION compile-only
-    ${_art_current_native_ids_selector}
+    ${_art_native_abi_ids_selector}
     SOURCES "${_art_test_cases_root}/jni-native-abi/probe.c"
     INCLUDE_DIRS "${_art_jni_include}"
     LINK_OPTIONS "${_art_no_cet}"
@@ -944,7 +948,7 @@ art_add_target_probe(
 art_add_target_probe(
     NAME managed_native_abi STAGE w003 TYPE MANAGED EXECUTION target-runnable
     TIMEOUT 900
-    ${_art_current_native_ids_selector}
+    ${_art_native_abi_ids_selector}
     SOURCES "${_art_test_cases_root}/jni-native-abi/FastNativeAbiProbe.java"
     DEPENDS nativeabiprobe dalvikvm icu_jni javacore openjdk
     CONTRACTS jni native-abi
@@ -961,6 +965,7 @@ art_add_target_probe(
         --work-root "${CMAKE_CURRENT_BINARY_DIR}/results/w003-native-abi"
         --icu-data "${_art_icu_data}"
         ${_art_managed_runtime_library_args}
+        ${_art_target_runner_args}
         --repeat 2
         --timeout 180)
 art_add_target_probe(

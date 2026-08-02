@@ -370,6 +370,9 @@ def test_w003_frame_gate_runs_four_modes_twice_and_records_sanitized_result(
 
 
 def test_w003_jni_abi_targets_are_exact_and_host_independent():
+    assert "linux-aarch64-gnu" in w003_gate._CRITICAL_NATIVE_TARGETS
+    assert "linux-aarch64-gnu" in w003_gate._NATIVE_ABI_TARGETS
+    assert "windows-aarch64-msvc" not in w003_gate._JNI_ABI_TARGETS
     assert w003_gate._target_platform("linux-x86_64-gnu") == "linux"
     assert w003_gate._target_platform("linux-aarch64-gnu") == "linux"
     assert w003_gate._target_platform("windows-x86_64-msvc") == "windows"
