@@ -2013,6 +2013,18 @@ differences.
   source inheritance. Both admitted profiles still pass `check-generated`,
   topology/VCS audits pass, and all 235 host/bp2cmake tests pass. Future
   Windows profiles remain unable to inherit the exact Windows x86-64 delta.
+- [x] Materialize ART's architecture-selected `libvixl` dependency from the
+  official AOSP `android-16.0.0_r4` pin. The converter now follows
+  `libart-disassembler`'s Blueprint `static_libs` edge, consumes VIXL's exported
+  `src` include directory, emits one PIC static archive, and selects both the
+  AArch64 and deliberate AArch32 sibling source sets. The current AArch64 graph
+  therefore has 38 modules. A fresh cross configuration audited 2,110 compile
+  commands, 2,196 Ninja commands, and 32 product links; the build passed the
+  former missing-header point and compiled VIXL before exposing the next
+  independent blocker: the existing low-address Windows patch uses x86-only
+  `MAP_32BIT` without testing whether the target architecture provides it. All
+  236 host/bp2cmake tests pass. This is pre-admission evidence, not AArch64
+  product admission.
 - [ ] Validate and admit Linux AArch64, x86, ARMv7, and RISC-V64 separately.
 - [x] Migrate the ARM64EC identity from transitional
   `windows-aarch64-arm64ec/cpu_arch=aarch64` to

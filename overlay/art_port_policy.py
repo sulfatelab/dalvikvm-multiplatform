@@ -217,6 +217,10 @@ _COMMON_MODULES: dict[str, dict[str, object]] = {
         kind="shared",
         remove_shared_libs=["liblog"],
     ),
+    # Soong's art_cc_library publishes both variants. ART's ARM/AArch64
+    # consumers select it through static_libs, so emit the selected closure as
+    # an archive rather than guessing the ambiguous cc_library default.
+    "libvixl": dict(kind="static"),
     "libunwindstack": dict(
         add_shared_libs=["libdexfile"],
         remove_static_libs=["libdexfile_support", "librustc_demangle_static"],
@@ -361,6 +365,9 @@ _LINUX_MODULE_DELTA: dict[str, dict[str, object]] = {
     "libprofile": dict(kind="shared"),
     "libsigchain": dict(add_defines=["CHAR_BIT=8"]),
     "libunwindstack": dict(kind="shared"),
+    # The archive is linked into ART DSOs. Soong supplies PIC implicitly;
+    # preserve that Linux product invariant explicitly in generated CMake.
+    "libvixl": dict(add_cflags=["-fPIC"]),
 }
 
 

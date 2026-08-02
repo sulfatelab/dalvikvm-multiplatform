@@ -30,7 +30,7 @@ dalvikvm-multiplatform/
   vendor/
     art/ libcore/ libbase/ libnativehelper/ libprocinfo/
     libziparchive/ logging/ unwinding/ icu/
-    external/{boringssl,cpu_features,dlmalloc,fmtlib,lzma,oj-libjdwp,tinyxml2}/
+    external/{boringssl,cpu_features,dlmalloc,fmtlib,lzma,oj-libjdwp,tinyxml2,vixl}/
     java-external/{bouncycastle,conscrypt,fdlibm,okhttp}/
     r8/r8.jar                 # prebuilt D8/R8 (not a nested repo)
     external/fmtlib            # canonical path; legacy alias is not required
@@ -70,7 +70,8 @@ long-lived patch/overlay trees.
 
 ## Nested repository map
 
-GitHub naming: `sulfatelab/dalvikvm-multiplatform_<name>` (SSH).
+Product forks use `sulfatelab/dalvikvm-multiplatform_<name>` over SSH. The
+unmodified VIXL dependency is pinned directly from the official AOSP repository.
 
 | Path | Nested name | Branch |
 |------|-------------|--------|
@@ -82,6 +83,7 @@ GitHub naming: `sulfatelab/dalvikvm-multiplatform_<name>` (SSH).
 | `vendor/external/lzma` | `lzma` | `artmp_android-16.0.0_r4` |
 | `vendor/external/oj-libjdwp` | `oj-libjdwp` | `artmp_android-16.0.0_r4` |
 | `vendor/external/tinyxml2` | `tinyxml2` | `artmp_android-16.0.0_r4` |
+| `vendor/external/vixl` | `vixl` | official `android-16.0.0_r4` pin |
 | `vendor/icu` | `icu` | `artmp_android-16.0.0_r4` |
 | `vendor/java-external/bouncycastle` | `bouncycastle` | `artmp_android-16.0.0_r4` |
 | `vendor/java-external/conscrypt` | `conscrypt` | `artmp_android-16.0.0_r4` |

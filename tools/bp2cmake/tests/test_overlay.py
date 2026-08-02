@@ -181,8 +181,8 @@ def test_unified_overlay_factory_selects_current_target_policy():
     assert not (repo / "overlay" / "port_policy_windows.py").exists()
     linux = load_overlay_factory(str(factory), resolve_target("linux-x86_64-gnu"))
     windows = load_overlay_factory(str(factory), resolve_target("windows-x86_64-msvc"))
-    assert len(linux.modules) == 40
-    assert len(windows.modules) == 34
+    assert len(linux.modules) == 41
+    assert len(windows.modules) == 35
     assert linux.global_policy.host_libs == windows.global_policy.host_libs
     assert linux.blueprint_scan == windows.blueprint_scan
     assert linux.blueprint_scan.excludes(
@@ -201,6 +201,10 @@ def test_unified_overlay_factory_selects_current_target_policy():
     assert "__LP64__=1" not in linux.global_policy.art_defines
     assert "__LP64__=1" in windows.global_policy.art_defines
     assert linux.policy_for("libart-compiler").kind == "shared"
+    assert linux.policy_for("libvixl").kind == "static"
+    assert linux.policy_for("libvixl").add_cflags == ["-fPIC"]
+    assert windows.policy_for("libvixl").kind == "static"
+    assert windows.policy_for("libvixl").add_cflags == []
     assert linux.policy_for("libart").add_gensrc_sources == [
         "art/asm/mterp/mterp_x86_64.S"
     ]
@@ -261,7 +265,7 @@ def test_linux_overlay_policy_is_available_for_pre_admission_graph_audits():
     ):
         target = resolve_target(target_id)
         overlay = load_overlay_factory(str(factory), target)
-        assert len(overlay.modules) == 40
+        assert len(overlay.modules) == 41
         assert overlay.global_policy.add_ldflags == []
         assert overlay.policy_for("libart").add_gensrc_sources == [
             f"art/asm/mterp/{target.mterp_output}"

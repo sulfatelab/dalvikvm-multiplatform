@@ -22,6 +22,9 @@
 [submodule "vendor/external/tinyxml2"]
 	path = vendor/external/tinyxml2
 	url = git@github.com:sulfatelab/dalvikvm-multiplatform_tinyxml2.git
+[submodule "vendor/external/vixl"]
+	path = vendor/external/vixl
+	url = https://android.googlesource.com/platform/external/vixl
 [submodule "vendor/icu"]
 	path = vendor/icu
 	url = git@github.com:sulfatelab/dalvikvm-multiplatform_icu.git

@@ -65,7 +65,17 @@ def test_linux_aarch64_pre_admission_graph_uses_selected_architecture(tmp_path):
         for source in module.get("sources", [])
     }
     assert manifest["target"]["target_id"] == "linux-aarch64-gnu"
-    assert len(manifest["modules"]) == 37
+    assert len(manifest["modules"]) == 38
+    modules = {module["aosp_name"]: module for module in manifest["modules"]}
+    assert modules["libvixl"]["kind"] == "static"
+    assert "vixl" in modules["libart-disassembler"]["link_dependencies"]
+    assert (
+        "${MDVM_ART_ROOT_DIR}/external/vixl/src"
+        in modules["libart-disassembler"]["include_dirs"]
+    )
+    assert any("external/vixl/src/aarch64/" in source for source in sources)
+    # ART's 64-bit ARM codegen deliberately includes its 32-bit sibling.
+    assert any("external/vixl/src/aarch32/" in source for source in sources)
     assert any(source.endswith("quick_entrypoints_arm64.S") for source in sources)
     assert any(source.endswith("mterp_arm64.S") for source in sources)
     assert any("external/boringssl/linux-aarch64/" in source for source in sources)
