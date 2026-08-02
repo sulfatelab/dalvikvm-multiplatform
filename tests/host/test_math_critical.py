@@ -12,7 +12,13 @@ _SPEC.loader.exec_module(runner)
 
 def test_math_critical_runs_xint_and_jit_without_shell(tmp_path, monkeypatch):
     files = {}
-    for name in ("dalvikvm.exe", "boot.jar", "math.jar", "icudt72l.dat"):
+    for name in (
+        "dalvikvm.exe",
+        "boot.jar",
+        "math.jar",
+        "icudt72l.dat",
+        "target-runner",
+    ):
         path = tmp_path / name
         path.write_bytes(name.encode())
         files[name] = path
@@ -44,11 +50,15 @@ def test_math_critical_runs_xint_and_jit_without_shell(tmp_path, monkeypatch):
         library_dirs=[tmp_path],
         repetitions=2,
         timeout=30,
+        runner=files["target-runner"],
+        runner_args=["-L", "target-root"],
     )
     assert len(calls) == 4
     assert sum("-Xint" in call["vm_options"] for call in calls) == 2
     assert sum("-Xjitthreshold:0" in call["vm_options"] for call in calls) == 2
     assert all(call["main_class"] == "MathCriticalProbe" for call in calls)
+    assert all(call["runner"] == files["target-runner"] for call in calls)
+    assert all(call["runner_args"] == ["-L", "target-root"] for call in calls)
     record_text = (work / "result.json").read_text(encoding="utf-8")
     assert json.loads(record_text)["completed_cases"] == 4
     assert str(tmp_path) not in record_text

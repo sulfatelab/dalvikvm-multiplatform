@@ -753,6 +753,11 @@ set(_art_native_abi_ids_selector
         linux-x86_64-gnu
         linux-aarch64-gnu
         windows-x86_64-msvc)
+set(_art_math_critical_ids_selector
+    TARGET_IDS
+        linux-x86_64-gnu
+        linux-aarch64-gnu
+        windows-x86_64-msvc)
 set(_art_gc_stress_ids_selector
     TARGET_IDS
         linux-x86_64-gnu
@@ -1222,7 +1227,7 @@ foreach(_art_runtime_stress_class HandleLeakProbe PerfSmokeProbe ThreadHeavyProb
 endforeach()
 art_add_target_probe(
     NAME managed_math_critical STAGE w004 TYPE MANAGED EXECUTION target-runnable
-    ${_art_current_native_ids_selector}
+    ${_art_math_critical_ids_selector}
     SOURCES "${_art_test_cases_root}/math-critical/MathCriticalProbe.java"
     DEPENDS dalvikvm icu_jni javacore openjdk
     CONTRACTS math critical-native
@@ -1237,6 +1242,7 @@ art_add_target_probe(
         --work-root "${CMAKE_CURRENT_BINARY_DIR}/results/math-critical"
         --icu-data "${_art_icu_data}"
         ${_art_managed_runtime_library_args}
+        ${_art_target_runner_args}
         --repeat 2
         --timeout 180)
 

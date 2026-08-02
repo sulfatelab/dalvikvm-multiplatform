@@ -1,7 +1,8 @@
 # Shared Math CriticalNative restoration result
 
-**Status:** PASS in the unified Linux and native Windows W-004 stages
-**Date:** 2026-08-01
+**Status:** PASS in the unified Linux x86-64/AArch64 and native Windows W-004
+stages
+**Date:** 2026-08-02
 **Scope:** W-024 product demotion, PE registration-table removal, and maintained
 CriticalNative interpreter/JIT acceptance
 
@@ -41,7 +42,7 @@ signed zero while accepting any NaN payload. It then executes 2,000 direct-call
 rounds to exercise compiled callers.
 
 The case-local, shell-free `run.py` runs both `-Xint` and threshold-zero JIT
-twice. It accepts only the exact `linux-x86_64-gnu` and
+twice. It accepts only the exact `linux-x86_64-gnu`, `linux-aarch64-gnu`, and
 `windows-x86_64-msvc` target IDs. Windows JIT runs enable the narrow
 `MathCriticalProbe` compiler filter and require an explicit successful compile
 record; Linux uses its ordinary JIT diagnostics. Every child must report the
@@ -56,6 +57,32 @@ seconds. A Linux-hosted Windows cross run rebuilt 66 affected test/JVMTI edges,
 passed the W-004 source/object reviewer, and immediately repeated as a Ninja
 no-op. PE runtime execution remains a native-Windows gate, not a cross-host
 claim.
+
+## Linux AArch64 acceptance
+
+The exact Math selector and shell-free runner now accept the same explicit
+QEMU executable/root arguments as the other admitted AArch64 managed gates.
+A fresh 38-module configuration audited 2,112 compile commands, 2,196 Ninja
+commands, and 32 product links. Its 1,516-edge W-004 build produced the managed
+Math JAR and complete runtime closure through plain Clang, CMake, and Ninja.
+
+The four QEMU processes ran `-Xint` and threshold-zero JIT twice each. Every
+process proved that `Math.ceil` and `Math.floor` remain native, matched
+`StrictMath` for all 23 edge inputs including signed zero, infinities, and NaN,
+completed 2,000 direct-call rounds, and emitted checksum
+`0x2900b87ac0cf269a`. The Math gate passed in 82.47 seconds; the expanded W-004
+stage passed 4/4 in 86.57 seconds. Its immediate repeat began with
+`ninja: no work to do`, passed Math in 80.45 seconds, and passed W-004 4/4 in
+84.54 seconds.
+
+The aggregate contains four exact-zero exits, no missing markers, no dumps,
+the normalized QEMU fingerprint, and no machine path. Source and output scans
+found no filesystem links. The accepted `mathcriticalprobe.jar` SHA-256 is
+`cb5660f26d8e8269a6d4c454bc3605699019c0aacfed98f926f2c62ccf97ace4`.
+The current native Linux x86-64 W-004 catalog also repeated from a Ninja no-op
+at 6/6 in 2.35 seconds, with Math passing in 1.29 seconds. This evidence admits
+only the AArch64 Math CriticalNative interpreter/JIT contract; it does not
+infer another libcore case or a native AArch64 build host.
 
 The current deterministic checksum is:
 
@@ -105,6 +132,7 @@ differ by platform.
 
 ```text
 python3 tools/build_art.py test --target-id linux-x86_64-gnu --build-type RelWithDebInfo --stage w004 --parallel 32
+python3 tools/build_art.py test --target-id linux-aarch64-gnu --build-type RelWithDebInfo --stage w004 --parallel 32
 python tools/build_art.py test --target-id windows-x86_64-msvc --build-type RelWithDebInfo --stage w004 --parallel 16
 ```
 

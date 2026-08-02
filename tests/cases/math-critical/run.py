@@ -17,7 +17,11 @@ if str(_SUPPORT_ROOT) not in sys.path:
 import runtime_gate  # noqa: E402
 
 
-_TARGETS = {"linux-x86_64-gnu", "windows-x86_64-msvc"}
+_TARGETS = {
+    "linux-x86_64-gnu",
+    "linux-aarch64-gnu",
+    "windows-x86_64-msvc",
+}
 _COMPILE_MARKER = "Windows x64 CompileMethod done success=1 method="
 _EXPECTED = [
     "MathCriticalProbe native ceil=true floor=true cases=23 rounds=2000 "
@@ -46,6 +50,8 @@ def run_gate(
     library_dirs: list[Path],
     repetitions: int,
     timeout: int,
+    runner: Path | None = None,
+    runner_args: list[str] | None = None,
 ) -> None:
     if target_id not in _TARGETS:
         raise runtime_gate.GateError(
@@ -58,6 +64,7 @@ def run_gate(
         runtime_gate._reject_tree_links(work_root)
         shutil.rmtree(work_root)
     work_root.mkdir(parents=True)
+    runner_args = [] if runner_args is None else runner_args
 
     records: list[dict[str, object]] = []
     modes = (
@@ -93,6 +100,8 @@ def run_gate(
                 expected_exit=0,
                 timeout=timeout,
                 environment_overrides=environment,
+                runner=runner,
+                runner_args=runner_args,
             )
             output = "\n".join(
                 (case_root / name).read_text(
@@ -150,6 +159,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--library-dir", type=Path, action="append", default=[])
     parser.add_argument("--repeat", type=int, default=2)
     parser.add_argument("--timeout", type=int, default=180)
+    runtime_gate._add_runner_arguments(parser)
     return parser
 
 
@@ -166,6 +176,8 @@ def main(argv: list[str] | None = None) -> int:
             library_dirs=args.library_dir,
             repetitions=args.repeat,
             timeout=args.timeout,
+            runner=args.runner,
+            runner_args=args.runner_arg,
         )
         return 0
     except (runtime_gate.GateError, OSError, UnicodeError) as exc:

@@ -117,12 +117,12 @@ sources, and security properties. Android/libcore APIs and ART annotations are
 therefore resolved from the same AOSP boot classes on Linux and Windows build
 hosts.
 Three W-004 managed declarations are `target-runnable` on explicit exact-target
-selectors. Imageless Hello and allocation/collection stress cover
-`linux-x86_64-gnu`, `linux-aarch64-gnu`, and `windows-x86_64-msvc`;
-`support/runtime_gate.py` supplies QEMU user mode only for the AArch64 target.
-The case-local `math-critical/run.py` remains limited to the two current native
-x86-64 identities and runs Math CriticalNative in `-Xint` and threshold-zero
-JIT twice each. All three declarations use a declared native DSO closure,
+selectors. Imageless Hello, allocation/collection stress, and Math
+CriticalNative cover `linux-x86_64-gnu`, `linux-aarch64-gnu`, and
+`windows-x86_64-msvc`; their shell-free runners supply QEMU user mode only for
+the AArch64 target. The case-local `math-critical/run.py` runs `-Xint` and
+threshold-zero JIT twice each. All three declarations use a declared native
+DSO closure,
 isolated target-local runtime directories, pinned ICU data, strict exit/marker
 checks, timeouts, and sanitized JSON results. The Math aggregate additionally
 rejects filesystem links/reparse points, and Windows JIT requires a matching
@@ -588,12 +588,12 @@ identity without recording machine paths or environment dumps.
 
 The current `linux-aarch64-gnu` experimental slice deliberately registers only
 the CriticalNative and normal/FastNative DSO/JAR pairs and their JIT/tracing
-gates, `art_runtime_show_version`, imageless interpreter `Hello`, managed GC
-stress, and the 128 MiB non-moving-heap gate plus its managed artifact. Each
-runnable gate has its own behavioral evidence under the explicit runner. The
-slice does not infer another JNI contract, boot-image, compiler-DSO load, the
-1024 MiB resource profile, or another stage's applicability from successful
-emulation.
+gates, Math CriticalNative in `-Xint`/JIT, `art_runtime_show_version`,
+imageless interpreter `Hello`, managed GC stress, and the 128 MiB
+non-moving-heap gate plus its managed artifact. Each runnable gate has its own
+behavioral evidence under the explicit runner. The slice does not infer another
+JNI contract, boot-image, compiler-DSO load, the 1024 MiB resource profile, or
+another stage's applicability from successful emulation.
 
 Linkage describes the binary boundary under test. It is independent of whether
 the test is compile-only, run locally, transferred to another machine, or
