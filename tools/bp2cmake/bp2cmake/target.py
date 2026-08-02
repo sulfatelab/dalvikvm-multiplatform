@@ -178,7 +178,8 @@ _PROFILES = {
     "linux-x86_64-gnu": _profile(
         "linux-x86_64-gnu", "linux", "x86_64", "x86_64", "x86_64", "gnu",
         "elf64", 64, "x86_64-unknown-linux-gnu", "Linux",
-        status="supported", capabilities=_NATIVE_CAPABILITIES + ("signals", "jit"),
+        status="supported",
+        capabilities=_NATIVE_CAPABILITIES + ("boot_image", "signals", "jit"),
     ),
     "linux-armv7-gnu": _profile(
         "linux-armv7-gnu", "linux", "armv7", "armv7", "arm", "gnu",

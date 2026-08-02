@@ -121,7 +121,10 @@ def test_windows_gnu_target_is_valid_but_blocked_by_toolchain_contract():
 
 
 def test_supported_and_experimental_targets_are_admitted():
-    resolve_target("linux-x86_64-gnu").require_generation()
+    linux = resolve_target("linux-x86_64-gnu")
+    linux.require_generation()
+    assert "boot_image" in linux.capabilities
+    assert "boot_image" not in resolve_target("windows-x86_64-msvc").capabilities
     resolve_target("windows-x86_64-msvc").require_generation()
 
 

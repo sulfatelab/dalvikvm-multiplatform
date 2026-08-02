@@ -8,6 +8,8 @@ option(ART_ENABLE_TARGET_RUNTIME_TESTS
 get_filename_component(_art_test_repo_root "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
 set(_art_test_cases_root "${CMAKE_CURRENT_LIST_DIR}/cases")
 set(_art_managed_builder "${CMAKE_CURRENT_LIST_DIR}/support/managed_artifact.py")
+set(_art_boot_image_builder
+    "${_art_test_repo_root}/tools/build_boot_image.py")
 set(_art_conscrypt_constants_builder
     "${CMAKE_CURRENT_LIST_DIR}/support/generate_conscrypt_constants.py")
 set(_art_managed_root "${CMAKE_CURRENT_BINARY_DIR}/managed")
@@ -259,6 +261,58 @@ add_custom_target(art-managed-boot-jar
     DEPENDS "${_art_boot_jar}" "${_art_boot_manifest}")
 add_custom_target(art-runtime-package-inputs ALL)
 add_dependencies(art-runtime-package-inputs art-managed-boot-jar)
+
+set(ART_BOOT_IMAGE_PARALLEL "16" CACHE STRING
+    "Bounded dex2oat worker count for a natively generated boot image")
+if(NOT ART_BOOT_IMAGE_PARALLEL MATCHES "^[1-9][0-9]*$")
+    message(FATAL_ERROR
+        "ART_BOOT_IMAGE_PARALLEL must be a positive integer")
+endif()
+set(_art_boot_image_root "${CMAKE_BINARY_DIR}/runtime/boot-image")
+set(_art_boot_image_dir
+    "${_art_boot_image_root}/${ART_TARGET_AOSP_ARCH}")
+list(FIND ART_TARGET_CAPABILITIES "boot_image" _art_boot_image_capability)
+if(_art_boot_image_capability GREATER -1)
+    if(ART_ENABLE_TARGET_RUNTIME_TESTS)
+        if(NOT TARGET dex2oat)
+            message(FATAL_ERROR
+                "Target ${ART_TARGET_ID} declares boot_image without dex2oat")
+        endif()
+        add_custom_command(
+            OUTPUT
+                "${_art_boot_image_dir}/boot.art"
+                "${_art_boot_image_dir}/boot.oat"
+                "${_art_boot_image_dir}/boot.vdex"
+                "${_art_boot_image_root}/manifest.json"
+            BYPRODUCTS "${_art_boot_image_root}/dex2oat.log"
+            COMMAND "${Python3_EXECUTABLE}" "${_art_boot_image_builder}"
+                --target-id "${ART_TARGET_ID}"
+                --dex2oat "$<TARGET_FILE:dex2oat>"
+                --boot-jar "${_art_boot_jar}"
+                --output-root "${_art_boot_image_root}"
+                --instruction-set "${ART_TARGET_AOSP_ARCH}"
+                --parallel "${ART_BOOT_IMAGE_PARALLEL}"
+                --library-dir "$<TARGET_FILE_DIR:dex2oat>"
+            DEPENDS
+                dex2oat
+                art-managed-boot-jar
+                "${_art_boot_image_builder}"
+                "${_art_boot_jar}"
+            COMMENT "Building relocatable ${ART_TARGET_ID} ART boot image"
+            VERBATIM)
+        add_custom_target(art-runtime-boot-image
+            DEPENDS
+                "${_art_boot_image_dir}/boot.art"
+                "${_art_boot_image_dir}/boot.oat"
+                "${_art_boot_image_dir}/boot.vdex"
+                "${_art_boot_image_root}/manifest.json")
+        add_dependencies(art-runtime-package-inputs art-runtime-boot-image)
+    else()
+        # Cross hosts cannot execute target dex2oat. Keep the target name valid
+        # for catalog ownership without pretending that an image was built.
+        add_custom_target(art-runtime-boot-image)
+    endif()
+endif()
 
 function(art_define_test_stage stage)
     if(NOT stage MATCHES "^w[0-9][0-9][0-9]$")
@@ -1008,6 +1062,35 @@ art_add_target_probe(
         --icu-data "${_art_icu_data}"
         ${_art_managed_runtime_library_args}
         --vm-option=-Xint
+        --expect "Hello from dalvikvm!"
+        --expect "main end exception=0"
+        --forbid AssertionError)
+art_add_target_probe(
+    NAME managed_boot_image_hello STAGE w004 TYPE GATE
+    EXECUTION target-runnable TIMEOUT 180
+    ${_art_linux_x86_64_gnu_selector}
+    CAPABILITIES boot_image
+    DEPENDS
+        art-runtime-boot-image
+        managed_imageless_hello
+        dalvikvm
+        icu_jni
+        javacore
+        openjdk
+    CONTRACTS runtime-load boot-image oat packaging
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_test_repo_root}/tests/support/runtime_gate.py"
+        managed
+        --target-id "${ART_TARGET_ID}"
+        --dalvikvm "$<TARGET_FILE:dalvikvm>"
+        --boot-jar "${_art_boot_jar}"
+        --boot-image-dir "${_art_boot_image_root}"
+        --app-jar "${_art_managed_root}/hello.jar"
+        --main-class Hello
+        --work-root "${CMAKE_CURRENT_BINARY_DIR}/results/boot-image-hello"
+        --icu-data "${_art_icu_data}"
+        ${_art_managed_runtime_library_args}
         --expect "Hello from dalvikvm!"
         --expect "main end exception=0"
         --forbid AssertionError)

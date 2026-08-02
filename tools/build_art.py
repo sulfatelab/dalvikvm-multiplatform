@@ -178,6 +178,11 @@ def _host_can_run_target(target: TargetProfile) -> bool:
     return normalized_arch == target.target_arch
 
 
+def _boot_image_parallel_limit() -> int:
+    """Keep native Windows within its 16 GiB VM limit."""
+    return 16 if platform.system().lower() == "windows" else 32
+
+
 class BuildFrontendError(RuntimeError):
     """Raised for a deterministic user-facing frontend failure."""
 
@@ -437,6 +442,7 @@ def _configure(
         f"-DART_LLVM_OBJDUMP={tools['llvm-objdump']}",
         "-DART_ENABLE_TARGET_RUNTIME_TESTS="
         + ("ON" if _host_can_run_target(target) else "OFF"),
+        f"-DART_BOOT_IMAGE_PARALLEL={_boot_image_parallel_limit()}",
         f"-DART_TEST_VARIANT={variant}",
     ]
     if target.target_platform == "windows":
@@ -732,6 +738,13 @@ def _stage(target: TargetProfile, binary_dir: Path, local: LocalBuildConfig) -> 
     )
     for source, destination in runtime_sources:
         copied.append(_copy_staged_file(source, destination, stage_dir))
+    boot_image_status, boot_image_files = _stage_boot_image(
+        binary_dir,
+        stage_dir,
+        target,
+        boot_jar=runtime_sources[0][0],
+    )
+    copied.extend(boot_image_files)
 
     cacerts_root = REPO_ROOT / "native" / "runtime-assets" / "etc" / "security" / "cacerts"
     validate_managed_path(cacerts_root)
@@ -764,6 +777,7 @@ def _stage(target: TargetProfile, binary_dir: Path, local: LocalBuildConfig) -> 
         "schema_version": 2,
         "target_id": target.target_id,
         "artifacts": copied,
+        "runtime_package": {"boot_image": boot_image_status},
         "topology": topology,
     })
     _reject_managed_tree(stage_dir)
@@ -771,6 +785,81 @@ def _stage(target: TargetProfile, binary_dir: Path, local: LocalBuildConfig) -> 
         f"staged {len(copied)} regular files in {stage_dir} "
         f"(AndroidCAStore certificates={certificate_count})"
     )
+
+
+def _stage_boot_image(
+    binary_dir: Path,
+    stage_dir: Path,
+    target: TargetProfile,
+    *,
+    boot_jar: Path,
+) -> tuple[dict[str, object], list[dict[str, object]]]:
+    if "boot_image" not in target.capabilities:
+        return {"status": "unsupported"}, []
+    source_root = binary_dir / "runtime" / "boot-image"
+    if not source_root.is_dir():
+        if _host_can_run_target(target):
+            raise BuildFrontendError(
+                "native runtime package is missing its declared boot image; "
+                "build the complete product first"
+            )
+        return {"status": "not-built-cross-host"}, []
+    validate_managed_path(source_root)
+    _reject_managed_tree(source_root)
+    manifest_path = source_root / "manifest.json"
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise BuildFrontendError(f"cannot read boot image manifest: {exc}") from exc
+    if (
+        manifest.get("schema_version") != 1
+        or manifest.get("target_id") != target.target_id
+        or manifest.get("instruction_set") != target.aosp_arch
+        or manifest.get("logical_boot_jar") != "/system/framework/boot.jar"
+        or manifest.get("boot_jar_sha256") != _sha256(boot_jar)
+    ):
+        raise BuildFrontendError("boot image manifest does not match the product")
+    artifacts = manifest.get("artifacts")
+    if not isinstance(artifacts, list):
+        raise BuildFrontendError("boot image manifest has no artifact list")
+    expected = {
+        f"{target.aosp_arch}/boot.art",
+        f"{target.aosp_arch}/boot.oat",
+        f"{target.aosp_arch}/boot.vdex",
+    }
+    copied: list[dict[str, object]] = []
+    seen: set[str] = set()
+    for raw in artifacts:
+        if not isinstance(raw, dict) or not isinstance(raw.get("path"), str):
+            raise BuildFrontendError("boot image artifact record is malformed")
+        relative = raw["path"].replace("\\", "/")
+        if relative not in expected or relative in seen:
+            raise BuildFrontendError(f"unexpected boot image artifact: {relative}")
+        source = source_root / Path(relative)
+        validate_managed_path(source)
+        if not source.is_file() or source.is_symlink():
+            raise BuildFrontendError(f"boot image artifact is not regular: {source}")
+        if raw.get("sha256") != _sha256(source) or raw.get("size") != source.stat().st_size:
+            raise BuildFrontendError(f"boot image artifact identity changed: {relative}")
+        destination = stage_dir / "runtime" / "boot-image" / Path(relative)
+        copied.append(_copy_staged_file(source, destination, stage_dir))
+        seen.add(relative)
+    if seen != expected:
+        raise BuildFrontendError(
+            f"boot image artifact set is incomplete: {sorted(expected - seen)}"
+        )
+    copied.append(
+        _copy_staged_file(
+            manifest_path,
+            stage_dir / "runtime" / "boot-image" / "manifest.json",
+            stage_dir,
+        )
+    )
+    return {
+        "status": "included",
+        "instruction_set": target.aosp_arch,
+        "artifacts": sorted(expected),
+    }, copied
 
 
 def _copy_staged_file(source: Path, destination: Path, stage_dir: Path) -> dict[str, object]:

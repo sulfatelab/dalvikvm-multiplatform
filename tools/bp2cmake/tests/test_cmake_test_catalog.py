@@ -67,9 +67,9 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         (binary / "art-tests" / "art_test_catalog.json").read_text(encoding="utf-8")
     )
     assert catalog["target_id"] == "windows-x86_64-msvc"
-    assert len(catalog["probes"]) == 92
+    assert len(catalog["probes"]) == 93
     assert sum(probe["applicable"] for probe in catalog["probes"]) == 90
-    assert sum(bool(probe["target_ids"]) for probe in catalog["probes"]) == 32
+    assert sum(bool(probe["target_ids"]) for probe in catalog["probes"]) == 33
     assert sum(not probe["target_ids"] for probe in catalog["probes"]) == 60
     w002_attach = next(
         probe for probe in catalog["probes"] if probe["name"] == "managed_w002_attach"
@@ -201,7 +201,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     assert async_close["ctest_registered"] is False
     assert sum(
         probe["execution"] == "target-runnable" for probe in catalog["probes"]
-    ) == 71
+    ) == 72
     assert {
         probe["name"]: probe["timeout_seconds"]
         for probe in catalog["probes"]
@@ -212,6 +212,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "managed_critical_native": 1200,
         "managed_native_abi": 900,
         "managed_w003_xmm_sentinel": 1200,
+        "managed_boot_image_hello": 180,
         "win32_art_embedding_probe": 600,
         "managed_jvmti_force": 1200,
         "managed_pathprobe": 600,
@@ -390,6 +391,8 @@ set(ART_LLVM_READOBJ "{(tmp_path / 'llvm-readobj').as_posix()}")
 set(ART_LLVM_OBJDUMP "{(tmp_path / 'llvm-objdump').as_posix()}")
 add_executable(dalvikvm IMPORTED GLOBAL)
 set_target_properties(dalvikvm PROPERTIES IMPORTED_LOCATION "{tmp_path / 'dalvikvm'}")
+add_executable(dex2oat IMPORTED GLOBAL)
+set_target_properties(dex2oat PROPERTIES IMPORTED_LOCATION "{tmp_path / 'dex2oat'}")
 foreach(_art_runtime_library IN ITEMS icu_jni javacore openjdk)
   add_library(${{_art_runtime_library}} SHARED IMPORTED GLOBAL)
 endforeach()
@@ -415,13 +418,14 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         (binary / "art-tests" / "art_test_catalog.json").read_text(encoding="utf-8")
     )
     applicable = [probe for probe in catalog["probes"] if probe["applicable"]]
-    assert len(catalog["probes"]) == 92
+    assert len(catalog["probes"]) == 93
     assert [probe["name"] for probe in applicable] == [
         "criticalnativeprobe",
         "nativeabiprobe",
         "managed_critical_native",
         "managed_native_abi",
         "managed_imageless_hello",
+        "managed_boot_image_hello",
         "managed_gc_stress",
         "managed_math_critical",
         "art_runtime_show_version",
@@ -439,6 +443,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "w004",
         "w004",
         "w004",
+        "w004",
         "w013",
         "w013",
     ]
@@ -447,7 +452,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         for probe in applicable
         if probe["execution"] == "target-runnable"
     ]
-    assert len(runnable) == 8
+    assert len(runnable) == 9
     assert all(probe["ctest_registered"] for probe in runnable)
     artifact = applicable[-2]
     assert artifact["type"] == "MANAGED"

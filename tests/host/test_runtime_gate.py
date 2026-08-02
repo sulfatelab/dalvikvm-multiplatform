@@ -560,6 +560,86 @@ def test_managed_gate_uses_isolated_runtime_and_records_result(
     assert "Hello passed" in capsys.readouterr().out
 
 
+def test_managed_gate_stages_and_uses_verified_boot_image(tmp_path, monkeypatch):
+    dalvikvm = tmp_path / "bin" / "dalvikvm"
+    boot = tmp_path / "managed" / "boot.jar"
+    app = tmp_path / "managed" / "hello.jar"
+    icu = tmp_path / "source" / "icudt72l.dat"
+    for path, content in (
+        (dalvikvm, b"vm"),
+        (boot, b"boot"),
+        (app, b"app"),
+        (icu, b"icu"),
+    ):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+    image_root = tmp_path / "product" / "boot-image"
+    image_dir = image_root / "x86_64"
+    image_dir.mkdir(parents=True)
+    artifacts = []
+    for name in ("boot.art", "boot.oat", "boot.vdex"):
+        path = image_dir / name
+        path.write_bytes(name.encode())
+        artifacts.append(
+            {
+                "path": f"x86_64/{name}",
+                "sha256": runtime_gate._sha256(path),
+                "size": path.stat().st_size,
+            }
+        )
+    (image_root / "manifest.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "target_id": "linux-x86_64-gnu",
+                "instruction_set": "x86_64",
+                "logical_boot_jar": "/system/framework/boot.jar",
+                "boot_jar_sha256": runtime_gate._sha256(boot),
+                "artifacts": artifacts,
+            }
+        ),
+        encoding="utf-8",
+    )
+    commands = []
+
+    def run(command, **kwargs):
+        commands.append(command)
+        return SimpleNamespace(
+            returncode=0,
+            stdout="Hello from dalvikvm!\nmain end exception=0\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", run)
+    work = tmp_path / "out" / "results" / "image-hello"
+    runtime_gate.run_managed(
+        target_id="linux-x86_64-gnu",
+        dalvikvm=dalvikvm,
+        boot_jar=boot,
+        boot_image_dir=image_root,
+        app_jar=app,
+        main_class="Hello",
+        work_root=work,
+        icu_data=icu,
+        library_dirs=[dalvikvm.parent],
+        vm_options=[],
+        main_args=[],
+        expected=["Hello from dalvikvm!", "main end exception=0"],
+        forbidden=["AssertionError"],
+        expected_exit=0,
+        timeout=30,
+    )
+
+    assert "-Xbootclasspath-locations:/system/framework/boot.jar" in commands[0]
+    assert f"-Ximage:{work / 'runtime' / 'boot-image' / 'boot.art'}" in commands[0]
+    assert (
+        work / "runtime" / "boot-image" / "x86_64" / "boot.art"
+    ).read_bytes() == b"boot.art"
+    result = json.loads((work / "result.json").read_text(encoding="utf-8"))
+    assert result["boot_image"]["status"] == "verified"
+    assert result["boot_image"]["instruction_set"] == "x86_64"
+
+
 def test_managed_gate_fails_closed_on_missing_marker(tmp_path, monkeypatch):
     files = []
     for name in ("dalvikvm", "boot.jar", "app.jar", "icudt72l.dat"):

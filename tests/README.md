@@ -101,8 +101,9 @@ source references into `tools/verify`; every case containing catalog native
 source has an adjacent target-status result. Shared stack-fault assembly has
 one physical owner under `stack-page-growth/` and is consumed by related
 targets without copying or filesystem links.
-Two Linux x86-64 command gates in `w004` now exercise `dalvikvm -showversion`
-and the runtime/compiler ELF load topology through
+Three Linux x86-64 command gates in `w004` now exercise `dalvikvm -showversion`,
+the runtime/compiler ELF load topology, and image-backed boot/runtime packaging
+through
 `support/runtime_gate.py`. A command gate owns no dummy target binary; its
 virtual target depends on the exact product artifacts that must exist before
 CTest runs it.
@@ -126,10 +127,11 @@ links/reparse points, and Windows JIT requires a matching compiler record.
 W-003 also declares CriticalNative and normal/FastNative for the exact pair
 `linux-x86_64-gnu` and `windows-x86_64-msvc`. One shared runner resolves the
 ELF/DLL name, library-path separator, absolute-load property, and target JIT
-controls; no other target is inferred. Linux also registers its show-version
-and compiler-DSO topology gates, for five W-004 CTest gates. Together with the
-shared W-013 gate, the Linux catalog has eight runnable declarations and three
-compile-only artifacts. Windows adds its BoringSSL SHA executable plus the exact
+controls; no other target is inferred. Linux also registers its show-version,
+compiler-DSO topology, and boot-image gates, for six W-004 CTest gates. Together
+with two shared W-003 gates and the shared W-013 gate, the Linux catalog has
+nine runnable declarations and three compile-only artifacts. Windows adds its
+BoringSSL SHA executable plus the exact
 `windows-x86_64-msvc` JVMTI managed gate and runtime-load/assembly-dependency
 reviewer. Twenty-five accepted Phase-3 libcore behaviors use one checked-in
 JSON contract matrix and one case-local, shell-free Python runner. The expanded
@@ -212,8 +214,10 @@ suffix-`A` family. The active 1,441-source graph has zero ANSI calls, source
 files, or API families. The Linux-hosted Windows-cross stage passes. Native
 Windows Server 2025 now passes W-027 as part of the complete 76/76 catalog;
 the first run completed in 12.38 seconds and the no-op repeat in 12.33 seconds.
-The complete catalog contains 69 target-runnable gates and seven host reviewers,
-and its repeated `art-tests` build reports `ninja: no work to do`.
+The complete 93-declaration catalog contains 72 target-runnable items, seven
+host reviewers, and 14 compile-only artifacts. The Windows product subset
+remains 90 applicable declarations: 69 target-runnable, seven host-review, and
+14 compile-only. Its repeated `art-tests` build reports `ninja: no work to do`.
 The former legacy shell runners and per-probe CMake entry points have been
 replaced by the unified Python/CMake/Ninja path, and `tools/verify` is removed.
 W-003 removed its four standalone CMake graphs, shell runners, and package producer;
@@ -505,14 +509,42 @@ repository-relative source names and contain no machine absolute paths. The
 builder invokes no shell, rejects symlink/reparse inputs, propagates javac/D8
 failures, and replaces only its named work directories under that output root.
 
+Targets that declare `boot_image` add `art-runtime-boot-image` to the same
+CMake/Ninja graph. On an exact native host it runs target `dex2oat` through
+`tools/build_boot_image.py` and produces only:
+
+```text
+runtime/boot-image/<aosp-instruction-set>/boot.art
+runtime/boot-image/<aosp-instruction-set>/boot.oat
+runtime/boot-image/<aosp-instruction-set>/boot.vdex
+runtime/boot-image/manifest.json
+```
+
+The image uses `/system/framework/boot.jar` as its logical location. Its three
+artifacts and relative manifest must not contain a source, toolchain, or build
+absolute path. The helper validates all outputs because `dex2oat` can report a
+fatal trace while returning zero, and it replaces the output tree atomically.
+The diagnostic `dex2oat.log` remains only in the ignored build tree and is not
+staged.
+
+`linux-x86_64-gnu` is currently the only admitted `boot_image` identity. A
+cross host cannot execute target `dex2oat`, so it owns a valid no-op CMake
+target and staging records `not-built-cross-host`. A target without the
+capability records `unsupported`. In particular, Windows does not inherit AOT/
+OAT support from `art-compiler.dll`; that remains a separate blocked porting
+track. A native capable product is incomplete if its declared image is absent.
+Product staging revalidates the image manifest against the exact boot JAR and
+copies the three artifacts plus manifest as regular files, never links.
+
 Managed runtime gates must use `support/runtime_gate.py` unless a case has a
 genuinely unique runner. The shared runner invokes `dalvikvm` with `shell=False`,
 creates its runtime root below the exact build output, stages `icudt72l.dat` as
-a regular file, supplies only declared DSO directories, rejects link/reparse
-components, and fails closed on a non-zero exit, timeout, missing marker, or
-forbidden marker. Its `result.json` records target identity, class, exit status,
-marker status, and JAR hashes without recording machine paths or environment
-dumps.
+a regular file, optionally verifies and copies the declared boot image, supplies
+only declared DSO directories, rejects link/reparse components, and fails closed
+on a non-zero exit, timeout, missing marker, or forbidden marker. Its
+`result.json` records target identity, class, exit status, marker status, JAR
+hashes, and normalized image identity without recording machine paths or
+environment dumps.
 
 Linkage describes the binary boundary under test. It is independent of whether
 the test is compile-only, run locally, transferred to another machine, or

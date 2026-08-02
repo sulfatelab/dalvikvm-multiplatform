@@ -481,6 +481,7 @@ def run_managed(
     require_nonzero: bool = False,
     cacerts_dir: Path | None = None,
     security_properties: Path | None = None,
+    boot_image_dir: Path | None = None,
 ) -> None:
     dalvikvm = _regular_file(str(dalvikvm))
     boot_jar = _regular_file(str(boot_jar))
@@ -535,11 +536,25 @@ def run_managed(
             "keystore_type": "AndroidCAStore",
         }
 
+    if boot_image_dir is None:
+        boot_image_option = runtime_root / "nonexistent-boot-image"
+        boot_classpath_location = str(boot_jar)
+        boot_image_record: dict[str, object] = {"status": "imageless"}
+    else:
+        boot_image_record = _stage_boot_image(
+            boot_image_dir,
+            runtime_root / "boot-image",
+            target_id=target_id,
+            boot_jar=boot_jar,
+        )
+        boot_image_option = runtime_root / "boot-image" / "boot.art"
+        boot_classpath_location = "/system/framework/boot.jar"
+
     command = [
         str(dalvikvm),
         f"-Xbootclasspath:{boot_jar}",
-        f"-Xbootclasspath-locations:{boot_jar}",
-        f"-Ximage:{runtime_root / 'nonexistent-boot-image'}",
+        f"-Xbootclasspath-locations:{boot_classpath_location}",
+        f"-Ximage:{boot_image_option}",
         "-XjdwpProvider:none",
         "-Xms64m",
         "-Xmx512m",
@@ -605,6 +620,7 @@ def run_managed(
         "forbidden_markers": present_forbidden,
         "boot_jar": {"name": boot_jar.name, "sha256": _sha256(boot_jar)},
         "app_jar": {"name": app_jar.name, "sha256": _sha256(app_jar)},
+        "boot_image": boot_image_record,
         "runtime_assets": runtime_assets,
     }
     (work_root / "result.json").write_text(
@@ -622,6 +638,68 @@ def run_managed(
         f"{main_class} passed for {target_id}: exit={result.returncode}, "
         f"markers={len(expected)}"
     )
+
+
+def _stage_boot_image(
+    source_root: Path,
+    destination_root: Path,
+    *,
+    target_id: str,
+    boot_jar: Path,
+) -> dict[str, object]:
+    source_root = _managed_path(source_root)
+    if not source_root.is_dir():
+        raise GateError(f"boot image root is not a directory: {source_root}")
+    manifest_path = _regular_file(str(source_root / "manifest.json"))
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, UnicodeError) as exc:
+        raise GateError(f"invalid boot image manifest: {exc}") from exc
+    if (
+        manifest.get("schema_version") != 1
+        or manifest.get("target_id") != target_id
+        or manifest.get("boot_jar_sha256") != _sha256(boot_jar)
+        or manifest.get("logical_boot_jar") != "/system/framework/boot.jar"
+    ):
+        raise GateError("boot image manifest does not match the runtime inputs")
+    instruction_set = manifest.get("instruction_set")
+    artifacts = manifest.get("artifacts")
+    if not isinstance(instruction_set, str) or not isinstance(artifacts, list):
+        raise GateError("boot image manifest omits instruction set or artifacts")
+    expected = {
+        f"{instruction_set}/boot.art",
+        f"{instruction_set}/boot.oat",
+        f"{instruction_set}/boot.vdex",
+    }
+    records: list[dict[str, object]] = []
+    seen: set[str] = set()
+    for raw in artifacts:
+        if not isinstance(raw, dict) or not isinstance(raw.get("path"), str):
+            raise GateError("boot image artifact record is malformed")
+        relative = raw["path"].replace("\\", "/")
+        if relative not in expected or relative in seen:
+            raise GateError(f"unexpected boot image artifact: {relative}")
+        source = _regular_file(str(source_root / Path(relative)))
+        digest = _sha256(source)
+        if raw.get("sha256") != digest or raw.get("size") != source.stat().st_size:
+            raise GateError(f"boot image artifact identity changed: {relative}")
+        destination = destination_root / Path(relative)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        _managed_path(destination.parent)
+        shutil.copyfile(source, destination)
+        records.append({"path": relative, "sha256": digest})
+        seen.add(relative)
+    if seen != expected:
+        raise GateError(
+            f"boot image artifact set is incomplete: {sorted(expected - seen)}"
+        )
+    destination_root.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(manifest_path, destination_root / "manifest.json")
+    return {
+        "status": "verified",
+        "instruction_set": instruction_set,
+        "artifacts": sorted(records, key=lambda value: str(value["path"])),
+    }
 
 
 def _copy_regular_tree(source_root: Path, destination_root: Path) -> list[Path]:
@@ -713,6 +791,7 @@ def _parser() -> argparse.ArgumentParser:
     managed.add_argument("--icu-data", type=_regular_file, required=True)
     managed.add_argument("--cacerts-dir", type=Path)
     managed.add_argument("--security-properties", type=_regular_file)
+    managed.add_argument("--boot-image-dir", type=Path)
     managed.add_argument("--library-dir", type=Path, action="append", default=[])
     managed.add_argument("--vm-option", action="append", default=[])
     managed.add_argument("--main-arg", action="append", default=[])
@@ -780,6 +859,7 @@ def main(argv: list[str] | None = None) -> int:
                 require_nonzero=args.require_nonzero,
                 cacerts_dir=args.cacerts_dir,
                 security_properties=args.security_properties,
+                boot_image_dir=args.boot_image_dir,
             )
         return 0
     except (GateError, OSError, UnicodeError) as exc:

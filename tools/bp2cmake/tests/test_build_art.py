@@ -1,3 +1,4 @@
+import hashlib
 import json
 from pathlib import Path
 import subprocess
@@ -257,6 +258,33 @@ def test_stage_copies_only_regular_product_files(tmp_path, monkeypatch):
     boot = binary_dir / "tests" / "managed" / "boot.jar"
     boot.parent.mkdir(parents=True)
     boot.write_bytes(b"boot")
+    image_root = binary_dir / "runtime" / "boot-image"
+    image_dir = image_root / "x86_64"
+    image_dir.mkdir(parents=True)
+    image_artifacts = []
+    for name in ("boot.art", "boot.oat", "boot.vdex"):
+        path = image_dir / name
+        path.write_bytes(name.encode())
+        image_artifacts.append(
+            {
+                "path": f"x86_64/{name}",
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                "size": path.stat().st_size,
+            }
+        )
+    (image_root / "manifest.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "target_id": "linux-x86_64-gnu",
+                "instruction_set": "x86_64",
+                "logical_boot_jar": "/system/framework/boot.jar",
+                "boot_jar_sha256": hashlib.sha256(b"boot").hexdigest(),
+                "artifacts": image_artifacts,
+            }
+        ),
+        encoding="utf-8",
+    )
     monkeypatch.setattr(
         build_art,
         "_ninja_product_outputs",
@@ -286,6 +314,9 @@ def test_stage_copies_only_regular_product_files(tmp_path, monkeypatch):
     assert (binary_dir / "stage" / "libbase.so").read_bytes() == b"base"
     assert (binary_dir / "stage" / "runtime" / "boot.jar").read_bytes() == b"boot"
     assert (
+        binary_dir / "stage" / "runtime" / "boot-image" / "x86_64" / "boot.art"
+    ).read_bytes() == b"boot.art"
+    assert (
         binary_dir
         / "stage"
         / "runtime"
@@ -298,6 +329,7 @@ def test_stage_copies_only_regular_product_files(tmp_path, monkeypatch):
     ).glob("*.*"))) >= 121
     assert '"schema_version": 2' in manifest
     assert '"target_id": "linux-x86_64-gnu"' in manifest
+    assert '"status": "included"' in manifest
 
 
 def test_ninja_product_inventory_ignores_stale_and_nested_outputs():
@@ -554,6 +586,7 @@ def test_windows_configure_uses_target_bundle_and_clang_target(tmp_path, monkeyp
     assert any(arg.startswith("-DART_TARGET_BUNDLE_ROOT=") for arg in commands[0])
     assert "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL" in commands[0]
     assert "-DART_ENABLE_TARGET_RUNTIME_TESTS=OFF" in commands[0]
+    assert "-DART_BOOT_IMAGE_PARALLEL=32" in commands[0]
     assert "-DART_TEST_VARIANT=product" in commands[0]
 
 
@@ -686,6 +719,12 @@ def test_runtime_tests_require_exact_native_host(
     monkeypatch.setattr(build_art.platform, "system", lambda: system)
     monkeypatch.setattr(build_art.platform, "machine", lambda: machine)
     assert build_art._host_can_run_target(build_art.resolve_target(target_id)) is expected
+
+
+@pytest.mark.parametrize(("system", "expected"), [("Linux", 32), ("Windows", 16)])
+def test_boot_image_parallel_limit_respects_windows_vm_memory(monkeypatch, system, expected):
+    monkeypatch.setattr(build_art.platform, "system", lambda: system)
+    assert build_art._boot_image_parallel_limit() == expected
 
 
 def test_build_fingerprint_records_resolved_profile_graph_tools_and_bindings(
