@@ -1,10 +1,10 @@
 # Libcore smoke — result
 
 **Status:** **COMPLETE for the promoted native Windows matrix and the exact
-Linux CoreProbe/InterruptProbe slice** — 25 unified libcore behaviors pass on
-the authoritative Windows Server 2025 host; CoreProbe and InterruptProbe
-additionally pass on Linux x86-64 and AArch64; no named L-003 case remains
-native-open
+Linux CoreProbe/InterruptProbe/RtMem slice** — 25 unified libcore behaviors pass
+on the authoritative Windows Server 2025 host; CoreProbe, InterruptProbe, and
+RtMem additionally pass on Linux x86-64 and AArch64; no named L-003 case
+remains native-open
 
 **Latest acceptance:** 2026-08-02
 
@@ -84,8 +84,8 @@ socket error and a closed peer to unblock the client read with EOF or an I/O
 error; both worker threads must terminate and no unexpected peer may appear.
 Historical Wine success is evidence only and does not broaden this result.
 
-Applicability remains per probe. CoreProbe and InterruptProbe are each accepted
-on exactly `linux-x86_64-gnu`, `linux-aarch64-gnu`, and
+Applicability remains per probe. CoreProbe, InterruptProbe, and RtMem are each
+accepted on exactly `linux-x86_64-gnu`, `linux-aarch64-gnu`, and
 `windows-x86_64-msvc`. Every other declaration in this case keeps its existing
 Windows x86-64/MSVC selector until independently reviewed, built, and
 runtime-tested on another exact target.
@@ -125,6 +125,24 @@ Both InterruptProbe records require exact-zero exit, a terminated sleeper
 after interruption, `interrupt.ok=true`, `InterruptProbe.done=ok`, and
 `main end exception=0`. They use app JAR SHA-256
 `62f39baec03d56d02e2077b6e564e9fb9179486dc69277173c8bfdbc9cd84ea8`
+and the same boot JAR hash recorded above. The manifests contain normalized
+native/QEMU runner identity and no absolute machine path; neither result tree
+contains a filesystem link.
+
+### Latest Linux RtMem acceptance
+
+Fresh Linux graphs again retained 37/38 generated modules, 2,089/2,113 compile
+commands, 2,172/2,196 Ninja commands, and 32 product links for x86-64/AArch64.
+The fresh 1,865-edge x86-64 W-004 build passed 12/12 in 4.05 seconds, including
+RtMem in 0.22 seconds; its true Ninja no-op repeat passed 12/12 in 4.10 seconds,
+including RtMem in 0.23 seconds. The fresh 1,630-edge AArch64 build passed 11/11
+in 96.09 seconds, including RtMem in 1.54 seconds under the explicit target
+runner; its true Ninja no-op repeat passed 11/11 in 96.58 seconds, including
+RtMem in 1.52 seconds.
+
+Both RtMem records require exact-zero exit, `mem.ok=true`, `RtMem.done=ok`, and
+`main end exception=0`. They use app JAR SHA-256
+`e813a185fdaf1dae64488c4b4d6fc97f8f4f72cc8be00da6fb3a9fa0184737c5`
 and the same boot JAR hash recorded above. The manifests contain normalized
 native/QEMU runner identity and no absolute machine path; neither result tree
 contains a filesystem link.

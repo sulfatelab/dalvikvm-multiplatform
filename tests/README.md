@@ -117,13 +117,13 @@ Conscrypt provider, OkHttp/Okio URL handlers, generated aconfig and Conscrypt
 sources, and security properties. Android/libcore APIs and ART annotations are
 therefore resolved from the same AOSP boot classes on Linux and Windows build
 hosts.
-Eight W-004 managed declarations are `target-runnable` on explicit exact-target
+Nine W-004 managed declarations are `target-runnable` on explicit exact-target
 selectors. Imageless Hello, allocation/collection stress, Math
 CriticalNative, HandleLeak, PerfSmoke, ThreadHeavy, and the libcore CoreProbe
-and InterruptProbe cover `linux-x86_64-gnu`, `linux-aarch64-gnu`, and
+InterruptProbe, and RtMem cover `linux-x86_64-gnu`, `linux-aarch64-gnu`, and
 `windows-x86_64-msvc`; their shell-free runners supply QEMU user mode only for
 the AArch64 target. The case-local
-`math-critical/run.py` runs `-Xint` and threshold-zero JIT twice each. All eight
+`math-critical/run.py` runs `-Xint` and threshold-zero JIT twice each. All nine
 declarations use a declared native DSO closure,
 isolated target-local runtime directories, pinned ICU data, strict exit/marker
 checks, timeouts, and sanitized JSON results. The Math aggregate additionally
@@ -135,17 +135,17 @@ runner resolves the ELF/DLL name, library-path separator, absolute-load
 property, target JIT controls, and the optional AArch64 runner prefix; no other
 target is inferred. Both Linux identities register show-version and the
 target-side compiler-DSO topology check; Linux x86-64 additionally registers
-its boot-image gate. It therefore has eleven W-004 CTest gates, while AArch64
-has ten. With two shared W-003 gates and the shared W-013 gate, Linux x86-64
-has fourteen runnable declarations and three compile-only artifacts; AArch64
-has thirteen runnable declarations and three compile-only artifacts. Windows
+its boot-image gate. It therefore has twelve W-004 CTest gates, while AArch64
+has eleven. With two shared W-003 gates and the shared W-013 gate, Linux x86-64
+has fifteen runnable declarations and three compile-only artifacts; AArch64
+has fourteen runnable declarations and three compile-only artifacts. Windows
 adds its
 BoringSSL SHA executable plus the exact
 `windows-x86_64-msvc` JVMTI managed gate and runtime-load/assembly-dependency
 reviewer. Twenty-five accepted Phase-3 libcore behaviors use one checked-in
-JSON contract matrix and one case-local, shell-free Python runner. CoreProbe
-and InterruptProbe each have an independent exact selector for both Linux
-targets and Windows x86-64; the other libcore declarations remain Windows
+JSON contract matrix and one case-local, shell-free Python runner. CoreProbe,
+InterruptProbe, and RtMem each have an independent exact selector for both
+Linux targets and Windows x86-64; the other libcore declarations remain Windows
 x86-64/MSVC-only. The expanded
 native W-004 stage has 35 gates: ART embedding, core/charset/monitor,
 BigInteger, Android/bionic OS constants, DNS,

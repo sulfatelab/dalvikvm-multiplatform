@@ -778,6 +778,11 @@ set(_art_interrupt_probe_ids_selector
         linux-x86_64-gnu
         linux-aarch64-gnu
         windows-x86_64-msvc)
+set(_art_runtime_memory_ids_selector
+    TARGET_IDS
+        linux-x86_64-gnu
+        linux-aarch64-gnu
+        windows-x86_64-msvc)
 set(_art_perf_smoke_ids_selector
     TARGET_IDS
         linux-x86_64-gnu
@@ -1347,6 +1352,8 @@ foreach(_art_libcore_class IN LISTS _art_libcore_managed_classes)
         set(_art_libcore_selector ${_art_core_probe_ids_selector})
     elseif(_art_libcore_class STREQUAL "InterruptProbe")
         set(_art_libcore_selector ${_art_interrupt_probe_ids_selector})
+    elseif(_art_libcore_class STREQUAL "RtMem")
+        set(_art_libcore_selector ${_art_runtime_memory_ids_selector})
     else()
         set(_art_libcore_selector ${_art_windows_current_selector})
     endif()
