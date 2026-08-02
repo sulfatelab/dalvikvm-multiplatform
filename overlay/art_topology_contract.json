@@ -12,7 +12,10 @@
     },
     "libicuuc_stubdata": {
       "linux": "static",
-      "reason": "Windows preserves ICU's shared stub-data import topology while Linux folds the zero-data stub into its shared ICU closure.",
+      "reason": "Windows ICU common is a DLL and imports icudt72_dat through ICU's U_DATA_API contract; the stub-data DLL owns that required PE data-import boundary while Linux folds the zero-data stub into its shared ICU closure.",
+      "required_consumers": [
+        "libicuuc"
+      ],
       "windows": "shared"
     },
     "libprofile": {

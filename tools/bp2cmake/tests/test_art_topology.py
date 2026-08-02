@@ -51,6 +51,26 @@ def test_topology_contract_accepts_only_declared_kind_delta():
     }
 
 
+def test_topology_contract_enforces_required_kind_difference_consumers():
+    linux = _manifest(
+        "linux-x86_64-gnu",
+        [("base", "base", "shared"), ("art", "art", "shared")],
+    )
+    windows = _manifest(
+        "windows-x86_64-msvc",
+        [("base", "base", "static"), ("art", "art", "shared")],
+    )
+    contract = _contract()
+    contract["kind_differences"]["base"]["required_consumers"] = ["art"]
+    for manifest in (linux, windows):
+        manifest["modules"][1]["link_dependencies"] = ["base"]
+
+    check_art_topology.compare_topologies(linux, windows, contract)
+    windows["modules"][1]["link_dependencies"] = []
+    with pytest.raises(check_art_topology.TopologyError, match="must link required"):
+        check_art_topology.compare_topologies(linux, windows, contract)
+
+
 def test_topology_contract_rejects_new_module_and_target_rename():
     linux = _manifest(
         "linux-x86_64-gnu",

@@ -1868,7 +1868,7 @@ difference has a reviewed disposition in `overlay/art_topology_contract.json`:
 | `libdexfile` | shared | static | keep the implementation internal to ART and dex2oat until its C++ PE boundary is reviewed |
 | `libprofile` | shared | static | keep the implementation internal to ART and dex2oat until its PE boundary is reviewed |
 | `libunwindstack` | shared | static | embed the adapted unwinder until a standalone Windows DLL ABI is reviewed |
-| `libicuuc_stubdata` | static | shared | retain the Windows ICU stub-data import topology |
+| `libicuuc_stubdata` | static | shared | Windows `icuuc.dll` imports `icudt72_dat` through ICU's `U_DATA_API`; retain the stub-data DLL as the required PE data-import owner |
 
 There is one module-set difference: Linux generates shared `libsigchain`,
 while Windows supplies the equivalent shared `sigchain` target from
@@ -1924,6 +1924,12 @@ differences.
   it mechanically. The fresh-manifest audit accepts exactly 37 Linux modules,
   36 Windows modules, one reviewed set difference, and five reviewed kind
   differences; any unreviewed change fails.
+- [x] Re-audit the `libicuuc_stubdata` kind difference against a fresh Windows
+  cross link. Making it static fails `icuuc.dll` with the expected unresolved
+  `__imp_icudt72_dat`: ICU marks the data symbol `dllimport` when common ICU is
+  a DLL. The reviewed contract now records that exact PE boundary and
+  mechanically requires both Linux and Windows `libicuuc` to link their
+  target-correct stub-data artifact.
 - [x] Enforce the exact `art-compiler.dll` export allowlist, required
   `art.dll` import, and absence of an `art.dll -> art-compiler.dll` reverse
   dependency. Architecture/object-format and ASLR checks remain in their
