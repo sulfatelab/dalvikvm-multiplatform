@@ -206,15 +206,24 @@ class Emitter:
         gp = self.ov.global_policy
         blocks: list[str] = []
         for dep in self._absorbed_modules(m):
+            # Source-level options model the absorbed Blueprint module itself.
+            # ModulePolicy flag additions are target-level decisions when that
+            # module is emitted; do not silently duplicate them here.
             # Apply the SAME global flag-drop policy as the main target options
             # (drop_cflags): these per-file COMPILE_OPTIONS otherwise bypass it
             # and can re-arm e.g. -Werror on host (C++20's
             # -Wdeprecated-literal-operator fires in fmtlib via art_defaults).
             opts = [c for c in dep.cflags if c not in gp.drop_cflags]
+            from .overlay import apply_module_policy
+            dep_pol = self.ov.policy_for(dep.name)
+            dep2 = apply_module_policy(dep, dep_pol, gp)
             if not opts:
                 continue
-            files = [self._join(dep.bp_dir, s, dep.root_var) for s in dep.effective_srcs()
-                     if not s.startswith(":")]
+            files = [
+                self._join(dep2.bp_dir, s, dep2.root_var)
+                for s in dep2.effective_srcs()
+                if not s.startswith(":")
+            ]
             if not files:
                 continue
             opt_str = ";".join(opts)

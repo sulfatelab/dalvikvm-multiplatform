@@ -445,7 +445,15 @@ _WINDOWS_MODULE_DELTA: dict[str, dict[str, object]] = {
         add_defines=["_CRT_SECURE_NO_WARNINGS"],
         force_enabled=True,
     ),
-    "libcpu_features": dict(force_enabled=True),
+    # Upstream's architecture branch selects the Linux/Android x86 detector
+    # even for target.windows. Replace it in the exact admitted Windows x86-64
+    # policy, before libart absorbs this whole-static dependency. A future
+    # Windows architecture must provide its own reviewed implementation.
+    "libcpu_features": dict(
+        remove_srcs=["src/impl_x86_linux_or_android.c"],
+        add_srcs=["src/impl_x86_windows.c"],
+        force_enabled=True,
+    ),
     "libdexfile": dict(
         kind="static",
         add_cflags=_WINDOWS_CFLAGS,

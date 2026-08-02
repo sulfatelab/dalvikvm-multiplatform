@@ -140,6 +140,40 @@ def test_absorbed_whole_static_includes_precede_other_link_dependencies():
     assert text.index(compiler_include + "\n") < text.index(lzma_include + "\n")
 
 
+def test_absorbed_cpu_features_uses_the_exact_windows_implementation():
+    evaluator = Evaluator(Config(os="windows", arch="x86_64"))
+    evaluator.add_file(
+        """
+        cc_library_static {
+            name: "libcpu_features",
+            cflags: ["-DCPU_FEATURES_SOURCE"],
+            arch: {
+                x86_64: { srcs: ["src/impl_x86_linux_or_android.c"] },
+            },
+        }
+        cc_library {
+            name: "libart",
+            whole_static_libs: ["libcpu_features"],
+            srcs: ["runtime.cc"],
+        }
+        """,
+        "external/cpu_features/Android.bp",
+    )
+    overlay = Overlay(
+        modules={
+            "libcpu_features": ModulePolicy(
+                remove_srcs=["src/impl_x86_linux_or_android.c"],
+                add_srcs=["src/impl_x86_windows.c"],
+            )
+        }
+    )
+
+    text = Emitter(evaluator, overlay).emit_module(evaluator.resolve("libart"))
+
+    assert "impl_x86_windows.c" in text
+    assert "impl_x86_linux_or_android.c" not in text
+
+
 def test_unified_overlay_factory_selects_current_target_policy():
     repo = Path(__file__).resolve().parents[3]
     factory = repo / "overlay" / "art_port_policy.py"
@@ -181,6 +215,9 @@ def test_unified_overlay_factory_selects_current_target_policy():
         assert windows.policy_for(name).kind == "shared"
     assert linux.policy_for("libcrypto").add_srcs == []
     assert windows.policy_for("libcrypto").add_srcs == []
+    cpu_features = windows.policy_for("libcpu_features")
+    assert cpu_features.remove_srcs == ["src/impl_x86_linux_or_android.c"]
+    assert cpu_features.add_srcs == ["src/impl_x86_windows.c"]
     assert windows.policy_for("libjavacrypto").add_shared_libs == [
         "libcrypto",
         "libssl",

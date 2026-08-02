@@ -35,12 +35,6 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
         target_sources(unwindstack PRIVATE
             "${MDVM_ART_ROOT_DIR}/art/multiplatform/windows/AsmGetRegs_stub.c")
     endif()
-    foreach(_art_cpu_target cpu_features art dex2oat_static)
-        if(TARGET ${_art_cpu_target})
-            target_sources(${_art_cpu_target} PRIVATE
-                "${MDVM_ART_ROOT_DIR}/external/cpu_features/src/impl_x86_windows.c")
-        endif()
-    endforeach()
     if(TARGET artbase)
         target_link_libraries(artbase onecore)
     endif()

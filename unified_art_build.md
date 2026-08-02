@@ -75,6 +75,16 @@ items are closed.
   Blueprint source-list position. Fresh 37/36-module Linux and Windows-cross
   products passed the 2,088/2,082 compile-command audits, completed
   2,173/2,128 Ninja edges at 32 jobs, and repeated as true Ninja no-ops.
+- [x] CPU-feature implementation selection is no longer embedded in common
+  CMake. The exact Windows x86-64 overlay replaces Blueprint's inactive
+  Linux/Android detector with `impl_x86_windows.c` before `libart` absorbs the
+  dependency; generated source properties follow the same resolved policy.
+  Future Windows architectures cannot inherit the x86 detector without an
+  explicit reviewed overlay. Linux's graph/manifest stayed byte-identical and
+  its complete product remained a no-op. A fresh Windows graph contains only
+  the Windows detector, passed 2,081 compile-command and 2,126 Ninja-command
+  audits, rebuilt the affected source/`art.dll` incrementally, and then became
+  a true no-op.
 - [x] Mterp layout no longer appends `ng` to an architecture spelling or
   injects a fixed generated x86-64 path. Each target profile carries a
   path-free `mterp_source_dir` and `mterp_output`; the closed mapping includes
@@ -92,7 +102,8 @@ items are closed.
   `asm_defines.h`, mterp assembly, and 37/36-module CMake graphs are
   byte-identical to the preceding fully built products.
 - [x] `PYTHONPATH=tools/bp2cmake python3 -m pytest tools/bp2cmake/tests tests/host -q`:
-  229 passed, including target-selected `cc_object` source expansion,
+  230 passed, including absorbed target-specific CPU-feature substitution,
+  target-selected `cc_object` source expansion,
   explicit RISC-V mterp-layout generation and
   profile-triple asm-definition propagation,
   boot-image construction/staging/runtime gates, the
@@ -1959,10 +1970,12 @@ differences.
 - [x] Remove the fixed BoringSSL x86-64 assembly list from the overlay.
   Target-resolved Blueprint `cc_object` expansion now selects the upstream BCM
   sources and fails naturally when a target lacks a reviewed Blueprint branch.
-- [ ] Remove the remaining fixed CPU-feature sources, probe names, and
-  object-inspection assumptions. Target-layout codegen already uses the
-  profile triple, and broad toolchain preludes are retired; those completed
-  parts must not be reintroduced.
+- [x] Move Windows x86 CPU-feature source substitution from common CMake into
+  the exact target overlay, including absorbed-source compile properties. A
+  future architecture cannot silently inherit `impl_x86_windows.c`.
+- [ ] Remove the remaining fixed probe names and object-inspection assumptions.
+  Target-layout codegen already uses the profile triple, and broad toolchain
+  preludes are retired; those completed parts must not be reintroduced.
 - [ ] Validate and admit Linux AArch64, x86, ARMv7, and RISC-V64 separately.
 - [x] Migrate the ARM64EC identity from transitional
   `windows-aarch64-arm64ec/cpu_arch=aarch64` to

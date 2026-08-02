@@ -54,6 +54,9 @@ def test_windows_product_targets_use_explicit_definitions_without_a_prelude():
     codegen = (
         REPO_ROOT / "tools" / "bp2cmake" / "bp2cmake" / "codegen.py"
     ).read_text(encoding="utf-8")
+    target_graph = (
+        REPO_ROOT / "native" / "cmake" / "ArtTargetGraph.cmake"
+    ).read_text(encoding="utf-8")
     windows_prelude = (
         REPO_ROOT / "compat" / "include" / "mdvm_windows_x64_prelude.h"
     )
@@ -73,6 +76,8 @@ def test_windows_product_targets_use_explicit_definitions_without_a_prelude():
     assert "target_compile_definitions(${_t} PRIVATE" in cmake
     assert "get_target_property(_art_dex2oat_sources art-dex2oat SOURCES)" not in cmake
     assert "libbase/hex.cpp" not in cmake
+    assert "impl_x86_windows.c" not in target_graph
+    assert "impl_x86_linux_or_android.c" not in target_graph
     for relative in (
         "tests/cases/jit-mapping/probe.cc",
         "tests/cases/jit-section-policy/probe.cc",
