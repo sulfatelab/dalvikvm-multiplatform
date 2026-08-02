@@ -134,7 +134,7 @@ int main(int argc, char** argv) {
     exhaustive_low_va = true;
   } else if (argc != 1) {
     std::fprintf(stderr,
-                 "usage: windows_x64_w013_mem_map_probe.exe [--exhaustive-low-va]\n");
+                 "usage: windows_w013_mem_map_probe.exe [--exhaustive-low-va]\n");
     return 2;
   }
 

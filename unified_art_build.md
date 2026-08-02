@@ -1574,9 +1574,9 @@ inference.
 | `w003` | `w003frameprobe` | `w003xmmsentinel` (Windows only); `criticalnativeprobe`, `nativeabiprobe` (exact Linux/Windows pair) | `criticalnativeprobe`, `nativeabiprobe` |
 | `w004` | `win32_art_embedding_probe`, `jvmtiforceprobe`, `windows_crypto_sha_probe` | none | none |
 | `w010` | `win32_uef_probe`, `win32_fault_record_probe`, `win32_debugger_probe` | `win32_sigchain_probe` | none |
-| `w013` | `windows_socket_fd_registry_probe`, `windows_x64_w013_mem_map_probe`, `windows_x64_w013_mspace_owner_probe` | `windows_x64_w013_dlmalloc_config_probe` | none |
-| `w014` | `windows_x64_pthread_once_probe`, `win32_thread_stack_probe`, `win32_stack_growth_rx_probe`, `win32_cet_policy_probe`, `fs1stackhighwater` | `win32_stack_page_probe`, `win32_stack_growth_probe`, `win32_stack_pregrow_probe` | none |
-| `w025` | `w025jitmappingprobe`, `windows_x64_w025_section_policy_probe`, `windows_x64_w025_policy_launcher` | `win32_jit_unwind_info_probe`, `win32_jit_unwind_registry_probe`, `jitunwindlifecycleprobe`, `w025jitlifecyclestressprobe` | none |
+| `w013` | `windows_socket_fd_registry_probe`, `windows_w013_mem_map_probe`, `windows_w013_mspace_owner_probe` | `windows_w013_dlmalloc_config_probe` | none |
+| `w014` | `windows_w014_pthread_once_probe`, `win32_thread_stack_probe`, `win32_stack_growth_rx_probe`, `win32_cet_policy_probe`, `fs1stackhighwater` | `win32_stack_page_probe`, `win32_stack_growth_probe`, `win32_stack_pregrow_probe` | none |
+| `w025` | `w025jitmappingprobe`, `windows_w025_section_policy_probe`, `windows_w025_policy_launcher` | `win32_jit_unwind_info_probe`, `win32_jit_unwind_registry_probe`, `jitunwindlifecycleprobe`, `w025jitlifecyclestressprobe` | none |
 
 The eleven Windows-only exact-ID entries inspect or depend on Microsoft x86-64 calling,
 register, stack, PE unwind, or handwritten assembly behavior. They are not
@@ -1589,8 +1589,10 @@ are not proven for another Windows architecture or ABI. They remain unreviewed
 port candidates for Windows AArch64 and ARM64EC. Each must compile and pass its
 own native runtime or result-review gate before another exact selector value is
 added. Windows x86 and ARMv7 remain valid registry identities but are explicitly
-outside the implementation roadmap. Names containing `windows_x64` must be
-renamed if their audited contract proves architecture-independent.
+outside the implementation roadmap. The seven former `windows_x64_*` logical
+probe targets now use architecture-neutral `windows_*` names while retaining
+their existing x86-64/MSVC selectors; naming no longer makes a support claim,
+and selector expansion still requires independent native acceptance.
 
 Only `criticalnativeprobe` and `nativeabiprobe` currently use
 platform-neutral JNI/C scalar sources and have verified common Linux/Windows
@@ -1983,9 +1985,16 @@ differences.
   generated 37/36-module graphs. Regenerating the already complete products in
   `out/bp-object-sources-20260802/` left both builds as true Ninja no-ops;
   topology, VCS-content, and all 230 host/bp2cmake tests passed.
-- [ ] Remove the remaining fixed probe names and object-inspection assumptions.
-  Target-layout codegen already uses the profile triple, and broad toolchain
-  preludes are retired; those completed parts must not be reintroduced.
+- [x] Remove architecture claims from the seven live `windows_x64_*` logical
+  probe target names. W-013, W-014, and W-025 now use `windows_*` names while
+  preserving every existing typed or exact x86-64/MSVC selector. Historical
+  evidence names and genuinely x86-64 source/reviewer filenames remain intact.
+  Both complete product trees regenerated and stayed true Ninja no-ops; the
+  topology/VCS audits and all 230 host/bp2cmake tests passed.
+- [ ] Remove the remaining generic object-inspection assumptions. Exact
+  Microsoft x86-64 ABI/assembly reviewers remain intentionally scoped to
+  `windows-x86_64-msvc`; generic product validation must instead consume
+  target-profile format, architecture, and pointer-width data.
 - [ ] Validate and admit Linux AArch64, x86, ARMv7, and RISC-V64 separately.
 - [x] Migrate the ARM64EC identity from transitional
   `windows-aarch64-arm64ec/cpu_arch=aarch64` to

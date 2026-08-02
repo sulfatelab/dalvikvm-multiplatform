@@ -261,12 +261,12 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "managed_crashabortprobe": 300,
         "managed_crashnativeprobe": 900,
         "managed_w010_fault_recovery": 1200,
-        "windows_x64_w013_mem_map_probe": 60,
-        "windows_x64_w013_mspace_owner_probe": 60,
-        "windows_x64_w013_dlmalloc_config_probe": 60,
+        "windows_w013_mem_map_probe": 60,
+        "windows_w013_mspace_owner_probe": 60,
+        "windows_w013_dlmalloc_config_probe": 60,
         "managed_w013_non_moving_128m": 300,
         "managed_w013_non_moving_1024m": 300,
-        "windows_x64_pthread_once_probe": 180,
+        "windows_w014_pthread_once_probe": 180,
         "win32_thread_stack_probe": 240,
         "win32_stack_page_probe": 240,
         "win32_stack_growth_probe": 900,
@@ -278,8 +278,8 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "managed_jit_unwind_lifecycle": 600,
         "managed_w025_jit_lifecycle_stress": 1200,
         "managed_w025_jit_mapping": 1200,
-        "windows_x64_w025_section_policy_probe": 900,
-        "windows_x64_w025_policy_launcher": 1200,
+        "windows_w025_section_policy_probe": 900,
+        "windows_w025_policy_launcher": 1200,
         "windows_w025_jit_runtime_controls": 1800,
     }
     assert [
@@ -291,7 +291,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "windows_w010_boundary_unwind_structure",
         "windows_w013_source_policy",
         "win32_fs1_stack_high_water_structure",
-        "windows_x64_w025_jit_structure",
+        "windows_w025_jit_structure",
         "windows_w027_unicode_api_policy",
     ]
     w025 = [probe for probe in catalog["probes"] if probe["stage"] == "w025"]
@@ -300,7 +300,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     assert sum(probe["execution"] == "host-review" for probe in w025) == 1
     assert sum(probe["execution"] == "compile-only" for probe in w025) == 3
     assert [probe["name"] for probe in w025 if probe["ctest_registered"]] == [
-        "windows_x64_w025_jit_structure",
+        "windows_w025_jit_structure",
     ]
     w027 = [probe for probe in catalog["probes"] if probe["stage"] == "w027"]
     assert len(w027) == 1

@@ -1433,7 +1433,7 @@ endif()
 
 # W-013: ART-owned Windows virtual-memory and allocator contracts.
 art_add_target_probe(
-    NAME windows_x64_w013_mem_map_probe STAGE w013 TYPE EXECUTABLE
+    NAME windows_w013_mem_map_probe STAGE w013 TYPE EXECUTABLE
     EXECUTION target-runnable TIMEOUT 60
     ${_art_windows_current_selector}
     SOURCES "${_art_test_cases_root}/mem-map-policy/probe.cc"
@@ -1441,7 +1441,7 @@ art_add_target_probe(
     LINK_LIBRARIES artbase base log
     CONTRACTS virtual-memory PRODUCT_POLICY)
 art_add_target_probe(
-    NAME windows_x64_w013_mspace_owner_probe STAGE w013 TYPE EXECUTABLE
+    NAME windows_w013_mspace_owner_probe STAGE w013 TYPE EXECUTABLE
     EXECUTION target-runnable TIMEOUT 60
     ${_art_windows_current_selector}
     SOURCES
@@ -1457,14 +1457,14 @@ art_add_target_probe(
         "${Python3_EXECUTABLE}"
         "${_art_test_repo_root}/tests/support/windows/mspace_owner_gate.py"
         --target-id "${ART_TARGET_ID}"
-        --probe "$<TARGET_FILE:windows_x64_w013_mspace_owner_probe>"
+        --probe "$<TARGET_FILE:windows_w013_mspace_owner_probe>"
         --result
             "${CMAKE_CURRENT_BINARY_DIR}/results/w013-mspace-owner/result.json"
         --library-dir "${CMAKE_BINARY_DIR}"
         --library-dir "${_art_bundle_lib}/libcxx/bin"
         --timeout 8)
 art_add_target_probe(
-    NAME windows_x64_w013_dlmalloc_config_probe STAGE w013 TYPE EXECUTABLE
+    NAME windows_w013_dlmalloc_config_probe STAGE w013 TYPE EXECUTABLE
     EXECUTION target-runnable TIMEOUT 60
     ${_art_windows_x86_64_msvc_selector}
     SOURCES "${_art_test_cases_root}/dlmalloc-config/probe.c"
@@ -1527,7 +1527,7 @@ endforeach()
 
 # W-014: native thread-stack, guard-page, CET, and stack high-water contracts.
 art_add_target_probe(
-    NAME windows_x64_pthread_once_probe STAGE w014 TYPE EXECUTABLE
+    NAME windows_w014_pthread_once_probe STAGE w014 TYPE EXECUTABLE
     EXECUTION target-runnable TIMEOUT 180 ${_art_windows_current_selector}
     SOURCES "${_art_test_cases_root}/pthread-once/probe.c"
     CONTRACTS threads PRODUCT_POLICY
@@ -1536,7 +1536,7 @@ art_add_target_probe(
         "${_art_test_repo_root}/tests/support/runtime_gate.py"
         native
         --target-id "${ART_TARGET_ID}"
-        --probe "$<TARGET_FILE:windows_x64_pthread_once_probe>"
+        --probe "$<TARGET_FILE:windows_w014_pthread_once_probe>"
         --work-root
             "${CMAKE_CURRENT_BINARY_DIR}/results/w014-pthread-once"
         --library-dir "${CMAKE_BINARY_DIR}"
@@ -1908,7 +1908,7 @@ art_add_target_probe(
         --icu-data "${_art_icu_data}"
         ${_art_managed_runtime_library_args})
 art_add_target_probe(
-    NAME windows_x64_w025_section_policy_probe STAGE w025 TYPE EXECUTABLE
+    NAME windows_w025_section_policy_probe STAGE w025 TYPE EXECUTABLE
     EXECUTION target-runnable TIMEOUT 900 ${_art_windows_current_selector}
     SOURCES "${_art_test_cases_root}/jit-section-policy/probe.cc"
     LINK_LIBRARIES onecore psapi
@@ -1921,17 +1921,17 @@ art_add_target_probe(
         "${_art_test_repo_root}/tests/support/runtime_gate.py"
         native-matrix
         --target-id "${ART_TARGET_ID}"
-        --probe "$<TARGET_FILE:windows_x64_w025_section_policy_probe>"
+        --probe "$<TARGET_FILE:windows_w025_section_policy_probe>"
         --work-root "${CMAKE_CURRENT_BINARY_DIR}/results/w025-section-policy"
         --library-dir "${CMAKE_BINARY_DIR}"
         --library-dir "${_art_bundle_lib}/libcxx/bin"
         --matrix "${_art_test_cases_root}/jit-section-policy/runtime-matrix.json")
 art_add_target_probe(
-    NAME windows_x64_w025_policy_launcher STAGE w025 TYPE EXECUTABLE
+    NAME windows_w025_policy_launcher STAGE w025 TYPE EXECUTABLE
     EXECUTION target-runnable TIMEOUT 1200 ${_art_windows_current_selector}
     SOURCES "${_art_test_cases_root}/jit-section-policy/launcher.cc"
     DEPENDS
-        windows_x64_w025_section_policy_probe
+        windows_w025_section_policy_probe
         managed_w025_jit_mapping managed_imageless_hello
         dalvikvm icu_jni javacore openjdk openjdkjvm
     CONTRACTS jit process-policy
@@ -1940,8 +1940,8 @@ art_add_target_probe(
         "${Python3_EXECUTABLE}"
         "${_art_test_cases_root}/jit-section-policy/run.py"
         --target-id "${ART_TARGET_ID}"
-        --launcher "$<TARGET_FILE:windows_x64_w025_policy_launcher>"
-        --section-probe "$<TARGET_FILE:windows_x64_w025_section_policy_probe>"
+        --launcher "$<TARGET_FILE:windows_w025_policy_launcher>"
+        --section-probe "$<TARGET_FILE:windows_w025_section_policy_probe>"
         --mapping-probe "$<TARGET_FILE:w025jitmappingprobe>"
         --dalvikvm "$<TARGET_FILE:dalvikvm>"
         --boot-jar "${_art_boot_jar}"
@@ -1975,10 +1975,10 @@ art_add_target_probe(
         --icu-data "${_art_icu_data}"
         ${_art_managed_runtime_library_args})
 art_add_target_probe(
-    NAME windows_x64_w025_jit_structure STAGE w025 TYPE GATE
+    NAME windows_w025_jit_structure STAGE w025 TYPE GATE
     EXECUTION host-review ${_art_windows_current_selector}
     DEPENDS
-        art windows_x64_w025_section_policy_probe
+        art windows_w025_section_policy_probe
         w025jitlifecyclestressprobe
     CONTRACTS jit virtual-memory unwind source-policy
     COMMAND
@@ -1987,7 +1987,7 @@ art_add_target_probe(
         --target-id "${ART_TARGET_ID}"
         --repo "${_art_test_repo_root}"
         --art "$<TARGET_FILE:art>"
-        --section-probe "$<TARGET_FILE:windows_x64_w025_section_policy_probe>"
+        --section-probe "$<TARGET_FILE:windows_w025_section_policy_probe>"
         --stress-probe "$<TARGET_FILE:w025jitlifecyclestressprobe>"
         --llvm-readobj "${ART_LLVM_READOBJ}"
         --result
