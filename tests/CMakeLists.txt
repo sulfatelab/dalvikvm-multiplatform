@@ -747,6 +747,11 @@ set(_art_gc_stress_ids_selector
         linux-x86_64-gnu
         linux-aarch64-gnu
         windows-x86_64-msvc)
+set(_art_non_moving_128m_ids_selector
+    TARGET_IDS
+        linux-x86_64-gnu
+        linux-aarch64-gnu
+        windows-x86_64-msvc)
 set(_art_imageless_runtime_ids_selector
     TARGET_IDS linux-x86_64-gnu linux-aarch64-gnu windows-x86_64-msvc)
 foreach(_art_test_llvm_tool ART_LLVM_READOBJ ART_LLVM_OBJDUMP)
@@ -1498,7 +1503,7 @@ art_add_target_probe(
     CONTRACTS allocator configuration)
 art_add_target_probe(
     NAME managed_w013_non_moving STAGE w013 TYPE MANAGED EXECUTION compile-only
-    ${_art_current_native_ids_selector}
+    ${_art_non_moving_128m_ids_selector}
     SOURCES
         "${_art_test_cases_root}/non-moving-heap/W013NonMovingStressProbe.java"
     CONTRACTS allocator gc stress
@@ -1514,7 +1519,7 @@ foreach(_art_w013_heap_mib IN ITEMS 128 1024)
     # Preserve shared accepted pressure at 128 MiB; 1024 MiB remains the
     # separately accepted Windows resource-pressure profile.
     if(_art_w013_heap_mib EQUAL 128)
-        set(_art_w013_non_moving_selector ${_art_current_native_ids_selector})
+        set(_art_w013_non_moving_selector ${_art_non_moving_128m_ids_selector})
     else()
         set(_art_w013_non_moving_selector ${_art_windows_current_selector})
     endif()
@@ -1537,6 +1542,7 @@ foreach(_art_w013_heap_mib IN ITEMS 128 1024)
                 "${CMAKE_CURRENT_BINARY_DIR}/results/w013-non-moving-${_art_w013_heap_mib}m"
             --icu-data "${_art_icu_data}"
             ${_art_managed_runtime_library_args}
+            ${_art_target_runner_args}
             --vm-option=-Xint
             --vm-option=-Xmx${_art_w013_heap_mib}m
             --expect "nonmoving.total_bytes=75497472"

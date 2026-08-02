@@ -473,11 +473,12 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     assert gate["type"] == "GATE"
     assert gate["target_ids"] == [
         "linux-x86_64-gnu",
+        "linux-aarch64-gnu",
         "windows-x86_64-msvc",
     ]
 
 
-def test_linux_aarch64_catalog_registers_only_evidenced_runner_smokes(tmp_path):
+def test_linux_aarch64_catalog_registers_only_evidenced_runner_slice(tmp_path):
     cmake = shutil.which("cmake")
     if cmake is None:
         pytest.skip("CMake is unavailable")
@@ -535,9 +536,23 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "managed_imageless_hello",
         "managed_gc_stress",
         "art_runtime_show_version",
+        "managed_w013_non_moving",
+        "managed_w013_non_moving_128m",
     ]
-    assert all(probe["execution"] == "target-runnable" for probe in applicable)
-    assert all(probe["ctest_registered"] for probe in applicable)
+    assert [probe["execution"] for probe in applicable] == [
+        "target-runnable",
+        "target-runnable",
+        "target-runnable",
+        "compile-only",
+        "target-runnable",
+    ]
+    assert [probe["ctest_registered"] for probe in applicable] == [
+        True,
+        True,
+        True,
+        False,
+        True,
+    ]
     ctest = (binary / "art-tests" / "CTestTestfile.cmake").read_text(
         encoding="utf-8"
     )
@@ -545,3 +560,11 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     assert "qemu-aarch64" in ctest
     assert "--runner-arg=-L" in ctest
     assert "ART version 2.1.0 arm64" in ctest
+    w013_line = next(
+        line
+        for line in ctest.splitlines()
+        if line.startswith("add_test(")
+        and "art.w013.managed_w013_non_moving_128m" in line
+    )
+    assert "--runner" in w013_line
+    assert "--runner-arg=-L" in w013_line

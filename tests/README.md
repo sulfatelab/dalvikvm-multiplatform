@@ -178,11 +178,12 @@ The JVMTI runner, native agent, managed
 source, and result live together under `cases/jvmti-force/`; its current
 selector is deliberately not generalized to another Windows architecture or
 ABI.
-The W-013 non-moving-heap artifact and 128 MiB runtime gate use the same exact
-Linux and Windows x86-64 identities. Its heavier 1024 MiB gate is separately
-Windows-specific. This is intentional per-test applicability: sharing one Java
-source and Python runner does not imply that every resource profile or future
-architecture is supported.
+The W-013 non-moving-heap artifact and 128 MiB runtime gate use three exact
+identities: Linux x86-64, Linux AArch64 under its explicit runner, and Windows
+x86-64. Its heavier 1024 MiB gate is separately Windows-specific. This is
+intentional per-test applicability: sharing one Java source and Python runner
+does not imply that every resource profile or future architecture is
+supported.
 W-010's four native EXEs and three managed declarations are now all
 `target-runnable` for `windows-x86_64-msvc`. Case-local Python runners own the
 four-mode UEF contract, two debugger modes, managed abort, three fatal
@@ -585,10 +586,11 @@ hashes, normalized image identity, and normalized native/external runner
 identity without recording machine paths or environment dumps.
 
 The current `linux-aarch64-gnu` experimental slice deliberately registers only
-`art_runtime_show_version`, imageless interpreter `Hello`, and managed GC
-stress. Each has its own behavioral evidence under the explicit runner. The
-slice does not infer JNI, JIT, boot-image, compiler-DSO load, or another
-stage's applicability from successful emulation.
+`art_runtime_show_version`, imageless interpreter `Hello`, managed GC stress,
+and the 128 MiB non-moving-heap gate plus its compile-only managed artifact.
+Each runnable gate has its own behavioral evidence under the explicit runner.
+The slice does not infer JNI, JIT, boot-image, compiler-DSO load, the 1024 MiB
+resource profile, or another stage's applicability from successful emulation.
 
 Linkage describes the binary boundary under test. It is independent of whether
 the test is compile-only, run locally, transferred to another machine, or
