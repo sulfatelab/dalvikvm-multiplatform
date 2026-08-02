@@ -670,6 +670,7 @@ endforeach()
 set(_art_jni_include "${_art_test_repo_root}/vendor/libnativehelper/include_jni")
 
 add_library(art-test-target-policy INTERFACE)
+target_link_options(art-test-target-policy INTERFACE -fuse-ld=lld)
 if(ART_TARGET_PLATFORM STREQUAL "windows")
     set(_art_windows_defines
         _CRT_SECURE_NO_WARNINGS NOMINMAX WIN32_LEAN_AND_MEAN NOGDI
@@ -706,7 +707,7 @@ foreach(_art_test_bundle_lib_dir
     endif()
 endforeach()
 target_link_options(art-test-target-policy INTERFACE
-    -fuse-ld=lld "${_art_no_cet}" ${_art_windows_image_options})
+    "${_art_no_cet}" ${_art_windows_image_options})
 target_link_libraries(art-test-target-policy INTERFACE
     art_windows_cxx windows_x64_posix_stubs ws2_32 synchronization)
 
@@ -742,6 +743,11 @@ set(_art_linux_runtime_smoke_ids_selector
     TARGET_IDS linux-x86_64-gnu linux-aarch64-gnu)
 set(_art_current_native_ids_selector
     TARGET_IDS linux-x86_64-gnu windows-x86_64-msvc)
+set(_art_critical_native_ids_selector
+    TARGET_IDS
+        linux-x86_64-gnu
+        linux-aarch64-gnu
+        windows-x86_64-msvc)
 set(_art_gc_stress_ids_selector
     TARGET_IDS
         linux-x86_64-gnu
@@ -857,12 +863,13 @@ art_add_target_probe(
         --repeat 2
         --timeout 120)
 
-# W-003: quick-frame and native ABI preservation. The first two source/runtime
-# contracts are accepted for the exact current Linux and Windows target IDs;
-# no other architecture or ABI is inferred from sharing their source.
+# W-003: quick-frame and native ABI preservation. CriticalNative includes the
+# separately accepted Linux AArch64 target; normal/FastNative remains limited
+# to the exact current Linux and Windows x86-64 IDs. No other target is
+# inferred from sharing their source.
 art_add_target_probe(
     NAME criticalnativeprobe STAGE w003 TYPE SHARED EXECUTION compile-only
-    ${_art_current_native_ids_selector}
+    ${_art_critical_native_ids_selector}
     SOURCES "${_art_test_cases_root}/jni-critical-native/probe.c"
     INCLUDE_DIRS "${_art_jni_include}"
     LINK_OPTIONS "${_art_no_cet}"
@@ -912,7 +919,7 @@ art_add_target_probe(
 art_add_target_probe(
     NAME managed_critical_native STAGE w003 TYPE MANAGED EXECUTION target-runnable
     TIMEOUT 1200
-    ${_art_current_native_ids_selector}
+    ${_art_critical_native_ids_selector}
     SOURCES
         "${_art_test_cases_root}/jni-critical-native/CriticalNativeProbe.java"
         "${_art_test_cases_root}/jni-critical-native/CriticalNativeDlsymProbe.java"
@@ -931,6 +938,7 @@ art_add_target_probe(
         --work-root "${CMAKE_CURRENT_BINARY_DIR}/results/w003-critical-native"
         --icu-data "${_art_icu_data}"
         ${_art_managed_runtime_library_args}
+        ${_art_target_runner_args}
         --repeat 2
         --timeout 180)
 art_add_target_probe(

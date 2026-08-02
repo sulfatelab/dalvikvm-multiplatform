@@ -72,7 +72,13 @@ def check_source_policy(repo: Path) -> dict[str, int]:
         fail("Windows test graph does not define the shared /CETCOMPAT:NO policy")
     if not re.search(
         r"target_link_options\(art-test-target-policy INTERFACE\s+"
-        r'-fuse-ld=lld "\$\{_art_no_cet\}" \$\{_art_windows_image_options\}\)',
+        r"-fuse-ld=lld\)",
+        test_graph,
+    ):
+        fail("test target policy does not select LLD through plain Clang")
+    if not re.search(
+        r"target_link_options\(art-test-target-policy INTERFACE\s+"
+        r'"\$\{_art_no_cet\}" \$\{_art_windows_image_options\}\)',
         test_graph,
     ):
         fail("Windows test target policy does not propagate PE image options")

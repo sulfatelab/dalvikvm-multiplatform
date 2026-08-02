@@ -84,8 +84,10 @@ Under the same fingerprinted QEMU runner, the probe printed
 exited zero in 2.20 seconds. The expanded W-004 stage passed 3/3 in 4.13
 seconds, and its immediate repeat passed 3/3 in 4.14 seconds after Ninja
 reported no work. This admits allocation/collection stress in the AArch64
-interpreter slice; JNI, JIT, boot-image, compiler-DSO loading, and a native
-AArch64 host remain unclaimed.
+interpreter slice. At this checkpoint JNI, JIT, boot-image, compiler-DSO
+loading, and a native AArch64 host were not yet claimed; the later independent
+CriticalNative/JIT admission is recorded in
+`../jni-critical-native/RESULT.md`.
 
 ## Latest Linux acceptance
 

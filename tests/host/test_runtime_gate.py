@@ -294,7 +294,14 @@ def test_w003_frame_gate_runs_four_modes_twice_and_records_sanitized_result(
     tmp_path, monkeypatch, capsys
 ):
     files = {}
-    for name in ("dalvikvm.exe", "boot.jar", "probe.jar", "probe.dll", "icudt.dat"):
+    for name in (
+        "dalvikvm.exe",
+        "boot.jar",
+        "probe.jar",
+        "probe.dll",
+        "icudt.dat",
+        "target-runner",
+    ):
         path = tmp_path / name
         path.write_bytes(name.encode())
         files[name] = path
@@ -337,9 +344,13 @@ def test_w003_frame_gate_runs_four_modes_twice_and_records_sanitized_result(
         library_dirs=[tmp_path],
         repetitions=2,
         timeout=10,
+        runner=files["target-runner"],
+        runner_args=["-L", "target-root"],
     )
 
     assert len(calls) == 8
+    assert all(call["runner"] == files["target-runner"] for call in calls)
+    assert all(call["runner_args"] == ["-L", "target-root"] for call in calls)
     assert [call["environment_overrides"]["ART_WINDOWS_X64_NTERP"] for call in calls] == [
         "0",
         "0",
@@ -360,6 +371,7 @@ def test_w003_frame_gate_runs_four_modes_twice_and_records_sanitized_result(
 
 def test_w003_jni_abi_targets_are_exact_and_host_independent():
     assert w003_gate._target_platform("linux-x86_64-gnu") == "linux"
+    assert w003_gate._target_platform("linux-aarch64-gnu") == "linux"
     assert w003_gate._target_platform("windows-x86_64-msvc") == "windows"
     assert w003_gate._target_jit_options("linux") == [
         "-verbose:jit",

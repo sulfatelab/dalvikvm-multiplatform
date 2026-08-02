@@ -28,7 +28,13 @@ _FORBIDDEN = (
     "minidump written",
 )
 
-_JNI_ABI_TARGETS = {"linux-x86_64-gnu", "windows-x86_64-msvc"}
+_CRITICAL_NATIVE_TARGETS = {
+    "linux-x86_64-gnu",
+    "linux-aarch64-gnu",
+    "windows-x86_64-msvc",
+}
+_NATIVE_ABI_TARGETS = {"linux-x86_64-gnu", "windows-x86_64-msvc"}
+_JNI_ABI_TARGETS = _CRITICAL_NATIVE_TARGETS | _NATIVE_ABI_TARGETS
 
 _CRITICAL_VALUES = (
     "longs=190 doubles=91.0 mixed=159.5 mixed32=87 "
@@ -128,6 +134,8 @@ def _run_managed(
     expected: list[str],
     environment: dict[str, str],
     timeout: int,
+    runner: Path | None,
+    runner_args: list[str],
 ) -> str:
     runtime_gate.run_managed(
         target_id=target_id,
@@ -145,6 +153,8 @@ def _run_managed(
         expected_exit=0,
         timeout=timeout,
         environment_overrides=environment,
+        runner=runner,
+        runner_args=runner_args,
     )
     return _combined(case_root)
 
@@ -161,6 +171,8 @@ def _run_critical(
     library_dirs: list[Path],
     repetitions: int,
     timeout: int,
+    runner: Path | None,
+    runner_args: list[str],
 ) -> list[dict[str, object]]:
     platform = _target_platform(target_id)
     library_separator = ";" if platform == "windows" else ":"
@@ -214,6 +226,8 @@ def _run_critical(
                 expected=expected,
                 environment=_target_jit_environment(platform, "CriticalNativeProbe"),
                 timeout=timeout,
+                runner=runner,
+                runner_args=runner_args,
             )
             if instrumentation and re.search(
                 r"CriticalNativeProbe tracingMode before=0 during=[1-9][0-9]* "
@@ -246,6 +260,8 @@ def _run_native_abi(
     library_dirs: list[Path],
     repetitions: int,
     timeout: int,
+    runner: Path | None,
+    runner_args: list[str],
 ) -> list[dict[str, object]]:
     platform = _target_platform(target_id)
     library_separator = ";" if platform == "windows" else ":"
@@ -280,6 +296,8 @@ def _run_native_abi(
                 ],
                 environment=_target_jit_environment(platform, "FastNativeAbiProbe"),
                 timeout=timeout,
+                runner=runner,
+                runner_args=runner_args,
             )
             compile_records = None
             if platform == "windows":
@@ -373,6 +391,8 @@ def _run_frame(
     library_dirs: list[Path],
     repetitions: int,
     timeout: int,
+    runner: Path | None,
+    runner_args: list[str],
 ) -> list[dict[str, object]]:
     records: list[dict[str, object]] = []
     for mode in ("int", "switch", "nterp", "jit"):
@@ -394,6 +414,8 @@ def _run_frame(
                 expected=[f"W003FrameProbe OK mode={mode}"],
                 environment=environment,
                 timeout=timeout,
+                runner=runner,
+                runner_args=runner_args,
             )
             _validate_frame_output(output, mode)
             records.append({
@@ -435,6 +457,8 @@ def _run_xmm(
     library_dirs: list[Path],
     repetitions: int,
     timeout: int,
+    runner: Path | None,
+    runner_args: list[str],
 ) -> list[dict[str, object]]:
     records: list[dict[str, object]] = []
     for mode in ("nterp", "switch", "jit"):
@@ -461,6 +485,8 @@ def _run_xmm(
                 ],
                 environment=environment,
                 timeout=timeout,
+                runner=runner,
+                runner_args=runner_args,
             )
             if re.search(
                 rf"W003XmmSentinelProbe mode={mode} expected=-?[0-9]+ "
@@ -500,9 +526,16 @@ def run_gate(
     library_dirs: list[Path],
     repetitions: int,
     timeout: int,
+    runner: Path | None = None,
+    runner_args: list[str] | None = None,
 ) -> None:
-    if case in ("critical-native", "native-abi"):
-        if target_id not in _JNI_ABI_TARGETS:
+    if case == "critical-native":
+        if target_id not in _CRITICAL_NATIVE_TARGETS:
+            raise runtime_gate.GateError(
+                f"W-003 {case} is not accepted for {target_id}"
+            )
+    elif case == "native-abi":
+        if target_id not in _NATIVE_ABI_TARGETS:
             raise runtime_gate.GateError(
                 f"W-003 {case} is not accepted for {target_id}"
             )
@@ -515,6 +548,7 @@ def run_gate(
         runtime_gate._reject_tree_links(work_root)
         shutil.rmtree(work_root)
     work_root.mkdir(parents=True)
+    runner_args = [] if runner_args is None else runner_args
 
     common = {
         "target_id": target_id,
@@ -527,6 +561,8 @@ def run_gate(
         "library_dirs": library_dirs,
         "repetitions": repetitions,
         "timeout": timeout,
+        "runner": runner,
+        "runner_args": runner_args,
     }
     runners = {
         "critical-native": _run_critical,
@@ -575,6 +611,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--library-dir", type=Path, action="append", default=[])
     parser.add_argument("--repeat", type=int, default=2)
     parser.add_argument("--timeout", type=int, default=180)
+    runtime_gate._add_runner_arguments(parser)
     return parser
 
 
@@ -595,6 +632,8 @@ def main(argv: list[str] | None = None) -> int:
             library_dirs=args.library_dir,
             repetitions=args.repeat,
             timeout=args.timeout,
+            runner=args.runner,
+            runner_args=args.runner_arg,
         )
         return 0
     except (runtime_gate.GateError, OSError, UnicodeError) as exc:

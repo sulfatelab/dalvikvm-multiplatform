@@ -44,12 +44,12 @@ items are closed.
 | Compiler DSO parity | COMPLETE for `art-compiler` | both targets emit a shared compiler DSO; Windows imports `art.dll` and exports `art_compiler_jit_create` | retain exact ABI and no-cycle gates |
 | Windows runtime DSO exports | COMPLETE for current x86-64 closure | `art.dll` combines explicit source annotations with a reviewed 187-entry runtime-consumer DEF, never CMake auto-export; Debug has 2,065 exports and RelWithDebInfo has 2,066 | keep the consumer allowlist and actual PE boundary under regression review |
 | Full DSO topology parity | PARTIAL / mechanically controlled | the fresh graphs have five reviewed module-kind differences and one reviewed generated/platform module mapping; every current difference is checked against a versioned contract | convert reviewed exceptions where practical; reject every unreviewed graph change |
-| Unified phase catalog | COMPLETE for current declaration truthfulness; PARTIAL target expansion | eight virtual stages declare 32 native probes, 47 managed JARs, and 14 command gates; Windows has 90 applicable items (69 target-runnable, eight host-review, and 13 compile-only in the product variant), Linux x86-64 has 12 applicable items (nine runnable and three compile-only artifacts), and experimental Linux AArch64 has five applicable items (four runner-backed gates and one compile-only managed artifact); CMake rejects runnable shared libraries and compile-only command gates | expand exact-target applicability only with matching behavioral acceptance |
-| Boot/runtime packaging | COMPLETE for Linux x86-64; experimental imageless Linux AArch64; capability-gated elsewhere | deterministic target-local boot/probe JARs include Conscrypt, OkHttp/Okio, and security properties; native Linux x86-64 generates, runtime-tests, and stages a relocatable ART/OAT/VDEX boot image; AArch64 passes exact imageless Hello and GC stress under its explicit runner and records boot image unsupported; staging also validates the complete DSO closure and packages pinned ICU data, 121 CA roots, and writable keychain directories | retain the image/runtime-package gates while adding target capabilities independently |
+| Unified phase catalog | COMPLETE for current declaration truthfulness; PARTIAL target expansion | eight virtual stages declare 32 native probes, 47 managed JARs, and 14 command gates; Windows has 90 applicable items (69 target-runnable, eight host-review, and 13 compile-only in the product variant), Linux x86-64 has 12 applicable items (nine runnable and three compile-only artifacts), and experimental Linux AArch64 has seven applicable items (five runner-backed gates and two compile-only artifacts); CMake rejects runnable shared libraries and compile-only command gates | expand exact-target applicability only with matching behavioral acceptance |
+| Boot/runtime packaging | COMPLETE for Linux x86-64; experimental Linux AArch64; capability-gated elsewhere | deterministic target-local boot/probe JARs include Conscrypt, OkHttp/Okio, and security properties; native Linux x86-64 generates, runtime-tests, and stages a relocatable ART/OAT/VDEX boot image; AArch64 passes exact CriticalNative/JIT/tracing, imageless Hello, GC stress, show-version, and 128 MiB non-moving-heap gates under its explicit runner while recording boot image unsupported; staging also validates the complete DSO closure and packages pinned ICU data, 121 CA roots, and writable keychain directories | retain the image/runtime-package gates while adding target capabilities independently |
 | POSIX-free Windows build host | COMPLETE for the accepted native baseline; PARTIAL end to end | Server 2025 uses configured official JDK 21, Python, CMake, Ninja, and plain Clang drivers; all 77 accepted native tests, provider/security packaging, and product/test no-op gates pass without POSIX tooling | migrate every retained behavioral gate; keep Windows AOT/OAT capability work separate |
 | Legacy build removal | COMPLETE | the checked-in Linux snapshot/generator, split overlays, Linux miniature graphs, Windows Phase-0/Phase-1 and libcore/ICU graphs, product package scripts, and final POSIX-only boot-image entry points are retired; historical records remain documentation only | prevent alternative product paths from returning |
 | CI/acceptance automation | IMPLEMENTED / activation pending | checked-in shell-free Python driver and GitHub workflow define host, fresh Linux, Windows-cross, and native Windows cells; machine paths enter only through an external CI TOML binding | register/provision the two self-hosted runner labels and obtain accepted workflow runs |
-| Additional architectures | PARTIAL / Linux AArch64 experimental | all 17 canonical identities are registered; `linux-aarch64-gnu` now generates, builds, stages, and passes exact show-version, imageless-Hello, GC-stress, and 128 MiB non-moving-heap gates through an explicit QEMU user-mode binding; x86, ARMv7, RISC-V64, Windows AArch64/ARM64EC, and WASI remain capability-gated | broaden AArch64 only with matching evidence, then admit each remaining profile independently |
+| Additional architectures | PARTIAL / Linux AArch64 experimental | all 17 canonical identities are registered; `linux-aarch64-gnu` now generates, builds, stages, and passes exact CriticalNative/JIT/tracing, show-version, imageless-Hello, GC-stress, and 128 MiB non-moving-heap gates through an explicit QEMU user-mode binding; x86, ARMv7, RISC-V64, Windows AArch64/ARM64EC, and WASI remain capability-gated | broaden AArch64 only with matching evidence, then admit each remaining profile independently |
 | Windows AOT/OAT | BLOCKED / separate track | compiler DSO parity does not provide Windows OAT production or loading | satisfy `win32_aot_oat.md`; do not imply capability from `art-compiler.dll` |
 
 ### Latest verification baseline (2026-08-02)
@@ -798,18 +798,19 @@ items are closed.
   identical repeat was a Ninja no-op. The reviewer tools are explicit
   frontend-resolved fingerprint inputs, so Linux-hosted cross configuration
   uses host `llvm-readobj`/`llvm-objdump` without a target `.exe` suffix.
-- [x] CriticalNative and normal/FastNative now use explicit exact-ID selectors
-  for `linux-x86_64-gnu` and `windows-x86_64-msvc`; no other architecture or
-  ABI is inferred. Their shared shell-free runner resolves ELF/DLL names,
-  library-path separators, absolute versus library-name loading, and target JIT
-  controls without a host shell. A fresh Linux tree passed both gates and its
-  repeat was a Ninja no-op. A fresh native Windows Server 2025 tree built all
-  1,492 actions at 16 jobs, passed product W-003 4/4, and repeated with
-  `ninja: no work to do` and another 4/4 pass. Each of the four aggregate JNI
-  results records four completed runs, zero dumps, and no machine path; source
-  and output scans found zero links or reparse points. The Linux-hosted Windows
-  cross tree also completed 1,492 actions at 32 jobs, passed its host reviewer,
-  and repeated as a Ninja no-op.
+- [x] The initial cross-platform CriticalNative and normal/FastNative
+  acceptance gave both gates explicit exact-ID selectors for
+  `linux-x86_64-gnu` and `windows-x86_64-msvc`; at that checkpoint no other
+  architecture or ABI was inferred. Their shared shell-free runner resolves
+  ELF/DLL names, library-path separators, absolute versus library-name loading,
+  and target JIT controls without a host shell. A fresh Linux tree passed both
+  gates and its repeat was a Ninja no-op. A fresh native Windows Server 2025
+  tree built all 1,492 actions at 16 jobs, passed product W-003 4/4, and
+  repeated with `ninja: no work to do` and another 4/4 pass. Each of the four
+  aggregate JNI results records four completed runs, zero dumps, and no machine
+  path; source and output scans found zero links or reparse points. The
+  Linux-hosted Windows cross tree also completed 1,492 actions at 32 jobs,
+  passed its host reviewer, and repeated as a Ninja no-op.
 - [x] The W-004 ART embedding probe is now a real exact-target runtime gate for
   `windows-x86_64-msvc`; no other target is inferred. Its shell-free case
   runner copies the regular-file product DLL closure into an isolated `bin`
@@ -1492,7 +1493,7 @@ One historical work stage maps to exactly one virtual target named
 | Stage | Current build catalog | Exact-ID / typed selectors | Execution modes | Remaining semantic coverage |
 |---|---:|---|---|---|
 | `w002` | 1 EXE, 1 DLL, 2 managed, 1 gate | 3 exact / 2 typed | 3 runnable, 1 host-review, 1 compile-only | registered Windows x86-64 coverage is complete |
-| `w003` | 4 DLLs, 4 managed, 1 gate | 7 exact / 2 typed | product: 3 runnable, 1 host-review, 5 compile-only; frame variant: 4 runnable, 1 host-review, 4 compile-only | registered Windows x86-64 coverage is complete; CriticalNative and normal/FastNative are also verified on exact Linux x86-64 GNU |
+| `w003` | 4 DLLs, 4 managed, 1 gate | 7 exact / 2 typed | product: 3 runnable, 1 host-review, 5 compile-only; frame variant: 4 runnable, 1 host-review, 4 compile-only | registered Windows x86-64 coverage is complete; CriticalNative is also verified on Linux x86-64 and AArch64 GNU, while normal/FastNative is verified only on Linux x86-64 GNU outside Windows |
 | `w004` | 2 EXEs, 1 DLL, 33 managed, 4 gates | 8 exact / 32 typed | product: 38 target-runnable, 1 host-review, 1 compile-only; Windows applicable subset: 35 target-runnable, 1 host-review, 1 compile-only | Linux boot-image/runtime packaging and Windows provider/security packaging are accepted; no named libcore case remains outside its explicit runtime/compile-only status |
 | `w010` | 4 EXEs, 3 managed, 1 gate | 2 exact / 6 typed | 7 target-runnable, 1 host-review | registered Windows x86-64 coverage is complete |
 | `w013` | 4 EXEs, 1 managed, 3 gates | 3 exact / 5 typed | 6 runnable, 1 host-review, 1 compile-only | registered x86-64 native, managed, and source-policy coverage is complete |
@@ -1574,17 +1575,18 @@ making MSYS2, Cygwin, or any POSIX environment a build-host prerequisite.
 `tests/CMakeLists.txt` now declares every probe through the common
 `art_add_target_probe` API. There is no platform-level early return and no
 `ARCH any` spelling. Eleven Microsoft x86-64-specific probes use only the
-exact `windows-x86_64-msvc` target ID. CriticalNative and normal/FastNative use
-the explicit exact pair `linux-x86_64-gnu` and `windows-x86_64-msvc`. The
-remaining nineteen native probes use the typed intersection `PLATFORMS
-windows`, `TARGET_ARCHES x86_64`, and `TARGET_ABIS msvc`. Exact pairs preserve
-per-target acceptance; they are not a platform wildcard or an architecture
-inference.
+exact `windows-x86_64-msvc` target ID. CriticalNative uses the explicit exact
+three-target set `linux-x86_64-gnu`, `linux-aarch64-gnu`, and
+`windows-x86_64-msvc`; normal/FastNative uses only the exact x86-64 pair
+`linux-x86_64-gnu` and `windows-x86_64-msvc`. The remaining nineteen native
+probes use the typed intersection `PLATFORMS windows`, `TARGET_ARCHES x86_64`,
+and `TARGET_ABIS msvc`. Exact selectors preserve per-target acceptance; they
+are not a platform wildcard or an architecture inference.
 
 | Stage | Typed `windows`/`x86_64`/`msvc` probes | Exact target-ID probes | Verified multi-target probes |
 |---|---|---|---|
 | `w002` | `w002attachprobe` | `win32_osr_unwind_probe` | none |
-| `w003` | `w003frameprobe` | `w003xmmsentinel` (Windows only); `criticalnativeprobe`, `nativeabiprobe` (exact Linux/Windows pair) | `criticalnativeprobe`, `nativeabiprobe` |
+| `w003` | `w003frameprobe` | `w003xmmsentinel` (Windows only); `criticalnativeprobe` (exact Linux x86-64/AArch64 and Windows x86-64 set); `nativeabiprobe` (exact Linux/Windows x86-64 pair) | `criticalnativeprobe` (three targets); `nativeabiprobe` (x86-64 pair) |
 | `w004` | `win32_art_embedding_probe`, `jvmtiforceprobe`, `windows_crypto_sha_probe` | none | none |
 | `w010` | `win32_uef_probe`, `win32_fault_record_probe`, `win32_debugger_probe` | `win32_sigchain_probe` | none |
 | `w013` | `windows_socket_fd_registry_probe`, `windows_w013_mem_map_probe`, `windows_w013_mspace_owner_probe` | `windows_w013_dlmalloc_config_probe` | none |
@@ -1607,12 +1609,15 @@ probe targets now use architecture-neutral `windows_*` names while retaining
 their existing x86-64/MSVC selectors; naming no longer makes a support claim,
 and selector expansion still requires independent native acceptance.
 
-Only `criticalnativeprobe` and `nativeabiprobe` currently use
-platform-neutral JNI/C scalar sources and have verified common Linux/Windows
-ownership. Their CMake declarations list the two accepted exact targets; the
-shared managed runner resolves DSO naming, library-path syntax, target JIT
-controls, and result expectations separately. That proof does not admit Linux
-or Windows AArch64, ARM64EC, x86, ARMv7, or another ABI.
+Only `criticalnativeprobe` and `nativeabiprobe` currently use platform-neutral
+JNI/C scalar sources with verified common Linux/Windows ownership.
+`criticalnativeprobe` lists the three accepted Linux x86-64, Linux AArch64,
+and Windows x86-64 targets; `nativeabiprobe` lists only the accepted
+Linux/Windows x86-64 pair. The shared managed runner resolves DSO naming,
+library-path syntax, target JIT controls, optional external execution, and
+result expectations separately. The AArch64 proof is confined to
+CriticalNative and does not admit normal/FastNative, Windows AArch64, ARM64EC,
+x86, ARMv7, or another ABI.
 
 Current evidence remains much narrower than theoretical applicability:
 
@@ -1624,7 +1629,10 @@ Current evidence remains much narrower than theoretical applicability:
   W-010, W-013, and W-014 slices;
 - Linux x86-64 builds and runs the two W-003 JNI ABI probes through four exact
   declarations, in addition to its five runnable W-004 gates and shared W-013
-  gate; and
+  gate;
+- Linux AArch64 builds and runs CriticalNative through its two exact
+  declarations, plus show-version, imageless Hello, GC stress, and the shared
+  128 MiB W-013 gate under its explicit runner; and
 - no probe has build or runtime evidence for Windows x86, ARMv7, AArch64, or
   ARM64EC.
 
@@ -2103,9 +2111,16 @@ differences.
   low/stable addresses across forced collections and post-GC regrowth, and
   passed in 2.06 seconds. It repeated in 2.13 seconds after a true Ninja no-op.
   The 1024 MiB resource-pressure profile remains Windows x86-64-specific.
-- [ ] Promote Linux AArch64 beyond the experimental four-gate
-  interpreter/allocator
-  slice, and
+- [x] Admit the exact CriticalNative contract on Linux AArch64 without
+  broadening normal/FastNative. The W-003 runner now forwards the declared
+  external runner/root, and the common test-target policy selects LLD through
+  plain Clang on every target. Four QEMU processes covered library/absolute
+  loads, registered/dlsym mixed and spilled signatures, threshold-zero JIT,
+  and tracing transitions; the aggregate passed in 190.36 seconds and repeated
+  in 187.61 seconds from a Ninja no-op. A fresh 1,491-edge Linux x86-64 W-003
+  build passed both JNI gates 2/2 and repeated 2/2 from a no-op.
+- [ ] Promote Linux AArch64 beyond the experimental five-gate
+  JNI/interpreter/allocator slice, and
   validate/admit Linux x86, ARMv7, and RISC-V64 separately.
 - [x] Migrate the ARM64EC identity from transitional
   `windows-aarch64-arm64ec/cpu_arch=aarch64` to
@@ -2624,7 +2639,7 @@ combination is implicitly available:
 | `linux-x86-gnu` | `x86` | GNU | ELF32 | `planned` |
 | `linux-x86_64-gnu` | `x86_64` | GNU | ELF64 | `supported` after ID migration |
 | `linux-armv7-gnu` | `armv7` | GNU EABI hard-float fixed by this profile | ELF32 | `planned` |
-| `linux-aarch64-gnu` | `aarch64` | GNU | ELF64 | `experimental`; complete product plus exact show-version/imageless-Hello/GC-stress/non-moving-heap runner gates |
+| `linux-aarch64-gnu` | `aarch64` | GNU | ELF64 | `experimental`; complete product plus exact CriticalNative/show-version/imageless-Hello/GC-stress/non-moving-heap runner gates |
 | `linux-riscv64-gnu` | `riscv64` | GNU | ELF64 | `planned` |
 | `windows-x86-gnu` | `x86` | GNU | PE32 | valid `planned` placeholder; no near/far implementation commitment; also blocked by the no-MinGW contract |
 | `windows-x86-msvc` | `x86` | MSVC | PE32 | valid `planned` placeholder; no near/far implementation commitment |

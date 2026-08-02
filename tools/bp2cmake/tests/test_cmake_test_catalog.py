@@ -97,12 +97,14 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     )
     assert w003_structure["execution"] == "host-review"
     assert w003_structure["ctest_registered"] is True
-    for name in (
-        "criticalnativeprobe",
-        "nativeabiprobe",
-        "managed_critical_native",
-        "managed_native_abi",
-    ):
+    for name in ("criticalnativeprobe", "managed_critical_native"):
+        probe = next(probe for probe in catalog["probes"] if probe["name"] == name)
+        assert probe["target_ids"] == [
+            "linux-x86_64-gnu",
+            "linux-aarch64-gnu",
+            "windows-x86_64-msvc",
+        ]
+    for name in ("nativeabiprobe", "managed_native_abi"):
         probe = next(probe for probe in catalog["probes"] if probe["name"] == name)
         assert probe["target_ids"] == [
             "linux-x86_64-gnu",
@@ -533,6 +535,8 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     )
     applicable = [probe for probe in catalog["probes"] if probe["applicable"]]
     assert [probe["name"] for probe in applicable] == [
+        "criticalnativeprobe",
+        "managed_critical_native",
         "managed_imageless_hello",
         "managed_gc_stress",
         "art_runtime_show_version",
@@ -540,6 +544,8 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "managed_w013_non_moving_128m",
     ]
     assert [probe["execution"] for probe in applicable] == [
+        "compile-only",
+        "target-runnable",
         "target-runnable",
         "target-runnable",
         "target-runnable",
@@ -547,6 +553,8 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "target-runnable",
     ]
     assert [probe["ctest_registered"] for probe in applicable] == [
+        False,
+        True,
         True,
         True,
         True,

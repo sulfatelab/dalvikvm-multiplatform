@@ -8,12 +8,13 @@ Date: 2026-07-24. VM: agent01. Runtime: Wine 10.0. Build:
 | Target ID | Applicable | Build | Runtime | Last accepted |
 |---|---:|---:|---:|---|
 | `linux-x86_64-gnu` | yes | verified | verified | 2026-08-02 |
+| `linux-aarch64-gnu` | yes | verified | verified under explicit QEMU user mode | 2026-08-02 |
 | `windows-x86_64-msvc` | yes | verified | verified | 2026-08-02 |
 | `windows-aarch64-msvc` | not yet declared | pending | pending | — |
 | `windows-arm64ec-msvc` | not yet declared | pending | pending | — |
 
-The shared C/Java source is accepted only for the two exact target IDs above.
-That evidence does not admit either AArch64 target or any other platform,
+The shared C/Java source is accepted only for the three exact target IDs above.
+That evidence does not admit Windows AArch64, ARM64EC, or any other platform,
 architecture, or ABI.
 
 ## Unified exact-target acceptance (2026-08-02)
@@ -30,8 +31,46 @@ and its immediate repeat was a Ninja no-op. The fresh native Windows build
 completed 1,492 actions at 16 jobs, passed product W-003 4/4, then repeated as
 a Ninja no-op and passed 4/4 again. Each CriticalNative aggregate records four
 successful runs, zero dumps, and no machine absolute paths. Full source/output
-scans found no symlink or reparse point. The declaration lists the exact Linux
-and Windows IDs; it does not broaden runtime acceptance to AArch64 or ARM64EC.
+scans found no symlink or reparse point. At that checkpoint the declaration
+listed only the exact x86-64 Linux and Windows IDs; it did not broaden runtime
+acceptance to either AArch64 target or ARM64EC.
+
+## Linux AArch64 acceptance (2026-08-02)
+
+The CriticalNative declaration was expanded independently from the adjacent
+normal/FastNative gate. Its shell-free W-003 runner now accepts the same
+explicit runner/root arguments as the common runtime gate, while preserving
+the existing direct execution path on native Linux and Windows. The test-target
+policy also selects LLD through the plain Clang driver on every target; this
+replaced accidental dependence on the x86-64 host GNU linker, which could not
+link the AArch64 probe DSO.
+
+After reconfiguration passed audits of 2,111 compile commands, 2,196 Ninja
+commands, and 32 product links, `linux-aarch64-gnu` built the probe DSO and
+managed JAR. The four QEMU processes covered default and method-instrumented
+execution under both library-name and absolute-path loading. Registered and
+unresolved CriticalNative entrypoints returned the exact mixed, floating,
+spilled, and scalar values under threshold-zero JIT. Both instrumented runs
+proved tracing mode `0 -> nonzero -> 0`, exact values during and after tracing,
+and trace-file deletion. The aggregate passed in 190.36 seconds and repeated
+in 187.61 seconds after a true Ninja no-op. All four repeat records have exit
+zero, no missing marker, no dump, the normalized QEMU fingerprint, and no
+machine path.
+
+The accepted artifact SHA-256 values were:
+
+- `libcriticalnativeprobe.so`:
+  `c25225e1e11ad4c2df8a8f97d194ce88ce7c30faf1aee730bb1e86acaab8319b`
+- `criticalnativeprobe.jar`:
+  `694414b5305cad5f6d85b35bf244f78f8afff7570765345c8e5bf3d09e7a75cd`
+
+A fresh native Linux x86-64 tree then built 1,491 W-003 dependency edges with
+the same common LLD policy, passed CriticalNative and normal/FastNative 2/2 in
+2.53 seconds, and repeated 2/2 in 2.61 seconds from a Ninja no-op. Windows keeps
+the same effective `-fuse-ld=lld` test link option it used before this policy
+was made common. This admission covers the AArch64 CriticalNative/JIT/tracing
+contract only; it does not infer normal/FastNative, another W-003 probe, or a
+native AArch64 build host.
 
 ## Result
 
@@ -51,6 +90,7 @@ Current exact-target reproductions use 32 jobs on agent01 and 16 jobs on the
 
 ```text
 python tools/build_art.py test --target-id linux-x86_64-gnu --build-type RelWithDebInfo --stage w003 --parallel 32
+python tools/build_art.py test --target-id linux-aarch64-gnu --build-type RelWithDebInfo --stage w003 --parallel 32
 python tools/build_art.py test --target-id windows-x86_64-msvc --build-type RelWithDebInfo --stage w003 --parallel 16
 ```
 

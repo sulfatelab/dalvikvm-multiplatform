@@ -127,14 +127,15 @@ isolated target-local runtime directories, pinned ICU data, strict exit/marker
 checks, timeouts, and sanitized JSON results. The Math aggregate additionally
 rejects filesystem links/reparse points, and Windows JIT requires a matching
 compiler record.
-W-003 also declares CriticalNative and normal/FastNative for the exact pair
-`linux-x86_64-gnu` and `windows-x86_64-msvc`. One shared runner resolves the
-ELF/DLL name, library-path separator, absolute-load property, and target JIT
-controls; no other target is inferred. Linux also registers its show-version,
-compiler-DSO topology, and boot-image gates, for six W-004 CTest gates. Together
-with two shared W-003 gates and the shared W-013 gate, the Linux catalog has
-nine runnable declarations and three compile-only artifacts. Windows adds its
-BoringSSL SHA executable plus the exact
+W-003 declares CriticalNative for `linux-x86_64-gnu`, `linux-aarch64-gnu`, and
+`windows-x86_64-msvc`; normal/FastNative remains limited to the exact x86-64
+Linux/Windows pair. One shared runner resolves the ELF/DLL name, library-path
+separator, absolute-load property, target JIT controls, and the optional
+AArch64 runner prefix; no other target is inferred. Linux x86-64 also
+registers its show-version, compiler-DSO topology, and boot-image gates, for
+six W-004 CTest gates. Together with two shared W-003 gates and the shared
+W-013 gate, the Linux catalog has nine runnable declarations and three
+compile-only artifacts. Windows adds its BoringSSL SHA executable plus the exact
 `windows-x86_64-msvc` JVMTI managed gate and runtime-load/assembly-dependency
 reviewer. Twenty-five accepted Phase-3 libcore behaviors use one checked-in
 JSON contract matrix and one case-local, shell-free Python runner. The expanded
@@ -586,11 +587,13 @@ hashes, normalized image identity, and normalized native/external runner
 identity without recording machine paths or environment dumps.
 
 The current `linux-aarch64-gnu` experimental slice deliberately registers only
+the CriticalNative DSO/JAR and its JIT/tracing gate,
 `art_runtime_show_version`, imageless interpreter `Hello`, managed GC stress,
-and the 128 MiB non-moving-heap gate plus its compile-only managed artifact.
-Each runnable gate has its own behavioral evidence under the explicit runner.
-The slice does not infer JNI, JIT, boot-image, compiler-DSO load, the 1024 MiB
-resource profile, or another stage's applicability from successful emulation.
+and the 128 MiB non-moving-heap gate plus its managed artifact. Each runnable
+gate has its own behavioral evidence under the explicit runner. The slice does
+not infer normal/FastNative, another JNI contract, boot-image, compiler-DSO
+load, the 1024 MiB resource profile, or another stage's applicability from
+successful emulation.
 
 Linkage describes the binary boundary under test. It is independent of whether
 the test is compile-only, run locally, transferred to another machine, or
