@@ -69,8 +69,8 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     assert catalog["target_id"] == "windows-x86_64-msvc"
     assert len(catalog["probes"]) == 93
     assert sum(probe["applicable"] for probe in catalog["probes"]) == 90
-    assert sum(bool(probe["target_ids"]) for probe in catalog["probes"]) == 34
-    assert sum(not probe["target_ids"] for probe in catalog["probes"]) == 59
+    assert sum(bool(probe["target_ids"]) for probe in catalog["probes"]) == 35
+    assert sum(not probe["target_ids"] for probe in catalog["probes"]) == 58
     w002_attach = next(
         probe for probe in catalog["probes"] if probe["name"] == "managed_w002_attach"
     )
@@ -103,6 +103,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "managed_critical_native",
         "managed_native_abi",
         "managed_perfsmokeprobe",
+        "managed_threadheavyprobe",
     ):
         probe = next(probe for probe in catalog["probes"] if probe["name"] == name)
         assert probe["target_ids"] == [
@@ -441,6 +442,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "managed_boot_image_hello",
         "managed_gc_stress",
         "managed_perfsmokeprobe",
+        "managed_threadheavyprobe",
         "managed_math_critical",
         "art_runtime_show_version",
         "art_compiler_dso_topology",
@@ -459,6 +461,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "w004",
         "w004",
         "w004",
+        "w004",
         "w013",
         "w013",
     ]
@@ -467,7 +470,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         for probe in applicable
         if probe["execution"] == "target-runnable"
     ]
-    assert len(runnable) == 10
+    assert len(runnable) == 11
     assert all(probe["ctest_registered"] for probe in runnable)
     artifact = applicable[-2]
     assert artifact["type"] == "MANAGED"
@@ -544,6 +547,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "managed_imageless_hello",
         "managed_gc_stress",
         "managed_perfsmokeprobe",
+        "managed_threadheavyprobe",
         "managed_math_critical",
         "art_runtime_show_version",
         "art_compiler_dso_topology",
@@ -553,6 +557,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     assert [probe["execution"] for probe in applicable] == [
         "compile-only",
         "compile-only",
+        "target-runnable",
         "target-runnable",
         "target-runnable",
         "target-runnable",
@@ -575,6 +580,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         True,
         True,
         True,
+        True,
         False,
         True,
     ]
@@ -589,6 +595,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "art.w003.managed_critical_native",
         "art.w003.managed_native_abi",
         "art.w004.managed_perfsmokeprobe",
+        "art.w004.managed_threadheavyprobe",
         "art.w004.managed_math_critical",
         "art.w004.art_compiler_dso_topology",
     ):

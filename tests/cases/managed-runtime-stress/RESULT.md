@@ -7,12 +7,11 @@ sources. Their applicability is deliberately per probe:
 |---|---|
 | `HandleLeakProbe` | `windows-x86_64-msvc` |
 | `PerfSmokeProbe` | `linux-x86_64-gnu`, `linux-aarch64-gnu`, `windows-x86_64-msvc` |
-| `ThreadHeavyProbe` | `windows-x86_64-msvc` |
+| `ThreadHeavyProbe` | `linux-x86_64-gnu`, `linux-aarch64-gnu`, `windows-x86_64-msvc` |
 
 Historical Wine success does not broaden any probe to another platform,
 target architecture, or target ABI. In particular, sharing this source
-directory and runner does not infer Linux support for HandleLeak or
-ThreadHeavy.
+directory and runner does not infer Linux support for HandleLeak.
 
 The unified build produces their DEX JARs with configured JDK 21 and the pinned
 in-tree D8. The shared shell-free runtime gate launches each JAR through the
@@ -49,3 +48,22 @@ and boot JAR SHA-256
 `45e19b8cc4a4161d7b7b011e268bf262069d9a7b70c9cfd9c37e324feb249eae`.
 Neither result contains an absolute machine path, and neither source nor
 result tree contains a filesystem link.
+
+On 2026-08-02, ThreadHeavyProbe was then admitted independently on the same two
+Linux targets. The unchanged graphs retained their 2,089/2,113 compile-command,
+2,172/2,196 Ninja-command, and 32-product-link audits. A fresh 1,861-edge
+x86-64 W-004 build passed 8/8 in 3.06 seconds, including ThreadHeavy in 0.37
+seconds; the true Ninja no-op repeat passed 8/8 in 3.10 seconds, including
+ThreadHeavy in 0.35 seconds. A fresh 1,626-edge AArch64 W-004 build passed 7/7
+in 89.47 seconds, including ThreadHeavy in 2.03 seconds; the true Ninja no-op
+repeat passed 7/7 in 88.64 seconds, including ThreadHeavy in 1.99 seconds.
+
+Both ThreadHeavy records require the exact 24-thread, 3,000-iteration, 72,000
+counter result, successful sleeper interruption, exact-zero process exit, and
+the complete final marker set. They use app JAR SHA-256
+`c85612b911e6597c18f60f205072815cf8c7254e1c384a2ffce348083d6f8a76`
+and the same boot JAR hash recorded above. The AArch64 record contains only the
+normalized external-runner identity, while x86-64 records native execution.
+Neither result contains an absolute machine path, and no filesystem link was
+found in either source or result tree. HandleLeak remains Windows x86-64
+MSVC-only.

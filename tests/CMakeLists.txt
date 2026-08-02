@@ -768,6 +768,11 @@ set(_art_perf_smoke_ids_selector
         linux-x86_64-gnu
         linux-aarch64-gnu
         windows-x86_64-msvc)
+set(_art_thread_heavy_ids_selector
+    TARGET_IDS
+        linux-x86_64-gnu
+        linux-aarch64-gnu
+        windows-x86_64-msvc)
 set(_art_non_moving_128m_ids_selector
     TARGET_IDS
         linux-x86_64-gnu
@@ -1197,6 +1202,8 @@ foreach(_art_runtime_stress_class HandleLeakProbe PerfSmokeProbe ThreadHeavyProb
     string(TOLOWER "${_art_runtime_stress_class}" _art_runtime_stress_name)
     if(_art_runtime_stress_class STREQUAL "PerfSmokeProbe")
         set(_art_runtime_stress_selector ${_art_perf_smoke_ids_selector})
+    elseif(_art_runtime_stress_class STREQUAL "ThreadHeavyProbe")
+        set(_art_runtime_stress_selector ${_art_thread_heavy_ids_selector})
     else()
         set(_art_runtime_stress_selector ${_art_windows_current_selector})
     endif()
