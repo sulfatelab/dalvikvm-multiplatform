@@ -128,9 +128,9 @@ and compiler-DSO topology gates, for five W-004 CTest gates. Together with the
 shared W-013 gate, the Linux catalog has eight runnable declarations and three
 compile-only artifacts. Windows adds its BoringSSL SHA executable plus the exact
 `windows-x86_64-msvc` JVMTI managed gate and runtime-load/assembly-dependency
-reviewer. Twenty-two accepted Phase-3 libcore behaviors use one checked-in
+reviewer. Twenty-three accepted Phase-3 libcore behaviors use one checked-in
 JSON contract matrix and one case-local, shell-free Python runner. The expanded
-native W-004 stage has 32 gates: ART embedding, core/charset/monitor,
+native W-004 stage has 33 gates: ART embedding, core/charset/monitor,
 BigInteger, Android/bionic OS constants, DNS,
 ordinary and forced GC, GoldenApp, interruption, file I/O, TCP loopback,
 UDP loopback, ZIP/DEFLATE, errno/UTF-8 paths, properties/clocks, runtime memory,
@@ -147,7 +147,7 @@ DLL closure beside the probe and gives each repetition an isolated runtime
 root. It requires the complete create/destroy, VEH, predecessor/late UEF, and
 frame-SEH contract plus exactly one intentional ART UEF minidump per process;
 the dumps remain ignored build artifacts and the aggregate records only
-relative names. Windows Server 2025 passed 32/32 twice with `--parallel 16`,
+relative names. Windows Server 2025 passed 33/33 twice with `--parallel 16`,
 including a true Ninja no-op repeat. Its first DNS
 run exposed recursive `getnameinfo` JNI behavior; the maintained bridge now
 uses `GetNameInfoW` with explicit bionic-to-Winsock flag mapping. The remaining
@@ -161,8 +161,9 @@ cleanup now pass as one exact Windows runtime contract. Historical Wine results
 do not promote cases. BnProbe now validates NativeBN-backed BigInteger
 addition, multiplication, remainder, modular exponentiation, byte-array
 round-trip, and exact deterministic output. OsConstantsProbe requires all 18
-declared Android/bionic ABI values used by the Windows bridge. The JVMTI runner,
-native agent, managed
+declared Android/bionic ABI values used by the Windows bridge. XmlProbe requires
+the exact namespace-aware three-element `helloworld` SAX/Expat result. The
+JVMTI runner, native agent, managed
 source, and result live together under `cases/jvmti-force/`; its current
 selector is deliberately not generalized to another Windows architecture or
 ABI.
@@ -203,9 +204,9 @@ sources, strips comments and literals, distinguishes JNI `Call*MethodA` from
 Win32 suffix-`A` APIs, and fails on either a known ANSI call or an unclassified
 suffix-`A` family. The active 1,441-source graph has zero ANSI calls, source
 files, or API families. The Linux-hosted Windows-cross stage passes. Native
-Windows Server 2025 now passes W-027 as part of the complete 72/72 catalog;
+Windows Server 2025 now passes W-027 as part of the complete 73/73 catalog;
 the first run completed in 12.38 seconds and the no-op repeat in 12.33 seconds.
-The complete catalog contains 65 target-runnable gates and seven host reviewers,
+The complete catalog contains 66 target-runnable gates and seven host reviewers,
 and its repeated `art-tests` build reports `ninja: no work to do`.
 Remaining legacy shell runners and retained per-probe CMake entry points use
 canonical files as temporary compatibility shims; they must be replaced by the

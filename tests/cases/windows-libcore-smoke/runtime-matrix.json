@@ -203,6 +203,12 @@
       ],
       "timeout_seconds": 60
     },
+    "XmlProbe": {
+      "expected_markers": [
+        "XmlProbe.done=ok elems=3 text=helloworld"
+      ],
+      "timeout_seconds": 60
+    },
     "ZipProbe": {
       "expected_markers": [
         "crc32=20adb109",

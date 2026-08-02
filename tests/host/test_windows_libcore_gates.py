@@ -44,6 +44,7 @@ def test_windows_libcore_runtime_matrix_matches_promoted_cases():
         "ThreadStressProbe",
         "ThrowProbe",
         "UdpProbe",
+        "XmlProbe",
         "ZipProbe",
     }
     assert matrix["ThrowProbe"]["require_nonzero"] is True
@@ -88,6 +89,9 @@ def test_windows_libcore_runtime_matrix_matches_promoted_cases():
         "PASS NI_NUMERICHOST=1",
         "PASS F_GETLK=5",
         "OsConstantsProbe.done=ok",
+    ]
+    assert matrix["XmlProbe"]["expected_markers"] == [
+        "XmlProbe.done=ok elems=3 text=helloworld"
     ]
     assert matrix["PathProbe"]["mode"] == "path"
     assert matrix["AbsPathProbe"]["mode"] == "absolute-path"

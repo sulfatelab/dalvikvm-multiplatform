@@ -168,9 +168,18 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     assert os_constants["execution"] == "target-runnable"
     assert os_constants["timeout_seconds"] == 600
     assert os_constants["ctest_registered"] is False
+    xml = next(
+        probe for probe in catalog["probes"] if probe["name"] == "managed_xmlprobe"
+    )
+    assert xml["platforms"] == ["windows"]
+    assert xml["target_arches"] == ["x86_64"]
+    assert xml["target_abis"] == ["msvc"]
+    assert xml["execution"] == "target-runnable"
+    assert xml["timeout_seconds"] == 600
+    assert xml["ctest_registered"] is False
     assert sum(
         probe["execution"] == "target-runnable" for probe in catalog["probes"]
-    ) == 67
+    ) == 68
     assert {
         probe["name"]: probe["timeout_seconds"]
         for probe in catalog["probes"]
@@ -207,6 +216,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "managed_threadstressprobe": 600,
         "managed_throwprobe": 600,
         "managed_udpprobe": 600,
+        "managed_xmlprobe": 600,
         "managed_zipprobe": 600,
         "win32_uef_probe": 600,
         "win32_fault_record_probe": 60,
