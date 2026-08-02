@@ -2039,6 +2039,18 @@ differences.
   2,196-Ninja-command, 32-product-link audit. Packaging admission remains open:
   the first stage attempt correctly rejected a sysroot-derived absolute `/lib`
   RUNPATH that must be removed in favor of the relocatable `$ORIGIN` contract.
+- [x] Remove sysroot paths from cross-Linux product RUNPATHs. Configuration
+  still discovers and requires regular target `z`, LZ4, capability, and Expat
+  libraries, but links these system dependencies by canonical `-l` names so
+  Clang resolves them through the declared sysroot without teaching CMake to
+  encode the sysroot's `/lib`. The relinked AArch64 product repeated as a true
+  Ninja no-op and staged 157 regular files, including 32 executable/DSO images
+  all identified as `elf64-littleaarch64`, `aarch64`, 64-bit. Every recorded
+  product runtime path is exactly `$ORIGIN`; the only non-product dependencies
+  are the approved target C/C++ runtime, libc/libm, zlib, LZ4, libcap, and Expat
+  SONAMEs. Boot-image execution remains unsupported on this x86-64 cross host,
+  so this closes build/package portability without claiming native AArch64
+  runtime acceptance or target admission.
 - [ ] Validate and admit Linux AArch64, x86, ARMv7, and RISC-V64 separately.
 - [x] Migrate the ARM64EC identity from transitional
   `windows-aarch64-arm64ec/cpu_arch=aarch64` to

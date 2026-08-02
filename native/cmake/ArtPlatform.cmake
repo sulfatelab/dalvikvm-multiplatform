@@ -107,18 +107,24 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
         PRIVATE HAVE_EXPAT_CONFIG_H XML_DEV_URANDOM)
     add_library(cap INTERFACE)
 else()
-    find_package(ZLIB REQUIRED)
-    add_library(z INTERFACE)
-    target_link_libraries(z INTERFACE ZLIB::ZLIB)
-    foreach(_hostlib cap lz4)
-        find_library(_${_hostlib}_path NAMES ${_hostlib} REQUIRED)
-        add_library(${_hostlib} INTERFACE)
-        set_target_properties(${_hostlib} PROPERTIES
-            INTERFACE_LINK_LIBRARIES "${_${_hostlib}_path}")
-    endforeach()
-    find_library(_expat_path NAMES expat expatw REQUIRED)
-    add_library(expat INTERFACE)
-    set_target_properties(expat PROPERTIES INTERFACE_LINK_LIBRARIES "${_expat_path}")
+    function(_art_import_linux_system_library target link_name)
+        find_library(_art_${target}_path NAMES ${ARGN} REQUIRED)
+        add_library(${target} INTERFACE)
+        if(ART_TARGET_SYSROOT)
+            # The discovered regular file proves that the declared target
+            # sysroot provides this dependency. Link it by its canonical
+            # system name so CMake does not encode the sysroot's /lib as an
+            # absolute product RUNPATH.
+            target_link_libraries(${target} INTERFACE "-l${link_name}")
+        else()
+            set_target_properties(${target} PROPERTIES
+                INTERFACE_LINK_LIBRARIES "${_art_${target}_path}")
+        endif()
+    endfunction()
+    _art_import_linux_system_library(z z z)
+    _art_import_linux_system_library(cap cap cap)
+    _art_import_linux_system_library(lz4 lz4 lz4)
+    _art_import_linux_system_library(expat expat expat expatw)
 endif()
 
 # Windows supplies sigchain from its platform source tree before the generated
