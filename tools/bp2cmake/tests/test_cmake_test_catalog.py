@@ -202,6 +202,16 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     assert sum(
         probe["execution"] == "target-runnable" for probe in catalog["probes"]
     ) == 72
+    assert all(
+        probe["type"] != "SHARED"
+        for probe in catalog["probes"]
+        if probe["execution"] == "target-runnable"
+    )
+    assert all(
+        probe["type"] != "GATE"
+        for probe in catalog["probes"]
+        if probe["execution"] == "compile-only"
+    )
     assert {
         probe["name"]: probe["timeout_seconds"]
         for probe in catalog["probes"]
@@ -280,6 +290,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "windows_w004_runtime_load_structure",
         "windows_w010_boundary_unwind_structure",
         "windows_w013_source_policy",
+        "win32_fs1_stack_high_water_structure",
         "windows_x64_w025_jit_structure",
         "windows_w027_unicode_api_policy",
     ]

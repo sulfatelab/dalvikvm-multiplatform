@@ -495,6 +495,11 @@ function(art_add_target_probe)
         if(NOT PROBE_COMMAND)
             message(FATAL_ERROR "Command gate ${PROBE_NAME} has no COMMAND")
         endif()
+        if(PROBE_EXECUTION STREQUAL "compile-only")
+            message(FATAL_ERROR
+                "Command gate ${PROBE_NAME} cannot be compile-only; use a "
+                "host-review, target-runnable, or cross-runner command")
+        endif()
         if(PROBE_SOURCES OR PROBE_INCLUDE_DIRS OR PROBE_LINK_LIBRARIES OR
            PROBE_COMPILE_OPTIONS OR PROBE_COMPILE_DEFINITIONS OR
            PROBE_LINK_OPTIONS OR PROBE_PRODUCT_POLICY OR
@@ -566,6 +571,11 @@ function(art_add_target_probe)
         if(PROBE_TYPE STREQUAL "EXECUTABLE")
             add_executable("${PROBE_NAME}" EXCLUDE_FROM_ALL ${PROBE_SOURCES})
         elseif(PROBE_TYPE STREQUAL "SHARED")
+            if(NOT PROBE_EXECUTION STREQUAL "compile-only")
+                message(FATAL_ERROR
+                    "Shared probe ${PROBE_NAME} must be a compile-only support "
+                    "artifact; declare its behavioral owner as MANAGED or GATE")
+            endif()
             add_library("${PROBE_NAME}" SHARED EXCLUDE_FROM_ALL ${PROBE_SOURCES})
         else()
             message(FATAL_ERROR "Unsupported ART target probe type: ${PROBE_TYPE}")
@@ -1685,7 +1695,7 @@ art_add_target_probe(
     CONTRACTS stack jni
     PREFIX lib WINDOWS_EXPORT_ALL_SYMBOLS)
 if(ART_TEST_VARIANT STREQUAL "win32-stack-high-water")
-    set(_art_fs1_structure_execution host-review)
+    set(_art_fs1_structure_mode instrumented)
     if(CMAKE_BUILD_TYPE STREQUAL "Debug")
         set(_art_fs1_reserve 40960)
         set(_art_fs1_process_timeout 300)
@@ -1696,19 +1706,20 @@ if(ART_TEST_VARIANT STREQUAL "win32-stack-high-water")
         set(_art_fs1_ctest_timeout 900)
     endif()
 else()
-    set(_art_fs1_structure_execution compile-only)
+    set(_art_fs1_structure_mode product)
 endif()
 art_add_target_probe(
     NAME win32_fs1_stack_high_water_structure STAGE w014 TYPE GATE
-    EXECUTION "${_art_fs1_structure_execution}"
+    EXECUTION host-review
     ${_art_windows_current_selector}
     DEPENDS art
     CONTRACTS stack codegen source-policy
     COMMAND
         "${Python3_EXECUTABLE}"
         "${_art_test_repo_root}/tests/support/windows/fs1_stack_high_water_structure.py"
+        --mode "${_art_fs1_structure_mode}"
         --repo "${_art_test_repo_root}"
-        --probe-build "${CMAKE_BINARY_DIR}"
+        --build "${CMAKE_BINARY_DIR}"
         --llvm-readobj
             "${ART_LLVM_READOBJ}"
         --llvm-objdump

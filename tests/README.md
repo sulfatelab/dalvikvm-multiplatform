@@ -193,6 +193,13 @@ reviewer, and also repeated as a no-op. The debugger launches the
 frontend-resolved product EXE rather than copying it away from its matching DLL
 directory, while all writable runtime state remains isolated below the output
 tree.
+W-014 owns seven bounded native runtime declarations. Its FS-1 product reviewer
+proves that `art.dll`, generated asm definitions, and compile commands omit the
+test-only instrumentation. The same reviewer switches to positive export,
+offset, and direct-store object checks in the exact
+`win32-stack-high-water` variant, where the managed three-mode gate is also
+runnable. The FS-1 JNI DSO and managed JAR remain compile-only support
+artifacts in the product build; neither is reported as runtime-verified.
 W-025 keeps its three JNI DSOs as compile-only dependencies and makes eight
 behavioral declarations target-runnable. The managed runners cover unwind
 lifecycle, stress, and 64 MiB/1 GiB mapping audits; the native runners cover
@@ -214,10 +221,12 @@ suffix-`A` family. The active 1,441-source graph has zero ANSI calls, source
 files, or API families. The Linux-hosted Windows-cross stage passes. Native
 Windows Server 2025 now passes W-027 as part of the complete 76/76 catalog;
 the first run completed in 12.38 seconds and the no-op repeat in 12.33 seconds.
-The complete 93-declaration catalog contains 72 target-runnable items, seven
-host reviewers, and 14 compile-only artifacts. The Windows product subset
-remains 90 applicable declarations: 69 target-runnable, seven host-review, and
-14 compile-only. Its repeated `art-tests` build reports `ninja: no work to do`.
+The complete 93-declaration catalog contains 72 target-runnable items, eight
+host reviewers, and 13 compile-only artifacts. The Windows product subset
+remains 90 applicable declarations: 69 target-runnable, eight host-review, and
+13 compile-only. The last complete native baseline passed 76/76; the new
+host-only W-014 product-isolation review makes the next native total 77. Both
+product and FS-1 Windows-cross W-014 reviewers pass with Ninja no-op repeats.
 The former legacy shell runners and per-probe CMake entry points have been
 replaced by the unified Python/CMake/Ninja path, and `tools/verify` is removed.
 W-003 removed its four standalone CMake graphs, shell runners, and package producer;
@@ -353,8 +362,10 @@ The W-014 FS-1 stack-high-water case now uses the exact test-only build variant
 directory, cannot be staged as a product, and changes the managed case from
 compile-only to target-runnable. Its shell-free runtime gate runs switch,
 nterp, and JIT modes, while a `host-review` gate inspects the generated offsets
-and target objects for allocation-free direct stack sampling. Product builds
-keep both FS-1 declarations compile-only and receive no instrumentation macro.
+and target objects for allocation-free direct stack sampling. In product mode,
+the same `host-review` proves the export, generated offsets, and instrumentation
+definition are absent; only the supporting JNI DSO and managed JAR remain
+compile-only.
 W-003 uses the same variant discipline for frame-family attribution. Product
 `stage:w003` runs the structural reviewer plus CriticalNative,
 normal/FastNative, and XMM matrices; the exact `win32-frame-attribution`
@@ -556,6 +567,11 @@ reviewed from returned evidence.
 
 : Building the exact target artifact is the acceptance action. This does not
   claim runtime behavior.
+
+  A shared-library probe is always a compile-only support artifact. Its actual
+  behavioral owner must be a runnable managed declaration or command gate that
+  loads and checks the DSO. A command gate cannot be compile-only because an
+  unexecuted utility target has no artifact or reviewed result to accept.
 
 `target-runnable`
 

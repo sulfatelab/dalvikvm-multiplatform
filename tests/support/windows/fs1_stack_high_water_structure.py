@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify FS-1 is probe-only and samples the generated/assembly failure paths."""
+"""Verify the product/FS-1 variant boundary and instrumented failure paths."""
 
 from __future__ import annotations
 
@@ -55,34 +55,46 @@ def instruction_text(line: str) -> str | None:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo", type=Path, required=True)
-    parser.add_argument("--product-build", type=Path)
-    parser.add_argument("--probe-build", type=Path, required=True)
+    parser.add_argument("--build", type=Path, required=True)
+    parser.add_argument(
+        "--mode", choices=("product", "instrumented"), required=True
+    )
     parser.add_argument("--llvm-readobj", type=Path)
     parser.add_argument("--llvm-objdump", type=Path)
     args = parser.parse_args()
 
     repo = args.repo.resolve()
-    product = args.product_build.resolve() if args.product_build else None
-    probe = args.probe_build.resolve()
+    build = args.build.resolve()
     readobj = require_tool("llvm-readobj", args.llvm_readobj)
     objdump = require_tool("llvm-objdump", args.llvm_objdump)
 
     symbol = "artWin32DumpStackOverflowHighWater"
-    probe_exports = run(readobj, "--coff-exports", str(probe / "art.dll"))
-    if product is not None:
-        product_exports = run(readobj, "--coff-exports", str(product / "art.dll"))
-        if f"Name: {symbol}" in product_exports:
-            fail(f"product art.dll unexpectedly exports {symbol}")
-    if f"Name: {symbol}" not in probe_exports:
-        fail(f"instrumented art.dll does not export {symbol}")
+    exports = run(readobj, "--coff-exports", str(build / "art.dll"))
+    defines_path = build / "gensrc/art/asm/include/asm_defines.h"
+    defines = defines_path.read_text(encoding="utf-8")
+    compile_commands = (build / "compile_commands.json").read_text(encoding="utf-8")
+    instrumentation_definition = re.search(
+        r"(?:^|\s)-DART_WIN32_STACK_HIGH_WATER(?:=1)?(?:\s|$)",
+        compile_commands,
+    )
 
-    probe_defines_path = probe / "gensrc/art/asm/include/asm_defines.h"
-    defines = probe_defines_path.read_text(encoding="utf-8")
-    if product is not None:
-        product_defines_path = product / "gensrc/art/asm/include/asm_defines.h"
-        product_defines = product_defines_path.read_text(encoding="utf-8")
-        if "THREAD_WIN32_STACK_HIGH_WATER_" in product_defines:
+    if args.mode == "product":
+        if f"Name: {symbol}" in exports:
+            fail(f"product art.dll unexpectedly exports {symbol}")
+        if "THREAD_WIN32_STACK_HIGH_WATER_" in defines:
             fail("product asm definitions contain FS-1 offsets")
+        if instrumentation_definition:
+            fail("product compile commands enable FS-1 instrumentation")
+        print(
+            "FS-1 product isolation check: PASS "
+            "(no export, generated offset, or instrumentation definition)"
+        )
+        return 0
+
+    if f"Name: {symbol}" not in exports:
+        fail(f"instrumented art.dll does not export {symbol}")
+    if not instrumentation_definition:
+        fail("instrumented compile commands omit the FS-1 definition")
 
     stack_end = read_define(defines, "THREAD_STACK_END_OFFSET")
     throw_entry = read_define(defines, "THREAD_THROW_STACK_OVERFLOW_ENTRYPOINT_OFFSET")
@@ -93,7 +105,7 @@ def main() -> int:
     quick_frame = read_define(defines, "THREAD_WIN32_STACK_HIGH_WATER_QUICK_FRAME_OFFSET")
     long_jump = read_define(defines, "THREAD_WIN32_STACK_HIGH_WATER_LONG_JUMP_OFFSET")
 
-    nterp_obj = find_one(probe / "CMakeFiles/art.dir", "mterp_x86_64.S.obj")
+    nterp_obj = find_one(build / "CMakeFiles/art.dir", "mterp_x86_64.S.obj")
     nterp_disassembly = run(objdump, "-dr", "--no-show-raw-insn", str(nterp_obj))
     instructions = [
         instruction
@@ -111,7 +123,7 @@ def main() -> int:
         if len(path) != 4 or not path[1].startswith("jae\t") or path[2:] != [store, jump]:
             fail("nterp failure path is not compare/branch/direct-RSP-store/tail-jump: " + " | ".join(path))
 
-    quick_obj = find_one(probe / "CMakeFiles/art.dir", "quick_entrypoints_x86_64.S.obj")
+    quick_obj = find_one(build / "CMakeFiles/art.dir", "quick_entrypoints_x86_64.S.obj")
     quick_disassembly = run(objdump, "-dr", "--no-show-raw-insn", str(quick_obj))
     required_quick_instructions = (
         f"incq\t0x{sequence:x}(%r15)",
@@ -156,7 +168,8 @@ def main() -> int:
 
     print(
         "FS-1 stack high-water structural check: PASS "
-        "(product-isolated, optimizing direct store, nterp=7, quick/long-jump direct stores)"
+        "(instrumented export/offsets, optimizing direct store, nterp=7, "
+        "quick/long-jump direct stores)"
     )
     return 0
 

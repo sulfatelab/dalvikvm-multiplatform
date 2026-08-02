@@ -18,8 +18,14 @@ FS-1 is intentionally available only through the exact test-only variant
 `win32-stack-high-water` on `windows-x86_64-msvc`. The frontend gives the
 variant a fingerprinted output directory and rejects product staging from it.
 The product configuration still builds the managed/JNI artifacts compile-only
-without defining `ART_WIN32_STACK_HIGH_WATER`. Other target architectures
-remain non-applicable.
+without defining `ART_WIN32_STACK_HIGH_WATER`. Its W-014 host review now proves
+that the product `art.dll` has no FS-1 export, its generated asm definitions
+have no FS-1 offsets, and its GNU-style Clang commands have no instrumentation
+definition. The Linux-hosted Windows product and freshly built FS-1 variant
+both passed their respective negative/positive reviewers on 2026-08-02; both
+immediate repeats were Ninja no-ops. Other target architectures remain
+non-applicable. The last native product baseline remains 76/76; this added
+host-only review makes the next native catalog total 77.
 
 The authoritative Windows Server 2025 source projection and both variant
 output trees contained zero reparse points. Aggregate JSON stores target IDs,
