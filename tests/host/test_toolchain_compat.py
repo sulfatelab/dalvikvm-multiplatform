@@ -4,19 +4,46 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_linux_openjdkjvmti_toolchain_drift_is_module_scoped():
+def test_linux_openjdkjvmti_uses_target_checked_source_scoped_compatibility():
     cmake = (
         REPO_ROOT / "native" / "cmake" / "ArtCompatibility.cmake"
     ).read_text(encoding="utf-8")
-    prelude = (
-        REPO_ROOT / "compat" / "include" / "mdvm_openjdkjvmti_linux_prelude.h"
+    compat = (
+        REPO_ROOT / "compat" / "include" / "mdvm_bionic_nullptr_compat.h"
     ).read_text(encoding="utf-8")
 
+    assert 'check_symbol_exists(strlcpy "string.h" ART_TARGET_HAS_STRLCPY)' in cmake
+    assert "ART_LIBARTBASE_BASE_STRLCPY_H_" in cmake
+    assert 'SHELL:-include string.h' in cmake
     assert "target_compile_options(openjdkjvmti PRIVATE" in cmake
-    assert "mdvm_openjdkjvmti_linux_prelude.h" in cmake
-    assert "using std::nullptr_t;" in prelude
-    assert "__GLIBC_PREREQ(2, 38)" in prelude
-    assert "ART_LIBARTBASE_BASE_STRLCPY_H_" in prelude
+    assert "mdvm_bionic_nullptr_compat.h" in cmake
+    assert "using std::nullptr_t;" in compat
+    source_scope = cmake.split(
+        "set(_art_jvmti_bionic_nullptr_sources", 1
+    )[1].split(")", 1)[0]
+    reviewed_sources = {
+        "deopt_manager.cc",
+        "events.cc",
+        "object_tagging.cc",
+        "OpenjdkJvmTi.cc",
+        "ti_breakpoint.cc",
+        "ti_class.cc",
+        "ti_class_loader.cc",
+        "ti_dump.cc",
+        "ti_heap.cc",
+        "ti_method.cc",
+        "ti_phase.cc",
+        "ti_redefine.cc",
+        "ti_stack.cc",
+        "ti_thread.cc",
+        "transform.cc",
+    }
+    assert {line.strip() for line in source_scope.splitlines() if ".cc" in line} == (
+        reviewed_sources
+    )
+    assert not (
+        REPO_ROOT / "compat" / "include" / "mdvm_openjdkjvmti_linux_prelude.h"
+    ).exists()
 
 
 def test_windows_product_targets_use_explicit_definitions_without_a_prelude():
@@ -45,10 +72,7 @@ def test_windows_product_targets_use_explicit_definitions_without_a_prelude():
     assert 'if(ART_TARGET_PLATFORM STREQUAL "windows")\n' in cmake
     assert "target_compile_definitions(${_t} PRIVATE" in cmake
     assert "get_target_property(_art_dex2oat_sources art-dex2oat SOURCES)" not in cmake
-    assert (
-        "${MDVM_NATIVE_SRC_ROOT_DIR}/libbase/hex.cpp\n"
-        '    PROPERTIES COMPILE_OPTIONS "-include;stdint.h")'
-    ) in cmake
+    assert "libbase/hex.cpp" not in cmake
     for relative in (
         "tests/cases/jit-mapping/probe.cc",
         "tests/cases/jit-section-policy/probe.cc",
@@ -261,7 +285,7 @@ def test_windows_ziparchive_owns_64_bit_stdio_spellings():
         assert definition in scope
 
 
-def test_linux_toolchain_drift_headers_are_source_scoped():
+def test_linux_toolchain_drift_is_explicit_and_source_scoped():
     cmake = (
         REPO_ROOT / "native" / "cmake" / "ArtCompatibility.cmake"
     ).read_text(encoding="utf-8")
@@ -280,16 +304,13 @@ def test_linux_toolchain_drift_headers_are_source_scoped():
         )
         assert any(block in guarded.split("endif()", 1)[0] for guarded in linux_blocks)
 
-    paired_prelude = (
-        "set_source_files_properties(\n"
-        "        ${MDVM_NATIVE_SRC_ROOT_DIR}/libprocinfo/process.cpp\n"
-        "        ${MDVM_NATIVE_SRC_ROOT_DIR}/art/libartbase/base/metrics/metrics_common.cc\n"
-        '        PROPERTIES COMPILE_OPTIONS "-include;${_PRELUDE}")'
-    )
-    assert any(
-        paired_prelude in guarded.split("endif()", 1)[0]
-        for guarded in linux_blocks
-    )
+    assert "mdvm_toolchain_prelude.h" not in cmake
+    assert "${_PRELUDE}" not in cmake
+    assert not (
+        REPO_ROOT / "compat" / "include" / "mdvm_toolchain_prelude.h"
+    ).exists()
+    assert "libprocinfo/process.cpp" not in cmake
+    assert "art/libartbase/base/metrics/metrics_common.cc" not in cmake
 
 
 def test_product_graph_has_no_tree_wide_warning_as_error_demotion():

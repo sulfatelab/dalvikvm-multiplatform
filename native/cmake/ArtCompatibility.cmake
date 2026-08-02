@@ -17,28 +17,52 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
         list(APPEND _art_windows_system_compile_options
             "$<$<COMPILE_LANGUAGE:C,CXX>:SHELL:-isystem ${_art_windows_system_include}>")
     endforeach()
-else()
-    set(_PRELUDE "${MDVM_COMPAT_INCLUDE_DIR}/mdvm_toolchain_prelude.h")
-    if(TARGET openjdkjvmti)
-        # The pinned JVMTI sources assume bionic's global nullptr_t and predate
-        # glibc 2.38's strlcpy. Keep that host-toolchain drift isolated to the
-        # one DSO instead of changing the nested vendor source.
-        target_compile_options(openjdkjvmti PRIVATE
-            "$<$<COMPILE_LANGUAGE:CXX>:SHELL:-include ${MDVM_COMPAT_INCLUDE_DIR}/mdvm_openjdkjvmti_linux_prelude.h>")
-    endif()
 endif()
 
-# Per-file: files that need an extra include / warning demotion. Force-includes
-# are NEVER applied to posix_strerror_r.cpp (it #undef's _GNU_SOURCE first).
-if(ART_TARGET_PLATFORM STREQUAL "linux")
-    set_source_files_properties(
-        ${MDVM_NATIVE_SRC_ROOT_DIR}/libprocinfo/process.cpp
-        ${MDVM_NATIVE_SRC_ROOT_DIR}/art/libartbase/base/metrics/metrics_common.cc
-        PROPERTIES COMPILE_OPTIONS "-include;${_PRELUDE}")
+if(ART_TARGET_PLATFORM STREQUAL "linux" AND TARGET openjdkjvmti)
+    # The pinned JVMTI sources predate glibc 2.38's strlcpy. Detect the
+    # declaration with the target compiler/sysroot and suppress ART's older
+    # fallback only when the target libc supplies it. Include string.h
+    # explicitly so the selected declaration never depends on transitive
+    # standard-library includes.
+    include(CheckSymbolExists)
+    check_symbol_exists(strlcpy "string.h" ART_TARGET_HAS_STRLCPY)
+    if(ART_TARGET_HAS_STRLCPY)
+        target_compile_definitions(openjdkjvmti PRIVATE
+            ART_LIBARTBASE_BASE_STRLCPY_H_)
+        target_compile_options(openjdkjvmti PRIVATE
+            "$<$<COMPILE_LANGUAGE:CXX>:SHELL:-include string.h>")
+    endif()
+
+    # Bionic exposes nullptr_t in the global namespace. Only the sources that
+    # use that spelling directly or include events-inl.h need the compatibility
+    # alias when building against a standard host C++ library.
+    set(_art_jvmti_bionic_nullptr_sources
+        deopt_manager.cc
+        events.cc
+        object_tagging.cc
+        OpenjdkJvmTi.cc
+        ti_breakpoint.cc
+        ti_class.cc
+        ti_class_loader.cc
+        ti_dump.cc
+        ti_heap.cc
+        ti_method.cc
+        ti_phase.cc
+        ti_redefine.cc
+        ti_stack.cc
+        ti_thread.cc
+        transform.cc)
+    foreach(_art_jvmti_source IN LISTS _art_jvmti_bionic_nullptr_sources)
+        set_property(SOURCE
+            "${MDVM_NATIVE_SRC_ROOT_DIR}/art/openjdkjvmti/${_art_jvmti_source}"
+            APPEND PROPERTY COMPILE_OPTIONS
+                "-include;${MDVM_COMPAT_INCLUDE_DIR}/mdvm_bionic_nullptr_compat.h")
+    endforeach()
 endif()
-set_source_files_properties(
-    ${MDVM_NATIVE_SRC_ROOT_DIR}/libbase/hex.cpp
-    PROPERTIES COMPILE_OPTIONS "-include;stdint.h")
+
+# Per-file warning and include compatibility. Force-includes are never applied
+# to posix_strerror_r.cpp (it #undef's _GNU_SOURCE first).
 set_source_files_properties(
     ${MDVM_NATIVE_SRC_ROOT_DIR}/art/libartbase/base/file_utils.cc
     ${MDVM_NATIVE_SRC_ROOT_DIR}/art/libartbase/base/utils.cc
@@ -65,8 +89,7 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
         PROPERTIES COMPILE_OPTIONS "-Wno-strict-primary-template-shadow")
 else()
     set_source_files_properties(${_DEX_CC}
-        PROPERTIES COMPILE_OPTIONS
-            "-include;${_PRELUDE};-Wno-strict-primary-template-shadow")
+        PROPERTIES COMPILE_OPTIONS "-Wno-strict-primary-template-shadow")
 endif()
 if(ART_TARGET_PLATFORM STREQUAL "linux")
     set_property(SOURCE

@@ -295,6 +295,19 @@ items are closed.
   `--parallel 32`; the final Windows-cross policy passed and repeated as a
   Ninja no-op at `--parallel 32`. Host regressions prove the platform boundary
   and all 179 host tests pass.
+- [x] The remaining Linux broad preludes are now retired. Direct rebuilds
+  prove `libprocinfo/process.cpp`, ART metrics, all 15 `libdexfile/dex`
+  sources, and `libbase/hex.cpp` compile without `mdvm_toolchain_prelude.h`;
+  the unused header is deleted. The 29-source `openjdkjvmti` prelude is also
+  deleted. CMake now checks `strlcpy` with the target compiler/sysroot,
+  suppresses ART's fallback and includes `string.h` only when the target libc
+  supplies the symbol, and applies a seven-line bionic `nullptr_t` alias to
+  exactly the 15 sources that use it directly or include `events-inl.h`.
+  Three minimal Linux-only standard-header inputs remain because removal was
+  mechanically rejected: `filesystem` for `file_utils.cc`, `limits` for
+  `time_utils.cc`, and `stdint.h` for generated `invoke_type` output. They are
+  explicit source dependencies, not catch-all preludes. The affected Linux
+  targets and Windows-cross `base` target compile and link successfully.
 - [x] The Windows platform prelude was removed from seven reviewed
   dependency-owning targets. `art-dex2oat` now applies it only to its 19 ART
   sources and one generated ART source; its 224 embedded BoringSSL sources,
@@ -1381,12 +1394,12 @@ items are closed.
   the immediate repeat was a true Ninja no-op and passed 5/5 again.
 - [x] Building the newly rooted Linux `openjdkjvmti` target exposed two pinned
   source assumptions hidden by the earlier closure: bionic's global
-  `nullptr_t` and ART's pre-glibc-2.38 `strlcpy` fallback. A module-scoped,
-  Linux-only compatibility prelude now resolves those host-toolchain drifts
-  without editing vendor source or changing other targets. The corrected
-  31-edge build links `libopenjdkjvmti.so`; its immediate repeat is a Ninja
-  no-op. The Windows cross W-004 graph remained a no-op and passed its reviewer
-  after the same common-CMake change.
+  `nullptr_t` and ART's pre-glibc-2.38 `strlcpy` fallback. The original
+  module-scoped Linux prelude resolved the first build and has since been
+  replaced by the target-libc symbol check and 15-source alias policy recorded
+  above. No vendor source or unrelated target is changed. The corrected
+  `libopenjdkjvmti.so` links, while Windows keeps its independent source
+  contract.
 - [x] Math CriticalNative now has one case-local Python matrix for the exact
   Linux and Windows x86-64 targets. It runs `-Xint` and threshold-zero JIT twice
   each, requires an explicit Windows compile record, writes portable aggregate
@@ -1879,9 +1892,10 @@ differences.
   and native Windows rebuilds pass without it.
 - [x] Remove the target-wide strict-primary-template-shadow demotion while
   retaining only the reviewed source-specific exceptions.
-- [ ] Retire the remaining Linux source/module toolchain-drift preludes as
-  vendored dependencies are updated or compatibility becomes explicit. The
-  Windows platform prelude is fully retired.
+- [x] Retire the remaining Linux source/module toolchain-drift preludes. Both
+  broad headers are deleted; current vendor assumptions are represented by
+  target-checked or exact-source compatibility. The Windows platform prelude
+  remains fully retired.
 - [x] Prove a second identical build is a true Ninja no-op and that Blueprint,
   overlay, boot-JAR, and codegen input changes rebuild only affected outputs.
   The product-level Linux perturbations above exercise both forward and
