@@ -763,6 +763,11 @@ set(_art_gc_stress_ids_selector
         linux-x86_64-gnu
         linux-aarch64-gnu
         windows-x86_64-msvc)
+set(_art_handle_leak_ids_selector
+    TARGET_IDS
+        linux-x86_64-gnu
+        linux-aarch64-gnu
+        windows-x86_64-msvc)
 set(_art_perf_smoke_ids_selector
     TARGET_IDS
         linux-x86_64-gnu
@@ -1200,12 +1205,15 @@ set(_art_runtime_stress_expected_ThreadHeavyProbe
     "ThreadHeavyProbe.done=ok")
 foreach(_art_runtime_stress_class HandleLeakProbe PerfSmokeProbe ThreadHeavyProbe)
     string(TOLOWER "${_art_runtime_stress_class}" _art_runtime_stress_name)
-    if(_art_runtime_stress_class STREQUAL "PerfSmokeProbe")
+    if(_art_runtime_stress_class STREQUAL "HandleLeakProbe")
+        set(_art_runtime_stress_selector ${_art_handle_leak_ids_selector})
+    elseif(_art_runtime_stress_class STREQUAL "PerfSmokeProbe")
         set(_art_runtime_stress_selector ${_art_perf_smoke_ids_selector})
     elseif(_art_runtime_stress_class STREQUAL "ThreadHeavyProbe")
         set(_art_runtime_stress_selector ${_art_thread_heavy_ids_selector})
     else()
-        set(_art_runtime_stress_selector ${_art_windows_current_selector})
+        message(FATAL_ERROR
+            "missing exact selector for ${_art_runtime_stress_class}")
     endif()
     set(_art_runtime_stress_marker_arguments)
     foreach(_art_runtime_stress_marker IN LISTS

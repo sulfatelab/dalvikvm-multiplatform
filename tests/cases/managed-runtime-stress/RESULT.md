@@ -5,13 +5,13 @@ sources. Their applicability is deliberately per probe:
 
 | Probe | Accepted exact target IDs |
 |---|---|
-| `HandleLeakProbe` | `windows-x86_64-msvc` |
+| `HandleLeakProbe` | `linux-x86_64-gnu`, `linux-aarch64-gnu`, `windows-x86_64-msvc` |
 | `PerfSmokeProbe` | `linux-x86_64-gnu`, `linux-aarch64-gnu`, `windows-x86_64-msvc` |
 | `ThreadHeavyProbe` | `linux-x86_64-gnu`, `linux-aarch64-gnu`, `windows-x86_64-msvc` |
 
 Historical Wine success does not broaden any probe to another platform,
-target architecture, or target ABI. In particular, sharing this source
-directory and runner does not infer Linux support for HandleLeak.
+target architecture, or target ABI. Each target in the table has independent
+behavioral acceptance.
 
 The unified build produces their DEX JARs with configured JDK 21 and the pinned
 in-tree D8. The shared shell-free runtime gate launches each JAR through the
@@ -65,5 +65,25 @@ the complete final marker set. They use app JAR SHA-256
 and the same boot JAR hash recorded above. The AArch64 record contains only the
 normalized external-runner identity, while x86-64 records native execution.
 Neither result contains an absolute machine path, and no filesystem link was
-found in either source or result tree. HandleLeak remains Windows x86-64
-MSVC-only.
+found in either source or result tree.
+
+HandleLeakProbe was then admitted independently on both Linux targets. The
+unchanged AArch64 graph retained 38 modules, 262 Blueprint files, 2,113 compile
+commands, 2,196 Ninja commands, and 32 product links. Its fresh 1,627-edge
+W-004 build passed 8/8 in 99.23 seconds, including HandleLeak in 2.56 seconds;
+the true Ninja no-op repeat passed 8/8 in 99.55 seconds, again including
+HandleLeak in 2.56 seconds. The unchanged x86-64 graph retained 37 modules,
+262 Blueprint files, 2,089 compile commands, 2,172 Ninja commands, and 32
+product links. Its fresh 1,862-edge W-004 build passed 9/9 in 3.53 seconds,
+including HandleLeak in 0.36 seconds; the no-op repeat passed 9/9 in 3.59
+seconds, including HandleLeak in 0.34 seconds.
+
+Both HandleLeak records require exact-zero exit, 400 completed file cycles, 80
+completed socket cycles, the persisted `handle-final` marker, the final
+`handleleak.ok=true` and `HandleLeakProbe.done=ok` markers, and
+`main end exception=0`. They use app JAR SHA-256
+`87290d82c206dfa67a430cee8c3e9958c5c6544a22ce8428adea46f58853c81b`
+and the same boot JAR hash recorded above. The AArch64 manifest records only
+normalized `qemu-aarch64` identity and x86-64 records native execution; neither
+manifest contains an absolute machine path, and neither result tree contains a
+filesystem link.
