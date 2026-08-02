@@ -84,7 +84,8 @@ public class ZipProbe {
       System.out.println("zipfile.entries=" + zn);
       if (zf.getEntry("root.txt") == null) throw new RuntimeException("missing root");
     }
-    tmp.delete();
+    if (!tmp.delete() || tmp.exists()) throw new RuntimeException("zip cleanup");
+    System.out.println("zip.cleanup=true");
     System.out.println("ZipProbe.done=ok");
   }
 }

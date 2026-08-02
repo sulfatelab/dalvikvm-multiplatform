@@ -1,8 +1,8 @@
 # Windows libcore smoke — result
 
-**Status:** **COMPLETE for the promoted native matrix** — 19 unified libcore
-behaviors pass on the authoritative Windows Server 2025 host; L-003 Zip
-remains explicitly native-open and compile-only
+**Status:** **COMPLETE for the promoted native matrix** — 20 unified libcore
+behaviors pass on the authoritative Windows Server 2025 host; no named L-003
+case remains native-open
 
 **Latest acceptance:** 2026-08-01
 
@@ -49,7 +49,7 @@ Ninja 1.13.2, LLVM 21.1.8 GNU-style Clang drivers, and the official configured
 JDK 21.0.12. No POSIX shell, Make, NMake, PowerShell, WSL, Cygwin, MSVC
 compiler driver, or `clang-cl` participated.
 
-Nineteen accepted Phase-3 behaviors are now target-runnable through the common
+Twenty accepted Phase-3 behaviors are now target-runnable through the common
 W-004 catalog and one case-local Python runner with a checked-in JSON contract
 matrix. Core/charset/monitor, DNS, ordinary and forced GC, GoldenApp,
 interruption, file I/O, TCP loopback, errno/UTF-8 paths, properties/clocks,
@@ -65,15 +65,17 @@ requires US locale identity/case conversion, UTC epoch/calendar arithmetic,
 and a `zh-Hans-CN` language-tag round trip. It deliberately does not claim
 resource-backed display names or collation: the current runtime reports a null
 display language and catches a missing-resource exception for its soft
-collator check. ZipProbe is the only remaining native-open L-003 artifact.
+collator check. ZipProbe now requires the exact CRC32 marker, a raw
+DEFLATE/INFLATE round trip, three matching entries through both stream and
+`ZipFile` readers, successful lookup, and deletion of its temporary ZIP.
 Historical Wine success is evidence only and does not broaden this result.
 
 ```text
 python tools/build_art.py test --target-id windows-x86_64-msvc --stage w004 --parallel 16
 
-W-004: ninja: no work to do; 29/29 PASS in 43.11 seconds
-repeat: ninja: no work to do; 29/29 PASS in 43.08 seconds
-complete catalog: ninja: no work to do; 69/69 PASS in 126.66 seconds
+W-004 after Zip JAR rebuild: 30/30 PASS in 44.23 seconds
+repeat: ninja: no work to do; 30/30 PASS in 44.24 seconds
+complete catalog: ninja: no work to do; 70/70 PASS in 129.62 seconds
 Linux-hosted Windows cross reviewer: PASS; repeat Ninja no-op with --parallel 32
 ```
 
@@ -91,8 +93,12 @@ path. All superseded Phase-3 Bash producers and runners were removed after the
 supported behavior moved into the native catalog. LocaleProbe's old 120-second
 timeout no longer reproduces in the current integrated runtime; it passes its
 exact scoped contract in 0.95/0.96 seconds. Its sanitized result contains no
-machine path. ZipProbe remains the sole ordinary compile-only L-003 declaration
-rather than preserving a second runner.
+machine path. ZipProbe's historical timeout likewise does not reproduce: it
+passed in 1.03/0.97 seconds across the stage and no-op repeat. Its strengthened
+contract verifies temporary-ZIP deletion, and its sanitized result records exit
+zero with no missing/forbidden markers or machine path. No named L-003 case now
+requires a second runner; other W-004 compile-only declarations retain their
+separate applicability.
 
 The generated binaries, managed artifacts, routine logs, and build trees
 remain outside VCS. W-027 now rejects known or unclassified Win32 suffix-`A`

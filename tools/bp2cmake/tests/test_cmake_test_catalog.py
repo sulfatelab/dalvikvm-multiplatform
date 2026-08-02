@@ -137,9 +137,20 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     assert locale["execution"] == "target-runnable"
     assert locale["timeout_seconds"] == 600
     assert locale["ctest_registered"] is False
+    zip_probe = next(
+        probe
+        for probe in catalog["probes"]
+        if probe["name"] == "managed_zipprobe"
+    )
+    assert zip_probe["platforms"] == ["windows"]
+    assert zip_probe["target_arches"] == ["x86_64"]
+    assert zip_probe["target_abis"] == ["msvc"]
+    assert zip_probe["execution"] == "target-runnable"
+    assert zip_probe["timeout_seconds"] == 600
+    assert zip_probe["ctest_registered"] is False
     assert sum(
         probe["execution"] == "target-runnable" for probe in catalog["probes"]
-    ) == 64
+    ) == 65
     assert {
         probe["name"]: probe["timeout_seconds"]
         for probe in catalog["probes"]
@@ -174,6 +185,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "managed_threadstressprobe": 600,
         "managed_throwprobe": 600,
         "managed_udpprobe": 600,
+        "managed_zipprobe": 600,
         "win32_uef_probe": 600,
         "win32_fault_record_probe": 60,
         "win32_sigchain_probe": 60,

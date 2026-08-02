@@ -117,15 +117,17 @@ Linux controls also passed:
 ## Unified stage acceptance
 
 The maintained Windows acceptance path is shell-free unified `stage:w004`.
-Windows Server 2025 x86-64 passes all 29 gates, including the exact-target ART
-embedding, UDP loopback, and scoped Locale gates, plus the live
+Windows Server 2025 x86-64 passes all 30 gates, including the exact-target ART
+embedding, UDP loopback, scoped Locale, and ZIP/DEFLATE gates, plus the live
 source/object/PE/dependency reviewer described above. It uses `--parallel 16`
 on the 16 GiB VM; its immediate repeat reports `ninja: no work to do` and
-passes 29/29 again. The UDP gate maps
+passes 30/30 again. The UDP gate maps
 Android's bionic `SO_BROADCAST` value at the JNI/Winsock boundary and requires
 the exact loopback payload contract. Locale requires locale/case, UTC calendar,
 and language-tag behavior without claiming unavailable display/collation
-resources.
+resources. Zip requires CRC32, raw DEFLATE/INFLATE, three-entry stream and
+random-access content parity, and successful temporary-file cleanup; its
+historical native timeout does not reproduce.
 The embedding gate stages a regular-file DLL closure and requires two
 successful processes with exact VEH/UEF/frame-SEH behavior and one intentional
 ART UEF dump per process; its

@@ -172,6 +172,17 @@
         "UdpProbe.done=ok"
       ],
       "timeout_seconds": 60
+    },
+    "ZipProbe": {
+      "expected_markers": [
+        "crc32=20adb109",
+        "deflater.ok=true",
+        "zis.entries=3",
+        "zipfile.entries=3",
+        "zip.cleanup=true",
+        "ZipProbe.done=ok"
+      ],
+      "timeout_seconds": 60
     }
   }
 }

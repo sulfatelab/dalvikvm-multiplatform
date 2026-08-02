@@ -42,6 +42,7 @@ def test_windows_libcore_runtime_matrix_matches_promoted_cases():
         "ThreadStressProbe",
         "ThrowProbe",
         "UdpProbe",
+        "ZipProbe",
     }
     assert matrix["ThrowProbe"]["require_nonzero"] is True
     assert matrix["LocaleProbe"]["expected_markers"] == [
@@ -53,6 +54,14 @@ def test_windows_libcore_runtime_matrix_matches_promoted_cases():
         "LocaleProbe.done=ok",
     ]
     assert "udp.from=/127.0.0.1:" in matrix["UdpProbe"]["expected_markers"]
+    assert matrix["ZipProbe"]["expected_markers"] == [
+        "crc32=20adb109",
+        "deflater.ok=true",
+        "zis.entries=3",
+        "zipfile.entries=3",
+        "zip.cleanup=true",
+        "ZipProbe.done=ok",
+    ]
     assert matrix["PathProbe"]["mode"] == "path"
     assert matrix["AbsPathProbe"]["mode"] == "absolute-path"
     assert all(case["expected_markers"] for case in matrix.values())
