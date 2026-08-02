@@ -95,18 +95,19 @@ Each case owns its native and managed source plus an adjacent `RESULT.md`. The
 stage analysis links the case-specific results without physically grouping the
 source by stage. The XMM sentinel remains explicitly x86-64-only; moving it did
 not broaden its selector to AArch64 or ARM64EC.
-The source-ownership slices moved all 32 catalog-owned native probe declarations
+The source-ownership slices moved all 33 catalog-owned native probe declarations
 into logical cases. The registry now has zero
 source references into `tools/verify`; every case containing catalog native
 source has an adjacent target-status result. Shared stack-fault assembly has
 one physical owner under `stack-page-growth/` and is consumed by related
 targets without copying or filesystem links.
-Three Linux x86-64 command gates in `w004` now exercise `dalvikvm -showversion`,
-the runtime/compiler ELF load topology, and image-backed boot/runtime packaging
-through
-`support/runtime_gate.py`. A command gate owns no dummy target binary; its
-virtual target depends on the exact product artifacts that must exist before
-CTest runs it.
+Two Linux x86-64 command gates in `w004` exercise `dalvikvm -showversion` and
+image-backed boot/runtime packaging through `support/runtime_gate.py`. The
+compiler topology declaration instead owns a small target executable: Python
+parses both ELF dependency tables, then runs that executable natively or under
+the declared target runner to load both DSOs with immediate symbol resolution.
+A command gate owns no dummy target binary; its virtual target depends on the
+exact product artifacts that must exist before CTest runs it.
 The managed-source slice moved all 48 retained Java probe sources into logical
 cases. The catalog now declares 47 managed JAR artifacts (the paired
 CriticalNative sources intentionally share one JAR), built by
@@ -131,11 +132,13 @@ W-003 declares both CriticalNative and normal/FastNative for the exact set
 `linux-x86_64-gnu`, `linux-aarch64-gnu`, and `windows-x86_64-msvc`. One shared
 runner resolves the ELF/DLL name, library-path separator, absolute-load
 property, target JIT controls, and the optional AArch64 runner prefix; no other
-target is inferred. Linux x86-64 also
-registers its show-version, compiler-DSO topology, and boot-image gates, for
-six W-004 CTest gates. Together with two shared W-003 gates and the shared
-W-013 gate, the Linux catalog has nine runnable declarations and three
-compile-only artifacts. Windows adds its BoringSSL SHA executable plus the exact
+target is inferred. Both Linux identities register show-version and the
+target-side compiler-DSO topology check; Linux x86-64 additionally registers
+its boot-image gate. It therefore has six W-004 CTest gates, while AArch64 has
+five. With two shared W-003 gates and the shared W-013 gate, Linux x86-64 has
+nine runnable declarations and three compile-only artifacts; AArch64 has eight
+runnable declarations and three compile-only artifacts. Windows adds its
+BoringSSL SHA executable plus the exact
 `windows-x86_64-msvc` JVMTI managed gate and runtime-load/assembly-dependency
 reviewer. Twenty-five accepted Phase-3 libcore behaviors use one checked-in
 JSON contract matrix and one case-local, shell-free Python runner. The expanded
@@ -588,12 +591,13 @@ identity without recording machine paths or environment dumps.
 
 The current `linux-aarch64-gnu` experimental slice deliberately registers only
 the CriticalNative and normal/FastNative DSO/JAR pairs and their JIT/tracing
-gates, Math CriticalNative in `-Xint`/JIT, `art_runtime_show_version`,
-imageless interpreter `Hello`, managed GC stress, and the 128 MiB
-non-moving-heap gate plus its managed artifact. Each runnable gate has its own
-behavioral evidence under the explicit runner. The slice does not infer another
-JNI contract, boot-image, compiler-DSO load, the 1024 MiB resource profile, or
-another stage's applicability from successful emulation.
+gates, Math CriticalNative in `-Xint`/JIT, `art_runtime_show_version`, the
+target-side compiler-DSO topology/load check, imageless interpreter `Hello`,
+managed GC stress, and the 128 MiB non-moving-heap gate plus its managed
+artifact. Each runnable gate has its own behavioral evidence under the
+explicit runner. The slice does not infer another JNI contract, boot-image,
+the 1024 MiB resource profile, or another stage's applicability from
+successful emulation.
 
 Linkage describes the binary boundary under test. It is independent of whether
 the test is compile-only, run locally, transferred to another machine, or

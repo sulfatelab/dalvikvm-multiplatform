@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import ctypes
 import hashlib
 import json
 import os
@@ -463,11 +462,29 @@ def run_native_matrix(
 
 
 def run_dso_topology(
+    *,
+    target_id: str,
+    loader_probe: Path,
     runtime: Path,
     compiler: Path,
     compiler_needed: str,
     runtime_forbidden: str,
+    work_root: Path,
+    timeout: int,
+    runner: Path | None = None,
+    runner_args: list[str] | None = None,
 ) -> None:
+    if timeout < 1:
+        raise GateError("DSO-topology timeout must be positive")
+    loader_probe = _regular_file(str(loader_probe))
+    runtime = _regular_file(str(runtime))
+    compiler = _regular_file(str(compiler))
+    work_root = _managed_path(work_root, allow_missing=True)
+    if work_root.exists() or work_root.is_symlink():
+        _reject_tree_links(work_root)
+        shutil.rmtree(work_root)
+    work_root.mkdir(parents=True)
+
     runtime_needed = _elf_needed(runtime)
     compiler_dependencies = _elf_needed(compiler)
     if compiler_needed not in compiler_dependencies:
@@ -480,10 +497,59 @@ def run_dso_topology(
             f"{runtime.name} has forbidden reverse dependency {runtime_forbidden}"
         )
 
-    mode = getattr(os, "RTLD_NOW", 0) | getattr(os, "RTLD_LOCAL", 0)
-    ctypes.CDLL(str(runtime), mode=mode)
-    ctypes.CDLL(str(compiler), mode=mode)
-    print(f"loaded {runtime.name} and {compiler.name}")
+    prefix, runner_record = _runner_prefix(runner, runner_args)
+    marker = "art-compiler-dso-topology runtime=loaded compiler=loaded"
+    try:
+        result = subprocess.run(
+            [*prefix, str(loader_probe), str(runtime), str(compiler)],
+            cwd=work_root,
+            shell=False,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise GateError(
+            f"{loader_probe.name} timed out after {timeout} seconds"
+        ) from exc
+    (work_root / "stdout.txt").write_text(result.stdout, encoding="utf-8")
+    (work_root / "stderr.txt").write_text(result.stderr, encoding="utf-8")
+    marker_seen = marker in result.stdout
+    record = {
+        "schema_version": 1,
+        "target_id": target_id,
+        "loader_probe": {
+            "name": loader_probe.name,
+            "sha256": _sha256(loader_probe),
+        },
+        "runtime": {
+            "name": runtime.name,
+            "sha256": _sha256(runtime),
+            "needed": runtime_needed,
+        },
+        "compiler": {
+            "name": compiler.name,
+            "sha256": _sha256(compiler),
+            "needed": compiler_dependencies,
+        },
+        "required_edge": compiler_needed,
+        "forbidden_reverse_edge": runtime_forbidden,
+        "actual_exit": result.returncode,
+        "load_marker_seen": marker_seen,
+        "runner": runner_record,
+    }
+    (work_root / "result.json").write_text(
+        json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    if result.returncode != 0 or not marker_seen:
+        output = result.stdout + "\n" + result.stderr
+        tail = "\n".join(output.splitlines()[-80:])
+        raise GateError(
+            f"{loader_probe.name} failed: exit={result.returncode}, "
+            f"load_marker_seen={marker_seen}\n{tail}"
+        )
+    print(marker)
     print(f"{compiler.name} -> {compiler_needed}; no reverse dependency")
 
 
@@ -790,10 +856,15 @@ def _parser() -> argparse.ArgumentParser:
     show.add_argument("--expect", required=True)
     _add_runner_arguments(show)
     topology = subparsers.add_parser("dso-topology")
+    topology.add_argument("--target-id", required=True)
+    topology.add_argument("--loader-probe", type=_regular_file, required=True)
     topology.add_argument("--runtime", type=_regular_file, required=True)
     topology.add_argument("--compiler", type=_regular_file, required=True)
     topology.add_argument("--compiler-needed", required=True)
     topology.add_argument("--runtime-forbidden", required=True)
+    topology.add_argument("--work-root", type=Path, required=True)
+    topology.add_argument("--timeout", type=int, default=60)
+    _add_runner_arguments(topology)
     native = subparsers.add_parser("native")
     native.add_argument("--target-id", required=True)
     native.add_argument("--probe", type=_regular_file, required=True)
@@ -853,10 +924,16 @@ def main(argv: list[str] | None = None) -> int:
             )
         elif args.command == "dso-topology":
             run_dso_topology(
-                args.runtime,
-                args.compiler,
-                args.compiler_needed,
-                args.runtime_forbidden,
+                target_id=args.target_id,
+                loader_probe=args.loader_probe,
+                runtime=args.runtime,
+                compiler=args.compiler,
+                compiler_needed=args.compiler_needed,
+                runtime_forbidden=args.runtime_forbidden,
+                work_root=args.work_root,
+                timeout=args.timeout,
+                runner=args.runner,
+                runner_args=args.runner_arg,
             )
         elif args.command == "native":
             if args.repeat < 1 or args.timeout < 1:

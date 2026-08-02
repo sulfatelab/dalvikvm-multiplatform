@@ -542,6 +542,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "managed_gc_stress",
         "managed_math_critical",
         "art_runtime_show_version",
+        "art_compiler_dso_topology",
         "managed_w013_non_moving",
         "managed_w013_non_moving_128m",
     ]
@@ -554,12 +555,14 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "target-runnable",
         "target-runnable",
         "target-runnable",
+        "target-runnable",
         "compile-only",
         "target-runnable",
     ]
     assert [probe["ctest_registered"] for probe in applicable] == [
         False,
         False,
+        True,
         True,
         True,
         True,
@@ -580,6 +583,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "art.w003.managed_critical_native",
         "art.w003.managed_native_abi",
         "art.w004.managed_math_critical",
+        "art.w004.art_compiler_dso_topology",
     ):
         runner_line = next(
             line

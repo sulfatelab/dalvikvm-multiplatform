@@ -67,6 +67,84 @@ def test_elf_needed_rejects_non_elf(tmp_path):
         runtime_gate._elf_needed(artifact)
 
 
+def test_dso_topology_parses_edges_and_loads_through_runner(
+    tmp_path, monkeypatch, capsys
+):
+    files = {}
+    for name in (
+        "art-compiler-dso-topology",
+        "libart.so",
+        "libart-compiler.so",
+        "qemu-aarch64",
+    ):
+        path = tmp_path / name
+        path.write_bytes(name.encode())
+        files[name] = path
+    needed = {
+        files["libart.so"]: ["libc.so.6"],
+        files["libart-compiler.so"]: ["libart.so", "libc.so.6"],
+    }
+    monkeypatch.setattr(runtime_gate, "_elf_needed", needed.__getitem__)
+    calls = []
+
+    def run(command, **kwargs):
+        calls.append((command, kwargs))
+        return SimpleNamespace(
+            returncode=0,
+            stdout="art-compiler-dso-topology runtime=loaded compiler=loaded\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", run)
+    work_root = tmp_path / "result"
+    runtime_gate.run_dso_topology(
+        target_id="linux-aarch64-gnu",
+        loader_probe=files["art-compiler-dso-topology"],
+        runtime=files["libart.so"],
+        compiler=files["libart-compiler.so"],
+        compiler_needed="libart.so",
+        runtime_forbidden="libart-compiler.so",
+        work_root=work_root,
+        timeout=30,
+        runner=files["qemu-aarch64"],
+        runner_args=["-L", "target-root"],
+    )
+
+    assert calls[0][0] == [
+        str(files["qemu-aarch64"]),
+        "-L",
+        "target-root",
+        str(files["art-compiler-dso-topology"]),
+        str(files["libart.so"]),
+        str(files["libart-compiler.so"]),
+    ]
+    assert calls[0][1]["shell"] is False
+    record = json.loads((work_root / "result.json").read_text(encoding="utf-8"))
+    assert record["required_edge"] == "libart.so"
+    assert record["forbidden_reverse_edge"] == "libart-compiler.so"
+    assert record["runner"]["mode"] == "external"
+    assert str(tmp_path) not in json.dumps(record)
+    assert "runtime=loaded compiler=loaded" in capsys.readouterr().out
+
+
+def test_dso_topology_rejects_nonpositive_timeout(tmp_path):
+    artifact = tmp_path / "artifact"
+    artifact.write_bytes(b"placeholder")
+    with pytest.raises(
+        runtime_gate.GateError, match="DSO-topology timeout must be positive"
+    ):
+        runtime_gate.run_dso_topology(
+            target_id="linux-x86_64-gnu",
+            loader_probe=artifact,
+            runtime=artifact,
+            compiler=artifact,
+            compiler_needed="libart.so",
+            runtime_forbidden="libart-compiler.so",
+            work_root=tmp_path / "result",
+            timeout=0,
+        )
+
+
 def test_show_version_requires_exit_zero_and_marker(tmp_path, monkeypatch, capsys):
     dalvikvm = tmp_path / "dalvikvm"
     dalvikvm.write_bytes(b"placeholder")

@@ -1346,20 +1346,31 @@ art_add_target_probe(
         ${_art_target_runner_args}
         --expect "ART version 2.1.0 ${ART_TARGET_AOSP_ARCH}")
 art_add_target_probe(
-    NAME art_compiler_dso_topology STAGE w004 TYPE GATE
-    EXECUTION target-runnable ${_art_linux_x86_64_gnu_selector}
+    NAME art_compiler_dso_topology STAGE w004 TYPE EXECUTABLE
+    EXECUTION target-runnable
+    ${_art_linux_runtime_smoke_ids_selector}
+    SOURCES "${_art_test_cases_root}/art-compiler-dso-topology/probe.c"
+    LINK_LIBRARIES dl
+    COMPILE_OPTIONS -fPIC -fPIE
+    LINK_OPTIONS -pie
     DEPENDS art art-compiler
     CONTRACTS runtime-load dso-topology compiler
     COMMAND
         "${CMAKE_COMMAND}" -E env
-        "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}:$ENV{LD_LIBRARY_PATH}"
+        "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}"
         "${Python3_EXECUTABLE}"
         "${_art_test_repo_root}/tests/support/runtime_gate.py"
         dso-topology
+        --target-id "${ART_TARGET_ID}"
+        --loader-probe "$<TARGET_FILE:art_compiler_dso_topology>"
         --runtime "$<TARGET_FILE:art>"
         --compiler "$<TARGET_FILE:art-compiler>"
         --compiler-needed libart.so
-        --runtime-forbidden libart-compiler.so)
+        --runtime-forbidden libart-compiler.so
+        --work-root
+            "${CMAKE_CURRENT_BINARY_DIR}/results/art-compiler-dso-topology"
+        ${_art_target_runner_args}
+        --timeout 60)
 
 # W-010: exception dispatch, fault records, sigchain, and debugger interaction.
 art_add_target_probe(
