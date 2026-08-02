@@ -219,14 +219,14 @@ sources, strips comments and literals, distinguishes JNI `Call*MethodA` from
 Win32 suffix-`A` APIs, and fails on either a known ANSI call or an unclassified
 suffix-`A` family. The active 1,441-source graph has zero ANSI calls, source
 files, or API families. The Linux-hosted Windows-cross stage passes. Native
-Windows Server 2025 now passes W-027 as part of the complete 76/76 catalog;
-the first run completed in 12.38 seconds and the no-op repeat in 12.33 seconds.
+Windows Server 2025 now passes W-027 as part of the complete 77/77 catalog;
+the fresh run completed in 13.38 seconds and the no-op repeat in 13.21 seconds.
 The complete 93-declaration catalog contains 72 target-runnable items, eight
 host reviewers, and 13 compile-only artifacts. The Windows product subset
 remains 90 applicable declarations: 69 target-runnable, eight host-review, and
-13 compile-only. The last complete native baseline passed 76/76; the new
-host-only W-014 product-isolation review makes the next native total 77. Both
-product and FS-1 Windows-cross W-014 reviewers pass with Ninja no-op repeats.
+13 compile-only. The complete native baseline passes 77/77 twice; the second
+`art-tests` build is a Ninja no-op. Both product and FS-1 Windows-cross W-014
+reviewers also pass with Ninja no-op repeats.
 The former legacy shell runners and per-probe CMake entry points have been
 replaced by the unified Python/CMake/Ninja path, and `tools/verify` is removed.
 W-003 removed its four standalone CMake graphs, shell runners, and package producer;

@@ -24,8 +24,14 @@ have no FS-1 offsets, and its GNU-style Clang commands have no instrumentation
 definition. The Linux-hosted Windows product and freshly built FS-1 variant
 both passed their respective negative/positive reviewers on 2026-08-02; both
 immediate repeats were Ninja no-ops. Other target architectures remain
-non-applicable. The last native product baseline remains 76/76; this added
-host-only review makes the next native catalog total 77.
+non-applicable.
+
+At main commit `d9e103e`, a fresh Windows Server 2025 build-26100.32230 product
+accepted this isolation review in 0.34 seconds and passed the complete catalog
+at 77/77. The immediate `art-tests` repeat was a Ninja no-op, accepted the
+review again in 0.33 seconds, and passed 77/77. The subsequently completed
+product closure included `art-compiler.dll`, repeated as a no-op, and staged
+156 regular files with zero reparse points.
 
 The authoritative Windows Server 2025 source projection and both variant
 output trees contained zero reparse points. Aggregate JSON stores target IDs,
