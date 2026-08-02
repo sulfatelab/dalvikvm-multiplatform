@@ -810,6 +810,45 @@ def test_generated_graph_identity_checks_manifest_and_file_digest(tmp_path):
         build_art._generated_graph_identity(generated, target)
 
 
+def test_guard_allows_regenerated_graph_in_existing_binary_directory(tmp_path):
+    binary_dir = tmp_path / "out"
+    binary_dir.mkdir()
+    (binary_dir / "CMakeCache.txt").write_text("cache\n", encoding="utf-8")
+    manifest_path = binary_dir / "build_manifest.json"
+    current = {
+        "schema_version": 2,
+        "target": {"target_id": "linux-x86_64-gnu"},
+        "build_type": "RelWithDebInfo",
+        "generated_graph": {"graph_sha256": "1" * 64},
+        "tools": {"cmake": {"version_output": "cmake 4.2.3"}},
+    }
+    manifest_path.write_text(json.dumps(current) + "\n", encoding="utf-8")
+    expected = dict(current)
+    expected["generated_graph"] = {"graph_sha256": "2" * 64}
+
+    build_art._guard_binary_directory(binary_dir, manifest_path, expected)
+
+
+def test_guard_rejects_immutable_fingerprint_change(tmp_path):
+    binary_dir = tmp_path / "out"
+    binary_dir.mkdir()
+    (binary_dir / "CMakeCache.txt").write_text("cache\n", encoding="utf-8")
+    manifest_path = binary_dir / "build_manifest.json"
+    current = {
+        "schema_version": 2,
+        "target": {"target_id": "linux-x86_64-gnu"},
+        "build_type": "RelWithDebInfo",
+        "generated_graph": {"graph_sha256": "1" * 64},
+        "tools": {"cmake": {"version_output": "cmake 4.2.3"}},
+    }
+    manifest_path.write_text(json.dumps(current) + "\n", encoding="utf-8")
+    expected = dict(current)
+    expected["tools"] = {"cmake": {"version_output": "cmake 4.3.0"}}
+
+    with pytest.raises(build_art.BuildFrontendError, match="fingerprint changed"):
+        build_art._guard_binary_directory(binary_dir, manifest_path, expected)
+
+
 def test_tool_identities_capture_shell_free_version_output(tmp_path, monkeypatch):
     commands = []
 

@@ -2061,7 +2061,9 @@ def _guard_binary_directory(
             current = json.loads(manifest_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
             raise BuildFrontendError(f"cannot read build manifest: {exc}") from exc
-        if current != expected:
+        if _immutable_build_fingerprint(current) != _immutable_build_fingerprint(
+            expected
+        ):
             raise BuildFrontendError(
                 f"build fingerprint changed for {binary_dir}; use a fresh output root "
                 "or remove this ignored binary directory explicitly"
@@ -2070,6 +2072,23 @@ def _guard_binary_directory(
         raise BuildFrontendError(
             f"refusing unowned existing CMake cache without build manifest: {binary_dir}"
         )
+
+
+def _immutable_build_fingerprint(
+    fingerprint: dict[str, object],
+) -> dict[str, object]:
+    """Return the cache identity while excluding regenerated graph content.
+
+    Blueprint and overlay changes are expected to regenerate the target graph
+    and reconfigure the existing Ninja tree.  Build-host, target, build-type,
+    tool, target-binding, and configure-command changes still require a fresh
+    binary directory.
+    """
+    return {
+        key: value
+        for key, value in fingerprint.items()
+        if key != "generated_graph"
+    }
 
 
 def _require_configured(binary_dir: Path) -> None:

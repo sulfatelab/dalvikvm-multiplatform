@@ -38,7 +38,7 @@ items are closed.
 
 | Area | Status | Current position | Exit condition |
 |---|---|---|---|
-| Python frontend | COMPLETE for the initial slice | `generate`, `check-generated`, `configure`, `audit`, `build`, `test`, and `stage` exist; subprocesses are shell-free; configured JDK 21 is validated and passed to CMake | keep regression coverage current |
+| Python frontend | COMPLETE for the initial slice | `generate`, `check-generated`, `configure`, `audit`, `build`, `test`, and `stage` exist; subprocesses are shell-free; configured JDK 21 is validated and passed to CMake; regenerated Blueprint/overlay graphs can reconfigure an identity-compatible Ninja tree in place | keep regression coverage current |
 | Linux x86-64 product | COMPLETE for the current W-003/W-004/W-013 runtime slice | exact-target CriticalNative and normal/FastNative W-003 gates join all six W-004 gates, including imageless and generated-boot-image Hello, plus the shared W-013 128 MiB non-moving-heap gate; the staged runtime includes its verified ART/OAT/VDEX image set | migrate the remaining behavioral stages |
 | Windows x86-64 product | PARTIAL / experimental | Linux-hosted cross and native Windows Server 2025 product builds pass; the accepted native baseline passes 76/76 across W-002, W-003, W-004, W-010, W-013, W-014, W-025, and W-027; complete-package import/stale-path acceptance and identical no-op builds pass | migrate the remaining behavioral coverage; keep Windows AOT/OAT in its separate blocked track |
 | Compiler DSO parity | COMPLETE for `art-compiler` | both targets emit a shared compiler DSO; Windows imports `art.dll` and exports `art_compiler_jit_create` | retain exact ABI and no-cycle gates |
@@ -55,7 +55,7 @@ items are closed.
 ### Latest verification baseline (2026-08-02)
 
 - [x] `PYTHONPATH=tools/bp2cmake python3 -m pytest tools/bp2cmake/tests tests/host -q`:
-  224 passed, including boot-image construction/staging/runtime gates, the
+  226 passed, including boot-image construction/staging/runtime gates, the
   unified boot-JAR ownership gate, fresh
   Linux/Windows topology contract, ART embedding, UDP socket-option, scoped
   Locale,
@@ -102,6 +102,22 @@ items are closed.
   Ninja no-op. A fresh Windows-cross product still builds and stages without
   an image and records `boot_image.status = unsupported`; Windows AOT/OAT is
   not inferred from the Linux capability.
+- [x] Incremental dependency acceptance now distinguishes immutable cache
+  identity from mutable generated-graph content. Host, target, build type,
+  variant, tools, configure vector, and target bindings still require a fresh
+  binary directory when they change; a Blueprint or overlay result may
+  regenerate and reconfigure the same compatible Ninja tree. Live Linux
+  perturbations added one private definition to `libodrstatslog` first through
+  its `Android.bp` and then through the target overlay. Each forward and
+  restored change rebuilt exactly `odr_statslog_host.cc.o` and
+  `libodrstatslog.a`. A semantic x86-64 mterp input change automatically
+  re-ran CMake and rebuilt only `mterp_x86_64.S.o` plus `libart.so`; restoring
+  it produced the same bounded rebuild. Touching the completed `boot.jar`
+  rebuilt the four boot-image outputs without rebuilding the JAR or native
+  objects. Identical Linux and Windows-cross complete builds remain Ninja
+  no-ops. Focused frontend/codegen/generation tests pass at 54/54, including
+  regression checks that a graph-only fingerprint change is accepted and a
+  tool identity change is rejected.
 - [x] The first native Windows provider build found a host/target separation
   defect that cross builds could not expose: the Conscrypt constants helper
   invoked host `clang++.exe` without Windows SDK include/link arguments and
@@ -124,7 +140,7 @@ items are closed.
   acronym endings such as `_CA`, `_RSA`, and `_DATA` while continuing to
   reject known or unclassified encoding-selecting suffix-`A` calls; its native
   and cross gates pass. The focused host regressions and full maintained host
-  suite pass at 224/224.
+  suite pass at 226/226.
 - [x] The native generated-graph freshness check reports 36 modules from the
   same 260 Blueprint files. Running the complete product build after runtime
   testing built the remaining 350 edges, including `art-compiler.dll`,
@@ -1822,7 +1838,7 @@ differences.
   until the self-hosted `linux/x64/art-build` and `windows/x64/art-build`
   runners are registered and the checked-in workflow has accepted all cells.
   The actual `host-checks` entry point currently passes the VCS audit, fresh
-  topology audit, and 224/224 tests; official actionlint 1.7.12 accepts the
+  topology audit, and 226/226 tests; official actionlint 1.7.12 accepts the
   workflow and its custom runner-label configuration.
 
 #### P2: remove migration scaffolding and harden orchestration
@@ -1866,8 +1882,11 @@ differences.
 - [ ] Retire the remaining Linux source/module toolchain-drift preludes as
   vendored dependencies are updated or compatibility becomes explicit. The
   Windows platform prelude is fully retired.
-- [ ] Prove a second identical build is a true Ninja no-op and that Blueprint,
-  overlay, and codegen input changes rebuild only affected outputs.
+- [x] Prove a second identical build is a true Ninja no-op and that Blueprint,
+  overlay, boot-JAR, and codegen input changes rebuild only affected outputs.
+  The product-level Linux perturbations above exercise both forward and
+  restored graph changes; frontend regression coverage preserves the mutable
+  graph versus immutable cache-identity distinction.
 
 #### P3: admit additional targets one at a time
 
