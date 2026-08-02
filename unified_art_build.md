@@ -1978,6 +1978,11 @@ differences.
   target-specific product entry points. Artifact staging deliberately remains
   shell-free Python frontend policy in `tools/build_art.py`; it is not a CMake
   target-graph responsibility.
+- [x] Extract exact test-applicability policy from the stage catalog into the
+  include-only `tests/cmake/ArtTestApplicability.cmake` module. Every admitted
+  probe keeps an independent named selector, the module cannot become a
+  standalone project, and fresh Linux/Windows catalog configurations retain
+  the same 93 declarations and per-target projections.
 - [x] Strengthen the build fingerprint with the full serialized profile,
   generated graph digest, tool versions, and target-bundle identity rather
   than only paths and the target triple. Schema 2 also fingerprints the graph
@@ -2252,8 +2257,9 @@ are removed. Historical result documents explicitly label old command paths
 as retired and point to the unified frontend.
 
 The only project CMake entry points are now `native/CMakeLists.txt` and the
-included `tests/CMakeLists.txt`; files under `native/cmake/` are common include
-modules and are mechanically forbidden from becoming standalone projects.
+included `tests/CMakeLists.txt`; files under `native/cmake/` and `tests/cmake/`
+are common include modules and are mechanically forbidden from becoming
+standalone projects.
 The only overlay product policy is the target-aware
 `overlay/art_port_policy.py`. A host regression forbids the retired Linux
 generator/snapshot and POSIX boot-image directory from reappearing.
@@ -2394,10 +2400,10 @@ commands, Linux command gates, and target-object reviewers use shell-free
 Python under `tests/support/`. Each source case has an adjacent result, while the
 W-003 cross-case analysis remains stage-owned without relocating source by
 stage. The base boot JAR and probe JARs are ordinary target-local Ninja outputs
-from configured JDK 21 and pinned D8. Remaining legacy per-probe CMake entry
-points and shell runners temporarily reference canonical source; W-003, the
-W-004 JVMTI case, and all Phase-3 libcore probes have retired these
-compatibility paths. A portable VCS
+from configured JDK 21 and pinned D8. Former per-probe CMake entry points and
+shell runners are retired; the unified declaration API consumes canonical
+sources, and its independent exact selectors now live in the include-only
+`tests/cmake/ArtTestApplicability.cmake` module. A portable VCS
 audit rejects tracked product/test binaries and archives
 while retaining the one named `vendor/r8/r8.jar` D8/R8 exception. The old Phase
 3 returned ZIP is retained under ignored `out/` storage, and its tracked result

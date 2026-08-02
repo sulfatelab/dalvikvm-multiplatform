@@ -113,3 +113,15 @@ def test_native_cmake_modules_are_common_includes_not_entry_points():
         assert "cmake_minimum_required(" not in text
         assert "project(" not in text
         assert f'/cmake/{name}")' in entry
+
+
+def test_test_cmake_modules_are_common_includes_not_entry_points():
+    entry = (REPO_ROOT / "tests/CMakeLists.txt").read_text(encoding="utf-8")
+    modules = {"ArtTestApplicability.cmake"}
+    module_root = REPO_ROOT / "tests/cmake"
+    assert {path.name for path in module_root.glob("*.cmake")} == modules
+    for name in modules:
+        text = (module_root / name).read_text(encoding="utf-8")
+        assert "cmake_minimum_required(" not in text
+        assert "project(" not in text
+        assert f'/cmake/{name}")' in entry

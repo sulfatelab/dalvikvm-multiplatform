@@ -36,8 +36,9 @@ The authoritative build-system design and migration tracker is
 ```text
 tests/
   README.md                    this guide
-  CMakeLists.txt               transitional common target declaration API
-  catalog.py                   final target-neutral test declarations
+  CMakeLists.txt               common declaration API and stage catalog
+  cmake/
+    ArtTestApplicability.cmake independently admitted target selectors
 
   cases/
     <logical-test-id>/
@@ -68,6 +69,12 @@ contract. Avoid splitting one JNI test between unrelated language-first trees.
 `support/` is for reusable test framework code. A helper used by only one case
 stays in that case. A user-facing build, provisioning, or audit command belongs
 under `tools/`, not `tests/support/`.
+
+`cmake/` contains include-only build-system policy, never another CMake entry
+point or product graph. `ArtTestApplicability.cmake` gives every independently
+admitted probe its own named selector even when several selectors currently
+contain the same exact target IDs. Expanding one selector never implies stage-
+wide or directory-wide applicability.
 
 Target-specific shared artifact reviewers may use one additional directory,
 such as `support/windows/`, when they validate a platform ABI across several

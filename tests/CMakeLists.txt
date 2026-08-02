@@ -733,73 +733,7 @@ endif()
 # Every probe states its current exact applicability. The broad Windows
 # selector is intentionally limited to the only verified architecture/ABI; it
 # can be expanded one exact value at a time after native validation.
-set(_art_windows_current_selector
-    PLATFORMS windows TARGET_ARCHES x86_64 TARGET_ABIS msvc)
-set(_art_windows_x86_64_msvc_selector
-    TARGET_IDS windows-x86_64-msvc)
-set(_art_linux_x86_64_gnu_selector
-    TARGET_IDS linux-x86_64-gnu)
-set(_art_linux_runtime_smoke_ids_selector
-    TARGET_IDS linux-x86_64-gnu linux-aarch64-gnu)
-set(_art_current_native_ids_selector
-    TARGET_IDS linux-x86_64-gnu windows-x86_64-msvc)
-set(_art_critical_native_ids_selector
-    TARGET_IDS
-        linux-x86_64-gnu
-        linux-aarch64-gnu
-        windows-x86_64-msvc)
-set(_art_native_abi_ids_selector
-    TARGET_IDS
-        linux-x86_64-gnu
-        linux-aarch64-gnu
-        windows-x86_64-msvc)
-set(_art_math_critical_ids_selector
-    TARGET_IDS
-        linux-x86_64-gnu
-        linux-aarch64-gnu
-        windows-x86_64-msvc)
-set(_art_gc_stress_ids_selector
-    TARGET_IDS
-        linux-x86_64-gnu
-        linux-aarch64-gnu
-        windows-x86_64-msvc)
-set(_art_handle_leak_ids_selector
-    TARGET_IDS
-        linux-x86_64-gnu
-        linux-aarch64-gnu
-        windows-x86_64-msvc)
-set(_art_core_probe_ids_selector
-    TARGET_IDS
-        linux-x86_64-gnu
-        linux-aarch64-gnu
-        windows-x86_64-msvc)
-set(_art_interrupt_probe_ids_selector
-    TARGET_IDS
-        linux-x86_64-gnu
-        linux-aarch64-gnu
-        windows-x86_64-msvc)
-set(_art_runtime_memory_ids_selector
-    TARGET_IDS
-        linux-x86_64-gnu
-        linux-aarch64-gnu
-        windows-x86_64-msvc)
-set(_art_perf_smoke_ids_selector
-    TARGET_IDS
-        linux-x86_64-gnu
-        linux-aarch64-gnu
-        windows-x86_64-msvc)
-set(_art_thread_heavy_ids_selector
-    TARGET_IDS
-        linux-x86_64-gnu
-        linux-aarch64-gnu
-        windows-x86_64-msvc)
-set(_art_non_moving_128m_ids_selector
-    TARGET_IDS
-        linux-x86_64-gnu
-        linux-aarch64-gnu
-        windows-x86_64-msvc)
-set(_art_imageless_runtime_ids_selector
-    TARGET_IDS linux-x86_64-gnu linux-aarch64-gnu windows-x86_64-msvc)
+include("${CMAKE_CURRENT_LIST_DIR}/cmake/ArtTestApplicability.cmake")
 foreach(_art_test_llvm_tool ART_LLVM_READOBJ ART_LLVM_OBJDUMP)
     if(NOT ${_art_test_llvm_tool})
         message(FATAL_ERROR
