@@ -151,6 +151,7 @@ python tools/build_art.py configure --target-id linux-x86_64-gnu
 python tools/build_art.py audit --target-id linux-x86_64-gnu
 python tools/build_art.py build --target-id linux-x86_64-gnu --cmake-target dalvikvm
 python tools/build_art.py stage --target-id linux-x86_64-gnu
+python tools/build_art.py clean --target-id linux-x86_64-gnu
 ```
 
 Use `windows-x86_64-msvc` with the same commands after binding its target bundle
@@ -163,7 +164,11 @@ executable under `[target_runners]` in the ignored TOML. Its current W-004
 scope is intentionally only imageless Hello plus show-version; an emulator
 binding does not broaden any other test selector. Retained historical shell
 scripts are not product build entry points and are not required on a native
-Windows host.
+Windows host. `clean` removes only the selected target/build/variant directory,
+requires a matching frontend ownership manifest, preserves siblings, and is a
+successful no-op when that exact tree does not exist. It uses Python filesystem
+APIs and remains available for recognized targets whose generation status is
+currently unavailable.
 
 ## Continuous integration
 

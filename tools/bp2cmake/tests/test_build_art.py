@@ -760,6 +760,185 @@ def test_test_variant_has_distinct_output_and_cannot_be_staged(tmp_path):
         )
 
 
+def _write_clean_owner(
+    binary_dir: Path,
+    target_id: str,
+    *,
+    build_type: str = "RelWithDebInfo",
+    variant: str = "product",
+) -> None:
+    binary_dir.mkdir(parents=True, exist_ok=True)
+    (binary_dir / "build_manifest.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "target": {"target_id": target_id},
+                "build_type": build_type,
+                "build_variant": variant,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def test_clean_selects_product_and_variant_paths(tmp_path, capsys):
+    target = build_art.resolve_target("windows-x86_64-msvc")
+    product = build_art._binary_dir(tmp_path, target, "Debug", "product")
+    variant = build_art._binary_dir(
+        tmp_path, target, "RelWithDebInfo", "win32-frame-attribution"
+    )
+    _write_clean_owner(product, target.target_id, build_type="Debug")
+    _write_clean_owner(
+        variant,
+        target.target_id,
+        variant="win32-frame-attribution",
+    )
+
+    build_art._clean(target, "Debug", "product", tmp_path)
+
+    assert not product.exists()
+    assert variant.is_dir()
+    assert str(product) in capsys.readouterr().out
+
+    build_art._clean(
+        target, "RelWithDebInfo", "win32-frame-attribution", tmp_path
+    )
+    assert not variant.exists()
+    assert not (tmp_path / target.target_id).exists()
+
+
+def test_clean_missing_exact_tree_is_successful_no_op(tmp_path, capsys):
+    target = build_art.resolve_target("linux-x86_64-gnu")
+
+    build_art._clean(target, "RelWithDebInfo", "product", tmp_path / "out")
+
+    assert "no frontend-owned build tree to clean" in capsys.readouterr().out
+    assert not (tmp_path / "out").exists()
+
+
+def test_clean_removes_only_owned_tree_and_preserves_siblings(tmp_path):
+    target = build_art.resolve_target("linux-x86_64-gnu")
+    output_root = tmp_path / "out"
+    selected = build_art._binary_dir(
+        output_root, target, "RelWithDebInfo", "product"
+    )
+    sibling = build_art._binary_dir(output_root, target, "Debug", "product")
+    other_target = output_root / "windows-x86_64-msvc" / "RelWithDebInfo"
+    _write_clean_owner(selected, target.target_id)
+    (selected / "artifact.o").write_bytes(b"object")
+    _write_clean_owner(sibling, target.target_id, build_type="Debug")
+    other_target.mkdir(parents=True)
+    (other_target / "keep.txt").write_text("keep\n", encoding="utf-8")
+
+    build_art._clean(target, "RelWithDebInfo", "product", output_root)
+
+    assert not selected.exists()
+    assert sibling.is_dir()
+    assert (other_target / "keep.txt").is_file()
+
+
+def test_clean_rejects_unowned_or_mismatched_tree(tmp_path):
+    target = build_art.resolve_target("linux-x86_64-gnu")
+    binary_dir = build_art._binary_dir(
+        tmp_path, target, "RelWithDebInfo", "product"
+    )
+    binary_dir.mkdir(parents=True)
+    (binary_dir / "unrelated.txt").write_text("keep\n", encoding="utf-8")
+
+    with pytest.raises(build_art.BuildFrontendError, match="unowned build directory"):
+        build_art._clean(target, "RelWithDebInfo", "product", tmp_path)
+    assert binary_dir.is_dir()
+
+    _write_clean_owner(binary_dir, "windows-x86_64-msvc")
+    with pytest.raises(build_art.BuildFrontendError, match="unowned build directory"):
+        build_art._clean(target, "RelWithDebInfo", "product", tmp_path)
+    assert binary_dir.is_dir()
+
+
+def test_clean_accepts_generated_only_tree_and_schema1_migration(tmp_path):
+    target = build_art.resolve_target("linux-x86_64-gnu")
+    generated_only = build_art._binary_dir(
+        tmp_path, target, "RelWithDebInfo", "product"
+    )
+    generated = generated_only / "generated"
+    generated.mkdir(parents=True)
+    (generated / "graph_manifest.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "target": {"target_id": target.target_id},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    build_art._clean(target, "RelWithDebInfo", "product", tmp_path)
+    assert not generated_only.exists()
+
+    legacy = build_art._binary_dir(tmp_path, target, "Debug", "product")
+    legacy.mkdir(parents=True)
+    (legacy / "build_manifest.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "target_id": target.target_id,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    build_art._clean(target, "Debug", "product", tmp_path)
+    assert not legacy.exists()
+
+
+def test_clean_rejects_symlink_output_or_binary_root(tmp_path):
+    target = build_art.resolve_target("linux-x86_64-gnu")
+    real_output = tmp_path / "real-output"
+    real_output.mkdir()
+    linked_output = tmp_path / "linked-output"
+    try:
+        linked_output.symlink_to(real_output, target_is_directory=True)
+    except OSError:
+        pytest.skip("host cannot create directory symlinks")
+
+    with pytest.raises(LocalConfigError, match="link/reparse component"):
+        build_art._clean(target, "RelWithDebInfo", "product", linked_output)
+
+    target_dir = real_output / target.target_id
+    target_dir.mkdir()
+    external = tmp_path / "external"
+    external.mkdir()
+    configuration = target_dir / "RelWithDebInfo"
+    configuration.symlink_to(external, target_is_directory=True)
+    with pytest.raises(LocalConfigError, match="link/reparse component"):
+        build_art._clean(target, "RelWithDebInfo", "product", real_output)
+
+
+def test_clean_allows_recognized_unavailable_target(tmp_path, monkeypatch):
+    target = build_art.resolve_target("linux-riscv64-gnu")
+    binary_dir = build_art._binary_dir(
+        tmp_path, target, "RelWithDebInfo", "product"
+    )
+    _write_clean_owner(binary_dir, target.target_id)
+    monkeypatch.setattr(
+        build_art, "load_local_config", lambda _root: LocalBuildConfig()
+    )
+
+    result = build_art.main(
+        [
+            "clean",
+            "--target-id",
+            target.target_id,
+            "--output-root",
+            str(tmp_path),
+        ]
+    )
+
+    assert result == 0
+    assert not binary_dir.exists()
+
+
 def test_resolve_tools_rejects_clangxx_symlink(tmp_path):
     tool_dir = tmp_path / "llvm" / "bin"
     tool_dir.mkdir(parents=True)

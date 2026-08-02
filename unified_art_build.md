@@ -38,7 +38,7 @@ items are closed.
 
 | Area | Status | Current position | Exit condition |
 |---|---|---|---|
-| Python frontend | COMPLETE for the initial slice | `generate`, `check-generated`, `configure`, `audit`, `build`, `test`, and `stage` exist; subprocesses are shell-free; configured JDK 21 is validated and passed to CMake; regenerated Blueprint/overlay graphs can reconfigure an identity-compatible Ninja tree in place | keep regression coverage current |
+| Python frontend | COMPLETE for the initial slice | `generate`, `check-generated`, `configure`, `audit`, `build`, `test`, `stage`, and ownership-checked `clean` exist; subprocesses are shell-free; configured JDK 21 is validated and passed to CMake; regenerated Blueprint/overlay graphs can reconfigure an identity-compatible Ninja tree in place | keep regression coverage current |
 | Linux x86-64 product | COMPLETE for the current W-003/W-004/W-013 runtime slice | exact-target CriticalNative and normal/FastNative W-003 gates join all twelve W-004 gates, including imageless and generated-boot-image Hello plus HandleLeak, PerfSmoke, ThreadHeavy, and libcore CoreProbe/InterruptProbe/RtMem, and the shared W-013 128 MiB non-moving-heap gate; the staged runtime includes its verified ART/OAT/VDEX image set | migrate the remaining behavioral stages |
 | Windows x86-64 product | PARTIAL / experimental | Linux-hosted cross and native Windows Server 2025 product builds pass; the accepted native baseline passes 77/77 across W-002, W-003, W-004, W-010, W-013, W-014, W-025, and W-027, including the FS-1 product-isolation review; complete-package import/stale-path acceptance and identical no-op builds pass | migrate additional target applicability; keep Windows AOT/OAT in its separate blocked track |
 | Compiler DSO parity | COMPLETE for `art-compiler` | both targets emit a shared compiler DSO; Windows imports `art.dll` and exports `art_compiler_jit_create` | retain exact ABI and no-cycle gates |
@@ -53,6 +53,15 @@ items are closed.
 | Windows AOT/OAT | BLOCKED / separate track | compiler DSO parity does not provide Windows OAT production or loading | satisfy `win32_aot_oat.md`; do not imply capability from `art-compiler.dll` |
 
 ### Latest verification baseline (2026-08-02)
+
+- [x] The frontend owns shell-free cleanup of one exact
+  `out/<target-id>/<build-type-or-variant>` tree. `clean` accepts only a
+  matching schema-1/schema-2 build fingerprint or schema-2 generated graph
+  manifest, rejects link/reparse roots and unowned directories, preserves
+  sibling configurations and targets, removes an empty target directory, and
+  treats a missing exact tree as a successful no-op. Cleanup deliberately
+  skips target generation admission so a recognized target can be removed
+  after its support status becomes unavailable.
 
 - [x] Every current virtual stage now owns a real behavioral command or host
   reviewer. W-014's formerly compile-only FS-1 utility target became a product
@@ -110,7 +119,8 @@ items are closed.
   `asm_defines.h`, mterp assembly, and 37/36-module CMake graphs are
   byte-identical to the preceding fully built products.
 - [x] `PYTHONPATH=tools/bp2cmake python3 -m pytest tools/bp2cmake/tests tests/host -q`:
-  248 passed, including the Linux AArch64 experimental graph and explicit
+  257 passed, including exact shell-free clean ownership/safety, the Linux
+  AArch64 experimental graph, and explicit
   target-runner contract,
   planned-Linux overlay selection,
   exact profile-owned LLVM file identities,
@@ -2323,7 +2333,7 @@ Android.bp + target profile + one Python overlay
 
 The target registry, relocatable graph/profile generation, ignored local TOML
 bindings, shell-free generated commands, and the Python `generate`,
-`check-generated`, `configure`, `audit`, `build`, `test`, and `stage` frontend commands
+`check-generated`, `configure`, `audit`, `build`, `test`, `stage`, and `clean` frontend commands
 are now implemented. Linux x86-64 and Windows x86-64 use the same
 `native/CMakeLists.txt` entry point with `-G Ninja`; Windows requires an
 explicit regular-file target bundle and never searches host libraries. The

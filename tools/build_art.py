@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import errno
 import hashlib
 import json
 import os
@@ -211,6 +212,7 @@ def _parser() -> argparse.ArgumentParser:
         "build",
         "test",
         "stage",
+        "clean",
     ):
         sub = subparsers.add_parser(command)
         sub.add_argument("--target-id", required=True)
@@ -241,12 +243,17 @@ def main(argv: list[str] | None = None) -> int:
             return _init_local_config()
 
         target = resolve_target(args.target_id)
-        target.require_generation()
+        if args.command != "clean":
+            target.require_generation()
         _validate_build_variant(target, args.variant, args.command)
         local = load_local_config(REPO_ROOT)
         output_root = _resolve_output_root(args.output_root, local)
         binary_dir = _binary_dir(output_root, target, args.build_type, args.variant)
         validate_managed_path(binary_dir, allow_missing=True)
+
+        if args.command == "clean":
+            _clean(target, args.build_type, args.variant, output_root)
+            return 0
 
         if args.command in ("generate", "check-generated", "configure"):
             _generate(
@@ -298,6 +305,92 @@ def _binary_dir(
 ) -> Path:
     configuration = build_type if variant == "product" else f"{build_type}-{variant}"
     return output_root / target.target_id / configuration
+
+
+def _clean(
+    target: TargetProfile,
+    build_type: str,
+    variant: str,
+    output_root: Path,
+) -> None:
+    """Remove exactly one frontend-owned target/build tree without a shell."""
+    validate_managed_path(output_root, allow_missing=True)
+    if output_root.exists() and not output_root.is_dir():
+        raise BuildFrontendError(f"output root is not a directory: {output_root}")
+
+    binary_dir = _binary_dir(output_root, target, build_type, variant)
+    validate_managed_path(binary_dir, allow_missing=True)
+    configuration = build_type if variant == "product" else f"{build_type}-{variant}"
+    try:
+        relative = binary_dir.relative_to(output_root)
+    except ValueError as exc:
+        raise BuildFrontendError(
+            f"refusing clean outside the managed output root: {binary_dir}"
+        ) from exc
+    if relative.parts != (target.target_id, configuration):
+        raise BuildFrontendError(
+            f"refusing non-exact target/build clean path: {binary_dir}"
+        )
+
+    if not binary_dir.exists():
+        print(f"no frontend-owned build tree to clean: {binary_dir}")
+        return
+    if not binary_dir.is_dir():
+        raise BuildFrontendError(f"build path is not a directory: {binary_dir}")
+    _require_clean_ownership(binary_dir, target, build_type, variant)
+
+    shutil.rmtree(binary_dir)
+    target_dir = output_root / target.target_id
+    try:
+        target_dir.rmdir()
+    except FileNotFoundError:
+        pass
+    except OSError as exc:
+        # Sibling build types and variants are deliberately preserved.
+        if exc.errno not in (errno.EEXIST, errno.ENOTEMPTY):
+            raise
+    print(f"cleaned frontend-owned build tree: {binary_dir}")
+
+
+def _require_clean_ownership(
+    binary_dir: Path,
+    target: TargetProfile,
+    build_type: str,
+    variant: str,
+) -> None:
+    markers = (
+        binary_dir / "build_manifest.json",
+        binary_dir / "generated" / "graph_manifest.json",
+    )
+    for marker in markers:
+        if not os.path.lexists(marker):
+            continue
+        validate_managed_path(marker)
+        if not marker.is_file():
+            raise BuildFrontendError(
+                f"frontend ownership marker is not a regular file: {marker}"
+            )
+        try:
+            data = json.loads(marker.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            continue
+        if not isinstance(data, dict) or data.get("schema_version") not in (1, 2):
+            continue
+        marker_target = data.get("target_id")
+        if marker_target is None and isinstance(data.get("target"), dict):
+            marker_target = data["target"].get("target_id")
+        if marker_target != target.target_id:
+            continue
+        if marker.name == "build_manifest.json":
+            if data.get("build_type", build_type) != build_type:
+                continue
+            if data.get("build_variant", variant) != variant:
+                continue
+        return
+    raise BuildFrontendError(
+        "refusing to remove unowned build directory without a matching "
+        f"frontend manifest: {binary_dir}"
+    )
 
 
 def _validate_build_variant(
