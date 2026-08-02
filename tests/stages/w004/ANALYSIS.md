@@ -117,11 +117,15 @@ Linux controls also passed:
 ## Unified stage acceptance
 
 The maintained Windows acceptance path is shell-free unified `stage:w004`.
-Windows Server 2025 x86-64 passes all 26 gates, including the live
-source/object/PE/dependency reviewer described above, with `--parallel 16` on
-the 16 GiB VM. Its immediate repeat reports `ninja: no work to do` and passes
-26/26 again. A Linux-hosted Windows cross build passes the same structural
-reviewer with `--parallel 32` and repeats as a Ninja no-op. Current runs use:
+Windows Server 2025 x86-64 passes all 27 gates, including the exact-target ART
+embedding gate and the live source/object/PE/dependency reviewer described
+above, with `--parallel 16` on the 16 GiB VM. Its immediate repeat reports
+`ninja: no work to do` and passes 27/27 again. The embedding gate stages a
+regular-file DLL closure and requires two successful processes with exact
+VEH/UEF/frame-SEH behavior and one intentional ART UEF dump per process; its
+result contains no absolute machine path. A Linux-hosted Windows cross build
+passes the same structural reviewer with `--parallel 32` and repeats as a
+Ninja no-op. Current runs use:
 
 ```text
 python tools/build_art.py test --target-id windows-x86_64-msvc --stage w004 --parallel 16

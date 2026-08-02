@@ -69,8 +69,8 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     assert catalog["target_id"] == "windows-x86_64-msvc"
     assert len(catalog["probes"]) == 92
     assert sum(probe["applicable"] for probe in catalog["probes"]) == 90
-    assert sum(bool(probe["target_ids"]) for probe in catalog["probes"]) == 31
-    assert sum(not probe["target_ids"] for probe in catalog["probes"]) == 61
+    assert sum(bool(probe["target_ids"]) for probe in catalog["probes"]) == 32
+    assert sum(not probe["target_ids"] for probe in catalog["probes"]) == 60
     w002_attach = next(
         probe for probe in catalog["probes"] if probe["name"] == "managed_w002_attach"
     )
@@ -108,9 +108,18 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
             "linux-x86_64-gnu",
             "windows-x86_64-msvc",
         ]
+    embedding = next(
+        probe
+        for probe in catalog["probes"]
+        if probe["name"] == "win32_art_embedding_probe"
+    )
+    assert embedding["target_ids"] == ["windows-x86_64-msvc"]
+    assert embedding["execution"] == "target-runnable"
+    assert embedding["timeout_seconds"] == 600
+    assert embedding["ctest_registered"] is False
     assert sum(
         probe["execution"] == "target-runnable" for probe in catalog["probes"]
-    ) == 61
+    ) == 62
     assert {
         probe["name"]: probe["timeout_seconds"]
         for probe in catalog["probes"]
@@ -121,6 +130,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "managed_critical_native": 1200,
         "managed_native_abi": 900,
         "managed_w003_xmm_sentinel": 1200,
+        "win32_art_embedding_probe": 600,
         "managed_jvmti_force": 1200,
         "managed_pathprobe": 600,
         "managed_abspathprobe": 600,

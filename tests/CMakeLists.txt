@@ -751,11 +751,24 @@ endif()
 
 # W-004: runtime embedding and forced-interpreter/JVMTI transitions.
 art_add_target_probe(
-    NAME win32_art_embedding_probe STAGE w004 TYPE EXECUTABLE EXECUTION compile-only
-    ${_art_windows_current_selector}
+    NAME win32_art_embedding_probe STAGE w004 TYPE EXECUTABLE
+    EXECUTION target-runnable TIMEOUT 600
+    ${_art_windows_x86_64_msvc_selector}
     SOURCES "${_art_test_cases_root}/art-embedding/probe.cc"
     INCLUDE_DIRS "${_art_jni_include}"
-    CONTRACTS embedding runtime-load PRODUCT_POLICY)
+    DEPENDS art-managed-boot-jar art icu_jni javacore openjdk openjdkjvm
+    CONTRACTS embedding runtime-load PRODUCT_POLICY
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_test_cases_root}/art-embedding/run.py"
+        --target-id "${ART_TARGET_ID}"
+        --probe "$<TARGET_FILE:win32_art_embedding_probe>"
+        --boot-jar "${_art_boot_jar}"
+        --work-root "${CMAKE_CURRENT_BINARY_DIR}/results/art-embedding"
+        --icu-data "${_art_icu_data}"
+        ${_art_managed_runtime_library_args}
+        --repeat 2
+        --timeout 240)
 art_add_target_probe(
     NAME jvmtiforceprobe STAGE w004 TYPE SHARED EXECUTION compile-only
     ${_art_windows_current_selector}
