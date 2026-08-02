@@ -1929,7 +1929,10 @@ differences.
   `__imp_icudt72_dat`: ICU marks the data symbol `dllimport` when common ICU is
   a DLL. The reviewed contract now records that exact PE boundary and
   mechanically requires both Linux and Windows `libicuuc` to link their
-  target-correct stub-data artifact.
+  target-correct stub-data artifact. The contract now records the exact direct
+  consumer set for all five kind differences, so a new, missing, or renamed
+  consumer fails the fresh-manifest audit instead of silently widening a
+  static/shared boundary.
 - [x] Enforce the exact `art-compiler.dll` export allowlist, required
   `art.dll` import, and absence of an `art.dll -> art-compiler.dll` reverse
   dependency. Architecture/object-format and ASLR checks remain in their

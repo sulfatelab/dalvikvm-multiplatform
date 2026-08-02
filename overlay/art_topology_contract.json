@@ -1,29 +1,57 @@
 {
   "kind_differences": {
     "libartbase": {
+      "direct_consumers": [
+        "dex2oat",
+        "libart",
+        "libart-compiler",
+        "libdexfile",
+        "libelffile",
+        "libodrstatslog",
+        "libopenjdkjvm",
+        "libopenjdkjvmti",
+        "libprofile"
+      ],
       "linux": "shared",
       "reason": "Windows keeps ART base implementation internal to its PE consumers until a reviewed C++ DLL export/import boundary exists.",
       "windows": "static"
     },
     "libdexfile": {
+      "direct_consumers": [
+        "dex2oat",
+        "libart",
+        "libart-compiler",
+        "libopenjdkjvmti",
+        "libprofile",
+        "libunwindstack"
+      ],
       "linux": "shared",
       "reason": "Windows keeps the DEX implementation internal to ART and dex2oat until its C++ PE ABI and ownership annotations are reviewed.",
       "windows": "static"
     },
     "libicuuc_stubdata": {
-      "linux": "static",
-      "reason": "Windows ICU common is a DLL and imports icudt72_dat through ICU's U_DATA_API contract; the stub-data DLL owns that required PE data-import boundary while Linux folds the zero-data stub into its shared ICU closure.",
-      "required_consumers": [
+      "direct_consumers": [
         "libicuuc"
       ],
+      "linux": "static",
+      "reason": "Windows ICU common is a DLL and imports icudt72_dat through ICU's U_DATA_API contract; the stub-data DLL owns that required PE data-import boundary while Linux folds the zero-data stub into its shared ICU closure.",
       "windows": "shared"
     },
     "libprofile": {
+      "direct_consumers": [
+        "dex2oat",
+        "libart",
+        "libart-compiler",
+        "libart-dex2oat"
+      ],
       "linux": "shared",
       "reason": "Windows keeps profile implementation internal to ART and dex2oat until a stable PE export/import boundary is defined.",
       "windows": "static"
     },
     "libunwindstack": {
+      "direct_consumers": [
+        "libart"
+      ],
       "linux": "shared",
       "reason": "Windows embeds the adapted unwinder in its consumers because the port has no reviewed standalone libunwindstack DLL ABI.",
       "windows": "static"

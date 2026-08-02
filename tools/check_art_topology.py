@@ -158,26 +158,25 @@ def compare_topologies(
             raise TopologyError(f"kind contract for {name} does not match generated graphs")
         if not isinstance(expected.get("reason"), str) or not expected["reason"]:
             raise TopologyError(f"kind contract for {name} omits its disposition")
-        required_consumers = expected.get("required_consumers", [])
-        if not isinstance(required_consumers, list) or not all(
-            isinstance(consumer, str) and consumer for consumer in required_consumers
+        direct_consumers = expected.get("direct_consumers")
+        if not isinstance(direct_consumers, list) or not all(
+            isinstance(consumer, str) and consumer for consumer in direct_consumers
         ):
             raise TopologyError(
-                f"kind contract for {name} has malformed required_consumers"
+                f"kind contract for {name} has malformed direct_consumers"
             )
         for side, modules in (("Linux", linux), ("Windows", windows)):
             dependency = modules[name]["cmake_target"]
-            for consumer in required_consumers:
-                if consumer not in modules:
-                    raise TopologyError(
-                        f"{side} kind contract consumer {consumer} is missing"
-                    )
-                dependencies = modules[consumer].get("link_dependencies")
-                if not isinstance(dependencies, list) or dependency not in dependencies:
-                    raise TopologyError(
-                        f"{side} module {consumer} must link required kind-difference "
-                        f"dependency {dependency}"
-                    )
+            actual_consumers = {
+                consumer_name
+                for consumer_name, consumer in modules.items()
+                if dependency in consumer.get("link_dependencies", [])
+            }
+            if actual_consumers != set(direct_consumers):
+                raise TopologyError(
+                    f"{side} direct consumers for kind difference {name} changed: "
+                    f"expected {sorted(direct_consumers)}, got {sorted(actual_consumers)}"
+                )
 
     if "libsigchain" in expected_linux_only:
         mapping = expected_linux_only["libsigchain"]
