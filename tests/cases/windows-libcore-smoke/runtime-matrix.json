@@ -96,6 +96,17 @@
       ],
       "timeout_seconds": 120
     },
+    "LocaleProbe": {
+      "expected_markers": [
+        "locale.us=en-US",
+        "case.us=ok",
+        "date.iso.epoch=1970-01-01T00:00:00Z",
+        "calendar.day1.ms=86400000",
+        "tag.round=zh-Hans-CN",
+        "LocaleProbe.done=ok"
+      ],
+      "timeout_seconds": 60
+    },
     "NetProbe": {
       "expected_markers": [
         "match=true",

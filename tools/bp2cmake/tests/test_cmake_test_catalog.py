@@ -126,9 +126,20 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     assert udp["execution"] == "target-runnable"
     assert udp["timeout_seconds"] == 600
     assert udp["ctest_registered"] is False
+    locale = next(
+        probe
+        for probe in catalog["probes"]
+        if probe["name"] == "managed_localeprobe"
+    )
+    assert locale["platforms"] == ["windows"]
+    assert locale["target_arches"] == ["x86_64"]
+    assert locale["target_abis"] == ["msvc"]
+    assert locale["execution"] == "target-runnable"
+    assert locale["timeout_seconds"] == 600
+    assert locale["ctest_registered"] is False
     assert sum(
         probe["execution"] == "target-runnable" for probe in catalog["probes"]
-    ) == 63
+    ) == 64
     assert {
         probe["name"]: probe["timeout_seconds"]
         for probe in catalog["probes"]
@@ -153,6 +164,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "managed_ioprobe": 600,
         "managed_execprobe": 600,
         "managed_ipv6probe": 600,
+        "managed_localeprobe": 600,
         "managed_netprobe": 600,
         "managed_oserrnoprobe": 600,
         "managed_perfsmokeprobe": 600,

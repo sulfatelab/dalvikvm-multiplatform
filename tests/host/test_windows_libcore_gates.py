@@ -33,6 +33,7 @@ def test_windows_libcore_runtime_matrix_matches_promoted_cases():
         "InterruptProbe",
         "IoProbe",
         "Ipv6Probe",
+        "LocaleProbe",
         "NetProbe",
         "OsErrnoProbe",
         "PathProbe",
@@ -43,6 +44,14 @@ def test_windows_libcore_runtime_matrix_matches_promoted_cases():
         "UdpProbe",
     }
     assert matrix["ThrowProbe"]["require_nonzero"] is True
+    assert matrix["LocaleProbe"]["expected_markers"] == [
+        "locale.us=en-US",
+        "case.us=ok",
+        "date.iso.epoch=1970-01-01T00:00:00Z",
+        "calendar.day1.ms=86400000",
+        "tag.round=zh-Hans-CN",
+        "LocaleProbe.done=ok",
+    ]
     assert "udp.from=/127.0.0.1:" in matrix["UdpProbe"]["expected_markers"]
     assert matrix["PathProbe"]["mode"] == "path"
     assert matrix["AbsPathProbe"]["mode"] == "absolute-path"
