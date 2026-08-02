@@ -140,6 +140,15 @@ def test_unified_overlay_factory_selects_current_target_policy():
     assert "__LP64__=1" not in linux.global_policy.art_defines
     assert "__LP64__=1" in windows.global_policy.art_defines
     assert linux.policy_for("libart-compiler").kind == "shared"
+    assert linux.policy_for("libart").add_gensrc_sources == [
+        "art/asm/mterp/mterp_x86_64.S"
+    ]
+    assert windows.policy_for("libart").add_gensrc_sources == [
+        "art/asm/mterp/mterp_x86_64.S"
+    ]
+    assert windows.policy_for("libart-runtime").add_gensrc_sources == [
+        "art/asm/mterp/mterp_x86_64.S"
+    ]
     for name in ("libcrypto", "libssl", "libjavacrypto"):
         assert linux.policy_for(name).kind == "shared"
         assert windows.policy_for(name).kind == "shared"

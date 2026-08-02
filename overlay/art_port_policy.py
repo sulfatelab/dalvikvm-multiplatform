@@ -146,7 +146,6 @@ _COMMON_MODULES: dict[str, dict[str, object]] = {
     "libart": dict(
         kind="shared",
         add_include_dirs=["external/cpu_features/include"],
-        add_gensrc_sources=["art/asm/mterp/mterp_x86_64.S"],
     ),
     # ART keeps compiler objects in the runtime for JIT, while the separately
     # compiled DSO gives dex2oat equal shared-library topology on both targets.
@@ -431,7 +430,6 @@ _WINDOWS_MODULE_DELTA: dict[str, dict[str, object]] = {
         add_defines=["_CRT_SECURE_NO_WARNINGS", "BUILDING_LIBART"],
         add_public_defines=_WINDOWS_ART_TARGET + _ART_GAPS,
         add_include_dirs=["external/cpu_features/include"],
-        add_gensrc_sources=["art/asm/mterp/mterp_x86_64.S"],
         add_gensrc_includes=["art/asm/include", "art/aconfig/include"],
         force_enabled=True,
     ),
@@ -617,13 +615,20 @@ _WINDOWS_MODULE_DELTA: dict[str, dict[str, object]] = {
 }
 
 
-def _module_policies(delta: dict[str, dict[str, object]]) -> dict[str, ModulePolicy]:
+def _module_policies(
+    profile: TargetProfile, delta: dict[str, dict[str, object]]
+) -> dict[str, ModulePolicy]:
     names = list(_COMMON_MODULES)
     names.extend(name for name in delta if name not in _COMMON_MODULES)
-    return {
+    policies = {
         name: ModulePolicy(**{**_COMMON_MODULES.get(name, {}), **delta.get(name, {})})
         for name in names
     }
+    generated_mterp = f"art/asm/mterp/{profile.mterp_output}"
+    for name in ("libart", "libart-runtime"):
+        if name in policies:
+            policies[name].add_gensrc_sources = [generated_mterp]
+    return policies
 
 
 def make_overlay(profile: TargetProfile) -> Overlay:
@@ -637,6 +642,6 @@ def make_overlay(profile: TargetProfile) -> Overlay:
         )
     return Overlay(
         global_policy=_global_policy(profile),
-        modules=_module_policies(delta),
+        modules=_module_policies(profile, delta),
         blueprint_scan=_PRODUCT_BLUEPRINT_SCAN,
     )

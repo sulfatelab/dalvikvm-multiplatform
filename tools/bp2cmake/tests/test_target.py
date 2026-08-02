@@ -80,6 +80,8 @@ def test_aosp_arch_is_distinct_from_canonical_target_arch():
     assert target.target_arch == "aarch64"
     assert target.base_isa == "aarch64"
     assert target.aosp_arch == "arm64"
+    assert target.mterp_source_dir == "arm64ng"
+    assert target.mterp_output == "mterp_arm64.S"
     assert target.target_abi == "gnu"
     config = Config.from_target(target)
     assert config.arch == "arm64"
@@ -92,10 +94,18 @@ def test_arm64ec_is_a_distinct_target_arch_with_aarch64_base_isa(target_id):
     assert target.target_arch == "arm64ec"
     assert target.base_isa == "aarch64"
     assert target.aosp_arch == "arm64"
+    assert target.mterp_source_dir == "arm64ng"
+    assert target.mterp_output == "mterp_arm64.S"
+
+
+def test_riscv_mterp_layout_is_explicit_and_has_no_ng_suffix():
+    target = resolve_target("linux-riscv64-gnu")
+    assert target.mterp_source_dir == "riscv64"
+    assert target.mterp_output == "mterp_riscv64.S"
 
 
 def test_planned_target_fails_before_generation():
-    with pytest.raises(TargetUnavailableError, match="mterp"):
+    with pytest.raises(TargetUnavailableError, match="dependency"):
         resolve_target("linux-riscv64-gnu").require_generation()
 
 
@@ -136,6 +146,8 @@ def test_cmake_projection_is_data_only_and_path_free():
     assert 'set(ART_TARGET_BASE_ISA "x86_64")' in text
     assert 'set(ART_TARGET_ABI "msvc")' in text
     assert 'set(ART_TARGET_AOSP_ARCH "x86_64")' in text
+    assert 'set(ART_TARGET_MTERP_SOURCE_DIR "x86_64ng")' in text
+    assert 'set(ART_TARGET_MTERP_OUTPUT "mterp_x86_64.S")' in text
     assert "ART_TARGET_CPU_ARCH" not in text
     assert "ART_TARGET_OS_OR_RUNTIME" not in text
     assert "add_library" not in text

@@ -42,6 +42,8 @@ class TargetProfile:
     target_arch: str
     base_isa: str
     aosp_arch: str
+    mterp_source_dir: str
+    mterp_output: str
     target_abi: str
     object_format: str
     pointer_bits: int
@@ -86,6 +88,8 @@ class TargetProfile:
             ("ART_TARGET_ARCH", self.target_arch),
             ("ART_TARGET_BASE_ISA", self.base_isa),
             ("ART_TARGET_AOSP_ARCH", self.aosp_arch),
+            ("ART_TARGET_MTERP_SOURCE_DIR", self.mterp_source_dir),
+            ("ART_TARGET_MTERP_OUTPUT", self.mterp_output),
             ("ART_TARGET_ABI", self.target_abi),
             ("ART_TARGET_OBJECT_FORMAT", self.object_format),
             ("ART_TARGET_POINTER_BITS", str(self.pointer_bits)),
@@ -124,6 +128,17 @@ _WINDOWS_GNU_REASON = (
     "regular-file GNU-ABI target bundle is defined"
 )
 
+# Mterp input directories are not derivable by suffixing the AOSP architecture:
+# RISC-V uses `riscv64`, while the older backends use an `ng` directory. Keep
+# both the source directory and generated file name as closed profile data.
+_MTERP_LAYOUTS: Mapping[str, tuple[str, str]] = MappingProxyType({
+    "x86": ("x86ng", "mterp_x86.S"),
+    "x86_64": ("x86_64ng", "mterp_x86_64.S"),
+    "arm": ("armng", "mterp_arm.S"),
+    "arm64": ("arm64ng", "mterp_arm64.S"),
+    "riscv64": ("riscv64", "mterp_riscv64.S"),
+})
+
 
 def _profile(
     target_id: str,
@@ -150,12 +165,15 @@ def _profile(
     expected_id = f"{target_platform}-{target_arch}-{target_abi}"
     if target_id != expected_id:
         raise AssertionError(f"target ID {target_id!r} must be {expected_id!r}")
+    mterp_source_dir, mterp_output = _MTERP_LAYOUTS.get(aosp_arch, ("", ""))
     return TargetProfile(
         target_id=target_id,
         target_platform=target_platform,
         target_arch=target_arch,
         base_isa=base_isa,
         aosp_arch=aosp_arch,
+        mterp_source_dir=mterp_source_dir,
+        mterp_output=mterp_output,
         target_abi=target_abi,
         object_format=object_format,
         pointer_bits=pointer_bits,
@@ -194,7 +212,7 @@ _PROFILES = {
     "linux-riscv64-gnu": _profile(
         "linux-riscv64-gnu", "linux", "riscv64", "riscv64", "riscv64", "gnu",
         "elf64", 64, "riscv64-unknown-linux-gnu", "Linux",
-        status="planned", reason="RISC-V mterp and dependency policy are not validated",
+        status="planned", reason="RISC-V dependency and runtime policy are not validated",
     ),
     "windows-x86-gnu": _profile(
         "windows-x86-gnu", "windows", "x86", "x86", "x86", "gnu",

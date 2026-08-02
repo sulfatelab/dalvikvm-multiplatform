@@ -15,7 +15,10 @@ or wired into CMake.
    `OPERATOR_OUT_SETS` (libartbase / libdexfile / runtime), mirroring the
    Gradle `genInfoList`.
 3. **mterp asm** — `gen_mterp.py <out> <inputs...>` over the 8 `*.S` files in
-   `art/runtime/interpreter/mterp/<arch>ng/` → `mterp_<arch>.S`.
+   the target profile's explicit `mterp_source_dir`, producing its explicit
+   `mterp_output`. The mapping is not derived from `<arch>ng`: RISC-V uses
+   `riscv64/` while x86, x86-64, ARMv7, and AArch64 use their reviewed `ng`
+   directories.
 4. **asm_defines** — TWO-STAGE: `clang++ -S asm_defines.cc` (with the runtime's
    include + define context, incl. the art.go knobs) → assembly text carrying
    `>>NAME val neg<<` markers, then `make_header.py <s>` → `asm_defines.h`.
@@ -29,7 +32,9 @@ rebuild.
 
 ```
 PYTHONPATH=tools/bp2cmake python3 -m bp2cmake.codegen_main \
-    --root <repo>/vendor --gensrc <out-dir> --arch x86_64 --clang clang++
+    --root <repo>/vendor --gensrc <out-dir> --arch x86_64 \
+    --mterp-source-dir x86_64ng --mterp-output mterp_x86_64.S \
+    --clang clang++
 ```
 
 Validated output (2026-06-20, clang-21): two ART aconfig headers, 33

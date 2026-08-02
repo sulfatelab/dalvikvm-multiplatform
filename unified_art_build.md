@@ -49,7 +49,7 @@ items are closed.
 | POSIX-free Windows build host | COMPLETE for the accepted native baseline; PARTIAL end to end | Server 2025 uses configured official JDK 21, Python, CMake, Ninja, and plain Clang drivers; all 76 accepted native tests, provider/security packaging, and product/test no-op gates pass without POSIX tooling | migrate every retained behavioral gate; keep Windows AOT/OAT capability work separate |
 | Legacy build removal | COMPLETE | the checked-in Linux snapshot/generator, split overlays, Linux miniature graphs, Windows Phase-0/Phase-1 and libcore/ICU graphs, product package scripts, and final POSIX-only boot-image entry points are retired; historical records remain documentation only | prevent alternative product paths from returning |
 | CI/acceptance automation | IMPLEMENTED / activation pending | checked-in shell-free Python driver and GitHub workflow define host, fresh Linux, Windows-cross, and native Windows cells; machine paths enter only through an external CI TOML binding | register/provision the two self-hosted runner labels and obtain accepted workflow runs |
-| Additional architectures | BLOCKED by capability gates | all 17 canonical identities are registered; only `linux-x86_64-gnu` and experimental `windows-x86_64-msvc` generate | admit each profile only after its architecture and runtime gates pass |
+| Additional architectures | BLOCKED by capability gates | all 17 canonical identities are registered; mterp source/output layout is explicit profile data for x86, x86-64, ARMv7, AArch64/ARM64EC, and RISC-V64, but only `linux-x86_64-gnu` and experimental `windows-x86_64-msvc` generate | remove the remaining x86-64 graph/toolchain assumptions, then admit each profile only after its architecture and runtime gates pass |
 | Windows AOT/OAT | BLOCKED / separate track | compiler DSO parity does not provide Windows OAT production or loading | satisfy `win32_aot_oat.md`; do not imply capability from `art-compiler.dll` |
 
 ### Latest verification baseline (2026-08-02)
@@ -65,8 +65,17 @@ items are closed.
   declared runnable and prevents an unexecuted command gate from being called
   compile-only. Native Windows still has the preceding 76/76 accepted product
   baseline; the added host-only review makes its next expected total 77.
+- [x] Mterp layout no longer appends `ng` to an architecture spelling or
+  injects a fixed generated x86-64 path. Each target profile carries a
+  path-free `mterp_source_dir` and `mterp_output`; the closed mapping includes
+  RISC-V's unsuffixed `riscv64/` input. Focused target/codegen/overlay tests
+  generated substantial x86-64 and RISC-V assembly and passed 41/41. Fresh
+  Linux and Windows profiles emitted byte-identical 37/36-module CMake graphs
+  relative to the accepted baseline, passed 2,088/2,082 compile-command audits,
+  completed 2,173/2,128 Ninja edges at 32 jobs, and repeated as true no-ops.
 - [x] `PYTHONPATH=tools/bp2cmake python3 -m pytest tools/bp2cmake/tests tests/host -q`:
-  226 passed, including boot-image construction/staging/runtime gates, the
+  227 passed, including explicit RISC-V mterp-layout generation,
+  boot-image construction/staging/runtime gates, the
   unified boot-JAR ownership gate, fresh
   Linux/Windows topology contract, ART embedding, UDP socket-option, scoped
   Locale,
@@ -151,7 +160,7 @@ items are closed.
   acronym endings such as `_CA`, `_RSA`, and `_DATA` while continuing to
   reject known or unclassified encoding-selecting suffix-`A` calls; its native
   and cross gates pass. The focused host regressions and full maintained host
-  suite pass at 226/226.
+  suite pass at 227/227.
 - [x] The native generated-graph freshness check reports 36 modules from the
   same 260 Blueprint files. Running the complete product build after runtime
   testing built the remaining 350 edges, including `art-compiler.dll`,
@@ -1865,7 +1874,7 @@ differences.
   until the self-hosted `linux/x64/art-build` and `windows/x64/art-build`
   runners are registered and the checked-in workflow has accepted all cells.
   The actual `host-checks` entry point currently passes the VCS audit, fresh
-  topology audit, and 226/226 tests; official actionlint 1.7.12 accepts the
+  topology audit, and 227/227 tests; official actionlint 1.7.12 accepts the
   workflow and its custom runner-label configuration.
 
 #### P2: remove migration scaffolding and harden orchestration
@@ -1918,8 +1927,10 @@ differences.
 
 #### P3: admit additional targets one at a time
 
-- [ ] Remove the `<arch>ng` mterp assumption and select generated assembly from
-  explicit profile metadata, including RISC-V's different naming.
+- [x] Remove the `<arch>ng` mterp assumption and select generated assembly from
+  explicit `mterp_source_dir`/`mterp_output` profile metadata. RISC-V uses
+  `riscv64/` rather than an `ng` directory, and a focused generation test
+  exercises that exact mapping without claiming target admission.
 - [ ] Remove fixed x86-64 triples, preludes, stack-gap definitions, CPU-feature
   sources, BoringSSL assembly, probe names, and object-inspection assumptions.
 - [ ] Validate and admit Linux AArch64, x86, ARMv7, and RISC-V64 separately.
@@ -2586,18 +2597,20 @@ The vendored ART source has architecture implementations under
 without the `ng` suffix. That source availability is evidence for the target
 registry, not proof that this repository can build all five architectures.
 
-The current conversion path remains materially x86-64-specific:
+Mterp layout is now explicit profile data rather than a derived naming rule.
+The generator consumes `mterp_source_dir` and `mterp_output`, the target-aware
+overlay injects that output, and RISC-V generation exercises its unsuffixed
+source directory. This is codegen acceptance only, not RISC-V product
+admission.
+
+The remaining conversion path is materially x86-64-specific:
 
 - [`tools/bp2cmake/bp2cmake/config.py`](tools/bp2cmake/bp2cmake/config.py)
   explicitly models x86-64, x86, ARM64, and ARM codegen sibling selection;
   other architecture values only fall through generic paths and are not a
   validated profile;
-- [`tools/bp2cmake/bp2cmake/codegen.py`](tools/bp2cmake/bp2cmake/codegen.py)
-  constructs the mterp directory as `<arch>ng`, which is wrong for RISC-V;
 - the same code generator hard-codes `x86_64-pc-windows-msvc` for
   target-layout assembly generation;
-- both current overlays inject `mterp_x86_64.S` rather than a target-selected
-  generated source;
 - Linux BoringSSL policy injects a fixed set of x86-64 assembly files; and
 - the Windows compatibility policy, verification graphs, and ABI checks are
   Windows x86-64-specific.
@@ -3689,8 +3702,9 @@ unified product targets instead of alternative ways to build those targets.
 
 - Keep registry entries for all planned targets, but enable each only after its
   profile capability gate is complete.
-- Replace the `<arch>ng` mterp assumption with explicit architecture metadata
-  and make generated assembly selection profile-driven.
+- Keep the completed explicit mterp source/output metadata as the only
+  generated-assembly selection mechanism; do not restore architecture-name
+  concatenation in CMake or Python.
 - Remove the x86-64 triple, prelude, mterp, BoringSSL assembly, and verification
   assumptions identified in the current-state audit.
 - Validate Linux AArch64, x86, ARMv7, and RISC-V64 independently; source-tree

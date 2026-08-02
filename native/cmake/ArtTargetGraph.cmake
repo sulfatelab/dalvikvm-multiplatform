@@ -63,7 +63,7 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
             "${MDVM_ART_ROOT_DIR}/art/runtime/arch/x86_64/native_entrypoints_x86_64.S"
             "${MDVM_ART_ROOT_DIR}/art/runtime/arch/x86_64/jni_entrypoints_x86_64.S"
             "${MDVM_ART_ROOT_DIR}/art/runtime/arch/x86_64/quick_entrypoints_x86_64.S"
-            "${MDVM_GENSRC_DIR}/art/asm/mterp/mterp_x86_64.S"
+            "${MDVM_GENSRC_DIR}/art/asm/mterp/${ART_TARGET_MTERP_OUTPUT}"
             APPEND PROPERTY OBJECT_DEPENDS "${_art_x86_64_asm_support_deps}")
     endif()
     if(TARGET openjdkjvm)

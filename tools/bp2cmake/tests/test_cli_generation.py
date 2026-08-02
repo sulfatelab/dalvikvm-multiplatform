@@ -66,6 +66,8 @@ def test_target_generation_writes_relocatable_graph_and_manifest(tmp_path):
 
     profile_text = profile.read_text(encoding="utf-8")
     assert 'set(ART_TARGET_ID "linux-x86_64-gnu")' in profile_text
+    assert 'set(ART_TARGET_MTERP_SOURCE_DIR "x86_64ng")' in profile_text
+    assert 'set(ART_TARGET_MTERP_OUTPUT "mterp_x86_64.S")' in profile_text
     assert str(source) not in profile_text
     assert main(args + ["--check"]) == 0
 

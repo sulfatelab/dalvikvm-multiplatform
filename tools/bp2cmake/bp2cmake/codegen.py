@@ -12,7 +12,7 @@ consumes. Three kinds of generation:
      too, which is handy for standalone runs / debugging.)
 
   2. mterp asm     -- run art/runtime/interpreter/mterp/gen_mterp.py over the
-     per-arch *.S inputs to produce mterp_<arch>.S.
+     explicit target-profile input directory and output name.
 
   3. asm_defines   -- TWO-STAGE: compile art/tools/cpp-define-generator/
      asm_defines.cc to assembly text (clang -S) with the runtime's include +
@@ -38,6 +38,8 @@ class CodegenConfig:
     native_root: str               # multipath vendor/ (foundational libs, ICU, …)
     gensrc_dir: str                # output tree, e.g. build/gensrc
     arch: str = "x86_64"
+    mterp_source_dir: str = ""
+    mterp_output: str = ""
     clang: str = "clang++"
     # Root of the art tree. art/* inputs (mterp, asm_defines, operator_out
     # headers) come from here (nested vendor/art). Defaults to native_root for
@@ -197,12 +199,25 @@ def gen_operator_out(cfg: CodegenConfig, module_reldir: str, headers: list[str])
     return outputs
 
 
-def gen_mterp(cfg: CodegenConfig, arch: str | None = None) -> str:
-    """Run gen_mterp.py over the per-arch *.S inputs -> mterp_<arch>.S.
-    Mirrors generateArtMterpAsmSrc."""
-    arch = arch or cfg.arch
+def gen_mterp(cfg: CodegenConfig) -> str:
+    """Run gen_mterp.py using the exact target-profile source/output layout."""
+    if (
+        not cfg.mterp_source_dir
+        or cfg.mterp_source_dir in (".", "..")
+        or "/" in cfg.mterp_source_dir
+        or "\\" in cfg.mterp_source_dir
+    ):
+        raise CodegenError(
+            f"invalid explicit mterp source directory: {cfg.mterp_source_dir!r}"
+        )
+    if (
+        not cfg.mterp_output.endswith(".S")
+        or os.path.basename(cfg.mterp_output) != cfg.mterp_output
+        or "\\" in cfg.mterp_output
+    ):
+        raise CodegenError(f"invalid explicit mterp output: {cfg.mterp_output!r}")
     tool = cfg.pa("art/runtime/interpreter/mterp/gen_mterp.py")
-    src_dir = cfg.pa("art/runtime/interpreter/mterp", arch + "ng")
+    src_dir = cfg.pa("art/runtime/interpreter/mterp", cfg.mterp_source_dir)
     if not os.path.isdir(src_dir):
         raise CodegenError(f"mterp source dir not found: {src_dir}")
     asm_inputs = sorted(
@@ -210,7 +225,7 @@ def gen_mterp(cfg: CodegenConfig, arch: str | None = None) -> str:
     )
     if not asm_inputs:
         raise CodegenError(f"no .S inputs in {src_dir}")
-    out_path = cfg.out("art/asm/mterp", f"mterp_{arch}.S")
+    out_path = cfg.out("art/asm/mterp", cfg.mterp_output)
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     staged_path = out_path + ".tmp"
     # gen_mterp.py writes the output file itself (arg1 = output, rest = inputs).
