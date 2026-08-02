@@ -157,9 +157,20 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     assert bn["execution"] == "target-runnable"
     assert bn["timeout_seconds"] == 600
     assert bn["ctest_registered"] is False
+    os_constants = next(
+        probe
+        for probe in catalog["probes"]
+        if probe["name"] == "managed_osconstantsprobe"
+    )
+    assert os_constants["platforms"] == ["windows"]
+    assert os_constants["target_arches"] == ["x86_64"]
+    assert os_constants["target_abis"] == ["msvc"]
+    assert os_constants["execution"] == "target-runnable"
+    assert os_constants["timeout_seconds"] == 600
+    assert os_constants["ctest_registered"] is False
     assert sum(
         probe["execution"] == "target-runnable" for probe in catalog["probes"]
-    ) == 66
+    ) == 67
     assert {
         probe["name"]: probe["timeout_seconds"]
         for probe in catalog["probes"]
@@ -187,6 +198,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "managed_ipv6probe": 600,
         "managed_localeprobe": 600,
         "managed_netprobe": 600,
+        "managed_osconstantsprobe": 600,
         "managed_oserrnoprobe": 600,
         "managed_perfsmokeprobe": 600,
         "managed_propsprobe": 600,

@@ -36,6 +36,7 @@ def test_windows_libcore_runtime_matrix_matches_promoted_cases():
         "Ipv6Probe",
         "LocaleProbe",
         "NetProbe",
+        "OsConstantsProbe",
         "OsErrnoProbe",
         "PathProbe",
         "PropsProbe",
@@ -66,6 +67,27 @@ def test_windows_libcore_runtime_matrix_matches_promoted_cases():
     assert matrix["BnProbe"]["expected_markers"] == [
         "BnProbe.done=ok sum=1111111110111111111011111111100 "
         "mod=9000000000900000000090 pow=483792039048379203904837920390"
+    ]
+    assert matrix["OsConstantsProbe"]["expected_markers"] == [
+        "PASS AF_INET=2",
+        "PASS AF_INET6=10",
+        "PASS SOCK_STREAM=1",
+        "PASS EAGAIN=11",
+        "PASS AI_PASSIVE=1",
+        "PASS AI_NUMERICHOST=4",
+        "PASS AI_ADDRCONFIG=32",
+        "PASS AI_CANONNAME=2",
+        "PASS AI_V4MAPPED=8",
+        "PASS EAI_NONAME=-2",
+        "PASS EAI_AGAIN=-3",
+        "PASS O_DIRECT=16384",
+        "PASS SIGRTMIN=32",
+        "PASS _SC_NPROCESSORS_CONF=83",
+        "PASS _SC_NPROCESSORS_ONLN=84",
+        "PASS _SC_PAGESIZE=30",
+        "PASS NI_NUMERICHOST=1",
+        "PASS F_GETLK=5",
+        "OsConstantsProbe.done=ok",
     ]
     assert matrix["PathProbe"]["mode"] == "path"
     assert matrix["AbsPathProbe"]["mode"] == "absolute-path"

@@ -1,6 +1,6 @@
 # Windows libcore smoke — result
 
-**Status:** **COMPLETE for the promoted native matrix** — 21 unified libcore
+**Status:** **COMPLETE for the promoted native matrix** — 22 unified libcore
 behaviors pass on the authoritative Windows Server 2025 host; no named L-003
 case remains native-open
 
@@ -49,7 +49,7 @@ Ninja 1.13.2, LLVM 21.1.8 GNU-style Clang drivers, and the official configured
 JDK 21.0.12. No POSIX shell, Make, NMake, PowerShell, WSL, Cygwin, MSVC
 compiler driver, or `clang-cl` participated.
 
-Twenty-one accepted Phase-3 behaviors are now target-runnable through the common
+Twenty-two accepted Phase-3 behaviors are now target-runnable through the common
 W-004 catalog and one case-local Python runner with a checked-in JSON contract
 matrix. Core/charset/monitor, DNS, ordinary and forced GC, GoldenApp,
 interruption, file I/O, TCP loopback, errno/UTF-8 paths, properties/clocks,
@@ -70,14 +70,17 @@ DEFLATE/INFLATE round trip, three matching entries through both stream and
 `ZipFile` readers, successful lookup, and deletion of its temporary ZIP.
 BnProbe requires deterministic BigInteger addition, multiplication, remainder,
 modular exponentiation, and byte-array round-trip behavior through NativeBN.
+OsConstantsProbe requires all 18 exact Android/bionic AF/SOCK, errno,
+address-info, file, signal, sysconf, and name-info constants consumed by the
+Windows bridge.
 Historical Wine success is evidence only and does not broaden this result.
 
 ```text
 python tools/build_art.py test --target-id windows-x86_64-msvc --stage w004 --parallel 16
 
-W-004: ninja: no work to do; 31/31 PASS in 44.92 seconds
-repeat: ninja: no work to do; 31/31 PASS in 45.07 seconds
-complete catalog: ninja: no work to do; 71/71 PASS in 129.15 seconds
+W-004: ninja: no work to do; 32/32 PASS in 45.80 seconds
+repeat: ninja: no work to do; 32/32 PASS in 45.70 seconds
+complete catalog: ninja: no work to do; 72/72 PASS in 130.17 seconds
 Linux-hosted Windows cross reviewer: PASS; repeat Ninja no-op with --parallel 32
 ```
 
@@ -102,7 +105,8 @@ zero with no missing/forbidden markers or machine path. No named L-003 case now
 requires a second runner; other W-004 compile-only declarations retain their
 separate applicability. BnProbe passed its exact sum/remainder/modPow contract
 in 0.93/0.96 seconds across the stage and no-op repeat. Its result records exit
-zero with no missing/forbidden markers or machine path.
+zero with no missing/forbidden markers or machine path. OsConstantsProbe passed
+all 18 exact-value markers in 0.94/0.94 seconds; its result is likewise clean.
 
 The generated binaries, managed artifacts, routine logs, and build trees
 remain outside VCS. W-027 now rejects known or unclassified Win32 suffix-`A`
