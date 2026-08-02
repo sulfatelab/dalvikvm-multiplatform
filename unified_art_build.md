@@ -1973,6 +1973,16 @@ differences.
 - [x] Move Windows x86 CPU-feature source substitution from common CMake into
   the exact target overlay, including absorbed-source compile properties. A
   future architecture cannot silently inherit `impl_x86_windows.c`.
+- [x] Generalize ART assembly support dependencies from a Windows-only fixed
+  x86-64 source list to the assembly sources present in the target-resolved
+  `art` graph. CMake now derives the support inputs and selected `memcmp16`,
+  native, JNI, quick-entrypoint, and generated mterp consumers from
+  `ART_TARGET_AOSP_ARCH`; Linux and Windows use the same rule, and an admitted
+  future architecture cannot inherit an x86-64 filename. Fresh configurations
+  audited 2,088 Linux and 2,081 Windows compile commands without changing the
+  generated 37/36-module graphs. Regenerating the already complete products in
+  `out/bp-object-sources-20260802/` left both builds as true Ninja no-ops;
+  topology, VCS-content, and all 230 host/bp2cmake tests passed.
 - [ ] Remove the remaining fixed probe names and object-inspection assumptions.
   Target-layout codegen already uses the profile triple, and broad toolchain
   preludes are retired; those completed parts must not be reintroduced.

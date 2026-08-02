@@ -12,6 +12,48 @@ else()
     message(FATAL_ERROR "Generated ART graph must define the shared art-compiler target")
 endif()
 
+# Clang's assembly dependency scanning does not consistently report nested
+# .include inputs for every host/target combination. Apply the selected ART
+# ISA's support files to the assembly sources that Blueprint actually placed
+# in the resolved graph. This stays equal across Linux and Windows and does not
+# make a future architecture inherit an x86 source name.
+if(TARGET art)
+    set(_art_asm_support_deps
+        "${MDVM_ART_ROOT_DIR}/art/runtime/arch/${ART_TARGET_AOSP_ARCH}/asm_support_${ART_TARGET_AOSP_ARCH}.S"
+        "${MDVM_ART_ROOT_DIR}/art/runtime/arch/${ART_TARGET_AOSP_ARCH}/asm_support_${ART_TARGET_AOSP_ARCH}.h"
+        "${MDVM_ART_ROOT_DIR}/art/runtime/interpreter/cfi_asm_support.h"
+        "${MDVM_ART_ROOT_DIR}/art/runtime/asm_support.h")
+    foreach(_art_asm_support_dep IN LISTS _art_asm_support_deps)
+        if(NOT EXISTS "${_art_asm_support_dep}")
+            message(FATAL_ERROR
+                "Target ${ART_TARGET_ID} assembly dependency is missing: ${_art_asm_support_dep}")
+        endif()
+    endforeach()
+
+    get_target_property(_art_resolved_sources art SOURCES)
+    set(_art_asm_dependent_sources)
+    foreach(_art_asm_stem memcmp16 native_entrypoints jni_entrypoints quick_entrypoints)
+        set(_art_asm_candidate
+            "${MDVM_ART_ROOT_DIR}/art/runtime/arch/${ART_TARGET_AOSP_ARCH}/${_art_asm_stem}_${ART_TARGET_AOSP_ARCH}.S")
+        list(FIND _art_resolved_sources "${_art_asm_candidate}" _art_asm_source_index)
+        if(NOT _art_asm_source_index EQUAL -1)
+            list(APPEND _art_asm_dependent_sources "${_art_asm_candidate}")
+        endif()
+    endforeach()
+    set(_art_mterp_source
+        "${MDVM_GENSRC_DIR}/art/asm/mterp/${ART_TARGET_MTERP_OUTPUT}")
+    list(FIND _art_resolved_sources "${_art_mterp_source}" _art_mterp_source_index)
+    if(NOT _art_mterp_source_index EQUAL -1)
+        list(APPEND _art_asm_dependent_sources "${_art_mterp_source}")
+    endif()
+    if(NOT _art_asm_dependent_sources)
+        message(FATAL_ERROR
+            "Target ${ART_TARGET_ID} has no reviewed ART assembly sources")
+    endif()
+    set_property(SOURCE ${_art_asm_dependent_sources}
+        APPEND PROPERTY OBJECT_DEPENDS "${_art_asm_support_deps}")
+endif()
+
 if(ART_TARGET_PLATFORM STREQUAL "windows")
     set(_art_windows_runtime "${MDVM_ART_ROOT_DIR}/art/runtime/multiplatform/windows")
     set(_art_windows_openjdk "${MDVM_ART_ROOT_DIR}/art/openjdkjvm")
@@ -47,18 +89,6 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
             "${_art_windows_runtime}/runtime_windows.cc"
             "${_art_windows_runtime}/monitor_windows.cc"
             "${_art_windows_openjdk}/openjdkjvm_memory_windows.cc")
-        set(_art_x86_64_asm_support_deps
-            "${MDVM_ART_ROOT_DIR}/art/runtime/arch/x86_64/asm_support_x86_64.S"
-            "${MDVM_ART_ROOT_DIR}/art/runtime/arch/x86_64/asm_support_x86_64.h"
-            "${MDVM_ART_ROOT_DIR}/art/runtime/interpreter/cfi_asm_support.h"
-            "${MDVM_ART_ROOT_DIR}/art/runtime/asm_support.h")
-        set_property(SOURCE
-            "${MDVM_ART_ROOT_DIR}/art/runtime/arch/x86_64/memcmp16_x86_64.S"
-            "${MDVM_ART_ROOT_DIR}/art/runtime/arch/x86_64/native_entrypoints_x86_64.S"
-            "${MDVM_ART_ROOT_DIR}/art/runtime/arch/x86_64/jni_entrypoints_x86_64.S"
-            "${MDVM_ART_ROOT_DIR}/art/runtime/arch/x86_64/quick_entrypoints_x86_64.S"
-            "${MDVM_GENSRC_DIR}/art/asm/mterp/${ART_TARGET_MTERP_OUTPUT}"
-            APPEND PROPERTY OBJECT_DEPENDS "${_art_x86_64_asm_support_deps}")
     endif()
     if(TARGET openjdkjvm)
         target_sources(openjdkjvm PRIVATE

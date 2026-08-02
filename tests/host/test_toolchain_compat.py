@@ -78,6 +78,10 @@ def test_windows_product_targets_use_explicit_definitions_without_a_prelude():
     assert "libbase/hex.cpp" not in cmake
     assert "impl_x86_windows.c" not in target_graph
     assert "impl_x86_linux_or_android.c" not in target_graph
+    assert "asm_support_x86_64" not in target_graph
+    assert "quick_entrypoints_x86_64" not in target_graph
+    assert "ART_TARGET_AOSP_ARCH" in target_graph
+    assert "_art_asm_dependent_sources" in target_graph
     for relative in (
         "tests/cases/jit-mapping/probe.cc",
         "tests/cases/jit-section-policy/probe.cc",
