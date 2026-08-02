@@ -117,13 +117,13 @@ Linux controls also passed:
 ## Unified stage acceptance
 
 The maintained Windows acceptance path is shell-free unified `stage:w004`.
-Windows Server 2025 x86-64 passes all 33 gates, including the exact-target ART
+Windows Server 2025 x86-64 passes all 34 gates, including the exact-target ART
 embedding, UDP loopback, scoped Locale, ZIP/DEFLATE, and NativeBN BigInteger
 gates plus the 18-value Android/bionic OS-constants and SAX/Expat XML gates,
-along with the live
+the direct `Os` loopback socket-address gate, and the live
 source/object/PE/dependency reviewer described above. It uses `--parallel 16`
 on the 16 GiB VM; its immediate repeat reports `ninja: no work to do` and
-passes 33/33 again. The UDP gate maps
+passes 34/34 again. The UDP gate maps
 Android's bionic `SO_BROADCAST` value at the JNI/Winsock boundary and requires
 the exact loopback payload contract. Locale requires locale/case, UTC calendar,
 and language-tag behavior without claiming unavailable display/collation
@@ -136,6 +136,8 @@ The OS-constants gate locks the Android/bionic values that the Windows JNI
 bridge translates instead of accepting raw Winsock/UCRT spellings.
 The XML gate requires namespace-aware parsing, three elements, and the exact
 `helloworld` character stream through Harmony Expat.
+The socket-address gate requires positive-port loopback results from both
+`Os.getsockname` and `Os.getpeername` after bind/connect/accept.
 The embedding gate stages a regular-file DLL closure and requires two
 successful processes with exact VEH/UEF/frame-SEH behavior and one intentional
 ART UEF dump per process; its

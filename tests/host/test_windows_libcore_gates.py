@@ -41,6 +41,7 @@ def test_windows_libcore_runtime_matrix_matches_promoted_cases():
         "PathProbe",
         "PropsProbe",
         "RtMem",
+        "SocketAddressProbe",
         "ThreadStressProbe",
         "ThrowProbe",
         "UdpProbe",
@@ -92,6 +93,13 @@ def test_windows_libcore_runtime_matrix_matches_promoted_cases():
     ]
     assert matrix["XmlProbe"]["expected_markers"] == [
         "XmlProbe.done=ok elems=3 text=helloworld"
+    ]
+    assert matrix["SocketAddressProbe"]["expected_markers"] == [
+        "bound.port=",
+        "bound.loopback=true",
+        "accepted=true peer=",
+        "peer.loopback=true",
+        "SocketAddressProbe.done=ok",
     ]
     assert matrix["PathProbe"]["mode"] == "path"
     assert matrix["AbsPathProbe"]["mode"] == "absolute-path"

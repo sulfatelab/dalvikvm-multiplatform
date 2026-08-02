@@ -178,6 +178,16 @@
       ],
       "timeout_seconds": 60
     },
+    "SocketAddressProbe": {
+      "expected_markers": [
+        "bound.port=",
+        "bound.loopback=true",
+        "accepted=true peer=",
+        "peer.loopback=true",
+        "SocketAddressProbe.done=ok"
+      ],
+      "timeout_seconds": 60
+    },
     "ThreadStressProbe": {
       "expected_markers": [
         "threadstress.ok=true",

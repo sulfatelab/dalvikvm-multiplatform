@@ -177,9 +177,20 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     assert xml["execution"] == "target-runnable"
     assert xml["timeout_seconds"] == 600
     assert xml["ctest_registered"] is False
+    socket_address = next(
+        probe
+        for probe in catalog["probes"]
+        if probe["name"] == "managed_socketaddressprobe"
+    )
+    assert socket_address["platforms"] == ["windows"]
+    assert socket_address["target_arches"] == ["x86_64"]
+    assert socket_address["target_abis"] == ["msvc"]
+    assert socket_address["execution"] == "target-runnable"
+    assert socket_address["timeout_seconds"] == 600
+    assert socket_address["ctest_registered"] is False
     assert sum(
         probe["execution"] == "target-runnable" for probe in catalog["probes"]
-    ) == 68
+    ) == 69
     assert {
         probe["name"]: probe["timeout_seconds"]
         for probe in catalog["probes"]
@@ -212,6 +223,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "managed_perfsmokeprobe": 600,
         "managed_propsprobe": 600,
         "managed_rtmem": 600,
+        "managed_socketaddressprobe": 600,
         "managed_threadheavyprobe": 600,
         "managed_threadstressprobe": 600,
         "managed_throwprobe": 600,

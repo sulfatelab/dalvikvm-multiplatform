@@ -945,8 +945,8 @@ set(_art_windows_libcore_managed_classes
 set(_art_windows_libcore_runnable_classes
     PathProbe AbsPathProbe BnProbe CoreProbe DnsProbe GcForced GcProbe GoldenApp
     InterruptProbe IoProbe ExecProbe Ipv6Probe LocaleProbe NetProbe OsErrnoProbe
-    OsConstantsProbe PropsProbe RtMem ThreadStressProbe ThrowProbe UdpProbe
-    XmlProbe ZipProbe)
+    OsConstantsProbe PropsProbe RtMem SocketAddressProbe ThreadStressProbe
+    ThrowProbe UdpProbe XmlProbe ZipProbe)
 foreach(_art_libcore_class IN LISTS _art_windows_libcore_managed_classes)
     string(TOLOWER "${_art_libcore_class}" _art_libcore_name)
     list(FIND _art_windows_libcore_runnable_classes
