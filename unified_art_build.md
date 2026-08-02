@@ -54,6 +54,27 @@ items are closed.
 
 ### Latest verification baseline (2026-08-02)
 
+- [x] `audit`, `build`, `test`, and `stage` now reject stale or copied CMake
+  trees before invoking Ninja, CTest, command inspection, or staging. Each
+  downstream command first runs deterministic graph freshness in check-only
+  mode, reconstructs the same configure command and schema-2 fingerprint used
+  by `configure`, and compares the complete host, target, build type, variant,
+  tool, target-binding, generated-graph, and command identity. Generated graph
+  drift requires reconfiguration; immutable host/tool/binding drift requires
+  the exact ownership-checked clean path instead of silently reusing a cache.
+  Fresh Linux and Windows-cross configure/audit repeats accepted their exact
+  identities and reported 2,089/2,172/32 and 2,081/2,126/29
+  compile-command/Ninja-command/product-link counts respectively. A stale
+  pre-existing Windows tree was rejected for changed target, configure-command,
+  and generated-graph fields before command auditing began. Native Windows
+  Server 2025 also configured a fresh 36-module tree and passed the same exact
+  downstream fingerprint plus 2,081/2,126/29 command audit without POSIX
+  tools. Its older Stage-8 projection first demonstrated why build-system files
+  must move as one revision: mixing the current overlay/codegen with its old
+  target profile and CMake entry point failed before a manifest could be
+  accepted. The coherent Python+CMake layer passed; the disposable output was
+  cleaned and all backed-up projection files were restored afterward.
+
 - [x] Product closure roots now belong to the target-aware Python overlay as
   one immutable, duplicate-free tuple shared by Linux and Windows. The public
   frontend no longer contains or forwards a module-root list. `bp2cmake`
@@ -131,7 +152,8 @@ items are closed.
   `asm_defines.h`, mterp assembly, and 37/36-module CMake graphs are
   byte-identical to the preceding fully built products.
 - [x] `PYTHONPATH=tools/bp2cmake python3 -m pytest tools/bp2cmake/tests tests/host -q`:
-  262 passed, including policy-owned product roots, exact shell-free clean
+  267 passed, including downstream full-fingerprint freshness, policy-owned
+  product roots, exact shell-free clean
   ownership/safety, the Linux
   AArch64 experimental graph, and explicit
   target-runner contract,

@@ -94,6 +94,115 @@ def test_product_graph_manifest_requires_overlay_owned_roots(tmp_path):
     build_art._validate_graph_manifest(manifest, target)
 
 
+@pytest.mark.parametrize("command", ["audit", "build", "test", "stage"])
+def test_downstream_commands_validate_current_configuration(
+    tmp_path, monkeypatch, command
+):
+    target = build_art.resolve_target("linux-x86_64-gnu")
+    calls = []
+    monkeypatch.setattr(
+        build_art, "load_local_config", lambda _root: LocalBuildConfig()
+    )
+    monkeypatch.setattr(
+        build_art,
+        "_require_current_configuration",
+        lambda *args: calls.append(("validate", args)),
+    )
+    monkeypatch.setattr(
+        build_art,
+        "_audit_generated_commands",
+        lambda *_args: calls.append(("audit", ())),
+    )
+    monkeypatch.setattr(
+        build_art,
+        "_build",
+        lambda *_args: calls.append(("build", ())),
+    )
+    monkeypatch.setattr(
+        build_art,
+        "_test",
+        lambda *_args: calls.append(("test", ())),
+    )
+    monkeypatch.setattr(
+        build_art,
+        "_stage",
+        lambda *_args: calls.append(("stage", ())),
+    )
+
+    result = build_art.main(
+        [
+            command,
+            "--target-id",
+            target.target_id,
+            "--output-root",
+            str(tmp_path),
+        ]
+    )
+
+    assert result == 0
+    assert [name for name, _args in calls] == ["validate", command]
+    validation = calls[0][1]
+    assert validation[0] == target
+    assert validation[1:3] == ("RelWithDebInfo", "product")
+
+
+def test_current_configuration_checks_graph_then_exact_fingerprint(
+    tmp_path, monkeypatch
+):
+    target = build_art.resolve_target("linux-x86_64-gnu")
+    binary_dir = tmp_path / target.target_id / "RelWithDebInfo"
+    binary_dir.mkdir(parents=True)
+    (binary_dir / "CMakeCache.txt").write_text("cache\n", encoding="utf-8")
+    expected = {
+        "schema_version": 2,
+        "target": target.to_dict(),
+        "build_type": "RelWithDebInfo",
+        "build_variant": "product",
+        "generated_graph": {"graph_sha256": "1" * 64},
+        "configure_command": ["cmake", "-G", "Ninja"],
+    }
+    manifest = binary_dir / "build_manifest.json"
+    manifest.write_text(json.dumps(expected) + "\n", encoding="utf-8")
+    calls = []
+    monkeypatch.setattr(
+        build_art,
+        "_generate",
+        lambda *args, **kwargs: calls.append((args, kwargs)),
+    )
+    monkeypatch.setattr(
+        build_art,
+        "_configure_plan",
+        lambda *_args: (expected["configure_command"], dict(expected)),
+    )
+
+    build_art._require_current_configuration(
+        target,
+        "RelWithDebInfo",
+        "product",
+        binary_dir,
+        LocalBuildConfig(),
+    )
+
+    assert calls == [
+        (
+            (target, "RelWithDebInfo", binary_dir),
+            {"check": True},
+        )
+    ]
+
+    stale = dict(expected)
+    stale["generated_graph"] = {"graph_sha256": "2" * 64}
+    manifest.write_text(json.dumps(stale) + "\n", encoding="utf-8")
+    with pytest.raises(build_art.BuildFrontendError, match="generated_graph"):
+        build_art._require_current_configuration(
+            target,
+            "RelWithDebInfo",
+            "product",
+            binary_dir,
+            LocalBuildConfig(),
+        )
+
+
 def test_stage_selector_builds_one_virtual_group_and_filters_ctest(
     tmp_path, monkeypatch
 ):

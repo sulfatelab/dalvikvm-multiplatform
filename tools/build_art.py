@@ -252,6 +252,14 @@ def main(argv: list[str] | None = None) -> int:
                 binary_dir,
                 check=args.command == "check-generated",
             )
+        if args.command in ("audit", "build", "test", "stage"):
+            _require_current_configuration(
+                target,
+                args.build_type,
+                args.variant,
+                binary_dir,
+                local,
+            )
         if args.command == "configure":
             _configure(target, args.build_type, binary_dir, local, args.variant)
         elif args.command == "audit":
@@ -510,6 +518,25 @@ def _configure(
     local: LocalBuildConfig,
     variant: str = "product",
 ) -> None:
+    command, fingerprint = _configure_plan(
+        target, build_type, binary_dir, local, variant
+    )
+    manifest_path = binary_dir / "build_manifest.json"
+    _guard_binary_directory(binary_dir, manifest_path, fingerprint)
+    _run_checked(command)
+    _audit_generated_commands(target, binary_dir, local)
+    _write_json_atomic(manifest_path, fingerprint)
+    print(f"configured {target.target_id} in {binary_dir}")
+
+
+def _configure_plan(
+    target: TargetProfile,
+    build_type: str,
+    binary_dir: Path,
+    local: LocalBuildConfig,
+    variant: str = "product",
+) -> tuple[list[str], dict[str, object]]:
+    """Resolve the exact shell-free command and cache identity."""
     tools = _resolve_tools(local, need_compiler=True)
     tools.update(_resolve_llvm_inspection_tools(local))
     jdk = _resolve_jdk(local)
@@ -531,7 +558,6 @@ def _configure(
         generated,
         bindings,
     )
-    manifest_path = binary_dir / "build_manifest.json"
     command = [
         str(tools["cmake"]),
         "-S",
@@ -597,11 +623,7 @@ def _configure(
             command.append(f"-D{cmake_key}={bindings[key]}")
     command.extend(_target_compiler_binding_arguments(target, bindings))
     fingerprint["configure_command"] = command
-    _guard_binary_directory(binary_dir, manifest_path, fingerprint)
-    _run_checked(command)
-    _audit_generated_commands(target, binary_dir, local)
-    _write_json_atomic(manifest_path, fingerprint)
-    print(f"configured {target.target_id} in {binary_dir}")
+    return command, fingerprint
 
 
 def _target_compiler_binding_arguments(
@@ -2335,6 +2357,40 @@ def _require_configured(binary_dir: Path) -> None:
         binary_dir / "build_manifest.json"
     ).is_file():
         raise BuildFrontendError(f"build is not configured by build_art.py: {binary_dir}")
+
+
+def _require_current_configuration(
+    target: TargetProfile,
+    build_type: str,
+    variant: str,
+    binary_dir: Path,
+    local: LocalBuildConfig,
+) -> None:
+    """Reject a stale or copied cache before any downstream command runs."""
+    _require_configured(binary_dir)
+    _generate(target, build_type, binary_dir, check=True)
+    _command, expected = _configure_plan(
+        target, build_type, binary_dir, local, variant
+    )
+    manifest_path = binary_dir / "build_manifest.json"
+    try:
+        current = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise BuildFrontendError(f"cannot read build manifest: {exc}") from exc
+    if not isinstance(current, dict):
+        raise BuildFrontendError("build manifest must be a JSON object")
+    if current != expected:
+        fields = sorted(
+            key
+            for key in set(current) | set(expected)
+            if current.get(key) != expected.get(key)
+        )
+        detail = ", ".join(fields) or "unknown fields"
+        raise BuildFrontendError(
+            f"configured build fingerprint is stale for {binary_dir} "
+            f"(changed: {detail}); rerun configure, or clean the exact tree "
+            "when immutable inputs changed"
+        )
 
 
 def _canonical_host_arch(machine: str) -> str:
