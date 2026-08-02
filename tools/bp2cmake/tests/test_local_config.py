@@ -2,7 +2,12 @@ from pathlib import Path
 
 import pytest
 
-from bp2cmake.local_config import LocalConfigError, load_local_config
+from bp2cmake.local_config import CI_CONFIG_ENV, LocalConfigError, load_local_config
+
+
+@pytest.fixture(autouse=True)
+def _clear_ci_config(monkeypatch):
+    monkeypatch.delenv(CI_CONFIG_ENV, raising=False)
 
 
 def _literal(path: Path) -> str:
@@ -79,4 +84,41 @@ def test_rejects_symlink_component(tmp_path):
         "[tools]\n" f"llvm_root = {_literal(alias)}\n", encoding="utf-8"
     )
     with pytest.raises(LocalConfigError, match="link/reparse"):
+        load_local_config(tmp_path)
+
+
+def test_ci_config_overrides_machine_local_bindings(tmp_path, monkeypatch):
+    local_llvm = tmp_path / "local-llvm"
+    ci_llvm = tmp_path / "ci-llvm"
+    local_bundle = tmp_path / "local-bundle"
+    ci_bundle = tmp_path / "ci-bundle"
+    for path in (local_llvm, ci_llvm, local_bundle, ci_bundle):
+        path.mkdir()
+    (tmp_path / ".art-build.local.toml").write_text(
+        "[tools]\n"
+        f"llvm_root = {_literal(local_llvm)}\n"
+        '[targets."windows-x86_64-msvc"]\n'
+        f"bundle_root = {_literal(local_bundle)}\n",
+        encoding="utf-8",
+    )
+    ci_config = tmp_path / "ci.toml"
+    ci_config.write_text(
+        "[tools]\n"
+        f"llvm_root = {_literal(ci_llvm)}\n"
+        '[targets."windows-x86_64-msvc"]\n'
+        f"bundle_root = {_literal(ci_bundle)}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv(CI_CONFIG_ENV, str(ci_config))
+
+    config = load_local_config(tmp_path)
+
+    assert config.source_file == ci_config
+    assert config.tools["llvm_root"] == ci_llvm
+    assert config.target_bindings("windows-x86_64-msvc")["bundle_root"] == ci_bundle
+
+
+def test_ci_config_path_must_be_absolute(tmp_path, monkeypatch):
+    monkeypatch.setenv(CI_CONFIG_ENV, "relative-ci.toml")
+    with pytest.raises(LocalConfigError, match="absolute"):
         load_local_config(tmp_path)

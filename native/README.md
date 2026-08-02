@@ -45,6 +45,9 @@ the generated target properties. Configure, build, and stage audit the complete
 generated command graph; the explicit `audit` command records the same result
 in `command_audit.json`. Machine-specific SDK or sysroot roots belong in the
 ignored repository-root `.art-build.local.toml`.
+Self-hosted CI points `ART_BUILD_CI_CONFIG` at an external TOML file with the
+same schema; those bindings override the developer-local file and remain
+machine-local.
 
 ## What's hand-written vs generated
 

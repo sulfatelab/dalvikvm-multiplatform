@@ -158,6 +158,23 @@ gate. Linux x86-64 currently has eight runnable catalog gates and three
 compile-only artifacts. Retained historical shell scripts are not product
 build entry points and are not required on a native Windows host.
 
+## Continuous integration
+
+The checked-in `Unified ART build` workflow runs four self-hosted cells through
+`tools/ci_art.py`: host contracts, the Linux product, a Linux-hosted Windows
+cross build, and the native Windows product/catalog. Product cells always use
+a fresh `out/ci/<run-key>/<cell>` root, verify deterministic generation, build
+twice to require a Ninja no-op, and stage the audited regular-file package.
+Linux and Windows native cells also run their applicable test catalogs.
+
+Each runner service must define `ART_BUILD_CI_CONFIG` as the absolute path of a
+regular machine-local TOML file outside the checkout. It uses the same schema
+as `.art-build.local.toml` and overrides matching developer-local bindings;
+the workflow supplies `ART_BUILD_CI_RUN_KEY`. No real toolchain, SDK, bundle,
+or output path is stored in Git. Private sibling submodules require the
+`ART_CI_CHECKOUT_TOKEN` repository secret until an equivalent read credential
+is configured for the runner.
+
 ## Documentation map
 
 These root documents are part of the project context. Automated and LLM-based

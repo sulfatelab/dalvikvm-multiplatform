@@ -12,6 +12,7 @@ from .target import resolve_target
 
 
 LOCAL_CONFIG_NAME = ".art-build.local.toml"
+CI_CONFIG_ENV = "ART_BUILD_CI_CONFIG"
 
 _TOOL_KEYS = frozenset({"cmake", "ninja", "llvm_root", "jdk_root"})
 _BUILD_KEYS = frozenset({"output_root"})
@@ -34,10 +35,41 @@ class LocalBuildConfig:
 
 
 def load_local_config(repo_root: Path) -> LocalBuildConfig:
-    path = repo_root / LOCAL_CONFIG_NAME
+    local = _load_config_file(repo_root / LOCAL_CONFIG_NAME, required=False)
+    ci_value = os.environ.get(CI_CONFIG_ENV)
+    if not ci_value:
+        return local
+    if ci_value.startswith("~") or "${" in ci_value or "%" in ci_value:
+        raise LocalConfigError(
+            f"{CI_CONFIG_ENV} must not use path expansion syntax"
+        )
+    ci_path = Path(ci_value)
+    if not ci_path.is_absolute():
+        raise LocalConfigError(f"{CI_CONFIG_ENV} must name an absolute path")
+    ci = _load_config_file(ci_path, required=True)
+    targets = {
+        target_id: dict(bindings)
+        for target_id, bindings in local.targets.items()
+    }
+    for target_id, bindings in ci.targets.items():
+        targets.setdefault(target_id, {}).update(bindings)
+    return LocalBuildConfig(
+        source_file=ci.source_file,
+        tools={**local.tools, **ci.tools},
+        output_root=ci.output_root if ci.output_root is not None else local.output_root,
+        targets=targets,
+    )
+
+
+def _load_config_file(path: Path, *, required: bool) -> LocalBuildConfig:
     if not path.exists():
+        if required:
+            raise LocalConfigError(f"CI configuration does not exist: {path}")
         return LocalBuildConfig()
     if path.is_symlink():
+        raise LocalConfigError(f"local configuration must be a regular file: {path}")
+    validate_managed_path(path)
+    if not path.is_file():
         raise LocalConfigError(f"local configuration must be a regular file: {path}")
     try:
         with path.open("rb") as stream:

@@ -48,7 +48,7 @@ items are closed.
 | Boot/runtime packaging | PARTIAL | deterministic target-local boot/probe JARs now include Conscrypt and security properties; staging starts empty, selects only current Ninja link outputs, validates the complete DSO import closure, records approved system dependencies, and packages pinned ICU data, 121 CA roots, writable keychain directories, and the native DSO closure | add boot images and their runtime acceptance |
 | POSIX-free Windows build host | COMPLETE for the accepted native baseline; PARTIAL end to end | Server 2025 uses configured official JDK 21, Python, CMake, Ninja, and plain Clang drivers; all 76 accepted native tests, provider/security packaging, and product/test no-op gates pass without POSIX tooling | migrate every retained behavioral gate and complete boot-image/runtime packaging |
 | Legacy build removal | PARTIAL | active product ownership was demoted, project-owned symlink overlays were removed, and the superseded Linux miniature, Windows Phase-0/Phase-1, and libcore/ICU product graphs were deleted; the checked-in Linux graph and split overlay datasets remain | remove or demote every alternative product path after gate migration |
-| CI/acceptance automation | NOT STARTED | no in-repository CI workflow owns the acceptance matrix | fresh-build, no-op, graph, command, artifact, and native-host gates run automatically |
+| CI/acceptance automation | IMPLEMENTED / activation pending | checked-in shell-free Python driver and GitHub workflow define host, fresh Linux, Windows-cross, and native Windows cells; machine paths enter only through an external CI TOML binding | register/provision the two self-hosted runner labels and obtain accepted workflow runs |
 | Additional architectures | BLOCKED by capability gates | all 17 canonical identities are registered; only `linux-x86_64-gnu` and experimental `windows-x86_64-msvc` generate | admit each profile only after its architecture and runtime gates pass |
 | Windows AOT/OAT | BLOCKED / separate track | compiler DSO parity does not provide Windows OAT production or loading | satisfy `win32_aot_oat.md`; do not imply capability from `art-compiler.dll` |
 
@@ -1772,6 +1772,17 @@ an unreviewed module-set or kind change.
   generators.
 - [ ] Add in-repository CI for fresh Linux generation/build/test/stage and the
   provisioned Windows cross/native cells.
+  The workflow and `tools/ci_art.py` now define host checks, Linux product,
+  Linux-hosted Windows cross, and native Windows cells. Each product cell uses
+  a fresh run-keyed root, checks regenerated graph identity, requires a second
+  Ninja no-op build, and stages the audited package; runnable native cells also
+  execute their catalog. `ART_BUILD_CI_CONFIG` points to one regular external
+  TOML file per runner, so no machine path enters Git. This item remains open
+  until the self-hosted `linux/x64/art-build` and `windows/x64/art-build`
+  runners are registered and the checked-in workflow has accepted all cells.
+  The actual `host-checks` entry point currently passes the VCS audit and
+  216/216 tests; official actionlint 1.7.12 accepts the workflow and its custom
+  runner-label configuration.
 
 #### P2: remove migration scaffolding and harden orchestration
 
@@ -1854,8 +1865,9 @@ are not invoked by `tools/build_art.py`, but remain runnable and can drift.
 Removal is blocked only by missing unified gate ownership, not by product graph
 generation.
 
-The repository also has no checked-in CI workflow. External or manual evidence
-does not replace a repeatable in-repository acceptance entry point.
+The repository now has a checked-in CI workflow and shell-free Python matrix
+driver. External or manual evidence still does not replace an accepted run of
+that entry point; self-hosted runner registration remains pending.
 
 ## Decision
 
@@ -2708,13 +2720,16 @@ them, and create the ignored file without overwriting an existing one. The
 checked-in documentation describes keys but never contains a real developer
 path or a filled machine-local example.
 
-Binding precedence is explicit frontend argument, then a narrowly defined CI
-process-environment variable, then local TOML. Process environment works on a
-native Windows process; there is no `.env` loader or environment activation
-script. Every resolved path is canonicalized, checked for symlink/reparse
-components, and recorded in the ignored build manifest. The frontend then
-passes required roots to CMake as cache bindings. It never copies their
-absolute values into `target_profile.cmake` or `art_graph.cmake`.
+Binding precedence is explicit frontend argument, then the narrowly defined
+`ART_BUILD_CI_CONFIG` process-environment binding, then local TOML. The CI
+variable names an absolute regular TOML file outside the checkout with the same
+restricted schema; its tool, output, and per-target values override matching
+developer-local values. Process environment works on a native Windows process;
+there is no `.env` loader or environment activation script. Every resolved path
+is canonicalized, checked for symlink/reparse components, and recorded in the
+ignored build manifest. The frontend then passes required roots to CMake as
+cache bindings. It never copies their absolute values into
+`target_profile.cmake` or `art_graph.cmake`.
 
 `CMakeUserPresets.json` is also ignored to prevent an expert/debug CMake flow
 from committing local paths, but it is not a second supported product
