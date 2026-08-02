@@ -310,8 +310,10 @@ def test_without_stage_builds_all_probes_and_records_runtime_status(
     build_art._test(binary_dir, LocalBuildConfig(), [], [])
 
     assert commands[0][-2:] == ["--target", "art-tests"]
+    assert commands[0][-4:-2] == ["--parallel", "32"]
     assert commands[1][0] == str(ctest)
     assert "--label-regex" not in commands[1]
+    assert commands[1][-2:] == ["--parallel", "1"]
     catalog = json.loads(
         (binary_dir / "tests" / "art_test_catalog.json").read_text(encoding="utf-8")
     )
@@ -347,6 +349,64 @@ def test_test_command_forwards_parallel_limit(tmp_path, monkeypatch):
         "--target",
         "art-tests",
     ]
+    assert commands[1][-2:] == ["--parallel", "1"]
+
+
+def test_build_uses_deterministic_default_parallelism(tmp_path, monkeypatch):
+    binary_dir = _configured_build(tmp_path)
+    cmake = tmp_path / "cmake"
+    cmake.write_bytes(b"")
+    commands = []
+    monkeypatch.setattr(
+        build_art,
+        "_resolve_tools",
+        lambda _local, *, need_compiler: {"cmake": cmake},
+    )
+    monkeypatch.setattr(build_art, "_run_checked", lambda command: commands.append(command))
+    monkeypatch.setattr(build_art, "_audit_generated_commands", lambda *_args: {})
+    monkeypatch.setattr(build_art.platform, "system", lambda: "Linux")
+
+    build_art._build(
+        build_art.resolve_target("linux-x86_64-gnu"),
+        binary_dir,
+        LocalBuildConfig(),
+        "help",
+        None,
+    )
+
+    assert commands == [
+        [
+            str(cmake),
+            "--build",
+            str(binary_dir),
+            "--target",
+            "help",
+            "--parallel",
+            "32",
+        ]
+    ]
+
+
+@pytest.mark.parametrize(
+    ("system", "requested", "expected"),
+    [
+        ("Linux", None, 32),
+        ("Linux", 64, 64),
+        ("Windows", None, 16),
+        ("Windows", 16, 16),
+    ],
+)
+def test_parallelism_defaults_are_host_bounded(
+    monkeypatch, system, requested, expected
+):
+    monkeypatch.setattr(build_art.platform, "system", lambda: system)
+    assert build_art._resolve_parallelism(requested) == expected
+
+
+def test_windows_parallelism_rejects_vm_oversubscription(monkeypatch):
+    monkeypatch.setattr(build_art.platform, "system", lambda: "Windows")
+    with pytest.raises(build_art.BuildFrontendError, match="cannot exceed 16"):
+        build_art._resolve_parallelism(17)
 
 
 def test_stage_selector_reports_zero_applicable_probes(tmp_path, monkeypatch):

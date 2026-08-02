@@ -824,8 +824,9 @@ Select one virtual stage:
 python tools/build_art.py test --target-id windows-x86_64-msvc --stage w014 --parallel 16
 ```
 
-Use 16 jobs on the current 16 GiB native Windows VM. Linux-hosted cross builds
-on agent01 may use 32 jobs.
+The frontend defaults to and caps at 16 jobs on the current 16 GiB native
+Windows VM. It defaults to 32 jobs on agent01 for Linux-hosted native and cross
+builds.
 
 Use `--build-type Debug` or `--build-type RelWithDebInfo` when the non-default
 configuration is required. The frontend uses the corresponding canonical

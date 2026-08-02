@@ -168,7 +168,11 @@ Windows host. `clean` removes only the selected target/build/variant directory,
 requires a matching frontend ownership manifest, preserves siblings, and is a
 successful no-op when that exact tree does not exist. It uses Python filesystem
 APIs and remains available for recognized targets whose generation status is
-currently unavailable.
+currently unavailable. When `--parallel` is omitted, `build` and `test` use 32
+jobs on non-Windows hosts and 16 on Windows hosts; Windows rejects higher
+values to protect the 16 GiB native VM. The resolved value is applied to both
+direct builds and Ninja work requested by `test`. CTest execution stays at one
+scheduler slot because several runtime gates are memory-heavy or process-wide.
 
 ## Continuous integration
 

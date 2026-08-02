@@ -181,6 +181,20 @@ def _boot_image_parallel_limit() -> int:
     return 16 if platform.system().lower() == "windows" else 32
 
 
+def _resolve_parallelism(requested: int | None) -> int:
+    """Choose deterministic host-bounded parallelism for Ninja work."""
+    host_default = _boot_image_parallel_limit()
+    if requested is None:
+        return host_default
+    if requested < 1:
+        raise BuildFrontendError("--parallel must be positive")
+    if platform.system().lower() == "windows" and requested > host_default:
+        raise BuildFrontendError(
+            f"--parallel cannot exceed {host_default} on a Windows build host"
+        )
+    return requested
+
+
 class BuildFrontendError(RuntimeError):
     """Raised for a deterministic user-facing frontend failure."""
 
@@ -654,14 +668,12 @@ def _build(
     parallel: int | None,
 ) -> None:
     _require_configured(binary_dir)
+    parallel = _resolve_parallelism(parallel)
     cmake = _resolve_tools(local, need_compiler=False)["cmake"]
     command = [str(cmake), "--build", str(binary_dir)]
     if cmake_target:
         command.extend(("--target", cmake_target))
-    if parallel is not None:
-        if parallel < 1:
-            raise BuildFrontendError("--parallel must be positive")
-        command.extend(("--parallel", str(parallel)))
+    command.extend(("--parallel", str(parallel)))
     _run_checked(command)
     _audit_generated_commands(target, binary_dir, local)
     if target.target_platform == "windows" and (
@@ -678,18 +690,16 @@ def _test(
     parallel: int | None = None,
 ) -> None:
     _require_configured(binary_dir)
+    parallel = _resolve_parallelism(parallel)
     cmake = _resolve_tools(local, need_compiler=False)["cmake"]
     catalog_path, catalog, probes = _load_test_catalog(binary_dir)
     target_id = str(catalog["target_id"])
     stages = list(dict.fromkeys(stages or []))
     stage_labels = [_stage_label(stage) for stage in stages]
-    if parallel is not None and parallel < 1:
-        raise BuildFrontendError("--parallel must be positive")
 
     def build_test_target(name: str) -> None:
         command = [str(cmake), "--build", str(binary_dir)]
-        if parallel is not None:
-            command.extend(("--parallel", str(parallel)))
+        command.extend(("--parallel", str(parallel)))
         command.extend(("--target", name))
         _run_checked(command)
 
@@ -768,6 +778,8 @@ def _test(
         str(binary_dir),
         "--output-on-failure",
         "--no-tests=error",
+        "--parallel",
+        "1",
     ]
     selected_labels = list(dict.fromkeys([*labels, *stage_labels]))
     if selected_labels:

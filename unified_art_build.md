@@ -29,8 +29,10 @@ items are closed.
   is not presently practical.
 - Record machine paths only in ignored local configuration. Tracker evidence
   uses canonical target IDs and stable repository-relative names.
-- Use `--parallel 32` for Linux and Windows-cross work on agent01, and
-  `--parallel 16` for native builds on the 16 GiB Windows Server 2025 VM.
+- `build` and `test` default to 32 jobs for Linux and Windows-cross work on
+  agent01, and default to/hard-cap at 16 jobs on a Windows build host for the
+  16 GiB Windows Server 2025 VM. Explicit values remain available within that
+  host policy.
 - Update the dated evidence below after any change to the frontend, generated
   graph, target bundle contract, test registry, staging rules, or topology.
 
@@ -53,6 +55,14 @@ items are closed.
 | Windows AOT/OAT | BLOCKED / separate track | compiler DSO parity does not provide Windows OAT production or loading | satisfy `win32_aot_oat.md`; do not imply capability from `art-compiler.dll` |
 
 ### Latest verification baseline (2026-08-02)
+
+- [x] Parallelism is now deterministic when callers omit `--parallel`:
+  non-Windows build hosts use 32 jobs, Windows build hosts use 16, and Windows
+  rejects values above its 16-job/16-GiB safety limit. `build` and every test
+  target pass the resolved value to Ninja. CTest is explicitly held to one
+  scheduler slot rather than inheriting compile parallelism because multiple
+  runtime gates are memory-heavy or exercise process-wide state; broader test
+  concurrency requires a separate reviewed policy.
 
 - [x] `audit`, `build`, `test`, and `stage` now reject stale or copied CMake
   trees before invoking Ninja, CTest, command inspection, or staging. Each
@@ -152,7 +162,9 @@ items are closed.
   `asm_defines.h`, mterp assembly, and 37/36-module CMake graphs are
   byte-identical to the preceding fully built products.
 - [x] `PYTHONPATH=tools/bp2cmake python3 -m pytest tools/bp2cmake/tests tests/host -q`:
-  267 passed, including downstream full-fingerprint freshness, policy-owned
+  273 passed, including deterministic host-bounded Ninja parallelism and
+  serial CTest scheduling,
+  downstream full-fingerprint freshness, policy-owned
   product roots, exact shell-free clean
   ownership/safety, the Linux
   AArch64 experimental graph, and explicit
