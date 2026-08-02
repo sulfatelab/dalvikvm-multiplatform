@@ -40,12 +40,12 @@ items are closed.
 |---|---|---|---|
 | Python frontend | COMPLETE for the initial slice | `generate`, `check-generated`, `configure`, `build`, `test`, and `stage` exist; subprocesses are shell-free; configured JDK 21 is validated and passed to CMake | keep regression coverage current |
 | Linux x86-64 product | COMPLETE for the current W-003/W-004/W-013 runtime slice | exact-target CriticalNative and normal/FastNative W-003 gates join all five W-004 gates plus the shared W-013 128 MiB non-moving-heap gate; shared TLS DSOs, Conscrypt boot content, security properties, and 121 CA roots now use the same product graph/stager as Windows | add boot images and migrate the remaining behavioral stages |
-| Windows x86-64 product | PARTIAL / experimental | Linux-hosted cross and native Windows Server 2025 product builds pass; the accepted native baseline passes 76/76 across W-002, W-003, W-004, W-010, W-013, W-014, W-025, and W-027, and identical product/test repeats are Ninja no-ops | add boot images/complete-package acceptance and migrate the remaining behavioral coverage |
+| Windows x86-64 product | PARTIAL / experimental | Linux-hosted cross and native Windows Server 2025 product builds pass; the accepted native baseline passes 76/76 across W-002, W-003, W-004, W-010, W-013, W-014, W-025, and W-027; complete-package import/stale-path acceptance and identical no-op builds pass | add boot images and migrate the remaining behavioral coverage |
 | Compiler DSO parity | COMPLETE for `art-compiler` | both targets emit a shared compiler DSO; Windows imports `art.dll` and exports `art_compiler_jit_create` | retain exact ABI and no-cycle gates |
 | Windows runtime DSO exports | COMPLETE for current x86-64 closure | `art.dll` combines explicit source annotations with a reviewed 187-entry runtime-consumer DEF, never CMake auto-export; Debug has 2,065 exports and RelWithDebInfo has 2,066 | keep the consumer allowlist and actual PE boundary under regression review |
 | Full DSO topology parity | PARTIAL | five module kinds and two target-specific module pairs still differ | convert each difference or record a reviewed target exception |
 | Unified phase catalog | PARTIAL | eight virtual stages declare 32 native probes, 47 managed JARs, and 13 command gates; Windows has 90 applicable items (69 target-runnable, seven host-review, and 14 compile-only in the product variant), while Linux x86-64 has eleven applicable items (eight runnable and three compile-only artifacts) | migrate the remaining behavioral runners, portable JNI expansion, and result checks |
-| Boot/runtime packaging | PARTIAL | deterministic target-local boot/probe JARs now include Conscrypt and security properties; the common product graph emits three shared TLS DSOs; managed gates and the frontend stage package pinned ICU data, 121 CA roots, writable keychain directories, and the native DSO closure | add boot images and complete-package acceptance |
+| Boot/runtime packaging | PARTIAL | deterministic target-local boot/probe JARs now include Conscrypt and security properties; staging starts empty, selects only current Ninja link outputs, validates the complete DSO import closure, records approved system dependencies, and packages pinned ICU data, 121 CA roots, writable keychain directories, and the native DSO closure | add boot images and their runtime acceptance |
 | POSIX-free Windows build host | COMPLETE for the accepted native baseline; PARTIAL end to end | Server 2025 uses configured official JDK 21, Python, CMake, Ninja, and plain Clang drivers; all 76 accepted native tests, provider/security packaging, and product/test no-op gates pass without POSIX tooling | migrate every retained behavioral gate and complete boot-image/runtime packaging |
 | Legacy build removal | PARTIAL | active product ownership was demoted, project-owned symlink overlays were removed, and the superseded Linux miniature, Windows Phase-0/Phase-1, and libcore/ICU product graphs were deleted; the checked-in Linux graph and split overlay datasets remain | remove or demote every alternative product path after gate migration |
 | CI/acceptance automation | NOT STARTED | no in-repository CI workflow owns the acceptance matrix | fresh-build, no-op, graph, command, artifact, and native-host gates run automatically |
@@ -120,6 +120,28 @@ items are closed.
   store and no stage links. The fully superseded POSIX-only Conscrypt builder,
   host-dependent CA generator, and Windows asset stager are removed; the
   generated graph plus Python frontend are their only product replacement.
+- [x] Complete-package staging no longer globs the binary directory. It reads
+  the current top-level shared-library and executable link outputs from
+  Ninja's graph, requires every declared output to exist, starts from an empty
+  frontend-owned stage, and excludes unrelated or stale regular files. This
+  removed the three obsolete pre-prefix `crypto.dll`, `ssl.dll`, and
+  `javacrypto.dll` files that a reused Windows-cross binary directory had
+  exposed. Linux now stages all 32 current top-level outputs, including
+  `dex2oat`, `libart-dex2oat.so`, and `libopenjdkjvmti.so`; Windows-cross and
+  native Windows each stage the same 31 top-level outputs including
+  `art-compiler.lib` and the pinned `c++.dll`.
+- [x] Stage-manifest schema 2 records `DT_NEEDED`/PE imports, approved platform
+  dependencies, and ELF runtime paths for every staged executable and DSO.
+  Unresolved non-platform dependencies fail staging. Linux build outputs use
+  `CMAKE_BUILD_RPATH_USE_ORIGIN`, so the complete staged ELF closure contains
+  only `$ORIGIN` and no build-host directory; its compiler DSO imports
+  `libart.so` with no reverse edge. Cross and native PE closures pass the same
+  mechanical dependency audit; `art-compiler.dll` exports exactly
+  `art_compiler_jit_create`, imports `art.dll`, and has no reverse edge. All
+  three manifests contain only relative artifact names and no machine path,
+  their complete stage scans contain no links/reparse points, and identical
+  32-job Linux/Windows-cross plus 16-job native Windows builds are Ninja
+  no-ops.
 - [x] Fresh generation loads the same 260 Blueprint files for both targets and
   emits 37 generated modules for `linux-x86_64-gnu` and 36 for
   `windows-x86_64-msvc`. Both graphs emit the separate `openjdkjvmti` DSO;
@@ -1326,23 +1348,23 @@ One historical work stage maps to exactly one virtual target named
 |---|---:|---|---|---|
 | `w002` | 1 EXE, 1 DLL, 2 managed, 1 gate | 3 exact / 2 typed | 3 runnable, 1 host-review, 1 compile-only | registered Windows x86-64 coverage is complete |
 | `w003` | 4 DLLs, 4 managed, 1 gate | 7 exact / 2 typed | product: 3 runnable, 1 host-review, 5 compile-only; frame variant: 4 runnable, 1 host-review, 4 compile-only | registered Windows x86-64 coverage is complete; CriticalNative and normal/FastNative are also verified on exact Linux x86-64 GNU |
-| `w004` | 2 EXEs, 1 DLL, 33 managed, 3 gates | 7 exact / 32 typed | product: 36 target-runnable, 1 host-review, 2 compile-only; Windows applicable subset: 34 target-runnable, 1 host-review, 2 compile-only | security-provider packaging remains; no other named libcore case is native-open |
+| `w004` | 2 EXEs, 1 DLL, 33 managed, 3 gates | 7 exact / 32 typed | product: 37 target-runnable, 1 host-review, 1 compile-only; Windows applicable subset: 35 target-runnable, 1 host-review, 1 compile-only | provider/security packaging is native-accepted; no named libcore case remains outside its explicit runtime/compile-only status |
 | `w010` | 4 EXEs, 3 managed, 1 gate | 2 exact / 6 typed | 7 target-runnable, 1 host-review | registered Windows x86-64 coverage is complete |
 | `w013` | 4 EXEs, 1 managed, 3 gates | 3 exact / 5 typed | 6 runnable, 1 host-review, 1 compile-only | registered x86-64 native, managed, and source-policy coverage is complete |
 | `w014` | 7 EXEs, 1 DLL, 1 managed, 1 gate | 3 exact / 7 typed | product: 7 runnable, 3 compile-only; FS-1 variant: 8 runnable, 1 host-review, 1 compile-only | registered FS-1 coverage is complete for Windows x86-64 |
 | `w025` | 4 EXEs, 3 DLLs, 3 managed, 2 gates | 7 exact / 5 typed | 8 target-runnable, 1 host-review, 3 compile-only | registered Windows x86-64 coverage is complete |
 | `w027` | 1 gate | 0 exact / 1 typed | 1 host-review | registered Windows x86-64 coverage is complete |
-| Total | 22 EXEs, 10 DLLs, 47 managed, 13 gates | 32 exact / 60 typed | product: 70 target-runnable, 7 host-review, 15 compile-only | Windows applies 90 declarations; Linux x86-64 applies eleven |
+| Total | 22 EXEs, 10 DLLs, 47 managed, 13 gates | 32 exact / 60 typed | product: 71 target-runnable, 7 host-review, 14 compile-only | Windows applies 90 declarations (69 runnable, seven host-review, 14 compile-only); Linux x86-64 applies eleven |
 
 The shared registry now references zero source files from historical
 verification directories. All 92 declarations own canonical source under
 `tests/cases/` or a shell-free runner under `tests/support/`; all 29 native
 source cases and all 48 Java sources have adjacent results, and shared stage
 analysis remains under `tests/stages/`. The old verification tree now contains
-zero Java or native source files, zero shell scripts, zero PowerShell scripts,
-and 17 Python scripts. Python checkers
-and reviewers may remain, but the unified frontend must invoke them through a
-declared stage instead of a phase-local product build.
+only three historical Markdown result records and no source, script, graph, or
+binary. Their current user edits are preserved outside build-system commits;
+after those evidence changes are reviewed or migrated, the empty compatibility
+ownership can be retired.
 
 ### Test applicability and target-architecture coverage
 
@@ -1712,13 +1734,16 @@ an unreviewed module-set or kind change.
 
 - [ ] Resolve or explicitly approve every topology difference in the table
   above.
-- [ ] Enforce the exact `art-compiler.dll` export allowlist, target
-  architecture/object format, ASLR flags, imports, and absence of an
-  `art.dll` -> `art-compiler.dll` reverse dependency.
-- [ ] Validate the Linux compiler DSO and the complete staged import closure,
-  not only the Windows compiler DLL.
-- [ ] Make staging start from an empty frontend-owned directory or reject every
-  stale entry, then scan the complete result for links/reparse points.
+- [x] Enforce the exact `art-compiler.dll` export allowlist, required
+  `art.dll` import, and absence of an `art.dll -> art-compiler.dll` reverse
+  dependency. Architecture/object-format and ASLR checks remain in their
+  existing PE gates and still need consolidation into package-manifest policy.
+- [x] Validate the Linux compiler DSO and every staged Linux/Windows
+  executable/DSO dependency, including the absence of the reverse compiler
+  edge and of absolute ELF runtime paths.
+- [x] Make staging start from an empty frontend-owned directory, select only
+  current Ninja link outputs, reject a partial product build, and scan the
+  complete result for links/reparse points.
 - [ ] Add generated-command audits for compiler drivers, link drivers, shell
   operators, POSIX utilities, host include/library leakage, and forbidden
   generators.

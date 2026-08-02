@@ -49,6 +49,48 @@ ROOT_MODULES = (
     "libopenjdkjvmti",
 )
 
+_LINUX_SYSTEM_NEEDED = frozenset(
+    {
+        "libc.so.6",
+        "libcap.so.2",
+        "libexpat.so.1",
+        "libgcc_s.so.1",
+        "liblz4.so.1",
+        "libm.so.6",
+        "libstdc++.so.6",
+        "libz.so.1",
+    }
+)
+_WINDOWS_SYSTEM_NEEDED = frozenset(
+    {
+        "advapi32.dll",
+        "bcrypt.dll",
+        "cfgmgr32.dll",
+        "crypt32.dll",
+        "dbghelp.dll",
+        "gdi32.dll",
+        "iphlpapi.dll",
+        "kernel32.dll",
+        "msvcp140.dll",
+        "ntdll.dll",
+        "ole32.dll",
+        "oleaut32.dll",
+        "pdh.dll",
+        "psapi.dll",
+        "rpcrt4.dll",
+        "secur32.dll",
+        "shell32.dll",
+        "shlwapi.dll",
+        "user32.dll",
+        "userenv.dll",
+        "version.dll",
+        "vcruntime140.dll",
+        "vcruntime140_1.dll",
+        "winmm.dll",
+        "ws2_32.dll",
+    }
+)
+
 
 def _host_can_run_target(target: TargetProfile) -> bool:
     """Conservatively admit runtime probes only on an exact native host."""
@@ -541,38 +583,24 @@ def _stage(target: TargetProfile, binary_dir: Path, local: LocalBuildConfig) -> 
         _reject_managed_tree(stage_dir)
         shutil.rmtree(stage_dir)
     stage_dir.mkdir(parents=True, exist_ok=True)
-    product_names = (
-        "dalvikvm", "dex2oat", "art", "art-compiler", "art-disassembler",
-        "javacore", "openjdk", "icu_jni",
-    )
-    sources: list[Path] = []
-    for name in product_names:
-        source = next(
-            (candidate for candidate in _artifact_candidates(binary_dir, target, name)
-             if candidate.is_file()),
+    product_outputs = _ninja_product_outputs(binary_dir, target, local)
+    sources = [path for path, _kind in product_outputs]
+    if target.target_platform == "windows":
+        import_lib = next(
+            (
+                candidate
+                for candidate in _artifact_candidates(
+                    binary_dir, target, "art-compiler"
+                )
+                if candidate.suffix.lower() == ".lib" and candidate.is_file()
+            ),
             None,
         )
-        if source is None:
-            continue
-        sources.append(source)
-
-        if target.target_platform == "windows" and name == "art-compiler":
-            import_lib = next(
-                (candidate for candidate in _artifact_candidates(binary_dir, target, name)
-                 if candidate.suffix.lower() == ".lib" and candidate.is_file()),
-                None,
+        if import_lib is None:
+            raise BuildFrontendError(
+                f"Windows art-compiler import library is missing in {binary_dir}"
             )
-            if import_lib is None:
-                raise BuildFrontendError(
-                    f"Windows art-compiler import library is missing in {binary_dir}"
-                )
-            sources.append(import_lib)
-
-    # The product is a DSO closure, not only its public entry points. Generated
-    # CMake DSOs are emitted in the top-level binary directory; test-only DSOs
-    # remain below tests/ and are deliberately excluded.
-    if target.target_platform == "windows":
-        sources.extend(sorted(binary_dir.glob("*.dll")))
+        sources.append(import_lib)
         bundle_root = _target_bindings(target, local).get("bundle_root")
         if bundle_root is None:
             raise BuildFrontendError(
@@ -584,8 +612,6 @@ def _stage(target: TargetProfile, binary_dir: Path, local: LocalBuildConfig) -> 
                 f"Windows target bundle is missing libc++ runtime: {libcxx_runtime}"
             )
         sources.append(libcxx_runtime)
-    else:
-        sources.extend(sorted(binary_dir.glob("*.so")))
 
     copied: list[dict[str, object]] = []
     destinations: dict[str, Path] = {}
@@ -645,11 +671,21 @@ def _stage(target: TargetProfile, binary_dir: Path, local: LocalBuildConfig) -> 
 
     if not copied:
         raise BuildFrontendError(f"no product artifacts found in {binary_dir}; build first")
+    topology = _validate_staged_topology(
+        stage_dir,
+        target,
+        local,
+        executable_names={
+            path.name for path, kind in product_outputs if kind == "executable"
+        },
+    )
     _write_json_atomic(stage_dir / "stage_manifest.json", {
-        "schema_version": 1,
+        "schema_version": 2,
         "target_id": target.target_id,
         "artifacts": copied,
+        "topology": topology,
     })
+    _reject_managed_tree(stage_dir)
     print(
         f"staged {len(copied)} regular files in {stage_dir} "
         f"(AndroidCAStore certificates={certificate_count})"
@@ -672,6 +708,185 @@ def _reject_managed_tree(root: Path) -> None:
     for current, directories, files in os.walk(root, topdown=True, followlinks=False):
         for name in (*directories, *files):
             validate_managed_path(Path(current) / name)
+
+
+def _ninja_product_outputs(
+    binary_dir: Path, target: TargetProfile, local: LocalBuildConfig
+) -> list[tuple[Path, str]]:
+    """Return current top-level CMake link outputs, excluding stale files."""
+    ninja = _configured_or_discovered(local, "ninja", "ninja")
+    result = subprocess.run(
+        [str(ninja), "-C", str(binary_dir), "-t", "targets", "all"],
+        cwd=REPO_ROOT,
+        shell=False,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode:
+        raise BuildFrontendError(
+            f"Ninja target inventory failed with exit code {result.returncode}"
+        )
+    declared = _parse_ninja_product_outputs(result.stdout, target)
+    if not declared:
+        raise BuildFrontendError(
+            f"Ninja declares no top-level product link outputs in {binary_dir}"
+        )
+    missing = [name for name, _kind in declared if not (binary_dir / name).is_file()]
+    if missing:
+        raise BuildFrontendError(
+            "product outputs are missing; run the full build before staging: "
+            + ", ".join(missing)
+        )
+    outputs = [(binary_dir / name, kind) for name, kind in declared]
+    for path, _kind in outputs:
+        validate_managed_path(path)
+        if path.is_symlink():
+            raise BuildFrontendError(f"product output must be a regular file: {path}")
+    return outputs
+
+
+def _parse_ninja_product_outputs(
+    output: str, target: TargetProfile
+) -> list[tuple[str, str]]:
+    declared: dict[str, str] = {}
+    for line in output.splitlines():
+        name, separator, rule = line.rpartition(": ")
+        if not separator or "/" in name or "\\" in name:
+            continue
+        if "SHARED_LIBRARY_LINKER__" in rule:
+            kind = "shared-library"
+        elif "EXECUTABLE_LINKER__" in rule:
+            kind = "executable"
+        else:
+            continue
+        lowered = name.lower()
+        if target.target_platform == "windows":
+            expected = (
+                lowered.endswith(".dll")
+                if kind == "shared-library"
+                else lowered.endswith(".exe")
+            )
+        else:
+            expected = lowered.endswith(".so") if kind == "shared-library" else "." not in name
+        if not expected or name in declared:
+            continue
+        declared[name] = kind
+    return sorted(declared.items())
+
+
+def _validate_staged_topology(
+    stage_dir: Path,
+    target: TargetProfile,
+    local: LocalBuildConfig,
+    *,
+    executable_names: set[str],
+) -> dict[str, object]:
+    readobj = _resolve_llvm_inspection_tools(local)["llvm-readobj"]
+    if target.target_platform == "windows":
+        inspect = sorted((*stage_dir.glob("*.dll"), *stage_dir.glob("*.exe")))
+        normalize = str.lower
+    else:
+        inspect = sorted(
+            [*stage_dir.glob("*.so"), *(stage_dir / name for name in executable_names)]
+        )
+        normalize = lambda value: value
+    stage_names = {
+        normalize(path.name)
+        for path in stage_dir.iterdir()
+        if path.is_file() and not path.is_symlink()
+    }
+    dependencies: dict[str, list[str]] = {}
+    system_dependencies: set[str] = set()
+    runtime_paths: dict[str, list[str]] = {}
+    for artifact in inspect:
+        validate_managed_path(artifact)
+        result = subprocess.run(
+            [str(readobj), "--needed-libs", "--dynamic-table", str(artifact)],
+            cwd=REPO_ROOT,
+            shell=False,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode:
+            raise BuildFrontendError(
+                f"llvm-readobj failed for staged {artifact.name} "
+                f"with exit code {result.returncode}"
+            )
+        needed = _parse_needed_libraries(result.stdout)
+        dependencies[artifact.name] = needed
+        for name in needed:
+            if normalize(name) in stage_names:
+                continue
+            if not _approved_system_dependency(target, name):
+                raise BuildFrontendError(
+                    f"staged {artifact.name} has unresolved dependency {name}"
+                )
+            system_dependencies.add(name)
+        if target.target_platform == "linux":
+            paths = _parse_elf_runtime_paths(result.stdout)
+            forbidden = [
+                path
+                for path in paths
+                if not (path == "$ORIGIN" or path.startswith("$ORIGIN/"))
+            ]
+            if forbidden:
+                raise BuildFrontendError(
+                    f"staged {artifact.name} has non-relocatable RUNPATH/RPATH: "
+                    + ", ".join(forbidden)
+                )
+            runtime_paths[artifact.name] = paths
+
+    compiler_name = (
+        "art-compiler.dll"
+        if target.target_platform == "windows"
+        else "libart-compiler.so"
+    )
+    runtime_name = "art.dll" if target.target_platform == "windows" else "libart.so"
+    compiler_needed = {normalize(name) for name in dependencies.get(compiler_name, [])}
+    runtime_needed = {normalize(name) for name in dependencies.get(runtime_name, [])}
+    if normalize(runtime_name) not in compiler_needed:
+        raise BuildFrontendError(
+            f"staged {compiler_name} must depend on {runtime_name}"
+        )
+    if normalize(compiler_name) in runtime_needed:
+        raise BuildFrontendError(
+            f"staged {runtime_name} must not depend on {compiler_name}"
+        )
+    return {
+        "dependencies": dependencies,
+        "runtime_paths": runtime_paths,
+        "system_dependencies": sorted(system_dependencies, key=str.lower),
+    }
+
+
+def _parse_needed_libraries(output: str) -> list[str]:
+    match = re.search(r"^NeededLibraries \[\r?\n(.*?)^\]$", output, re.MULTILINE | re.DOTALL)
+    if match is None:
+        raise BuildFrontendError("llvm-readobj output has no NeededLibraries block")
+    return [line.strip() for line in match.group(1).splitlines() if line.strip()]
+
+
+def _parse_elf_runtime_paths(output: str) -> list[str]:
+    values: list[str] = []
+    for match in re.finditer(
+        r"\b(?:RUNPATH|RPATH)\s+Library r(?:un)?path:\s*\[([^]]*)\]",
+        output,
+    ):
+        values.extend(part for part in match.group(1).split(":") if part)
+    return values
+
+
+def _approved_system_dependency(target: TargetProfile, name: str) -> bool:
+    lowered = name.lower()
+    if target.target_platform == "windows":
+        return lowered in _WINDOWS_SYSTEM_NEEDED or re.fullmatch(
+            r"api-ms-win-[a-z0-9-]+\.dll", lowered
+        ) is not None
+    return name in _LINUX_SYSTEM_NEEDED or re.fullmatch(
+        r"ld-linux(?:-[a-z0-9_-]+)?\.so\.[0-9]+", name
+    ) is not None
 
 
 def _artifact_candidates(binary_dir: Path, target: TargetProfile, name: str) -> list[Path]:
@@ -734,9 +949,17 @@ def _validate_windows_art_compiler(
     )
     if result.returncode:
         raise BuildFrontendError(f"llvm-readobj failed with exit code {result.returncode}")
-    if "art_compiler_jit_create" not in result.stdout:
+    exports = set(
+        re.findall(
+            r"Export \{.*?^\s*Name:\s*(\S+)",
+            result.stdout,
+            re.MULTILINE | re.DOTALL,
+        )
+    )
+    if exports != {"art_compiler_jit_create"}:
         raise BuildFrontendError(
-            "art-compiler.dll export allowlist is missing art_compiler_jit_create"
+            "art-compiler.dll exports differ from the exact allowlist: "
+            + ", ".join(sorted(exports))
         )
     if "Name: art.dll" not in result.stdout:
         raise BuildFrontendError("art-compiler.dll must import its runtime from art.dll")

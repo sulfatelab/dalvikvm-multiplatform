@@ -85,6 +85,7 @@ def test_retired_checked_linux_product_graph_does_not_reappear():
 
 def test_native_cmake_modules_are_common_includes_not_entry_points():
     entry = (REPO_ROOT / "native/CMakeLists.txt").read_text(encoding="utf-8")
+    assert "set(CMAKE_BUILD_RPATH_USE_ORIGIN ON)" in entry
     modules = {
         "ArtCodegen.cmake",
         "ArtCompatibility.cmake",

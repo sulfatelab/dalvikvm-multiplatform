@@ -248,7 +248,7 @@ def test_checked_subprocess_failure_is_frontend_error(monkeypatch):
         build_art._run_checked(["cmake", "--build", "out"])
 
 
-def test_stage_copies_only_regular_product_files(tmp_path):
+def test_stage_copies_only_regular_product_files(tmp_path, monkeypatch):
     binary_dir = _configured_build(tmp_path)
     (binary_dir / "dalvikvm").write_bytes(b"vm")
     (binary_dir / "libart.so").write_bytes(b"art")
@@ -256,6 +256,24 @@ def test_stage_copies_only_regular_product_files(tmp_path):
     boot = binary_dir / "tests" / "managed" / "boot.jar"
     boot.parent.mkdir(parents=True)
     boot.write_bytes(b"boot")
+    monkeypatch.setattr(
+        build_art,
+        "_ninja_product_outputs",
+        lambda *_args: [
+            (binary_dir / "dalvikvm", "executable"),
+            (binary_dir / "libart.so", "shared-library"),
+            (binary_dir / "libbase.so", "shared-library"),
+        ],
+    )
+    monkeypatch.setattr(
+        build_art,
+        "_validate_staged_topology",
+        lambda *_args, **_kwargs: {
+            "dependencies": {},
+            "runtime_paths": {},
+            "system_dependencies": [],
+        },
+    )
 
     build_art._stage(
         build_art.resolve_target("linux-x86_64-gnu"), binary_dir, LocalBuildConfig()
@@ -277,7 +295,80 @@ def test_stage_copies_only_regular_product_files(tmp_path):
     assert len(list((
         binary_dir / "stage" / "runtime" / "etc" / "security" / "cacerts"
     ).glob("*.*"))) >= 121
+    assert '"schema_version": 2' in manifest
     assert '"target_id": "linux-x86_64-gnu"' in manifest
+
+
+def test_ninja_product_inventory_ignores_stale_and_nested_outputs():
+    target = build_art.resolve_target("windows-x86_64-msvc")
+    output = """
+art.dll: CXX_SHARED_LIBRARY_LINKER__art_RelWithDebInfo
+art.lib: CXX_SHARED_LIBRARY_LINKER__art_RelWithDebInfo
+libcrypto.dll: C_SHARED_LIBRARY_LINKER__crypto_RelWithDebInfo
+dalvikvm.exe: CXX_EXECUTABLE_LINKER__dalvikvm_RelWithDebInfo
+tests/probe.dll: CXX_SHARED_LIBRARY_LINKER__probe_RelWithDebInfo
+crypto.dll: phony
+"""
+    assert build_art._parse_ninja_product_outputs(output, target) == [
+        ("art.dll", "shared-library"),
+        ("dalvikvm.exe", "executable"),
+        ("libcrypto.dll", "shared-library"),
+    ]
+
+
+def test_object_inspection_parsers_keep_relative_origin_and_needed_libraries():
+    output = """
+NeededLibraries [
+  libart.so
+  libc.so.6
+]
+DynamicSection [
+  0x1D RUNPATH Library runpath: [$ORIGIN:$ORIGIN/providers]
+]
+"""
+    assert build_art._parse_needed_libraries(output) == ["libart.so", "libc.so.6"]
+    assert build_art._parse_elf_runtime_paths(output) == [
+        "$ORIGIN",
+        "$ORIGIN/providers",
+    ]
+
+
+def test_staged_topology_rejects_absolute_linux_runpath(tmp_path, monkeypatch):
+    stage = tmp_path / "stage"
+    stage.mkdir()
+    for name in ("libart-compiler.so", "libart.so"):
+        (stage / name).write_bytes(b"ELF")
+    tool = tmp_path / "llvm-readobj"
+    tool.write_bytes(b"tool")
+    monkeypatch.setattr(
+        build_art,
+        "_resolve_llvm_inspection_tools",
+        lambda _local: {"llvm-readobj": tool},
+    )
+
+    def run(command, **_kwargs):
+        name = Path(command[-1]).name
+        needed = "  libart.so\n" if name == "libart-compiler.so" else ""
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=(
+                f"NeededLibraries [\n{needed}]\n"
+                "DynamicSection [\n"
+                "  0x1D RUNPATH Library runpath: [/machine/build]\n"
+                "]\n"
+            ),
+            stderr="",
+        )
+
+    monkeypatch.setattr(build_art.subprocess, "run", run)
+    with pytest.raises(build_art.BuildFrontendError, match="non-relocatable"):
+        build_art._validate_staged_topology(
+            stage,
+            build_art.resolve_target("linux-x86_64-gnu"),
+            LocalBuildConfig(),
+            executable_names=set(),
+        )
 
 
 def test_windows_configure_uses_target_bundle_and_clang_target(tmp_path, monkeypatch):

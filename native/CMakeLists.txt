@@ -54,6 +54,11 @@ endif()
 
 project(MinDalvikVM CXX C ASM)
 
+# Build-tree artifacts are the inputs to the Python product stager. Keep their
+# runtime lookup relocatable so copying the regular files never embeds a build
+# host's absolute binary directory in the staged ELF closure.
+set(CMAKE_BUILD_RPATH_USE_ORIGIN ON)
+
 if(NOT CMAKE_GENERATOR STREQUAL "Ninja")
     message(FATAL_ERROR "ART requires the single-config Ninja generator")
 endif()
