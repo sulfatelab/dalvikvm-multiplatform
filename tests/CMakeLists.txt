@@ -763,6 +763,11 @@ set(_art_gc_stress_ids_selector
         linux-x86_64-gnu
         linux-aarch64-gnu
         windows-x86_64-msvc)
+set(_art_perf_smoke_ids_selector
+    TARGET_IDS
+        linux-x86_64-gnu
+        linux-aarch64-gnu
+        windows-x86_64-msvc)
 set(_art_non_moving_128m_ids_selector
     TARGET_IDS
         linux-x86_64-gnu
@@ -1190,6 +1195,11 @@ set(_art_runtime_stress_expected_ThreadHeavyProbe
     "ThreadHeavyProbe.done=ok")
 foreach(_art_runtime_stress_class HandleLeakProbe PerfSmokeProbe ThreadHeavyProbe)
     string(TOLOWER "${_art_runtime_stress_class}" _art_runtime_stress_name)
+    if(_art_runtime_stress_class STREQUAL "PerfSmokeProbe")
+        set(_art_runtime_stress_selector ${_art_perf_smoke_ids_selector})
+    else()
+        set(_art_runtime_stress_selector ${_art_windows_current_selector})
+    endif()
     set(_art_runtime_stress_marker_arguments)
     foreach(_art_runtime_stress_marker IN LISTS
             _art_runtime_stress_expected_${_art_runtime_stress_class})
@@ -1199,7 +1209,7 @@ foreach(_art_runtime_stress_class HandleLeakProbe PerfSmokeProbe ThreadHeavyProb
     art_add_target_probe(
         NAME "managed_${_art_runtime_stress_name}" STAGE w004
         TYPE MANAGED EXECUTION target-runnable
-        ${_art_windows_current_selector}
+        ${_art_runtime_stress_selector}
         SOURCES
             "${_art_test_cases_root}/managed-runtime-stress/${_art_runtime_stress_class}.java"
         TIMEOUT 600
@@ -1219,6 +1229,7 @@ foreach(_art_runtime_stress_class HandleLeakProbe PerfSmokeProbe ThreadHeavyProb
                 "${CMAKE_CURRENT_BINARY_DIR}/results/${_art_runtime_stress_name}"
             --icu-data "${_art_icu_data}"
             ${_art_managed_runtime_library_args}
+            ${_art_target_runner_args}
             --vm-option=-Xint
             ${_art_runtime_stress_marker_arguments}
             --expect "main end exception=0"

@@ -117,12 +117,13 @@ Conscrypt provider, OkHttp/Okio URL handlers, generated aconfig and Conscrypt
 sources, and security properties. Android/libcore APIs and ART annotations are
 therefore resolved from the same AOSP boot classes on Linux and Windows build
 hosts.
-Three W-004 managed declarations are `target-runnable` on explicit exact-target
-selectors. Imageless Hello, allocation/collection stress, and Math
-CriticalNative cover `linux-x86_64-gnu`, `linux-aarch64-gnu`, and
-`windows-x86_64-msvc`; their shell-free runners supply QEMU user mode only for
-the AArch64 target. The case-local `math-critical/run.py` runs `-Xint` and
-threshold-zero JIT twice each. All three declarations use a declared native
+Four W-004 managed declarations are `target-runnable` on explicit exact-target
+selectors. Imageless Hello, allocation/collection stress, Math
+CriticalNative, and PerfSmoke cover `linux-x86_64-gnu`,
+`linux-aarch64-gnu`, and `windows-x86_64-msvc`; their shell-free runners supply
+QEMU user mode only for the AArch64 target. The case-local
+`math-critical/run.py` runs `-Xint` and threshold-zero JIT twice each. All four
+declarations use a declared native
 DSO closure,
 isolated target-local runtime directories, pinned ICU data, strict exit/marker
 checks, timeouts, and sanitized JSON results. The Math aggregate additionally
@@ -134,10 +135,10 @@ runner resolves the ELF/DLL name, library-path separator, absolute-load
 property, target JIT controls, and the optional AArch64 runner prefix; no other
 target is inferred. Both Linux identities register show-version and the
 target-side compiler-DSO topology check; Linux x86-64 additionally registers
-its boot-image gate. It therefore has six W-004 CTest gates, while AArch64 has
-five. With two shared W-003 gates and the shared W-013 gate, Linux x86-64 has
-nine runnable declarations and three compile-only artifacts; AArch64 has eight
-runnable declarations and three compile-only artifacts. Windows adds its
+its boot-image gate. It therefore has seven W-004 CTest gates, while AArch64
+has six. With two shared W-003 gates and the shared W-013 gate, Linux x86-64
+has ten runnable declarations and three compile-only artifacts; AArch64 has
+nine runnable declarations and three compile-only artifacts. Windows adds its
 BoringSSL SHA executable plus the exact
 `windows-x86_64-msvc` JVMTI managed gate and runtime-load/assembly-dependency
 reviewer. Twenty-five accepted Phase-3 libcore behaviors use one checked-in
@@ -153,10 +154,12 @@ AbsPathProbe add a
 standalone Hello regression, multi-JAR `;` classpath, structured
 drive/mixed/UNC checks, three absolute path forms, and two required `:`
 negative cases. The retained Phase-4 HandleLeak, PerfSmoke, and ThreadHeavy
-cases now run through the same shell-free gate in interpreter mode with exact
-marker contracts. The exact-target embedding runner stages the regular-file
-DLL closure beside the probe and gives each repetition an isolated runtime
-root. It requires the complete create/destroy, VEH, predecessor/late UEF, and
+cases run through the same shell-free gate in interpreter mode with exact
+marker contracts. PerfSmoke has exact evidence for both Linux identities and
+Windows x86-64; HandleLeak and ThreadHeavy remain exactly
+`windows-x86_64-msvc` only. The exact-target embedding runner stages the
+regular-file DLL closure beside the probe and gives each repetition an isolated
+runtime root. It requires the complete create/destroy, VEH, predecessor/late UEF, and
 frame-SEH contract plus exactly one intentional ART UEF minidump per process;
 the dumps remain ignored build artifacts and the aggregate records only
 relative names. Windows Server 2025 passed 35/35 twice with `--parallel 16`,
