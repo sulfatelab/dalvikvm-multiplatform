@@ -4,7 +4,11 @@ A Java program now runs on the bp2cmake-converted GNU/Linux dalvikvm, backed by
 a dex2oat-built boot image. VM: bumped art+libcore (android-u-beta-4-gpl) in
 vendor/, built RelWithDebInfo (-O2 -g -DNDEBUG). Archive untouched.
 
-## What runs
+This record preserves the commands and paths used in that bring-up session.
+The shell entry points named below have since been retired; the current
+shell-free replacement is `tools/build_art.py` plus the unified W-004 gates.
+
+## Historical command transcript
 
     $ tools/bootimage/build.sh        # dex2oat -> boot.art/boot.oat/boot.vdex
     dex2oat took 1.544s (12.9s cpu, 32 threads)   exit=0
@@ -49,14 +53,18 @@ vendor/, built RelWithDebInfo (-O2 -g -DNDEBUG). Archive untouched.
    the invoke stub did `rep movsb` of 1 byte from NULL. Fixed to pass
    `vregs.size()*sizeof(uint32_t)` (vendor patch 0010). libc++/AOSP masked it.
 
-## Durable artifacts
+## Artifacts recorded at the time and current disposition
 
-- overlay/port_policy.py — libcrypto bcm.c + fipsmodule asm injection.
+- `overlay/port_policy.py` supplied the original libcrypto injection; its
+  retained policy is now target-resolved by `overlay/art_port_policy.py`.
 - tools/vendor-sync.sh — patch 0006 removed; patches 0009 (BitVector clear),
   0010 (invoke-stub arg size) added; all idempotent (guarded).
-- tools/bootjar/dex.sh — emitRecordAnnotationsInDex property; verifies Record.
-- tools/bootimage/{build.sh,run.sh} — primary boot image build (omit
-  --boot-image, --no-watch-dog) into <isa>/ subdir, and the image-backed run.
+- `tools/bootjar/dex.sh` was replaced by the common CMake/Ninja boot-JAR edge.
+- `tools/bootimage/{build.sh,run.sh}` was replaced by
+  `tools/build_boot_image.py`, target capability metadata, and the W-004
+  `managed_boot_image_hello` gate. The replacement keeps the primary-image
+  invocation semantics while avoiding shell, `/tmp`, and ambient environment
+  ownership.
 - the then-current vendor patch ledger — patches documented through 0010; the
   applied forms now live in nested ART history.
 

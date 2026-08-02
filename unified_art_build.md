@@ -47,7 +47,7 @@ items are closed.
 | Unified phase catalog | PARTIAL | eight virtual stages declare 32 native probes, 47 managed JARs, and 14 command gates; Windows has 90 applicable items (69 target-runnable, seven host-review, and 14 compile-only in the product variant), while Linux x86-64 has 12 applicable items (nine runnable and three compile-only artifacts) | migrate the remaining behavioral runners, portable JNI expansion, and result checks |
 | Boot/runtime packaging | COMPLETE for Linux x86-64; capability-gated elsewhere | deterministic target-local boot/probe JARs include Conscrypt, OkHttp/Okio, and security properties; native Linux builds generate, runtime-test, and stage a relocatable ART/OAT/VDEX boot image; unsupported and cross-host cases are explicit; staging also validates the complete DSO closure and packages pinned ICU data, 121 CA roots, and writable keychain directories | retain the image/runtime-package gates while adding target capabilities independently |
 | POSIX-free Windows build host | COMPLETE for the accepted native baseline; PARTIAL end to end | Server 2025 uses configured official JDK 21, Python, CMake, Ninja, and plain Clang drivers; all 76 accepted native tests, provider/security packaging, and product/test no-op gates pass without POSIX tooling | migrate every retained behavioral gate; keep Windows AOT/OAT capability work separate |
-| Legacy build removal | PARTIAL | active product ownership was demoted, project-owned symlink overlays were removed, and the superseded Linux miniature, Windows Phase-0/Phase-1, and libcore/ICU product graphs were deleted; the checked-in Linux graph and split overlay datasets remain | remove or demote every alternative product path after gate migration |
+| Legacy build removal | COMPLETE | the checked-in Linux snapshot/generator, split overlays, Linux miniature graphs, Windows Phase-0/Phase-1 and libcore/ICU graphs, product package scripts, and final POSIX-only boot-image entry points are retired; historical records remain documentation only | prevent alternative product paths from returning |
 | CI/acceptance automation | IMPLEMENTED / activation pending | checked-in shell-free Python driver and GitHub workflow define host, fresh Linux, Windows-cross, and native Windows cells; machine paths enter only through an external CI TOML binding | register/provision the two self-hosted runner labels and obtain accepted workflow runs |
 | Additional architectures | BLOCKED by capability gates | all 17 canonical identities are registered; only `linux-x86_64-gnu` and experimental `windows-x86_64-msvc` generate | admit each profile only after its architecture and runtime gates pass |
 | Windows AOT/OAT | BLOCKED / separate track | compiler DSO parity does not provide Windows OAT production or loading | satisfy `win32_aot_oat.md`; do not imply capability from `art-compiler.dll` |
@@ -1915,15 +1915,26 @@ differences.
 - [ ] Keep WASI profiles as explicit capability failures until ART's DSO,
   executable-memory, fault, threading, and JIT contracts are redesigned.
 
-### Legacy inventory blocking Phase 5 removal
+### Legacy product-path disposition
 
-The retained alternative build descriptions are concentrated in the checked-in
-Linux graph and split overlay datasets. The eight early Linux
-isolation/miniature graphs, both Windows Phase-0/Phase-1 graphs, and the
-libcore/ICU alternative graph have been removed. The remaining descriptions
-are not invoked by `tools/build_art.py`, but remain runnable and can drift.
-Removal is blocked only by missing unified gate ownership, not by product graph
-generation.
+No runnable alternative product description remains. Git history confirms the
+checked-in Linux snapshot/generator was retired by `1f0f117`, the eight Linux
+isolation/miniature graphs by `39a7e2e`, and the split Linux/Windows overlay
+datasets by `9fbd0b5`; the old tracker inventory had not been updated after
+those commits. The final live exception was `tools/bootimage/{build.sh,run.sh}`:
+an initial Linux-only, `/tmp`- and environment-owned shell path that referenced
+the obsolete `build/native` layout. Capability-gated
+`tools/build_boot_image.py`, the CMake/Ninja `art-runtime-boot-image` edge, and
+W-004 now own all of its useful behavior, so the scripts and empty directory
+are removed. Historical result documents explicitly label old command paths
+as retired and point to the unified frontend.
+
+The only project CMake entry points are now `native/CMakeLists.txt` and the
+included `tests/CMakeLists.txt`; files under `native/cmake/` are common include
+modules and are mechanically forbidden from becoming standalone projects.
+The only overlay product policy is the target-aware
+`overlay/art_port_policy.py`. A host regression forbids the retired Linux
+generator/snapshot and POSIX boot-image directory from reappearing.
 
 The repository now has a checked-in CI workflow and shell-free Python matrix
 driver. External or manual evidence still does not replace an accepted run of

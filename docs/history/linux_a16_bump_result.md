@@ -94,4 +94,11 @@ ANDROID_DATA=<runtime-root>/data ICU_DATA=<runtime-root>/icu LD_LIBRARY_PATH=bui
     -cp <runtime-root>/hello.jar Hello
 ```
 
-Optional next: `tools/bootimage/build.sh` + `run.sh` for the fast image-backed path.
+The former optional `tools/bootimage/build.sh` and `run.sh` path is retired.
+The current image-backed reproduction is:
+
+```text
+python tools/build_art.py configure --target-id linux-x86_64-gnu
+python tools/build_art.py build --target-id linux-x86_64-gnu --cmake-target art-runtime-boot-image --parallel 32
+python tools/build_art.py test --target-id linux-x86_64-gnu --stage w004 --parallel 32
+```

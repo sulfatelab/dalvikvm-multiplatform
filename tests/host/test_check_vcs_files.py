@@ -75,10 +75,11 @@ def test_retired_windows_libcore_product_paths_do_not_reappear():
     assert not [path for path in retired if path.exists() or path.is_symlink()]
 
 
-def test_retired_checked_linux_product_graph_does_not_reappear():
+def test_retired_checked_linux_product_and_bootimage_paths_do_not_reappear():
     retired = (
         REPO_ROOT / "native/generate.sh",
         REPO_ROOT / "native/generated/dalvikvm.cmake",
+        REPO_ROOT / "tools/bootimage",
     )
     assert not [path for path in retired if path.exists() or path.is_symlink()]
 
