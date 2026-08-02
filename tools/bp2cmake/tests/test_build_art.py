@@ -371,6 +371,26 @@ DynamicSection [
     ]
 
 
+def test_object_inspection_uses_exact_target_profile_identity():
+    output = """
+Format: COFF-ARM64EC
+Arch: aarch64
+AddressSize: 64bit
+"""
+    target = build_art.resolve_target("windows-arm64ec-msvc")
+    assert build_art._validate_llvm_file_identity(output, target, "art.dll") == {
+        "format": "COFF-ARM64EC",
+        "arch": "aarch64",
+        "pointer_bits": 64,
+    }
+    with pytest.raises(build_art.BuildFrontendError, match="does not match"):
+        build_art._validate_llvm_file_identity(
+            output.replace("COFF-ARM64EC", "COFF-ARM64"),
+            target,
+            "art.dll",
+        )
+
+
 def test_generated_command_invocation_audit_rejects_forbidden_tools():
     build_art._audit_command_invocations(
         ": && /usr/bin/cmake -E rm -f libx.a && /llvm/bin/llvm-ar qc libx.a && :"
@@ -491,6 +511,9 @@ def test_staged_topology_rejects_absolute_linux_runpath(tmp_path, monkeypatch):
             command,
             0,
             stdout=(
+                "Format: elf64-x86-64\n"
+                "Arch: x86_64\n"
+                "AddressSize: 64bit\n"
                 f"NeededLibraries [\n{needed}]\n"
                 "DynamicSection [\n"
                 "  0x1D RUNPATH Library runpath: [/machine/build]\n"

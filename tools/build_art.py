@@ -1528,10 +1528,17 @@ def _validate_staged_topology(
     dependencies: dict[str, list[str]] = {}
     system_dependencies: set[str] = set()
     runtime_paths: dict[str, list[str]] = {}
+    file_identities: dict[str, dict[str, object]] = {}
     for artifact in inspect:
         validate_managed_path(artifact)
         result = subprocess.run(
-            [str(readobj), "--needed-libs", "--dynamic-table", str(artifact)],
+            [
+                str(readobj),
+                "--file-header",
+                "--needed-libs",
+                "--dynamic-table",
+                str(artifact),
+            ],
             cwd=REPO_ROOT,
             shell=False,
             check=False,
@@ -1543,6 +1550,11 @@ def _validate_staged_topology(
                 f"llvm-readobj failed for staged {artifact.name} "
                 f"with exit code {result.returncode}"
             )
+        file_identities[artifact.name] = _validate_llvm_file_identity(
+            result.stdout,
+            target,
+            artifact.name,
+        )
         needed = _parse_needed_libraries(result.stdout)
         dependencies[artifact.name] = needed
         for name in needed:
@@ -1585,8 +1597,47 @@ def _validate_staged_topology(
         )
     return {
         "dependencies": dependencies,
+        "file_identities": file_identities,
         "runtime_paths": runtime_paths,
         "system_dependencies": sorted(system_dependencies, key=str.lower),
+    }
+
+
+def _validate_llvm_file_identity(
+    output: str,
+    target: TargetProfile,
+    artifact_name: str,
+) -> dict[str, object]:
+    values: dict[str, str] = {}
+    for field in ("Format", "Arch", "AddressSize"):
+        matches = re.findall(rf"^{field}:\s*(\S+)\s*$", output, re.MULTILINE)
+        if len(matches) != 1:
+            raise BuildFrontendError(
+                f"staged {artifact_name} has {len(matches)} LLVM {field} records"
+            )
+        values[field] = matches[0]
+    size_match = re.fullmatch(r"([0-9]+)bit", values["AddressSize"])
+    if size_match is None:
+        raise BuildFrontendError(
+            f"staged {artifact_name} has invalid LLVM AddressSize "
+            f"{values['AddressSize']!r}"
+        )
+    pointer_bits = int(size_match.group(1))
+    expected = (
+        target.llvm_file_format,
+        target.llvm_arch,
+        target.pointer_bits,
+    )
+    actual = (values["Format"], values["Arch"], pointer_bits)
+    if actual != expected:
+        raise BuildFrontendError(
+            f"staged {artifact_name} identity {actual!r} does not match "
+            f"target {target.target_id} {expected!r}"
+        )
+    return {
+        "format": values["Format"],
+        "arch": values["Arch"],
+        "pointer_bits": pointer_bits,
     }
 
 

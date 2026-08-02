@@ -51,6 +51,36 @@ def test_registry_contains_all_seventeen_canonical_ids():
     assert len(TARGET_PROFILES) == 17
 
 
+def test_registry_owns_exact_llvm_file_identities():
+    expected = {
+        "linux-x86-gnu": ("elf32-i386", "i386", 32),
+        "linux-x86_64-gnu": ("elf64-x86-64", "x86_64", 64),
+        "linux-armv7-gnu": ("elf32-littlearm", "arm", 32),
+        "linux-aarch64-gnu": ("elf64-littleaarch64", "aarch64", 64),
+        "linux-riscv64-gnu": ("elf64-littleriscv", "riscv64", 64),
+        "windows-x86-gnu": ("COFF-i386", "i386", 32),
+        "windows-x86-msvc": ("COFF-i386", "i386", 32),
+        "windows-x86_64-gnu": ("COFF-x86-64", "x86_64", 64),
+        "windows-x86_64-msvc": ("COFF-x86-64", "x86_64", 64),
+        "windows-armv7-gnu": ("COFF-ARM", "thumb", 32),
+        "windows-armv7-msvc": ("COFF-ARM", "thumb", 32),
+        "windows-aarch64-gnu": ("COFF-ARM64", "aarch64", 64),
+        "windows-aarch64-msvc": ("COFF-ARM64", "aarch64", 64),
+        "windows-arm64ec-gnu": ("COFF-ARM64EC", "aarch64", 64),
+        "windows-arm64ec-msvc": ("COFF-ARM64EC", "aarch64", 64),
+        "wasi-wasm32-wasi": ("WASM", "wasm32", 32),
+        "wasi-wasm64-wasi": ("WASM", "wasm64", 64),
+    }
+    assert {
+        target_id: (
+            profile.llvm_file_format,
+            profile.llvm_arch,
+            profile.pointer_bits,
+        )
+        for target_id, profile in TARGET_PROFILES.items()
+    } == expected
+
+
 @pytest.mark.parametrize(
     ("bad", "replacement"),
     [
@@ -148,6 +178,8 @@ def test_cmake_projection_is_data_only_and_path_free():
     assert 'set(ART_TARGET_AOSP_ARCH "x86_64")' in text
     assert 'set(ART_TARGET_MTERP_SOURCE_DIR "x86_64ng")' in text
     assert 'set(ART_TARGET_MTERP_OUTPUT "mterp_x86_64.S")' in text
+    assert 'set(ART_TARGET_LLVM_FILE_FORMAT "COFF-x86-64")' in text
+    assert 'set(ART_TARGET_LLVM_ARCH "x86_64")' in text
     assert "ART_TARGET_CPU_ARCH" not in text
     assert "ART_TARGET_OS_OR_RUNTIME" not in text
     assert "add_library" not in text

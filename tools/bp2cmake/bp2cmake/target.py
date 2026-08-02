@@ -46,6 +46,8 @@ class TargetProfile:
     mterp_output: str
     target_abi: str
     object_format: str
+    llvm_file_format: str
+    llvm_arch: str
     pointer_bits: int
     endianness: str
     target_triple: str
@@ -92,6 +94,8 @@ class TargetProfile:
             ("ART_TARGET_MTERP_OUTPUT", self.mterp_output),
             ("ART_TARGET_ABI", self.target_abi),
             ("ART_TARGET_OBJECT_FORMAT", self.object_format),
+            ("ART_TARGET_LLVM_FILE_FORMAT", self.llvm_file_format),
+            ("ART_TARGET_LLVM_ARCH", self.llvm_arch),
             ("ART_TARGET_POINTER_BITS", str(self.pointer_bits)),
             ("ART_TARGET_ENDIANNESS", self.endianness),
             ("ART_TARGET_TRIPLE", self.target_triple),
@@ -139,6 +143,29 @@ _MTERP_LAYOUTS: Mapping[str, tuple[str, str]] = MappingProxyType({
     "riscv64": ("riscv64", "mterp_riscv64.S"),
 })
 
+# Canonical spellings emitted by ``llvm-readobj --file-header``. These are
+# explicit profile facts rather than transformations of ``target_arch``:
+# Windows ARMv7 reports ``thumb``, and ARM64EC shares LLVM's AArch64 Arch value
+# while retaining its distinct COFF-ARM64EC format.
+_LLVM_FILE_IDENTITIES: Mapping[
+    tuple[str, str], tuple[str, str]
+] = MappingProxyType(
+    {
+        ("linux", "x86"): ("elf32-i386", "i386"),
+        ("linux", "x86_64"): ("elf64-x86-64", "x86_64"),
+        ("linux", "armv7"): ("elf32-littlearm", "arm"),
+        ("linux", "aarch64"): ("elf64-littleaarch64", "aarch64"),
+        ("linux", "riscv64"): ("elf64-littleriscv", "riscv64"),
+        ("windows", "x86"): ("COFF-i386", "i386"),
+        ("windows", "x86_64"): ("COFF-x86-64", "x86_64"),
+        ("windows", "armv7"): ("COFF-ARM", "thumb"),
+        ("windows", "aarch64"): ("COFF-ARM64", "aarch64"),
+        ("windows", "arm64ec"): ("COFF-ARM64EC", "aarch64"),
+        ("wasi", "wasm32"): ("WASM", "wasm32"),
+        ("wasi", "wasm64"): ("WASM", "wasm64"),
+    }
+)
+
 
 def _profile(
     target_id: str,
@@ -166,6 +193,15 @@ def _profile(
     if target_id != expected_id:
         raise AssertionError(f"target ID {target_id!r} must be {expected_id!r}")
     mterp_source_dir, mterp_output = _MTERP_LAYOUTS.get(aosp_arch, ("", ""))
+    try:
+        llvm_file_format, llvm_arch = _LLVM_FILE_IDENTITIES[
+            (target_platform, target_arch)
+        ]
+    except KeyError as exc:
+        raise AssertionError(
+            "target profile has no LLVM file identity: "
+            f"{target_platform}-{target_arch}"
+        ) from exc
     return TargetProfile(
         target_id=target_id,
         target_platform=target_platform,
@@ -176,6 +212,8 @@ def _profile(
         mterp_output=mterp_output,
         target_abi=target_abi,
         object_format=object_format,
+        llvm_file_format=llvm_file_format,
+        llvm_arch=llvm_arch,
         pointer_bits=pointer_bits,
         endianness="little",
         target_triple=triple,

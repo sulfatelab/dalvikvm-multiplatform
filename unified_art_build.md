@@ -102,7 +102,9 @@ items are closed.
   `asm_defines.h`, mterp assembly, and 37/36-module CMake graphs are
   byte-identical to the preceding fully built products.
 - [x] `PYTHONPATH=tools/bp2cmake python3 -m pytest tools/bp2cmake/tests tests/host -q`:
-  230 passed, including absorbed target-specific CPU-feature substitution,
+  232 passed, including exact profile-owned LLVM file identities,
+  profile-driven staged artifact inspection,
+  absorbed target-specific CPU-feature substitution,
   target-selected `cc_object` source expansion,
   explicit RISC-V mterp-layout generation and
   profile-triple asm-definition propagation,
@@ -1991,10 +1993,16 @@ differences.
   evidence names and genuinely x86-64 source/reviewer filenames remain intact.
   Both complete product trees regenerated and stayed true Ninja no-ops; the
   topology/VCS audits and all 230 host/bp2cmake tests passed.
-- [ ] Remove the remaining generic object-inspection assumptions. Exact
-  Microsoft x86-64 ABI/assembly reviewers remain intentionally scoped to
-  `windows-x86_64-msvc`; generic product validation must instead consume
-  target-profile format, architecture, and pointer-width data.
+- [x] Remove generic object-inspection architecture assumptions. All 17 target
+  profiles now own the exact `llvm-readobj` file-format and architecture
+  spellings plus pointer width; this keeps `COFF-ARM64EC` distinct even though
+  LLVM reports its instruction architecture as `aarch64`. Common staging
+  validates and records every executable/DSO against those values. The current
+  stages accepted 32 ELF x86-64 and 30 COFF x86-64 images with no absolute
+  paths in their manifests; fresh configurations preserved byte-identical
+  37/36-module graphs, and topology/VCS plus all 232 host/bp2cmake tests passed.
+  Exact Microsoft x86-64 ABI/assembly reviewers remain intentionally scoped to
+  `windows-x86_64-msvc` rather than pretending to be generic.
 - [ ] Validate and admit Linux AArch64, x86, ARMv7, and RISC-V64 separately.
 - [x] Migrate the ARM64EC identity from transitional
   `windows-aarch64-arm64ec/cpu_arch=aarch64` to
@@ -2448,6 +2456,8 @@ base_isa
 aosp_arch
 target_abi
 object_format
+llvm_file_format
+llvm_arch
 pointer_bits
 endianness
 target_triple
@@ -2474,6 +2484,14 @@ architecture.
 `gnu`, `msvc`, and `wasi`. It is separate from `target_arch`: selecting
 `arm64ec` still controls ARM64EC macros and sources, while selecting `gnu` or
 `msvc` chooses the ABI/CRT/import-library environment for that architecture.
+
+`llvm_file_format` and `llvm_arch` are exact immutable spellings emitted by
+`llvm-readobj --file-header`, not additional user-selectable identity axes.
+They let shared artifact validation compare real outputs to profile data
+without architecture-name guesses. In particular, Windows ARM64EC owns
+`llvm_file_format=COFF-ARM64EC` and `llvm_arch=aarch64`, while ordinary Windows
+AArch64 owns `COFF-ARM64`; Windows ARMv7 reports `thumb`, whereas Linux ARMv7
+reports `arm`.
 
 For build selection, ARM64EC is the distinct `arm64ec` target-architecture
 token because it materially changes compiler macros, sources, assembly
