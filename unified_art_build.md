@@ -65,6 +65,16 @@ items are closed.
   declared runnable and prevents an unexecuted command gate from being called
   compile-only. Native Windows still has the preceding 76/76 accepted product
   baseline; the added host-only review makes its next expected total 77.
+- [x] BoringSSL architecture assembly is no longer copied into the overlay.
+  Layer 1 now resolves Blueprint `cc_object` source references after defaults
+  and target/architecture selection, including nested source containers, so
+  `bcm_object` supplies Linux x86/x86-64/ARMv7/AArch64 assembly and the
+  Windows no-assembly source set from upstream data. Both current manifests
+  retain exactly the same module/source sets; the Windows graph is
+  byte-identical, while Linux only moves the same BCM objects to their true
+  Blueprint source-list position. Fresh 37/36-module Linux and Windows-cross
+  products passed the 2,088/2,082 compile-command audits, completed
+  2,173/2,128 Ninja edges at 32 jobs, and repeated as true Ninja no-ops.
 - [x] Mterp layout no longer appends `ng` to an architecture spelling or
   injects a fixed generated x86-64 path. Each target profile carries a
   path-free `mterp_source_dir` and `mterp_output`; the closed mapping includes
@@ -82,7 +92,8 @@ items are closed.
   `asm_defines.h`, mterp assembly, and 37/36-module CMake graphs are
   byte-identical to the preceding fully built products.
 - [x] `PYTHONPATH=tools/bp2cmake python3 -m pytest tools/bp2cmake/tests tests/host -q`:
-  228 passed, including explicit RISC-V mterp-layout generation and
+  229 passed, including target-selected `cc_object` source expansion,
+  explicit RISC-V mterp-layout generation and
   profile-triple asm-definition propagation,
   boot-image construction/staging/runtime gates, the
   unified boot-JAR ownership gate, fresh
@@ -1940,10 +1951,18 @@ differences.
   explicit `mterp_source_dir`/`mterp_output` profile metadata. RISC-V uses
   `riscv64/` rather than an `ng` directory, and a focused generation test
   exercises that exact mapping without claiming target admission.
-- [ ] Remove the remaining fixed x86-64 stack-gap definitions, CPU-feature
-  sources, BoringSSL assembly, probe names, and object-inspection assumptions.
-  Target-layout codegen now uses the profile triple, and broad toolchain
-  preludes are already retired; those completed parts must not be reintroduced.
+- [x] Preserve ART's complete five-ISA stack-overflow-gap policy table rather
+  than incorrectly narrowing it to the selected target. `instruction_set.h`
+  requires all five values simultaneously because compiler/runtime code can
+  switch over every ART instruction set; this is shared ART policy, not a
+  residual x86-64 target assumption.
+- [x] Remove the fixed BoringSSL x86-64 assembly list from the overlay.
+  Target-resolved Blueprint `cc_object` expansion now selects the upstream BCM
+  sources and fails naturally when a target lacks a reviewed Blueprint branch.
+- [ ] Remove the remaining fixed CPU-feature sources, probe names, and
+  object-inspection assumptions. Target-layout codegen already uses the
+  profile triple, and broad toolchain preludes are retired; those completed
+  parts must not be reintroduced.
 - [ ] Validate and admit Linux AArch64, x86, ARMv7, and RISC-V64 separately.
 - [x] Migrate the ARM64EC identity from transitional
   `windows-aarch64-arm64ec/cpu_arch=aarch64` to

@@ -126,13 +126,27 @@ class Emitter:
         """Final list of (root_var, relpath) source files for a module: expand
         filegroup refs and globs, then apply exclude_srcs. Returns joined paths."""
         raw: list[tuple[str, str, str]] = []  # (bp_dir, rel, root_var)
+
+        def add_source(bp_dir: str, source: str, root_var: str,
+                       active_refs: frozenset[str] = frozenset()) -> None:
+            """Expand filegroup/cc_object source references without cycles."""
+            if not source.startswith(":"):
+                raw.append((bp_dir, source, root_var))
+                return
+            name = source[1:]
+            if name in active_refs:
+                return
+            container = self.ev.resolve_source_container(name)
+            if container is None:
+                return
+            child_srcs, child_dir, child_root = container
+            child_refs = active_refs | {name}
+            for child in child_srcs:
+                add_source(child_dir, child, child_root, child_refs)
+
         for s in m.srcs:
             if s.startswith(":"):
-                fg = self.ev.resolve_filegroup(s[1:])
-                if fg is not None:
-                    fg_srcs, fg_dir, fg_root = fg
-                    expanded = self._expand_globs(fg_srcs, fg_dir, fg_root)
-                    raw.extend((fg_dir, fs, fg_root) for fs in expanded)
+                add_source(m.bp_dir, s, m.root_var)
                 continue
             raw.append((m.bp_dir, s, m.root_var))
         # expand globs for the module's own (non-filegroup) srcs

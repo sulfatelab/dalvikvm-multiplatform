@@ -256,28 +256,11 @@ _LINUX_MODULE_DELTA: dict[str, dict[str, object]] = {
         ],
     ),
     "libbase": dict(add_defines=["_FILE_OFFSET_BITS=64"]),
-    # This is intentionally x86-64-specific until another Linux profile passes
-    # its architecture/source and runtime capability gates.
+    # bcm_object is expanded by Layer 1 after Blueprint target/architecture
+    # selection. Do not duplicate its assembly list here: each future target
+    # must receive the source set declared by BoringSSL itself.
     "libcrypto": dict(
         kind="shared",
-        add_srcs=[
-            "src/crypto/fipsmodule/bcm.c",
-            "linux-x86_64/crypto/fipsmodule/aesni-gcm-x86_64-linux.S",
-            "linux-x86_64/crypto/fipsmodule/aesni-x86_64-linux.S",
-            "linux-x86_64/crypto/fipsmodule/ghash-ssse3-x86_64-linux.S",
-            "linux-x86_64/crypto/fipsmodule/ghash-x86_64-linux.S",
-            "linux-x86_64/crypto/fipsmodule/md5-x86_64-linux.S",
-            "linux-x86_64/crypto/fipsmodule/p256-x86_64-asm-linux.S",
-            "linux-x86_64/crypto/fipsmodule/p256_beeu-x86_64-asm-linux.S",
-            "linux-x86_64/crypto/fipsmodule/rdrand-x86_64-linux.S",
-            "linux-x86_64/crypto/fipsmodule/rsaz-avx2-linux.S",
-            "linux-x86_64/crypto/fipsmodule/sha1-x86_64-linux.S",
-            "linux-x86_64/crypto/fipsmodule/sha256-x86_64-linux.S",
-            "linux-x86_64/crypto/fipsmodule/sha512-x86_64-linux.S",
-            "linux-x86_64/crypto/fipsmodule/vpaes-x86_64-linux.S",
-            "linux-x86_64/crypto/fipsmodule/x86_64-mont-linux.S",
-            "linux-x86_64/crypto/fipsmodule/x86_64-mont5-linux.S",
-        ],
         add_cflags=[
             "-fPIC",
             "-fvisibility=hidden",
@@ -477,7 +460,6 @@ _WINDOWS_MODULE_DELTA: dict[str, dict[str, object]] = {
     "libicu": dict(force_enabled=True),
     "libicu_jni": dict(add_cflags=_WINDOWS_CFLAGS, force_enabled=True),
     "libcrypto": dict(
-        add_srcs=["src/crypto/fipsmodule/bcm.c"],
         add_cflags=_WINDOWS_CFLAGS
         + [
             "-fvisibility=hidden",

@@ -79,6 +79,33 @@ def test_gensrc_command_uses_shell_free_capture_helper():
     assert " > " not in text
 
 
+def test_cc_object_sources_follow_target_selects_without_overlay_lists():
+    evaluator = Evaluator(Config(os="linux", arch="arm64"))
+    evaluator.add_file(
+        """
+        cc_defaults {
+            name: "object_sources",
+            srcs: ["common.c"],
+            target: {
+                linux_arm64: { srcs: ["linux-aarch64/armv8.S"] },
+                linux_x86_64: { srcs: ["linux-x86_64/x86_64.S"] },
+                windows: { srcs: ["windows.c"] },
+            },
+        }
+        cc_object { name: "selected_object", defaults: ["object_sources"] }
+        cc_library { name: "consumer", srcs: [":selected_object"] }
+        """,
+        "external/crypto/Android.bp",
+    )
+
+    text = Emitter(evaluator, Overlay()).emit_module(evaluator.resolve("consumer"))
+
+    assert "${MDVM_NATIVE_SRC_ROOT_DIR}/common.c" in text
+    assert "${MDVM_NATIVE_SRC_ROOT_DIR}/linux-aarch64/armv8.S" in text
+    assert "linux-x86_64/x86_64.S" not in text
+    assert "windows.c" not in text
+
+
 def test_absorbed_whole_static_includes_precede_other_link_dependencies():
     evaluator = Evaluator(Config(os="windows"))
     evaluator.add_file(
@@ -152,6 +179,8 @@ def test_unified_overlay_factory_selects_current_target_policy():
     for name in ("libcrypto", "libssl", "libjavacrypto"):
         assert linux.policy_for(name).kind == "shared"
         assert windows.policy_for(name).kind == "shared"
+    assert linux.policy_for("libcrypto").add_srcs == []
+    assert windows.policy_for("libcrypto").add_srcs == []
     assert windows.policy_for("libjavacrypto").add_shared_libs == [
         "libcrypto",
         "libssl",

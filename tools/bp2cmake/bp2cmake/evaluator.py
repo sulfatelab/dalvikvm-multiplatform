@@ -259,20 +259,23 @@ class Evaluator:
         # 4. Map onto Module.
         return self._to_module(name, m_ast.type, bp_dir, collapsed, root_var)
 
-    def resolve_filegroup(self, name: str):
-        """Resolve a `filegroup` module to (srcs, bp_dir, root_var). srcs are
-        paths relative to the filegroup's own bp_dir. Returns None if the module
-        is unknown OR is not a `filegroup` (e.g. a genrule/gensrcs, whose `srcs`
-        are generator INPUTS, not sources to compile -- those are handled by the
-        gensrcs path / codegen driver, not inlined here)."""
+    def resolve_source_container(self, name: str):
+        """Resolve an inline source container to (srcs, bp_dir, root_var).
+
+        Blueprint permits both ``filegroup`` and ``cc_object`` modules in a
+        C/C++ module's ``srcs`` list. A ``cc_object`` must be resolved through
+        defaults and target/architecture selects before its source paths are
+        inlined; BoringSSL's bcm_object relies on exactly that behavior. Other
+        module references (notably genrule/gensrcs inputs) are deliberately not
+        treated as compile sources here.
+        """
         if name not in self._decls:
             return None
-        m_ast, bp_dir, scope, root_var = self._decls[name]
-        if m_ast.type != "filegroup":
+        m_ast, _bp_dir, _scope, _root_var = self._decls[name]
+        if m_ast.type not in ("filegroup", "cc_object"):
             return None
-        raw = {k: self._eval(v, scope) for k, v in m_ast.properties.entries}
-        srcs = [s for s in (raw.get("srcs", []) or []) if isinstance(s, str)]
-        return (srcs, bp_dir, root_var)
+        module = self.resolve(name)
+        return (module.effective_srcs(), module.bp_dir, module.root_var)
 
     def resolve_gensrcs(self, name: str) -> "GenSrcs":
         """Resolve a `gensrcs` module into a GenSrcs descriptor."""
