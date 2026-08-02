@@ -680,7 +680,7 @@ Each phase has a kill-or-continue gate. This is the execution roadmap when imple
 - Layer 1: `Config(os="windows")` + `bp2cmake --os windows` selects `target.windows` (e.g. `errors_windows.cpp`, `mem_map_windows.cc`).
 - Layer 2: the Windows delta in `overlay/art_port_policy.py`.
 - Built PE32+ DLLs: `log`, `base`, `nativehelper`, `ziparchive`, `artpalette`, **`artbase`**.
-- **Gate:** `libartbase` links — **PASSED** (`build/windows_x64_phase0/artbase.dll`). See `tools/verify/windows_x64_phase0/RESULT.md`.
+- **Gate:** `libartbase` links — **PASSED** (`build/windows_x64_phase0/artbase.dll`). See `docs/history/windows_x64_phase0_result.md`.
 
 ### Phase 1 — Skeleton VM (1–2 months) — **DONE (2026-07-16)**
 
@@ -743,7 +743,7 @@ all product paths. Windows NIO.2 remains a non-goal.
 
 ### Phase 4 — Hardening (2–4 months) — **WINE COMPLETE; FOCUSED NATIVE SUBSETS PASS**
 
-- GC stress, multi-thread stress, crash dumps, resource leaks handles — **PASS** under wine64 (`tools/verify/windows_x64_phase4/`).
+- GC stress, multi-thread stress, crash dumps, and resource-leak handles — **PASS** under wine64; see `docs/history/windows_x64_phase4_result.md`.
 - Crash path: separate diagnostic VEH plus predecessor-preserving unhandled filter and **MiniDumpWriteDump** to `run/crash/*.dmp` (`runtime_windows.cc`); the W-010 managed VEH/context adapter is product-enabled for exact Windows x64 nterp/JIT implicit null and stack-overflow faults and has focused Wine stress.
 - Performance smoke (arraycopy/string churn) **PASS**.
 - **Gate:** A5–A8 stable under Wine. Focused native Windows W-024 JNI/JVMTI and
@@ -847,7 +847,7 @@ java.version=0
 exit 0
 ```
 
-See `tools/verify/windows_x64_phase2/RESULT.md` and `tools/verify/windows_x64_phase1/hello_attempt54.log`.
+See `docs/history/windows_x64_phase2_result.md`; the transient Phase-1 attempt log is not retained.
 
 ### Landed (runtime)
 - dlmalloc WIN32 mmap override fixed (MORECORE, low-4g non-moving).

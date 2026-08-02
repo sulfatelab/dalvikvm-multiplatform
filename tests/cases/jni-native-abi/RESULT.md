@@ -194,7 +194,7 @@ The Math/libcore native demotion and maintained two-mode gate are recorded in
 CriticalNative method tracing is covered by the adjacent
 `../jni-critical-native/RESULT.md`; JVMTI single-step/deoptimization coverage
 is recorded in
-`../../../tools/verify/windows_x64_phase4/RESULT-jvmti-force.md`.
+`../../../docs/history/windows_x64_phase4_jvmti_force_result.md`.
 
 ## Related files
 

@@ -60,5 +60,5 @@ walks the link graph from the product roots so the module list is derived, not
 maintained by hand.
 
 The unified target-aware registry and migrated probe sources live under
-`../tests/`. Historical harnesses under `tools/verify/*` remain temporary
-migration inputs and RESULT records; they do not own the product build.
+`../tests/`. The former `tools/verify` tree is fully retired; retained historical
+records live under `../docs/history/` and do not own the product build.

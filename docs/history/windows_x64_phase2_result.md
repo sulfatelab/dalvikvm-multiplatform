@@ -2,7 +2,7 @@
 
 **Status:** **PASSED** (wine64 gate, 2026-07-16)  
 **Date:** 2026-07-16  
-**Log:** `tools/verify/windows_x64_phase1/hello_attempt54.log`
+**Log:** transient Phase-1 attempt log, not retained in VCS
 
 ## Acceptance (A3)
 
@@ -98,5 +98,5 @@ java.version=0
 
 - PE stubs: `tools/windows_x64/jni_stubs/` (+ `build_combined.sh`)
 - Retired Interpreter JNI bring-up workaround and its current disposition:
-  `archive-patches/windows_x64_phase2_interpreter_jni.md`
+  `docs/windows-port-notes/windows_x64_phase2_interpreter_jni.md`
 - Port plan: `win32_art_port.md` rev19 Phase 2 DONE

@@ -194,7 +194,7 @@ Math.ceil/floor and the shared ELF/PE registration table are restored; see
 `../math-critical/RESULT.md`. Registered
 and unresolved CriticalNative calls also pass the JVMTI forced-interpreter
 transition in both memory modes; see
-`../../../tools/verify/windows_x64_phase4/RESULT-jvmti-force.md`.
+`../../../docs/history/windows_x64_phase4_jvmti_force_result.md`.
 
 ## Regression verification
 

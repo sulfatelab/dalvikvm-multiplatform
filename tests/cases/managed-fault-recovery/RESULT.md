@@ -57,10 +57,10 @@ fixed-page machinery is no longer part of product SOE delivery.
 
 ## Historical focused Wine gate
 
-The retired Bash command was:
+The equivalent unified command is:
 
-```bash
-bash tools/verify/windows_x64_phase4/run_w010_managed_fault_probe.sh
+```text
+python tools/build_art.py test --target-id windows-x86_64-msvc --stage w010 --parallel 16
 ```
 
 Result:

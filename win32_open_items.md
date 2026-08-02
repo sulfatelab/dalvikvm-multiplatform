@@ -20,7 +20,7 @@ Do **not** list permanent non-goals as OPEN workarounds—list them under §Non-
 | [win32_heap_memory.md](win32_heap_memory.md) | W-013 heap / embedded-dlmalloc ownership, low-address, and MoreCore target design |
 | [win32_libcore_os_natives.md](win32_libcore_os_natives.md) | Os/`Linux` natives: Implemented / Needed / ENOSYS |
 | [win32_host_gate_policy.md](win32_host_gate_policy.md) | Current native lab host and future-gate policy |
-| `tools/verify/windows_x64_phase*/RESULT.md` | Gate evidence |
+| `docs/history/windows_x64_*_result.md` | Historical gate evidence |
 
 ---
 
@@ -123,7 +123,7 @@ canonical policy is [win32_host_gate_policy.md](win32_host_gate_policy.md).
 - **Native JIT-3/FS-3 acceptance:** four J-2/J-1 processes on build 26100 complete 52 collections, 1,344 optimizing/JNI compilations, 1,248 exact address reuses, 696,929 stable-live lookups, 5,909,811 stable-dead lookups, and 696,969 successful virtual unwinds with `missing_live=0`, `stale_dead=0`, `unwind_failures=0`, `callback_tables=0`, empty JIT temp, and no dump. Independent returned-archive review passes 9/9. ART `43f866830e` also fixes the normal-JNI/nterp hard-float return regression found by the preflight: XMM0 remains authoritative instead of copying RAX's `0x5c000000` transition state into the Java result.
 - **Native JIT-4 fatal/unwind cross-regression:** the final default-J-2 archive passes 28 cases and 34/34 aggregate records on build 26100 without a J-1 arm. Its lifecycle repeat completes eight collections, 216 compilations, 192 exact reuses, and 85,944 virtual unwinds with zero missing/stale/failed records. Static, threshold-zero compiled-JIT, and OSR fatal origins each reach VEH/UEF and create a valid `MDMP`; `jit-temp` is empty and no trace remains. This cross-regresses E9 and FS-3 but does not close the remaining independent W-010 proof points.
 - **Remaining native acceptance:** keep the accepted E9, FS-1, FS-2, authoritative-host FS-4, FS-5 disposition, and H-001 subset as regression gates. Dynamic-JIT rollback fault injection and method-redefinition/OSR retirement extensions, Java/ART-pool reservation correlation, negative-exception cases, and debugger-quality dump-stack reconstruction remain conditional. The Windows 10/second-host repeat is explicitly skipped by policy. FS-5 records why a native exception inside the pending bridge range is impractical without product fault injection; debugger continuation, named CET rejection, exception-unwind XMM, and predecessor-UEF embedding are closed.
-- **Code anchors:** `vendor/art/runtime/runtime.cc`; `runtime/multiplatform/windows/sigchain_windows.cc`; `runtime_windows.cc`; `runtime/fault_handler.{h,cc}`; `runtime/arch/x86/fault_handler_x86.cc`; `runtime/arch/x86_64/quick_entrypoints_x86_64.S`; `runtime/multiplatform/windows/jit_unwind_windows.*`; `compiler/optimizing/code_generator_x86_64.*`; `compiler/utils/x86_64/{assembler,jni_macro_assembler}_x86_64.*`; `runtime/jit/{jit_code_cache,jit_memory_region}.*`; `tests/cases/{osr-unwind,jit-unwind-registry,stack-page-growth,unhandled-exception-filter}/`; transitional checkers and managed runners under `tools/verify/windows_x64_phase4/`
+- **Code anchors:** `vendor/art/runtime/runtime.cc`; `runtime/multiplatform/windows/sigchain_windows.cc`; `runtime_windows.cc`; `runtime/fault_handler.{h,cc}`; `runtime/arch/x86/fault_handler_x86.cc`; `runtime/arch/x86_64/quick_entrypoints_x86_64.S`; `runtime/multiplatform/windows/jit_unwind_windows.*`; `compiler/optimizing/code_generator_x86_64.*`; `compiler/utils/x86_64/{assembler,jni_macro_assembler}_x86_64.*`; `runtime/jit/{jit_code_cache,jit_memory_region}.*`; `tests/cases/{managed-fault-recovery,osr-unwind,jit-unwind-registry,stack-page-growth,unhandled-exception-filter}/`; shared Windows reviewers under `tests/support/windows/`
 - **Blocked on / design doc:** no blocker for core managed-fault delivery, FS-1 stack budget, FS-2, authoritative-host FS-4, FS-3 dynamic-table churn, or the FS-5 conditional disposition; only reservation/negative-exception/debugger-quality probes remain; [win32_faults_and_stacks.md](win32_faults_and_stacks.md)
 - **Opened:** 2026-07-16
 - **Updated:** 2026-07-30 — FS-1 Release/Debug switch, nterp, and JIT stack high-water acceptance passes on build 26100; the 40-KiB Debug-only reserve leaves more than 37 KiB of native margin without changing product or Linux
@@ -674,7 +674,7 @@ Summary (details below; do not delete history):
   - `vendor/art/runtime/interpreter/interpreter.cc` (exact `android-16.0.0_r4` parity)
   - `tests/cases/jni-native-abi/` (canonical source/result) plus unified `managed_native_abi`
   - `tests/cases/jni-critical-native/` (canonical source/result) plus unified `managed_critical_native`
-  - `tests/cases/jvmti-force/` plus the transitional managed runner and historical result under `tools/verify/windows_x64_phase4/`
+  - `tests/cases/jvmti-force/` plus the unified managed runner and `docs/history/windows_x64_phase4_jvmti_force_result.md`
   - `tests/cases/math-critical/` (canonical source, shell-free runner, and adjacent result) plus the live W-024 cleanup audit in `tests/support/w024_cleanup.py`
   - `docs/history/windows_x64_w024_interpreter_jni_result.md` (accepted Wine and native-Windows tripwire reachability audit and package identity)
   - `vendor/art/openjdkjvmti/` and `native/CMakeLists.txt` (separate Windows x64 JVMTI plugin)
@@ -810,7 +810,7 @@ Summary (details below; do not delete history):
   - `tools/bootjar/build.sh` no longer auto-discovers sibling `MinDalvikVM-Archive(_)` for ICU/annotation stubs; requires nested `vendor/icu` + in-tree `compat/java-stubs` (expanded minimal android.annotation / android.compat.annotation set).
   - `MDVM_ARCHIVE` remains an optional non-default escape hatch only.
   - Docs/tests scrubbed: `README.md`, `native/{CMakeLists,generate}.sh`, `tools/bp2cmake` CODEGEN/codegen + unit tests point at multipath `vendor/`.
-  - Historical `tools/verify/*/RESULT.md` absolute archive paths left as past evidence only (not product inputs).
+  - Historical absolute archive paths remain only inside documents under `docs/history/`; they are not product inputs.
 - **Opened:** 2026-07-17
 - **Closed:** 2026-07-17
 

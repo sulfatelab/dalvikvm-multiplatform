@@ -82,18 +82,16 @@ size   3436578 bytes
 ```
 
 The shared-jar design and runtime OS selection are recorded in
-`archived/shared_bootjar_runtime_os_detection.md`.
+`docs/history/shared_bootjar_runtime_os_detection.md`.
 
-## Command
+## Current unified command
 
 ```text
-tools/verify/windows_x64_phase4/run_jvmti_force_probe.sh
+python tools/build_art.py test --target-id windows-x86_64-msvc --stage w004 --parallel 16
 ```
 
-Related files:
+Current canonical ownership:
 
-- `run_jvmti_force_probe.sh`
-- `src/JvmtiForceProbe.java`
-- `jvmti_force/jvmti_force_probe.c`
-- `../windows_x64_phase1/CMakeLists.txt`
-- `../../../win32_open_items.md` W-024
+- `tests/cases/jvmti-force/`
+- `tests/support/w024_cleanup.py`
+- `win32_open_items.md` W-024

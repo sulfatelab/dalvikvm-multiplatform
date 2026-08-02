@@ -1360,11 +1360,10 @@ The shared registry now references zero source files from historical
 verification directories. All 92 declarations own canonical source under
 `tests/cases/` or a shell-free runner under `tests/support/`; all 29 native
 source cases and all 48 Java sources have adjacent results, and shared stage
-analysis remains under `tests/stages/`. The old verification tree now contains
-only three historical Markdown result records and no source, script, graph, or
-binary. Their current user edits are preserved outside build-system commits;
-after those evidence changes are reviewed or migrated, the empty compatibility
-ownership can be retired.
+analysis remains under `tests/stages/`. The final three historical Markdown
+records moved to flat names under `docs/history/` after their path-only edits
+were confirmed. The old verification tree now has no tracked content and is
+fully retired.
 
 ### Test applicability and target-architecture coverage
 
@@ -1667,7 +1666,7 @@ and reviewed; normal test execution never performs it.
 
 #### Migration classification
 
-| Current `tools/verify` content | Destination or disposition |
+| Former `tools/verify` content | Destination or disposition |
 |---|---|
 | reusable C/C++/assembly source | owning `tests/cases/<logical-test-id>/` |
 | managed Java source | same logical case as its native/behavioral contract |

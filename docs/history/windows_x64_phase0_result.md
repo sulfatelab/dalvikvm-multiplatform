@@ -52,7 +52,7 @@ Under `compat/include/` + `compat/src/windows_x64_posix_stubs.c`:
 | vendor `art/libartbase/base/unix_file/fd_file.cc` | `FdReadOffset=off64_t` on Windows |
 
 At this checkpoint the follow-up was to record durable patches. Those changes
-are now committed on the nested project branches; `archive-patches/` retains
+are now committed on the nested project branches; `docs/windows-port-notes/` retains
 diagnostic notes only.
 
 ### Reproduce

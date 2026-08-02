@@ -207,14 +207,13 @@ sources, strips comments and literals, distinguishes JNI `Call*MethodA` from
 Win32 suffix-`A` APIs, and fails on either a known ANSI call or an unclassified
 suffix-`A` family. The active 1,441-source graph has zero ANSI calls, source
 files, or API families. The Linux-hosted Windows-cross stage passes. Native
-Windows Server 2025 now passes W-027 as part of the complete 75/75 catalog;
+Windows Server 2025 now passes W-027 as part of the complete 76/76 catalog;
 the first run completed in 12.38 seconds and the no-op repeat in 12.33 seconds.
-The complete catalog contains 68 target-runnable gates and seven host reviewers,
+The complete catalog contains 69 target-runnable gates and seven host reviewers,
 and its repeated `art-tests` build reports `ninja: no work to do`.
-Remaining legacy shell runners and retained per-probe CMake entry points use
-canonical files as temporary compatibility shims; they must be replaced by the
-unified Python/CMake/Ninja path before `tools/verify` can be removed. W-003 has
-removed its four standalone CMake graphs, shell runners, and package producer;
+The former legacy shell runners and per-probe CMake entry points have been
+replaced by the unified Python/CMake/Ninja path, and `tools/verify` is removed.
+W-003 removed its four standalone CMake graphs, shell runners, and package producer;
 W-004 has likewise removed the standalone JVMTI CMake/Bash orchestration after
 unified native acceptance. Its accepted Phase-3 libcore slices removed all 26
 superseded Bash build/run wrappers; native-open cases remain compile-only in
@@ -812,11 +811,12 @@ python tools/check_vcs_files.py
 The root `.gitignore` is a convenience, not the enforcement boundary. The VCS
 audit and review must still reject a force-added artifact.
 
-## Migrating `tools/verify`
+## Legacy `tools/verify` migration disposition
 
-`tools/verify` is a temporary mixed historical tree and should disappear after
-its useful content has canonical ownership. Do not move it wholesale to
-`tests/archive` or `tests/archived`.
+The former mixed `tools/verify` tree has disappeared after its useful content
+received canonical ownership. It was not moved wholesale to `tests/archive` or
+`tests/archived`. Apply the same classification to any newly discovered legacy
+bring-up material:
 
 | Existing content | Action |
 |---|---|
@@ -832,9 +832,9 @@ its useful content has canonical ownership. Do not move it wholesale to
 | Phase-0/Phase-1/per-probe product CMake | remove after unified coverage; do not relocate |
 | obsolete progress narrative | move selectively to `docs/history/` or remove |
 
-Use `git mv` for maintained sources and records so their history remains easy
-to follow. Update all consumers in the same change and verify that no active
-reference still points at the old path. Do not delete an old graph until the
+Use a history-preserving move for maintained sources and records. Update all
+consumers in the same change and verify that no active reference still points
+at the old path. Do not delete an old graph until the
 unified target builds the applicable probes and the required behavioral or
 review gate owns its former acceptance claim.
 
