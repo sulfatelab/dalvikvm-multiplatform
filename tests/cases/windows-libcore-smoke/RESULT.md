@@ -1,9 +1,10 @@
 # Libcore smoke — result
 
 **Status:** **COMPLETE for the promoted native Windows matrix and the exact
-Linux CoreProbe slice** — 25 unified libcore behaviors pass on the
-authoritative Windows Server 2025 host; CoreProbe additionally passes on Linux
-x86-64 and AArch64; no named L-003 case remains native-open
+Linux CoreProbe/InterruptProbe slice** — 25 unified libcore behaviors pass on
+the authoritative Windows Server 2025 host; CoreProbe and InterruptProbe
+additionally pass on Linux x86-64 and AArch64; no named L-003 case remains
+native-open
 
 **Latest acceptance:** 2026-08-02
 
@@ -83,11 +84,11 @@ socket error and a closed peer to unblock the client read with EOF or an I/O
 error; both worker threads must terminate and no unexpected peer may appear.
 Historical Wine success is evidence only and does not broaden this result.
 
-Applicability remains per probe. CoreProbe is accepted on exactly
-`linux-x86_64-gnu`, `linux-aarch64-gnu`, and `windows-x86_64-msvc`. Every
-other declaration in this case keeps its existing Windows x86-64/MSVC selector
-until independently reviewed, built, and runtime-tested on another exact
-target.
+Applicability remains per probe. CoreProbe and InterruptProbe are each accepted
+on exactly `linux-x86_64-gnu`, `linux-aarch64-gnu`, and
+`windows-x86_64-msvc`. Every other declaration in this case keeps its existing
+Windows x86-64/MSVC selector until independently reviewed, built, and
+runtime-tested on another exact target.
 
 ### Latest Linux CoreProbe acceptance
 
@@ -109,6 +110,24 @@ and boot JAR SHA-256
 `45e19b8cc4a4161d7b7b011e268bf262069d9a7b70c9cfd9c37e324feb249eae`.
 The manifests contain only normalized native/QEMU runner identity and no
 absolute machine path; neither result tree contains a filesystem link.
+
+### Latest Linux InterruptProbe acceptance
+
+Fresh Linux graphs retained the same 262-Blueprint, 2,089/2,113-compile-command,
+2,172/2,196-Ninja-command, and 32-product-link audits. The fresh 1,864-edge
+x86-64 W-004 build passed 11/11 in 3.82 seconds; its true Ninja no-op repeat
+passed 11/11 in 3.88 seconds, including InterruptProbe in 0.22 seconds. The
+fresh 1,629-edge AArch64 build passed 10/10 in 93.88 seconds, including
+InterruptProbe in 1.52 seconds; its true Ninja no-op repeat passed 10/10 in
+93.98 seconds, including InterruptProbe in 1.51 seconds.
+
+Both InterruptProbe records require exact-zero exit, a terminated sleeper
+after interruption, `interrupt.ok=true`, `InterruptProbe.done=ok`, and
+`main end exception=0`. They use app JAR SHA-256
+`62f39baec03d56d02e2077b6e564e9fb9179486dc69277173c8bfdbc9cd84ea8`
+and the same boot JAR hash recorded above. The manifests contain normalized
+native/QEMU runner identity and no absolute machine path; neither result tree
+contains a filesystem link.
 
 ```text
 python tools/build_art.py test --target-id windows-x86_64-msvc --stage w004 --parallel 16
