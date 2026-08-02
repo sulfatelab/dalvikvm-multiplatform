@@ -369,6 +369,8 @@ def run_gate(
     library_dirs: list[Path],
     hello_jar: Path | None = None,
     path_jar: Path | None = None,
+    cacerts_dir: Path | None = None,
+    security_properties: Path | None = None,
 ) -> None:
     matrix = load_matrix()
     if case not in matrix:
@@ -397,6 +399,8 @@ def run_gate(
             expected_exit=0,
             timeout=config["timeout_seconds"],
             require_nonzero=config["require_nonzero"],
+            cacerts_dir=cacerts_dir,
+            security_properties=security_properties,
         )
     else:
         if hello_jar is None:
@@ -431,6 +435,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--library-dir", type=Path, action="append", default=[])
     parser.add_argument("--hello-jar", type=Path)
     parser.add_argument("--path-jar", type=Path)
+    parser.add_argument("--cacerts-dir", type=Path)
+    parser.add_argument("--security-properties", type=Path)
     return parser
 
 
@@ -448,6 +454,8 @@ def main(argv: list[str] | None = None) -> int:
             library_dirs=args.library_dir,
             hello_jar=args.hello_jar,
             path_jar=args.path_jar,
+            cacerts_dir=args.cacerts_dir,
+            security_properties=args.security_properties,
         )
         return 0
     except (runtime_gate.GateError, OSError, UnicodeError) as exc:

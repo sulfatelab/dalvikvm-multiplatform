@@ -515,6 +515,11 @@ def test_managed_gate_uses_isolated_runtime_and_records_result(
 
     monkeypatch.setattr(subprocess, "run", run)
     work = tmp_path / "out" / "tests" / "results" / "hello"
+    cacerts = tmp_path / "cacerts"
+    cacerts.mkdir()
+    (cacerts / "01234567.0").write_text("certificate\n", encoding="utf-8")
+    properties = tmp_path / "security.properties"
+    properties.write_text("keystore.type=AndroidCAStore\n", encoding="utf-8")
     runtime_gate.run_managed(
         target_id="linux-x86_64-gnu",
         dalvikvm=dalvikvm,
@@ -531,6 +536,8 @@ def test_managed_gate_uses_isolated_runtime_and_records_result(
         expected_exit=0,
         timeout=30,
         environment_overrides={"ART_TEST_MODE": "switch"},
+        cacerts_dir=cacerts,
+        security_properties=properties,
     )
 
     command, options = commands[0]
@@ -540,9 +547,16 @@ def test_managed_gate_uses_isolated_runtime_and_records_result(
     assert options["env"]["ANDROID_ROOT"] == str(work / "runtime")
     assert options["env"]["ART_TEST_MODE"] == "switch"
     assert (work / "runtime" / "icu" / "icudt72l.dat").read_bytes() == b"icu"
+    assert (
+        work / "runtime" / "etc" / "security" / "cacerts" / "01234567.0"
+    ).is_file()
+    assert (
+        work / "runtime" / "data" / "misc" / "keychain" / "cacerts-added"
+    ).is_dir()
     result = (work / "result.json").read_text(encoding="utf-8")
     assert '"target_id": "linux-x86_64-gnu"' in result
     assert str(tmp_path) not in result
+    assert '"count": 1' in result
     assert "Hello passed" in capsys.readouterr().out
 
 

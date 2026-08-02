@@ -15,6 +15,14 @@ endif()
 if(ART_TARGET_PLATFORM STREQUAL "windows")
     set(_art_windows_runtime "${MDVM_ART_ROOT_DIR}/art/runtime/multiplatform/windows")
     set(_art_windows_openjdk "${MDVM_ART_ROOT_DIR}/art/openjdkjvm")
+    # Java's platform library-name mapping uses the Android product sonames,
+    # including the `lib` prefix on PE. Keep the three TLS DSOs identical to
+    # their ELF names instead of accepting CMake's prefix-less Windows default.
+    foreach(_art_tls_target crypto ssl javacrypto)
+        if(TARGET ${_art_tls_target})
+            set_target_properties(${_art_tls_target} PROPERTIES PREFIX "lib")
+        endif()
+    endforeach()
     if(TARGET procinfo)
         target_sources(procinfo PRIVATE "${_repo}/compat/src/windows_procinfo_stub.cc")
     endif()

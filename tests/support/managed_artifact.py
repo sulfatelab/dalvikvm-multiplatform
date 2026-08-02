@@ -40,6 +40,13 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--source-tree", type=Path, action="append", default=[])
     parser.add_argument("--exclude", action="append", default=[])
     parser.add_argument("--aconfig", type=Path, action="append", default=[])
+    parser.add_argument(
+        "--resource",
+        nargs=2,
+        action="append",
+        default=[],
+        metavar=("SOURCE", "JAR_PATH"),
+    )
     parser.add_argument("--boot-classpath", type=Path)
     parser.add_argument("--patch-module", type=Path)
     parser.add_argument("--javac-option", action="append", default=[])
@@ -86,6 +93,7 @@ def build_managed_artifact(args: argparse.Namespace) -> tuple[Path, Path]:
     inputs.mkdir(parents=True, exist_ok=True)
 
     sources = [_validate_regular_file(path) for path in args.source]
+    resources = _validate_resources(args.resource, source_root, output_root)
     for tree in args.source_tree:
         sources.extend(_collect_java_sources(tree, args.exclude, source_root=source_root))
     if args.aconfig:
@@ -153,7 +161,7 @@ def build_managed_artifact(args: argparse.Namespace) -> tuple[Path, Path]:
         _validate_regular_file(dex_file)
 
     jar = output_root / f"{args.name}.jar"
-    _write_deterministic_jar(jar, dex_files)
+    _write_deterministic_jar(jar, dex_files, resources)
     manifest = output_root / f"{args.name}.manifest.json"
     manifest_value = {
         "schema_version": 1,
@@ -162,6 +170,14 @@ def build_managed_artifact(args: argparse.Namespace) -> tuple[Path, Path]:
         "class_count": len(class_files),
         "dex_entries": [path.name for path in dex_files],
         "jar_sha256": _sha256(jar),
+        "resources": [
+            {
+                "jar_path": archive_name,
+                "sha256": _sha256(path),
+                "source": _portable_source_name(path, source_root, output_root),
+            }
+            for path, archive_name in resources
+        ],
         "sources": [_portable_source_name(path, source_root, output_root) for path in sources],
         "tool": "vendor/r8/r8.jar",
     }
@@ -328,7 +344,11 @@ def _run_logged(command: list[str], log: Path, *, timeout: int) -> None:
         )
 
 
-def _write_deterministic_jar(path: Path, dex_files: list[Path]) -> None:
+def _write_deterministic_jar(
+    path: Path,
+    dex_files: list[Path],
+    resources: list[tuple[Path, str]],
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     handle, staged_name = tempfile.mkstemp(prefix=path.name + ".", dir=path.parent)
     os.close(handle)
@@ -340,6 +360,14 @@ def _write_deterministic_jar(path: Path, dex_files: list[Path]) -> None:
                 info.create_system = 3
                 info.external_attr = 0o100644 << 16
                 archive.writestr(info, dex_file.read_bytes())
+            for source, archive_name in resources:
+                info = zipfile.ZipInfo(
+                    archive_name, date_time=(1980, 1, 1, 0, 0, 0)
+                )
+                info.compress_type = zipfile.ZIP_DEFLATED
+                info.create_system = 3
+                info.external_attr = 0o100644 << 16
+                archive.writestr(info, source.read_bytes())
         os.replace(staged_name, path)
     except BaseException:
         try:
@@ -347,6 +375,38 @@ def _write_deterministic_jar(path: Path, dex_files: list[Path]) -> None:
         except FileNotFoundError:
             pass
         raise
+
+
+def _validate_resources(
+    values: list[list[str]], source_root: Path, output_root: Path
+) -> list[tuple[Path, str]]:
+    result: list[tuple[Path, str]] = []
+    names: set[str] = set()
+    for raw_source, raw_name in values:
+        source = _validate_regular_file(Path(raw_source))
+        archive_name = raw_name.replace("\\", "/")
+        parts = archive_name.split("/")
+        if (
+            not archive_name
+            or archive_name.startswith("/")
+            or any(part in ("", ".", "..") for part in parts)
+            or re.match(r"^[A-Za-z]:", archive_name)
+        ):
+            raise ManagedArtifactError(
+                f"non-canonical managed resource path: {raw_name!r}"
+            )
+        if archive_name.startswith("classes") and archive_name.endswith(".dex"):
+            raise ManagedArtifactError(
+                f"managed resource collides with D8 output: {archive_name}"
+            )
+        if archive_name in names:
+            raise ManagedArtifactError(
+                f"managed resource path is duplicated: {archive_name}"
+            )
+        _portable_source_name(source, source_root, output_root)
+        names.add(archive_name)
+        result.append((source, archive_name))
+    return sorted(result, key=lambda item: item[1])
 
 
 def _write_class_jar(path: Path, root: Path, class_files: list[Path]) -> None:

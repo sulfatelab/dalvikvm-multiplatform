@@ -253,6 +253,9 @@ def test_stage_copies_only_regular_product_files(tmp_path):
     (binary_dir / "dalvikvm").write_bytes(b"vm")
     (binary_dir / "libart.so").write_bytes(b"art")
     (binary_dir / "libbase.so").write_bytes(b"base")
+    boot = binary_dir / "tests" / "managed" / "boot.jar"
+    boot.parent.mkdir(parents=True)
+    boot.write_bytes(b"boot")
 
     build_art._stage(
         build_art.resolve_target("linux-x86_64-gnu"), binary_dir, LocalBuildConfig()
@@ -262,6 +265,18 @@ def test_stage_copies_only_regular_product_files(tmp_path):
     assert (binary_dir / "stage" / "dalvikvm").read_bytes() == b"vm"
     assert (binary_dir / "stage" / "libart.so").read_bytes() == b"art"
     assert (binary_dir / "stage" / "libbase.so").read_bytes() == b"base"
+    assert (binary_dir / "stage" / "runtime" / "boot.jar").read_bytes() == b"boot"
+    assert (
+        binary_dir
+        / "stage"
+        / "runtime"
+        / "etc"
+        / "security"
+        / "security.properties"
+    ).is_file()
+    assert len(list((
+        binary_dir / "stage" / "runtime" / "etc" / "security" / "cacerts"
+    ).glob("*.*"))) >= 121
     assert '"target_id": "linux-x86_64-gnu"' in manifest
 
 

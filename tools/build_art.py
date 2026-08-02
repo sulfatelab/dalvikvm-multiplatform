@@ -42,6 +42,7 @@ ROOT_MODULES = (
     "dalvikvm",
     "dex2oat",
     "libart-compiler",
+    "libjavacrypto",
     "libjavacore",
     "libopenjdk",
     "libicu_jni",
@@ -536,6 +537,9 @@ def _stage(target: TargetProfile, binary_dir: Path, local: LocalBuildConfig) -> 
 
     stage_dir = binary_dir / "stage"
     validate_managed_path(stage_dir, allow_missing=True)
+    if stage_dir.exists() or stage_dir.is_symlink():
+        _reject_managed_tree(stage_dir)
+        shutil.rmtree(stage_dir)
     stage_dir.mkdir(parents=True, exist_ok=True)
     product_names = (
         "dalvikvm", "dex2oat", "art", "art-compiler", "art-disassembler",
@@ -603,6 +607,42 @@ def _stage(target: TargetProfile, binary_dir: Path, local: LocalBuildConfig) -> 
         shutil.copy2(source, destination)
         copied.append({"path": destination.name, "sha256": _sha256(destination)})
 
+    runtime_sources = (
+        (
+            binary_dir / "tests" / "managed" / "boot.jar",
+            stage_dir / "runtime" / "boot.jar",
+        ),
+        (
+            REPO_ROOT / "vendor" / "icu" / "icu4c" / "source" / "stubdata"
+            / "icudt72l.dat",
+            stage_dir / "runtime" / "icu" / "icudt72l.dat",
+        ),
+        (
+            REPO_ROOT / "compat" / "java-resources" / "java" / "security"
+            / "security.properties",
+            stage_dir / "runtime" / "etc" / "security" / "security.properties",
+        ),
+    )
+    for source, destination in runtime_sources:
+        copied.append(_copy_staged_file(source, destination, stage_dir))
+
+    cacerts_root = REPO_ROOT / "native" / "runtime-assets" / "etc" / "security" / "cacerts"
+    validate_managed_path(cacerts_root)
+    certificate_count = 0
+    for source in sorted(cacerts_root.iterdir(), key=lambda path: path.name):
+        if not source.is_file():
+            raise BuildFrontendError(f"non-file entry in product cacerts: {source}")
+        validate_managed_path(source)
+        destination = stage_dir / "runtime" / "etc" / "security" / "cacerts" / source.name
+        copied.append(_copy_staged_file(source, destination, stage_dir))
+        if re.fullmatch(r"[0-9a-f]{8}\.[0-9]+", source.name):
+            certificate_count += 1
+    if certificate_count < 1:
+        raise BuildFrontendError("product runtime has zero AndroidCAStore certificates")
+    for keychain_directory in ("cacerts-added", "cacerts-removed"):
+        (stage_dir / "runtime" / "data" / "misc" / "keychain"
+         / keychain_directory).mkdir(parents=True, exist_ok=True)
+
     if not copied:
         raise BuildFrontendError(f"no product artifacts found in {binary_dir}; build first")
     _write_json_atomic(stage_dir / "stage_manifest.json", {
@@ -610,7 +650,28 @@ def _stage(target: TargetProfile, binary_dir: Path, local: LocalBuildConfig) -> 
         "target_id": target.target_id,
         "artifacts": copied,
     })
-    print(f"staged {len(copied)} artifacts in {stage_dir}")
+    print(
+        f"staged {len(copied)} regular files in {stage_dir} "
+        f"(AndroidCAStore certificates={certificate_count})"
+    )
+
+
+def _copy_staged_file(source: Path, destination: Path, stage_dir: Path) -> dict[str, object]:
+    validate_managed_path(source)
+    if not source.is_file() or source.is_symlink():
+        raise BuildFrontendError(f"staged input must be a regular file: {source}")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    validate_managed_path(destination.parent)
+    shutil.copy2(source, destination)
+    relative = destination.relative_to(stage_dir).as_posix()
+    return {"path": relative, "sha256": _sha256(destination)}
+
+
+def _reject_managed_tree(root: Path) -> None:
+    validate_managed_path(root)
+    for current, directories, files in os.walk(root, topdown=True, followlinks=False):
+        for name in (*directories, *files):
+            validate_managed_path(Path(current) / name)
 
 
 def _artifact_candidates(binary_dir: Path, target: TargetProfile, name: str) -> list[Path]:

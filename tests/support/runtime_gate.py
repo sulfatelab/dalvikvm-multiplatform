@@ -479,6 +479,8 @@ def run_managed(
     timeout: int,
     environment_overrides: dict[str, str] | None = None,
     require_nonzero: bool = False,
+    cacerts_dir: Path | None = None,
+    security_properties: Path | None = None,
 ) -> None:
     dalvikvm = _regular_file(str(dalvikvm))
     boot_jar = _regular_file(str(boot_jar))
@@ -497,6 +499,41 @@ def run_managed(
     (runtime_root / "tmp").mkdir()
     staged_icu = runtime_root / "icu" / icu_data.name
     shutil.copyfile(icu_data, staged_icu)
+    runtime_assets: dict[str, object] = {}
+    if (cacerts_dir is None) != (security_properties is None):
+        raise GateError(
+            "managed security packaging requires both cacerts and security properties"
+        )
+    if cacerts_dir is not None and security_properties is not None:
+        security_properties = _regular_file(str(security_properties))
+        staged_properties = runtime_root / "etc" / "security" / "security.properties"
+        staged_properties.parent.mkdir(parents=True)
+        shutil.copyfile(security_properties, staged_properties)
+        copied_cacerts = _copy_regular_tree(
+            cacerts_dir, runtime_root / "etc" / "security" / "cacerts"
+        )
+        certificates = [
+            path
+            for path in copied_cacerts
+            if re.fullmatch(r"[0-9a-f]{8}\.[0-9]+", path.name)
+        ]
+        if not certificates:
+            raise GateError("managed security packaging has zero CA certificates")
+        (runtime_root / "data" / "misc" / "keychain" / "cacerts-added").mkdir(
+            parents=True
+        )
+        (runtime_root / "data" / "misc" / "keychain" / "cacerts-removed").mkdir()
+        runtime_assets = {
+            "security_properties": {
+                "name": staged_properties.name,
+                "sha256": _sha256(staged_properties),
+            },
+            "cacerts": {
+                "count": len(certificates),
+                "tree_sha256": _tree_sha256(copied_cacerts),
+            },
+            "keystore_type": "AndroidCAStore",
+        }
 
     command = [
         str(dalvikvm),
@@ -568,6 +605,7 @@ def run_managed(
         "forbidden_markers": present_forbidden,
         "boot_jar": {"name": boot_jar.name, "sha256": _sha256(boot_jar)},
         "app_jar": {"name": app_jar.name, "sha256": _sha256(app_jar)},
+        "runtime_assets": runtime_assets,
     }
     (work_root / "result.json").write_text(
         json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8"
@@ -584,6 +622,40 @@ def run_managed(
         f"{main_class} passed for {target_id}: exit={result.returncode}, "
         f"markers={len(expected)}"
     )
+
+
+def _copy_regular_tree(source_root: Path, destination_root: Path) -> list[Path]:
+    source_root = _managed_path(source_root)
+    if not source_root.is_dir():
+        raise GateError(f"runtime asset tree is not a directory: {source_root}")
+    destination_root = _managed_path(destination_root, allow_missing=True)
+    destination_root.mkdir(parents=True, exist_ok=True)
+    copied: list[Path] = []
+    for current, directories, files in os.walk(
+        source_root, topdown=True, followlinks=False
+    ):
+        current_path = Path(current)
+        for name in sorted(directories):
+            _managed_path(current_path / name)
+        directories.sort()
+        for name in sorted(files):
+            source = _regular_file(str(current_path / name))
+            relative = source.relative_to(source_root)
+            destination = destination_root / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, destination)
+            copied.append(_regular_file(str(destination)))
+    return copied
+
+
+def _tree_sha256(files: list[Path]) -> str:
+    digest = hashlib.sha256()
+    common = Path(os.path.commonpath([str(path.parent) for path in files]))
+    for path in sorted(files, key=lambda item: item.as_posix()):
+        digest.update(path.relative_to(common).as_posix().encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(bytes.fromhex(_sha256(path)))
+    return digest.hexdigest()
 
 
 def _reject_tree_links(root: Path) -> None:
@@ -639,6 +711,8 @@ def _parser() -> argparse.ArgumentParser:
     managed.add_argument("--main-class", required=True)
     managed.add_argument("--work-root", type=Path, required=True)
     managed.add_argument("--icu-data", type=_regular_file, required=True)
+    managed.add_argument("--cacerts-dir", type=Path)
+    managed.add_argument("--security-properties", type=_regular_file)
     managed.add_argument("--library-dir", type=Path, action="append", default=[])
     managed.add_argument("--vm-option", action="append", default=[])
     managed.add_argument("--main-arg", action="append", default=[])
@@ -704,6 +778,8 @@ def main(argv: list[str] | None = None) -> int:
                 expected_exit=args.expected_exit,
                 timeout=args.timeout,
                 require_nonzero=args.require_nonzero,
+                cacerts_dir=args.cacerts_dir,
+                security_properties=args.security_properties,
             )
         return 0
     except (GateError, OSError, UnicodeError) as exc:

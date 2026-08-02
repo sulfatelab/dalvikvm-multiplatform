@@ -28,14 +28,29 @@ def test_win32_unicode_policy_ignores_literals_comments_and_jni_suffix_a_calls()
         const char* diagnostic = "LoadLibraryA(module)";
         const char* raw = R"tag(CreateProcessA(NULL))tag";
         env->CallObjectMethodA(receiver, method, values);
+        SSL_add_client_CA(ssl, certificate);
+        NativeCrypto_EVP_PKEY_new_RSA(env, clazz, values);
+        JNI_TRACE_PACKET_DATA(packet);
         HANDLE file = CreateFileA(path, 0, 0, NULL, 0, 0, NULL);
         ''',
         "probe.cc",
     )
     assert [finding["name"] for finding in findings] == [
         "CallObjectMethodA",
+        "SSL_add_client_CA",
+        "NativeCrypto_EVP_PKEY_new_RSA",
+        "JNI_TRACE_PACKET_DATA",
         "CreateFileA",
     ]
+    assert all(
+        namespace["is_classified_non_win32_call"](name)
+        for name in (
+            "CallObjectMethodA",
+            "SSL_add_client_CA",
+            "NativeCrypto_EVP_PKEY_new_RSA",
+            "JNI_TRACE_PACKET_DATA",
+        )
+    )
 
 
 def test_win32_unicode_policy_classifies_current_cross_graph():

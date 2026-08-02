@@ -122,6 +122,7 @@ NON_WIN32_SUFFIX_A_CALLS = frozenset(
 )
 
 SUFFIX_A_CALL = re.compile(r"\b([A-Za-z_]\w*A)\s*\(")
+UPPERCASE_ACRONYM_SUFFIX = re.compile(r"_[A-Z][A-Z0-9_]*A$")
 SOURCE_SUFFIXES = frozenset({".c", ".cc", ".cpp", ".cxx", ".s", ".S"})
 RAW_STRING_START = re.compile(r'(?:u8|u|U|L)?R"([^\s()\\]{0,16})\(')
 
@@ -196,6 +197,16 @@ def find_suffix_a_calls(text: str, relative: str) -> list[dict[str, object]]:
     return findings
 
 
+def is_classified_non_win32_call(name: str) -> bool:
+    # Identifiers such as SSL_add_client_CA, EVP_PKEY_new_RSA, and
+    # JNI_TRACE_PACKET_DATA end in an acronym whose final letter happens to be
+    # A.  They are not members of a Windows encoding-selecting A/W API pair.
+    return (
+        name in NON_WIN32_SUFFIX_A_CALLS
+        or UPPERCASE_ACRONYM_SUFFIX.search(name) is not None
+    )
+
+
 def active_sources(repo: Path, compile_commands: Path) -> list[tuple[str, Path]]:
     try:
         records = json.loads(compile_commands.read_text(encoding="utf-8"))
@@ -247,7 +258,7 @@ def inspect_active_graph(repo: Path, compile_commands: Path) -> dict[str, object
         finding
         for finding in findings
         if finding["name"] not in ANSI_WIN32_CALLS
-        and finding["name"] not in NON_WIN32_SUFFIX_A_CALLS
+        and not is_classified_non_win32_call(str(finding["name"]))
     ]
     return {
         "active_source_count": len(sources),

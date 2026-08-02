@@ -8,10 +8,16 @@ option(ART_ENABLE_TARGET_RUNTIME_TESTS
 get_filename_component(_art_test_repo_root "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
 set(_art_test_cases_root "${CMAKE_CURRENT_LIST_DIR}/cases")
 set(_art_managed_builder "${CMAKE_CURRENT_LIST_DIR}/support/managed_artifact.py")
+set(_art_conscrypt_constants_builder
+    "${CMAKE_CURRENT_LIST_DIR}/support/generate_conscrypt_constants.py")
 set(_art_managed_root "${CMAKE_CURRENT_BINARY_DIR}/managed")
 set(_art_r8_jar "${_art_test_repo_root}/vendor/r8/r8.jar")
 set(_art_icu_data
     "${_art_test_repo_root}/vendor/icu/icu4c/source/stubdata/icudt72l.dat")
+set(_art_security_properties
+    "${_art_test_repo_root}/compat/java-resources/java/security/security.properties")
+set(_art_cacerts_dir
+    "${_art_test_repo_root}/native/runtime-assets/etc/security/cacerts")
 if(NOT ART_JDK_ROOT)
     message(FATAL_ERROR
         "ART_JDK_ROOT is required; configure through tools/build_art.py")
@@ -32,6 +38,9 @@ set(_art_boot_source_roots
     "${_art_test_repo_root}/vendor/libcore/json/src/main/java"
     "${_art_test_repo_root}/vendor/icu/android_icu4j/src/main/java"
     "${_art_test_repo_root}/vendor/icu/android_icu4j/libcore_bridge/src/java"
+    "${_art_test_repo_root}/vendor/java-external/conscrypt/repackaged/common/src/main/java"
+    "${_art_test_repo_root}/vendor/java-external/conscrypt/repackaged/platform/src/main/java"
+    "${_art_test_repo_root}/vendor/java-external/conscrypt/publicapi/src/main/java"
     "${_art_test_repo_root}/compat/java-stubs")
 set(_art_boot_sources)
 foreach(_art_boot_source_root IN LISTS _art_boot_source_roots)
@@ -46,6 +55,144 @@ set(_art_boot_aconfig
 set(_art_boot_jar "${_art_managed_root}/boot.jar")
 set(_art_boot_manifest "${_art_managed_root}/boot.manifest.json")
 set(_art_boot_classes "${_art_managed_root}/classes/boot")
+set(_art_conscrypt_constants_source
+    "${_art_test_repo_root}/vendor/java-external/conscrypt/constants/src/gen/cpp/generate_constants.cc")
+set(_art_boringssl_include
+    "${_art_test_repo_root}/vendor/external/boringssl/src/include")
+set(_art_conscrypt_constants_java
+    "${_art_managed_root}/generated-inputs/conscrypt/com/android/org/conscrypt/NativeConstants.java")
+file(GLOB_RECURSE _art_boringssl_headers CONFIGURE_DEPENDS
+    "${_art_boringssl_include}/*.h")
+
+# Native Windows does not inherit a Visual Studio developer environment. Build
+# this host helper with the same plain-Clang GNU driver contract as the product,
+# but select libraries for the build host architecture rather than the target
+# architecture. Linux hosts need no additional host SDK arguments.
+set(_art_conscrypt_host_driver_options)
+if(CMAKE_HOST_WIN32)
+    set(ART_HOST_WINDOWS_BUNDLE_ROOT "" CACHE PATH
+        "Regular-file Windows host SDK/runtime bundle for build-time tools")
+    if(ART_HOST_WINDOWS_BUNDLE_ROOT)
+        set(_art_conscrypt_host_bundle "${ART_HOST_WINDOWS_BUNDLE_ROOT}")
+    elseif(ART_TARGET_PLATFORM STREQUAL "windows")
+        set(_art_conscrypt_host_bundle "${ART_TARGET_BUNDLE_ROOT}")
+    else()
+        message(FATAL_ERROR
+            "Windows-hosted non-Windows targets require "
+            "ART_HOST_WINDOWS_BUNDLE_ROOT for Conscrypt host codegen")
+    endif()
+
+    string(TOLOWER "${CMAKE_HOST_SYSTEM_PROCESSOR}" _art_conscrypt_host_processor)
+    if(_art_conscrypt_host_processor MATCHES "^(amd64|x86_64)$")
+        set(_art_conscrypt_host_arch x86_64)
+        set(_art_conscrypt_host_triple x86_64-pc-windows-msvc)
+    elseif(_art_conscrypt_host_processor MATCHES "^(arm64|aarch64)$")
+        set(_art_conscrypt_host_arch aarch64)
+        set(_art_conscrypt_host_triple aarch64-pc-windows-msvc)
+    else()
+        message(FATAL_ERROR
+            "Unsupported Windows host processor for Conscrypt codegen: "
+            "${CMAKE_HOST_SYSTEM_PROCESSOR}")
+    endif()
+
+    execute_process(
+        COMMAND "${CMAKE_CXX_COMPILER}" -print-resource-dir
+        OUTPUT_VARIABLE _art_conscrypt_clang_resource
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        RESULT_VARIABLE _art_conscrypt_resource_rc)
+    if(NOT _art_conscrypt_resource_rc EQUAL 0)
+        message(FATAL_ERROR "Cannot query host Clang resource directory")
+    endif()
+    file(TO_CMAKE_PATH
+        "${_art_conscrypt_clang_resource}" _art_conscrypt_clang_resource)
+
+    list(APPEND _art_conscrypt_host_driver_options
+        "--compile-option=--target=${_art_conscrypt_host_triple}"
+        "--compile-option=-nostdinc++"
+        "--compile-option=-nostartfiles"
+        "--compile-option=-nostdlib"
+        "--compile-option=-stdlib=libc++"
+        "--compile-option=-D_DLL"
+        "--compile-option=-D_MT"
+        "--compile-option=-Xclang"
+        "--compile-option=--dependent-lib=msvcrt")
+    set(_art_conscrypt_host_includes
+        "${_art_conscrypt_host_bundle}/lib/libcxx/include/c++/v1"
+        "${_art_conscrypt_clang_resource}/include"
+        "${_art_conscrypt_host_bundle}/xwin/sdk/include/ucrt"
+        "${_art_conscrypt_host_bundle}/xwin/sdk/include/shared"
+        "${_art_conscrypt_host_bundle}/xwin/sdk/include/um"
+        "${_art_conscrypt_host_bundle}/xwin/crt/include")
+    foreach(_art_conscrypt_host_include IN LISTS _art_conscrypt_host_includes)
+        if(NOT IS_DIRECTORY "${_art_conscrypt_host_include}")
+            message(FATAL_ERROR
+                "Windows host bundle is missing an include directory: "
+                "${_art_conscrypt_host_include}")
+        endif()
+        list(APPEND _art_conscrypt_host_driver_options
+            "--compile-option=-isystem"
+            "--compile-option=${_art_conscrypt_host_include}")
+    endforeach()
+
+    list(APPEND _art_conscrypt_host_driver_options
+        "--link-option=-fuse-ld=lld"
+        "--link-option=-fuse-ld=lld-link"
+        "--link-option=-Xlinker"
+        "--link-option=/subsystem:console")
+    set(_art_conscrypt_host_lib_dirs
+        "${_art_conscrypt_host_bundle}/lib/libcxx/lib"
+        "${_art_conscrypt_host_bundle}/xwin/crt/lib/${_art_conscrypt_host_arch}"
+        "${_art_conscrypt_host_bundle}/xwin/sdk/lib/ucrt/${_art_conscrypt_host_arch}"
+        "${_art_conscrypt_host_bundle}/xwin/sdk/lib/um/${_art_conscrypt_host_arch}")
+    file(GLOB _art_conscrypt_compiler_rt_dirs LIST_DIRECTORIES true
+        "${_art_conscrypt_host_bundle}/lib/clang/*/lib/windows")
+    list(APPEND _art_conscrypt_host_lib_dirs ${_art_conscrypt_compiler_rt_dirs})
+    foreach(_art_conscrypt_host_lib_dir IN LISTS _art_conscrypt_host_lib_dirs)
+        if(NOT IS_DIRECTORY "${_art_conscrypt_host_lib_dir}")
+            message(FATAL_ERROR
+                "Windows host bundle is missing a library directory: "
+                "${_art_conscrypt_host_lib_dir}")
+        endif()
+        list(APPEND _art_conscrypt_host_driver_options
+            "--link-option=-L${_art_conscrypt_host_lib_dir}")
+    endforeach()
+    set(_art_conscrypt_host_libraries
+        "${_art_conscrypt_host_bundle}/lib/libcxx/lib/c++.lib"
+        "${_art_conscrypt_host_bundle}/xwin/crt/lib/${_art_conscrypt_host_arch}/msvcprt.lib"
+        "${_art_conscrypt_host_bundle}/xwin/crt/lib/${_art_conscrypt_host_arch}/msvcrt.lib"
+        "${_art_conscrypt_host_bundle}/xwin/crt/lib/${_art_conscrypt_host_arch}/vcruntime.lib"
+        "${_art_conscrypt_host_bundle}/xwin/sdk/lib/ucrt/${_art_conscrypt_host_arch}/ucrt.lib"
+        "${_art_conscrypt_host_bundle}/xwin/sdk/lib/um/${_art_conscrypt_host_arch}/kernel32.lib")
+    foreach(_art_conscrypt_host_library IN LISTS _art_conscrypt_host_libraries)
+        if(NOT EXISTS "${_art_conscrypt_host_library}")
+            message(FATAL_ERROR
+                "Windows host bundle is missing a runtime library: "
+                "${_art_conscrypt_host_library}")
+        endif()
+        list(APPEND _art_conscrypt_host_driver_options
+            "--link-option=${_art_conscrypt_host_library}")
+    endforeach()
+endif()
+add_custom_command(
+    OUTPUT "${_art_conscrypt_constants_java}"
+    BYPRODUCTS
+        "${_art_managed_root}/host-tools/conscrypt/compile.stdout.txt"
+        "${_art_managed_root}/host-tools/conscrypt/compile.stderr.txt"
+        "${_art_managed_root}/host-tools/conscrypt/generator.stderr.txt"
+    COMMAND "${Python3_EXECUTABLE}" "${_art_conscrypt_constants_builder}"
+        --compiler "${CMAKE_CXX_COMPILER}"
+        --source "${_art_conscrypt_constants_source}"
+        --include-dir "${_art_boringssl_include}"
+        --work-root "${_art_managed_root}/host-tools/conscrypt"
+        --output "${_art_conscrypt_constants_java}"
+        --package com.android.org.conscrypt
+        ${_art_conscrypt_host_driver_options}
+    DEPENDS
+        "${_art_conscrypt_constants_builder}"
+        "${_art_conscrypt_constants_source}"
+        ${_art_boringssl_headers}
+    COMMENT "Generating Conscrypt NativeConstants.java with host plain Clang"
+    VERBATIM)
 add_custom_command(
     OUTPUT "${_art_boot_jar}" "${_art_boot_manifest}"
     BYPRODUCTS
@@ -67,7 +214,14 @@ add_custom_command(
         --source-tree "${_art_test_repo_root}/vendor/libcore/json/src/main/java"
         --source-tree "${_art_test_repo_root}/vendor/icu/android_icu4j/src/main/java"
         --source-tree "${_art_test_repo_root}/vendor/icu/android_icu4j/libcore_bridge/src/java"
+        --source-tree "${_art_test_repo_root}/vendor/java-external/conscrypt/repackaged/common/src/main/java"
+        --source-tree "${_art_test_repo_root}/vendor/java-external/conscrypt/repackaged/platform/src/main/java"
+        --source-tree "${_art_test_repo_root}/vendor/java-external/conscrypt/publicapi/src/main/java"
         --source-tree "${_art_test_repo_root}/compat/java-stubs"
+        --source "${_art_conscrypt_constants_java}"
+        --resource
+            "${_art_security_properties}"
+            java/security/security.properties
         --exclude vendor/libcore/luni/src/main/java/libcore/net/http/Dns.java
         --exclude vendor/libcore/luni/src/main/java/libcore/net/http/HttpURLConnectionFactory.java
         --exclude vendor/libcore/libart/src/main/java/java/lang/AndroidHardcodedSystemProperties.java
@@ -85,12 +239,16 @@ add_custom_command(
     DEPENDS
         "${_art_managed_builder}"
         "${_art_r8_jar}"
+        "${_art_conscrypt_constants_java}"
+        "${_art_security_properties}"
         ${_art_boot_sources}
         ${_art_boot_aconfig}
     COMMENT "Building target-neutral ART boot.jar with configured JDK 21 and D8"
     VERBATIM)
 add_custom_target(art-managed-boot-jar
     DEPENDS "${_art_boot_jar}" "${_art_boot_manifest}")
+add_custom_target(art-runtime-package-inputs ALL)
+add_dependencies(art-runtime-package-inputs art-managed-boot-jar)
 
 function(art_define_test_stage stage)
     if(NOT stage MATCHES "^w[0-9][0-9][0-9]$")
@@ -946,7 +1104,7 @@ set(_art_windows_libcore_runnable_classes
     PathProbe AbsPathProbe AsyncCloseProbe BnProbe CoreProbe DnsProbe GcForced
     GcProbe GoldenApp InterruptProbe IoProbe ExecProbe Ipv6Probe LocaleProbe
     NetProbe OsErrnoProbe OsConstantsProbe PropsProbe RtMem SocketAddressProbe
-    ThreadStressProbe ThrowProbe UdpProbe XmlProbe ZipProbe)
+    SslProviderProbe ThreadStressProbe ThrowProbe UdpProbe XmlProbe ZipProbe)
 foreach(_art_libcore_class IN LISTS _art_windows_libcore_managed_classes)
     string(TOLOWER "${_art_libcore_class}" _art_libcore_name)
     list(FIND _art_windows_libcore_runnable_classes
@@ -969,6 +1127,11 @@ foreach(_art_libcore_class IN LISTS _art_windows_libcore_managed_classes)
             list(APPEND _art_libcore_additional_command_arguments
                 --hello-jar "${_art_managed_root}/hello.jar"
                 --path-jar "${_art_managed_root}/pathprobe.jar")
+        elseif(_art_libcore_class STREQUAL "SslProviderProbe")
+            list(APPEND _art_libcore_additional_dependencies javacrypto)
+            list(APPEND _art_libcore_additional_command_arguments
+                --cacerts-dir "${_art_cacerts_dir}"
+                --security-properties "${_art_security_properties}")
         endif()
         set(_art_libcore_runtime_arguments
             TIMEOUT 600

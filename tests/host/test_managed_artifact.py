@@ -30,6 +30,7 @@ def _arguments(tmp_path: Path) -> argparse.Namespace:
         source_tree=[],
         exclude=[],
         aconfig=[],
+        resource=[],
         boot_classpath=None,
         patch_module=None,
         javac_option=[],
@@ -78,6 +79,33 @@ def test_probe_build_is_shell_free_deterministic_and_source_relative(tmp_path, m
     assert str(tmp_path) not in manifest_text
     assert all(call[1]["shell"] is False for call in commands)
     assert any(str(call[0][-1]).startswith("@") for call in commands)
+
+
+def test_resource_is_deterministic_portable_and_rejects_dex_collision(
+    tmp_path, monkeypatch
+):
+    args = _arguments(tmp_path)
+    resource = args.source_root / "security.properties"
+    resource.write_text("security.provider.1=Probe\n", encoding="utf-8")
+    args.resource = [[str(resource), "java/security/security.properties"]]
+    monkeypatch.setattr(
+        managed_artifact.subprocess, "run", _successful_tool_run([])
+    )
+
+    jar, manifest = managed_artifact.build_managed_artifact(args)
+    with zipfile.ZipFile(jar) as archive:
+        assert archive.namelist() == [
+            "classes.dex",
+            "java/security/security.properties",
+        ]
+        assert archive.read("java/security/security.properties") == resource.read_bytes()
+    manifest_text = manifest.read_text(encoding="utf-8")
+    assert "source/security.properties" in manifest_text
+    assert str(tmp_path) not in manifest_text
+
+    args.resource = [[str(resource), "classes.dex"]]
+    with pytest.raises(managed_artifact.ManagedArtifactError, match="collides"):
+        managed_artifact.build_managed_artifact(args)
 
 
 def test_d8_failure_is_propagated_with_log_path(tmp_path, monkeypatch):

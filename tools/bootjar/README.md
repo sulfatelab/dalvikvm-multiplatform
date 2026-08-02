@@ -40,16 +40,20 @@ Dex with AOSP r8 and
 `-Dcom.android.tools.r8.emitRecordAnnotationsInDex=1 --android-platform-build`
 so `java.lang.Record` remains in boot dex (ART WellKnownClasses).
 
-## Conscrypt/TLS product boot
+## Unified Conscrypt/TLS product boot
 
-```bash
-bash tools/bootjar/build.sh            # or reuse existing /tmp/bootbuild/classes
-bash tools/bootjar/build_windows_x64.sh      # stage the shared multipath jar
-bash tools/bootjar/build_conscrypt_windows_x64.sh
+```text
+python tools/build_art.py build --target-id <target-id> --parallel <jobs>
+python tools/build_art.py stage --target-id <target-id>
 ```
 
-Merges jarjar `com.android.org.conscrypt` into boot classes, embeds
-`java/security/security.properties`, re-dexes, and stages
-`build/windows_x64_phase1/run/boot.jar`. Requires host `g++` + boringssl headers for
-`NativeConstants`. The resulting jar remains the same shared multipath boot
-format; it adds the conscrypt classes and security resources used by TLS.
+The generated CMake/Ninja graph merges jarjar `com.android.org.conscrypt` into
+the shared boot classes, generates `NativeConstants.java` with the configured
+plain Clang driver, embeds `java/security/security.properties`, and produces a
+deterministic target-local boot JAR and relative-path manifest. The Python
+stage command packages that JAR, the three shared TLS DSOs, and the pinned CA
+roots without a shell, Make, NMake, or a POSIX environment.
+
+The older Windows-only Conscrypt and CA/staging shell scripts have been
+retired. They were host-dependent product builders and are not valid fallbacks
+for this pipeline.

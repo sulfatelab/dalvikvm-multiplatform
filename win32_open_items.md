@@ -549,7 +549,7 @@ Summary (details below; do not delete history):
 - **Kind:** config / compatibility
 - **Area:** JCA / conscrypt SSL defaults
 - **Root cause:** Windows x64 multipath deferred BouncyCastle, so `keystore.type=BKS` could not resolve. `Security.initializeStatic()` also omitted `keystore.type`, so `KeyStore.getDefaultType()` fell back to desktop `jks`, which is not registered. `KeyManagerFactory.init(null,null)` → `KeyStore.getInstance("jks")` failed and `SSLContext.init` aborted.
-- **Fix:** default `keystore.type=AndroidCAStore` (HarmonyJSSE/`TrustedCertificateKeyStoreSpi`, empty-loadable); restore loading `security.properties` on Windows after W-020; mirror in `build_conscrypt_windows_x64.sh` and boot.jar resource.
+- **Fix:** default `keystore.type=AndroidCAStore` (HarmonyJSSE/`TrustedCertificateKeyStoreSpi`, empty-loadable); restore loading `security.properties` on Windows after W-020; package the tracked common properties resource through the unified boot-JAR edge.
 - **Exit criteria:** KeyStoreProbe + SslProviderProbe `sslcontext.init=ok` under wine.
 - **Opened/Closed:** 2026-07-17
 
@@ -558,7 +558,7 @@ Summary (details below; do not delete history):
 - **Kind:** packaging / product asset
 - **Area:** TLS trust / AndroidCAStore
 - **Root cause:** Android `TrustedCertificateStore` reads `$ANDROID_ROOT/etc/security/cacerts/<subject_hash_old>.N`. Product previously shipped empty dirs, so SSLContext.init worked but trust set was empty.
-- **Fix:** generate Mozilla/system PEM bundle into OpenSSL hash_old layout (`tools/windows_x64/generate_cacerts.sh`), hermetic assets under `tools/windows_x64/assets/cacerts`, stage via `stage_run_assets.sh` as required asset (with `boot.jar` / `icudt72l.dat`). LocaleData hard-coded fallback so OpenSSLX509Certificate date parsing works without full ICU4J resource bundles in boot.jar.
+- **Fix:** keep 121 reviewed OpenSSL `subject_hash_old` roots under `native/runtime-assets/etc/security/cacerts` and stage them, `boot.jar`, `security.properties`, `icudt72l.dat`, and the writable keychain directories through `tools/build_art.py stage`. LocaleData retains the hard-coded fallback needed by OpenSSLX509Certificate date parsing without full ICU4J resource bundles in boot.jar. The former host-dependent CA generator and shell stager are retired.
 - **Exit criteria:** TrustStoreProbe AndroidCAStore.size>=50 and acceptedIssuers>=50 under wine with ANDROID_ROOT=run.
 - **Opened/Closed:** 2026-07-17
 
@@ -752,14 +752,15 @@ Summary (details below; do not delete history):
 - **Gap:** ~~Windows x64 TLS/crypto PE incomplete~~ **product PE + boot packaging complete for HTTPS smoke**.
 - **Exit criteria:** HTTPS/crypto golden **or** explicit non-goal. **Met** (wine HttpsProbe status 200 + SslProviderProbe).
 - **Fix / evidence:**
-  - PE: `libcrypto` / `libssl` / `libjavacrypto` from hybrid CMake; staged single-soname product names.
-  - Boot: `tools/bootjar/build_conscrypt_windows_x64.sh` + `build_okhttp_windows_x64.sh` → OpenSSLProvider/JSSE + OkHttp handlers + `security.properties` (AndroidCAStore).
-  - Trust: product `run/etc/security/cacerts` (121 roots) via `stage_run_assets.sh`.
+  - PE: the common generated target graph emits shared `libcrypto.dll`, `libssl.dll`, and `libjavacrypto.dll`; the latter imports both BoringSSL DSOs.
+  - Boot: the CMake/Ninja managed-artifact edge adds Conscrypt, generated `NativeConstants.java`, and `security.properties` to the deterministic shared boot JAR. The historical OkHttp overlay remains separate from this provider gate.
+  - Trust: `tools/build_art.py stage` packages 121 tracked roots plus `cacerts-added` and `cacerts-removed` directories without a POSIX environment.
+  - Native acceptance (2026-08-01): Windows Server 2025 W-004 passed `SslProviderProbe` with AndroidOpenSSL SHA-256, SecureRandom, AES-GCM, and `SSLContext.init`; the full unified catalog passed 76/76.
   - Wine (2026-07-17 reverify after ART/compat rebuild):
     - `SslProviderProbe.done=ok` (AndroidOpenSSL digests/AES-GCM/SSLContext.init)
     - `HttpsProbe.done=ok` (`https://example.com/` status 200; handlers Http/HttpsURLConnectionImpl)
 - **Residual (non-exit / optional):** boringssl win-x86_64 ASM acceleration; BouncyCastle/BKS; full ICU4J IDNA tables for non-ASCII hosts; broader HTTPS golden matrix on real Win10.
-- **Code anchors:** historical `docs/history/windows_x64_libcore_icu_result.md`; `tools/bootjar/build_conscrypt_windows_x64.sh`; `tools/bootjar/build_okhttp_windows_x64.sh`; `tools/windows_x64/stage_run_assets.sh`
+- **Code anchors:** historical `docs/history/windows_x64_libcore_icu_result.md`; `tests/CMakeLists.txt`; `tests/support/generate_conscrypt_constants.py`; `compat/java-resources/java/security/security.properties`; `native/runtime-assets/etc/security/cacerts`; `tools/build_art.py`
 - **Opened:** 2026-07-17
 - **Closed:** 2026-07-17
 

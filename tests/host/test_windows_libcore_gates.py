@@ -43,6 +43,7 @@ def test_windows_libcore_runtime_matrix_matches_promoted_cases():
         "PropsProbe",
         "RtMem",
         "SocketAddressProbe",
+        "SslProviderProbe",
         "ThreadStressProbe",
         "ThrowProbe",
         "UdpProbe",
@@ -101,6 +102,19 @@ def test_windows_libcore_runtime_matrix_matches_promoted_cases():
         "accepted=true peer=",
         "peer.loopback=true",
         "SocketAddressProbe.done=ok",
+    ]
+    assert matrix["SslProviderProbe"]["expected_markers"] == [
+        "mapLibraryName.javacrypto=libjavacrypto.dll",
+        "provider.1=AndroidOpenSSL class=com.android.org.conscrypt.OpenSSLProvider",
+        "AndroidOpenSSL=com.android.org.conscrypt.OpenSSLProvider",
+        "sha256.provider=AndroidOpenSSL",
+        "sha256.hex=0ced64b8a7ce50142f0ebec3e2d6b842e3991c8161abd5fe3089e145886bef02",
+        "securerandom.provider=AndroidOpenSSL",
+        "aesgcm.provider=AndroidOpenSSL",
+        "sslcontext.protocol=TLS",
+        "sslcontext.provider=AndroidOpenSSL",
+        "sslcontext.init=ok",
+        "SslProviderProbe.done=ok",
     ]
     assert matrix["AsyncCloseProbe"]["expected_markers"] == [
         "accept.blocking",

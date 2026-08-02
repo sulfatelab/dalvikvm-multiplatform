@@ -119,8 +119,8 @@ def test_unified_overlay_factory_selects_current_target_policy():
     assert not (repo / "overlay" / "port_policy_windows.py").exists()
     linux = load_overlay_factory(str(factory), resolve_target("linux-x86_64-gnu"))
     windows = load_overlay_factory(str(factory), resolve_target("windows-x86_64-msvc"))
-    assert len(linux.modules) == 38
-    assert len(windows.modules) == 31
+    assert len(linux.modules) == 40
+    assert len(windows.modules) == 34
     assert linux.global_policy.host_libs == windows.global_policy.host_libs
     assert linux.blueprint_scan == windows.blueprint_scan
     assert linux.blueprint_scan.excludes(
@@ -134,6 +134,13 @@ def test_unified_overlay_factory_selects_current_target_policy():
     assert "__LP64__=1" not in linux.global_policy.art_defines
     assert "__LP64__=1" in windows.global_policy.art_defines
     assert linux.policy_for("libart-compiler").kind == "shared"
+    for name in ("libcrypto", "libssl", "libjavacrypto"):
+        assert linux.policy_for(name).kind == "shared"
+        assert windows.policy_for(name).kind == "shared"
+    assert windows.policy_for("libjavacrypto").add_shared_libs == [
+        "libcrypto",
+        "libssl",
+    ]
     compiler = windows.policy_for("libart-compiler")
     assert compiler.kind == "shared"
     assert compiler.add_shared_libs == ["libart", "libart-disassembler"]

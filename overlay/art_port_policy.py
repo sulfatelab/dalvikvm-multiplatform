@@ -179,6 +179,16 @@ _COMMON_MODULES: dict[str, dict[str, object]] = {
             "__INTRODUCED_IN(x)=",
         ],
     ),
+    # Keep the product TLS topology equal across target platforms. Conscrypt's
+    # platform JNI is always a DSO and consumes the shared BoringSSL DSOs;
+    # target policy may still select architecture-specific BoringSSL sources.
+    "libcrypto": dict(kind="shared"),
+    "libssl": dict(kind="shared"),
+    "libjavacrypto": dict(
+        kind="shared",
+        remove_static_libs=["libcrypto", "libssl"],
+        add_shared_libs=["libcrypto", "libssl"],
+    ),
     "libjavacore": dict(
         kind="shared",
         remove_static_libs=["libnativehelper_compat_libc++"],
@@ -297,6 +307,9 @@ _LINUX_MODULE_DELTA: dict[str, dict[str, object]] = {
     "libicu_jni": dict(
         add_cflags=["-fvisibility=protected", "-Wno-unused-parameter"]
     ),
+    # This is an ART product target, not Conscrypt's OpenJDK host JNI. Select
+    # the JNIEnv** Android native boundary even though the OS target is Linux.
+    "libjavacrypto": dict(add_defines=["ANDROID"]),
     "libicui18n": dict(
         kind="shared",
         add_cflags=[
@@ -459,6 +472,45 @@ _WINDOWS_MODULE_DELTA: dict[str, dict[str, object]] = {
     ),
     "libicu": dict(force_enabled=True),
     "libicu_jni": dict(add_cflags=_WINDOWS_CFLAGS, force_enabled=True),
+    "libcrypto": dict(
+        add_srcs=["src/crypto/fipsmodule/bcm.c"],
+        add_cflags=_WINDOWS_CFLAGS
+        + [
+            "-fvisibility=hidden",
+            "-Wno-unused-parameter",
+            "-Wno-deprecated-declarations",
+            "-Wno-bitwise-op-parentheses",
+            "-Wno-unknown-pragmas",
+        ],
+        add_defines=[
+            "BORINGSSL_SHARED_LIBRARY",
+            "BORINGSSL_ANDROID_SYSTEM",
+            "BORINGSSL_IMPLEMENTATION",
+            "OPENSSL_NO_ASM",
+            "OPENSSL_SMALL",
+        ],
+        add_shared_libs=["bcrypt", "advapi32"],
+        force_enabled=True,
+    ),
+    "libssl": dict(
+        add_cflags=_WINDOWS_CFLAGS + ["-Wno-unused-parameter"],
+        add_defines=["OPENSSL_NO_ASM"],
+        force_enabled=True,
+    ),
+    "libjavacrypto": dict(
+        add_cflags=_WINDOWS_CFLAGS
+        + ["-Wno-unused-parameter", "-Wno-sign-compare"],
+        # app_data.h includes ws2ipdef.h directly. The Windows SDK expects the
+        # minwindef CONST spelling that project compatibility headers normally
+        # hide from C++ sources, so preserve it only for this boundary DSO.
+        add_defines=[
+            "CONSCRYPT_OPENJDK",
+            "OPENSSL_NO_ASM",
+            "CONST=const",
+            "MDVM_WINDOWS_KEEP_CONST_MACRO=1",
+        ],
+        force_enabled=True,
+    ),
     "libjavacore": dict(
         remove_srcs=[
             "libcore_io_Linux.cpp",

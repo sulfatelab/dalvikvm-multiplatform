@@ -39,14 +39,14 @@ items are closed.
 | Area | Status | Current position | Exit condition |
 |---|---|---|---|
 | Python frontend | COMPLETE for the initial slice | `generate`, `check-generated`, `configure`, `build`, `test`, and `stage` exist; subprocesses are shell-free; configured JDK 21 is validated and passed to CMake | keep regression coverage current |
-| Linux x86-64 product | COMPLETE for the current W-003/W-004/W-013 runtime slice | exact-target CriticalNative and normal/FastNative W-003 gates join all five W-004 gates plus the shared W-013 128 MiB non-moving-heap gate; fresh builds and identical stage repeats pass, with the repeats remaining Ninja no-ops | add boot-image/security packaging and migrate the remaining behavioral stages |
-| Windows x86-64 product | PARTIAL / experimental | Linux-hosted cross and native Windows Server 2025 product builds pass; the accepted native baseline passes 75/75 across W-002, W-003, W-004, W-010, W-013, W-014, W-025, and W-027, and identical product/test repeats are Ninja no-ops | add boot-image/security packaging and migrate the remaining behavioral coverage |
+| Linux x86-64 product | COMPLETE for the current W-003/W-004/W-013 runtime slice | exact-target CriticalNative and normal/FastNative W-003 gates join all five W-004 gates plus the shared W-013 128 MiB non-moving-heap gate; shared TLS DSOs, Conscrypt boot content, security properties, and 121 CA roots now use the same product graph/stager as Windows | add boot images and migrate the remaining behavioral stages |
+| Windows x86-64 product | PARTIAL / experimental | Linux-hosted cross and native Windows Server 2025 product builds pass; the accepted native baseline passes 76/76 across W-002, W-003, W-004, W-010, W-013, W-014, W-025, and W-027, and identical product/test repeats are Ninja no-ops | add boot images/complete-package acceptance and migrate the remaining behavioral coverage |
 | Compiler DSO parity | COMPLETE for `art-compiler` | both targets emit a shared compiler DSO; Windows imports `art.dll` and exports `art_compiler_jit_create` | retain exact ABI and no-cycle gates |
 | Windows runtime DSO exports | COMPLETE for current x86-64 closure | `art.dll` combines explicit source annotations with a reviewed 187-entry runtime-consumer DEF, never CMake auto-export; Debug has 2,065 exports and RelWithDebInfo has 2,066 | keep the consumer allowlist and actual PE boundary under regression review |
 | Full DSO topology parity | PARTIAL | five module kinds and two target-specific module pairs still differ | convert each difference or record a reviewed target exception |
-| Unified phase catalog | PARTIAL | eight virtual stages declare 32 native probes, 47 managed JARs, and 13 command gates; Windows has 90 applicable items (68 target-runnable, seven host-review, and 15 compile-only in the product variant), while Linux x86-64 has eleven applicable items (eight runnable and three compile-only artifacts) | migrate the remaining behavioral runners, portable JNI expansion, and result checks |
-| Boot/runtime packaging | PARTIAL | the base boot JAR and probe JARs are Python/CMake/Ninja-owned, deterministic, target-local, and fail-fast; managed gates isolate a runtime root and stage pinned ICU data plus the mandatory native boot DSO closure | add boot images, security providers/resources, cacerts, and complete runtime packages |
-| POSIX-free Windows build host | COMPLETE for the accepted native baseline; PARTIAL end to end | Server 2025 uses configured official JDK 21, Python, CMake, Ninja, and plain Clang drivers; all 75 accepted native tests and the product/test no-op gates pass without POSIX tooling | migrate every retained behavioral gate and complete runtime packaging |
+| Unified phase catalog | PARTIAL | eight virtual stages declare 32 native probes, 47 managed JARs, and 13 command gates; Windows has 90 applicable items (69 target-runnable, seven host-review, and 14 compile-only in the product variant), while Linux x86-64 has eleven applicable items (eight runnable and three compile-only artifacts) | migrate the remaining behavioral runners, portable JNI expansion, and result checks |
+| Boot/runtime packaging | PARTIAL | deterministic target-local boot/probe JARs now include Conscrypt and security properties; the common product graph emits three shared TLS DSOs; managed gates and the frontend stage package pinned ICU data, 121 CA roots, writable keychain directories, and the native DSO closure | add boot images and complete-package acceptance |
+| POSIX-free Windows build host | COMPLETE for the accepted native baseline; PARTIAL end to end | Server 2025 uses configured official JDK 21, Python, CMake, Ninja, and plain Clang drivers; all 76 accepted native tests, provider/security packaging, and product/test no-op gates pass without POSIX tooling | migrate every retained behavioral gate and complete boot-image/runtime packaging |
 | Legacy build removal | PARTIAL | active product ownership was demoted, project-owned symlink overlays were removed, and the superseded Linux miniature, Windows Phase-0/Phase-1, and libcore/ICU product graphs were deleted; the checked-in Linux graph and split overlay datasets remain | remove or demote every alternative product path after gate migration |
 | CI/acceptance automation | NOT STARTED | no in-repository CI workflow owns the acceptance matrix | fresh-build, no-op, graph, command, artifact, and native-host gates run automatically |
 | Additional architectures | BLOCKED by capability gates | all 17 canonical identities are registered; only `linux-x86_64-gnu` and experimental `windows-x86_64-msvc` generate | admit each profile only after its architecture and runtime gates pass |
@@ -55,7 +55,7 @@ items are closed.
 ### Latest verification baseline (2026-08-02)
 
 - [x] `PYTHONPATH=tools/bp2cmake python3 -m pytest tools/bp2cmake/tests tests/host -q`:
-  197 passed, including the ART embedding, UDP socket-option, scoped Locale,
+  201 passed, including the ART embedding, UDP socket-option, scoped Locale,
   Zip, NativeBN BigInteger, OS-constants, SAX/Expat XML, and direct `Os`
   socket-address plus async-close gates,
   generated PE-header,
@@ -68,8 +68,60 @@ items are closed.
   reviewed PE runtime-consumer export boundary, retired libcore-product-path
   absence, VCS binary/source-ownership coverage, W-027 Unicode API policy, and
   schema-2 build-fingerprint graph/tool/target-binding identity coverage.
+- [x] The provider/security product slice is common rather than a Windows
+  side-build. The overlay emits `libcrypto`, `libssl`, and `libjavacrypto` as
+  shared modules on both targets; `libjavacrypto` consumes the two BoringSSL
+  DSOs. Linux names them `libcrypto.so`, `libssl.so`, and
+  `libjavacrypto.so`; Windows keeps the same logical `lib` names as
+  `libcrypto.dll`, `libssl.dll`, and `libjavacrypto.dll`. Conscrypt Java plus
+  generated `NativeConstants.java` and the tracked
+  `java/security/security.properties` resource join the ordinary boot-JAR
+  edge. The boot manifest records 3,072 sources, 6,178 classes, one
+  `classes.dex`, relative source/resource identities, and no machine path.
+- [x] The first native Windows provider build found a host/target separation
+  defect that cross builds could not expose: the Conscrypt constants helper
+  invoked host `clang++.exe` without Windows SDK include/link arguments and
+  failed on `sys/types.h`. The helper now accepts repeated explicit compile
+  and link options. CMake maps the Windows build-host processor independently
+  to `x86_64-pc-windows-msvc` or `aarch64-pc-windows-msvc`, then passes the
+  configured regular-file SDK, libc++, compiler-runtime, and LLD driver
+  inputs. A Windows-hosted non-Windows target can supply the equally explicit
+  `ART_HOST_WINDOWS_BUNDLE_ROOT`; no Visual Studio environment, `cl.exe`,
+  `clang-cl.exe`, shell, or target executable is used.
+- [x] Provider/runtime gates passed on all provisioned cells. Linux W-004
+  rebuilt 1,580 edges and passed 5/5 at `--parallel 32`; Windows-cross W-004
+  built 1,543 edges and passed its structural gate, and the complete cross
+  product linked at 32 jobs. Native Windows W-004 built the target-local boot
+  product and passed 36/36 in 54.42 seconds, then repeated from
+  `ninja: no work to do` at 36/36 in 51.89 seconds. `SslProviderProbe` confirms
+  AndroidOpenSSL owns SHA-256, SecureRandom, AES-GCM, and the initialized TLS
+  context. The final complete native catalog also began with a Ninja no-op and
+  passed 76/76 in 136.08 seconds at the 16-job limit. The W-027 audit excludes
+  acronym endings such as `_CA`, `_RSA`, and `_DATA` while continuing to
+  reject known or unclassified encoding-selecting suffix-`A` calls; its native
+  and cross gates pass. The focused host regressions and full maintained host
+  suite pass at 201/201.
+- [x] The native generated-graph freshness check reports 36 modules from the
+  same 260 Blueprint files. Running the complete product build after runtime
+  testing built the remaining 350 edges, including `art-compiler.dll`,
+  `art-dex2oat.dll`, `dex2oat.exe`, and final product closure, and an identical
+  16-job build is a Ninja no-op. This ordering is required: a virtual runtime
+  stage need not link every final product target, and `stage` copies existing
+  artifacts rather than silently treating a partial test closure as a full
+  product build.
+- [x] Native Windows staging reports 156 product/runtime regular files; the
+  audited tree has 157 files including `stage_manifest.json`, 121 CA roots,
+  `cacerts-added` and `cacerts-removed`, and all three TLS DLLs. Every manifest
+  hash resolves, all stage and boot-manifest paths are relative, and source,
+  output, and stage scans contain zero reparse points. PE import inspection
+  confirms `libjavacrypto.dll -> libssl.dll + libcrypto.dll` and
+  `libssl.dll -> libcrypto.dll`. The Linux and Windows-cross stages report 154
+  and 159 staged regular files respectively, each with the same 121-root trust
+  store and no stage links. The fully superseded POSIX-only Conscrypt builder,
+  host-dependent CA generator, and Windows asset stager are removed; the
+  generated graph plus Python frontend are their only product replacement.
 - [x] Fresh generation loads the same 260 Blueprint files for both targets and
-  emits 34 generated modules for `linux-x86_64-gnu` and 33 for
+  emits 37 generated modules for `linux-x86_64-gnu` and 36 for
   `windows-x86_64-msvc`. Both graphs emit the separate `openjdkjvmti` DSO;
   Linux additionally emits `sigchain`, while Windows supplies the reviewed
   platform-source `sigchain` target from the common native entry point.
@@ -1644,15 +1696,16 @@ an unreviewed module-set or kind change.
 - [x] Stage pinned ICU data and the mandatory native bootstrap DSO closure in
   isolated managed-gate runtime roots without `/tmp` or shared cross-target
   state.
-- [ ] Add boot images, security assets/cacerts, and complete runtime package
-  staging to the frontend.
+- [x] Add common Conscrypt/security properties, shared TLS DSOs, 121 CA roots,
+  writable keychain directories, and their symlink-free frontend staging.
+- [ ] Add boot images and complete runtime-package acceptance to the frontend.
 - [x] Convert Phase-3 Java and Phase-4 managed probe compilation/D8 packaging
   into declared CMake/Ninja custom commands implemented by Python helpers.
 - [ ] Register behavioral commands and expected-result reviewers for every
   current stage; do not mark a compile-only DLL as a passed runtime gate.
 - [x] Run the newly unified stage set on the authoritative Windows Server 2025
   host and preserve sanitized evidence. The complete product catalog passes
-  at 75/75, with 68 target-runnable gates and seven host reviewers; its
+  at 76/76, with 69 target-runnable gates and seven host reviewers; its
   repeated `art-tests` build is a Ninja no-op.
 
 #### P1: complete parity and mechanical acceptance
@@ -1859,9 +1912,11 @@ from a directory containing only the staged closure. A frontend-owned
 `linux-x86_64-gnu` build produces `libart-compiler.so` with dynamic dependencies
 on `libart.so` and `libart-disassembler.so`. Fresh Linux and Windows generation
 loads the same Blueprint input set and uses the same converter. The resolved
-Linux graph contains 34 generated modules and the Windows graph contains 33:
+Linux graph contains 37 generated modules and the Windows graph contains 36:
 both emit `openjdkjvmti` as a separate DSO, while Linux emits `sigchain` and
-Windows owns its platform `sigchain` target in the common native entry point.
+Windows owns its platform `sigchain` target in the common native entry point;
+both generated graphs now also emit the shared `libcrypto`, `libssl`, and
+`libjavacrypto` provider topology.
 `build_art.py stage` validates the Windows
 DLL/import-library pair, copies the complete top-level DSO closure (including
 the pinned Windows `c++.dll`), rejects links/reparse points, and records

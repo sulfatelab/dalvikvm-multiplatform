@@ -42,7 +42,7 @@ add_library(art SHARED IMPORTED GLOBAL)
 set_target_properties(art PROPERTIES IMPORTED_LOCATION "{tmp_path / 'art.dll'}")
 add_executable(dalvikvm IMPORTED GLOBAL)
 set_target_properties(dalvikvm PROPERTIES IMPORTED_LOCATION "{tmp_path / 'dalvikvm.exe'}")
-foreach(_art_runtime_library IN ITEMS icu_jni javacore openjdk openjdkjvm)
+foreach(_art_runtime_library IN ITEMS icu_jni javacore javacrypto openjdk openjdkjvm)
   add_library(${{_art_runtime_library}} SHARED IMPORTED GLOBAL)
 endforeach()
 add_library(openjdkjvmti SHARED IMPORTED GLOBAL)
@@ -201,7 +201,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     assert async_close["ctest_registered"] is False
     assert sum(
         probe["execution"] == "target-runnable" for probe in catalog["probes"]
-    ) == 70
+    ) == 71
     assert {
         probe["name"]: probe["timeout_seconds"]
         for probe in catalog["probes"]
@@ -236,6 +236,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "managed_propsprobe": 600,
         "managed_rtmem": 600,
         "managed_socketaddressprobe": 600,
+        "managed_sslproviderprobe": 600,
         "managed_threadheavyprobe": 600,
         "managed_threadstressprobe": 600,
         "managed_throwprobe": 600,
