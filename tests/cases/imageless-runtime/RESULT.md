@@ -1,7 +1,7 @@
 # Managed runtime boot-mode result
 
 **Status:** PASS for Linux x86-64 imageless/generated-image runtime and Linux
-AArch64 imageless runtime
+AArch64 imageless/GC runtime
 
 **Latest acceptance:** 2026-08-02
 
@@ -15,16 +15,17 @@ Hello application in the boot modes explicitly admitted per target:
   matched to the exact target-local boot JAR.
 
 The adjacent GC stress source separately exercises allocation and collection
-through the same isolated runtime-gate infrastructure, but remains outside the
-AArch64 selector until it has its own behavioral evidence. These results do
-not claim Windows AOT/OAT support or AArch64 boot-image support.
+through the same isolated runtime-gate infrastructure. It is admitted for
+Linux AArch64 through an exact target selector backed by the acceptance below.
+These results do not claim Windows AOT/OAT support or AArch64 boot-image
+support.
 
 ## Target status
 
 | Target ID | Imageless | Boot image | Last accepted |
 |---|---:|---:|---:|
 | `linux-x86_64-gnu` | runtime-verified | runtime-verified | 2026-08-02 14:22:00 CST |
-| `linux-aarch64-gnu` | runtime-verified under explicit QEMU user mode | unsupported | 2026-08-02 19:24:29 CST |
+| `linux-aarch64-gnu` | runtime-verified under explicit QEMU user mode, including GC stress | unsupported | 2026-08-02 19:37:33 CST |
 | `windows-x86_64-msvc` | runtime-verified on the authoritative native host | unsupported | 2026-08-02 |
 
 Only `linux-x86_64-gnu` currently declares the `boot_image` capability.
@@ -37,8 +38,9 @@ A fresh RelWithDebInfo `linux-aarch64-gnu` product was generated, configured,
 audited, and built with the unified frontend, CMake, Ninja, plain GNU-style
 Clang 21.1.8 drivers, the declared regular-file GNU sysroot/runtime bundle,
 configured JDK 21, and pinned D8. The 32-job build completed 2,197 Ninja edges
-for the 38-module graph. The W-004 catalog exposed exactly two applicable
-runtime smokes: `art_runtime_show_version` and `managed_imageless_hello`.
+for the 38-module graph. The initial W-004 catalog exposed exactly two
+applicable runtime smokes: `art_runtime_show_version` and
+`managed_imageless_hello`.
 
 QEMU user mode 10.2.1 from the official Ubuntu `qemu-user` package was bound
 only through ignored local TOML. The shell-free gate supplied the declared
@@ -58,9 +60,9 @@ The result recorded only normalized runner identity. Its hashes were:
 Staging copied 157 declared artifacts into 158 regular files including the
 manifest, validated 32 AArch64 executable/DSO identities, retained only
 `$ORIGIN` runtime paths, and found no filesystem links. The immediate full
-product repeat reported `ninja: no work to do`. This admits an experimental
-AArch64 interpreter/runtime smoke; it does not claim GC, JNI, JIT, boot-image,
-or native-AArch64-host acceptance.
+product repeat reported `ninja: no work to do`. At that initial checkpoint this
+admitted only an experimental AArch64 interpreter/runtime smoke; it did not yet
+claim GC, JNI, JIT, boot-image, or native-AArch64-host acceptance.
 
 A follow-up rebuilt the four common sources that owned bring-up diagnostics
 plus their dependent runtime DSOs and executable. The same AArch64 W-004 slice
@@ -71,6 +73,19 @@ Windows rebuilt the same sources and passed W-004 twice at 36/36 in 52.10 and
 52.00 seconds, with the second build a Ninja no-op. Its common-prefix audit
 also found zero stale architecture labels. Actual x86-64 PE/JIT diagnostics
 remain explicitly scoped and were not generalized.
+
+A second evidence-first expansion added only `managed_gc_stress` to the exact
+Linux AArch64 selector. Reconfiguration passed audits of 2,110 compile
+commands, 2,196 Ninja commands, and 32 product links. The managed edge built
+`gcstressprobe.jar`, whose SHA-256 is
+`e2cd342ec38abdbbe936bd9bf1239742bcacc77ac0061e4c312c816eacd1f532`.
+Under the same fingerprinted QEMU runner, the probe printed
+`gcstress.ok=true`, `GcStressProbe.done=ok`, and `main end exception=0`, then
+exited zero in 2.20 seconds. The expanded W-004 stage passed 3/3 in 4.13
+seconds, and its immediate repeat passed 3/3 in 4.14 seconds after Ninja
+reported no work. This admits allocation/collection stress in the AArch64
+interpreter slice; JNI, JIT, boot-image, compiler-DSO loading, and a native
+AArch64 host remain unclaimed.
 
 ## Latest Linux acceptance
 
@@ -121,7 +136,7 @@ python3 tools/build_art.py stage --target-id linux-x86_64-gnu
 
 Use the same commands with `linux-aarch64-gnu`; its exact runner executable and
 sysroot remain external bindings in `.art-build.local.toml`. Its W-004 stage
-contains only the two AArch64 smokes described above.
+contains only the three AArch64 gates described above.
 
 Generated images, JARs, logs, result JSON, and stage trees remain under the
 ignored frontend output root. No executable, DSO, image, archive, or routine

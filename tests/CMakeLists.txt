@@ -742,6 +742,11 @@ set(_art_linux_runtime_smoke_ids_selector
     TARGET_IDS linux-x86_64-gnu linux-aarch64-gnu)
 set(_art_current_native_ids_selector
     TARGET_IDS linux-x86_64-gnu windows-x86_64-msvc)
+set(_art_gc_stress_ids_selector
+    TARGET_IDS
+        linux-x86_64-gnu
+        linux-aarch64-gnu
+        windows-x86_64-msvc)
 set(_art_imageless_runtime_ids_selector
     TARGET_IDS linux-x86_64-gnu linux-aarch64-gnu windows-x86_64-msvc)
 foreach(_art_test_llvm_tool ART_LLVM_READOBJ ART_LLVM_OBJDUMP)
@@ -1123,7 +1128,7 @@ art_add_target_probe(
         --forbid AssertionError)
 art_add_target_probe(
     NAME managed_gc_stress STAGE w004 TYPE MANAGED EXECUTION target-runnable
-    ${_art_current_native_ids_selector}
+    ${_art_gc_stress_ids_selector}
     SOURCES "${_art_test_cases_root}/imageless-runtime/GcStressProbe.java"
     DEPENDS dalvikvm icu_jni javacore openjdk
     CONTRACTS runtime-load gc stress

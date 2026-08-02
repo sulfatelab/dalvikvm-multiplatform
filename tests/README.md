@@ -116,14 +116,17 @@ Conscrypt provider, OkHttp/Okio URL handlers, generated aconfig and Conscrypt
 sources, and security properties. Android/libcore APIs and ART annotations are
 therefore resolved from the same AOSP boot classes on Linux and Windows build
 hosts.
-Three W-004 managed declarations are `target-runnable` on the exact current
-Linux and Windows x86-64 identities. `support/runtime_gate.py` runs imageless
-Hello and allocation/collection stress; the case-local `math-critical/run.py`
-runs Math CriticalNative in `-Xint` and threshold-zero JIT twice each. All
-three use a declared native DSO closure, isolated target-local runtime
-directories, pinned ICU data, strict exit/marker checks, timeouts, and
-sanitized JSON results. The Math aggregate additionally rejects filesystem
-links/reparse points, and Windows JIT requires a matching compiler record.
+Three W-004 managed declarations are `target-runnable` on explicit exact-target
+selectors. Imageless Hello and allocation/collection stress cover
+`linux-x86_64-gnu`, `linux-aarch64-gnu`, and `windows-x86_64-msvc`;
+`support/runtime_gate.py` supplies QEMU user mode only for the AArch64 target.
+The case-local `math-critical/run.py` remains limited to the two current native
+x86-64 identities and runs Math CriticalNative in `-Xint` and threshold-zero
+JIT twice each. All three declarations use a declared native DSO closure,
+isolated target-local runtime directories, pinned ICU data, strict exit/marker
+checks, timeouts, and sanitized JSON results. The Math aggregate additionally
+rejects filesystem links/reparse points, and Windows JIT requires a matching
+compiler record.
 W-003 also declares CriticalNative and normal/FastNative for the exact pair
 `linux-x86_64-gnu` and `windows-x86_64-msvc`. One shared runner resolves the
 ELF/DLL name, library-path separator, absolute-load property, and target JIT
@@ -582,9 +585,10 @@ hashes, normalized image identity, and normalized native/external runner
 identity without recording machine paths or environment dumps.
 
 The current `linux-aarch64-gnu` experimental slice deliberately registers only
-`art_runtime_show_version` and imageless interpreter `Hello`. It does not infer
-GC, JNI, JIT, boot-image, compiler-DSO load, or another stage's applicability
-from successful emulation.
+`art_runtime_show_version`, imageless interpreter `Hello`, and managed GC
+stress. Each has its own behavioral evidence under the explicit runner. The
+slice does not infer JNI, JIT, boot-image, compiler-DSO load, or another
+stage's applicability from successful emulation.
 
 Linkage describes the binary boundary under test. It is independent of whether
 the test is compile-only, run locally, transferred to another machine, or

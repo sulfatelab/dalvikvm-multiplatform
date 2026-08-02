@@ -533,6 +533,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     applicable = [probe for probe in catalog["probes"] if probe["applicable"]]
     assert [probe["name"] for probe in applicable] == [
         "managed_imageless_hello",
+        "managed_gc_stress",
         "art_runtime_show_version",
     ]
     assert all(probe["execution"] == "target-runnable" for probe in applicable)

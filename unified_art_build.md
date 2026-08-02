@@ -44,12 +44,12 @@ items are closed.
 | Compiler DSO parity | COMPLETE for `art-compiler` | both targets emit a shared compiler DSO; Windows imports `art.dll` and exports `art_compiler_jit_create` | retain exact ABI and no-cycle gates |
 | Windows runtime DSO exports | COMPLETE for current x86-64 closure | `art.dll` combines explicit source annotations with a reviewed 187-entry runtime-consumer DEF, never CMake auto-export; Debug has 2,065 exports and RelWithDebInfo has 2,066 | keep the consumer allowlist and actual PE boundary under regression review |
 | Full DSO topology parity | PARTIAL / mechanically controlled | the fresh graphs have five reviewed module-kind differences and one reviewed generated/platform module mapping; every current difference is checked against a versioned contract | convert reviewed exceptions where practical; reject every unreviewed graph change |
-| Unified phase catalog | COMPLETE for current declaration truthfulness; PARTIAL target expansion | eight virtual stages declare 32 native probes, 47 managed JARs, and 14 command gates; Windows has 90 applicable items (69 target-runnable, eight host-review, and 13 compile-only in the product variant), Linux x86-64 has 12 applicable items (nine runnable and three compile-only artifacts), and experimental Linux AArch64 has exactly two runner-backed W-004 smokes; CMake rejects runnable shared libraries and compile-only command gates | expand exact-target applicability only with matching behavioral acceptance |
-| Boot/runtime packaging | COMPLETE for Linux x86-64; experimental imageless Linux AArch64; capability-gated elsewhere | deterministic target-local boot/probe JARs include Conscrypt, OkHttp/Okio, and security properties; native Linux x86-64 generates, runtime-tests, and stages a relocatable ART/OAT/VDEX boot image; AArch64 passes exact imageless Hello under its explicit runner and records boot image unsupported; staging also validates the complete DSO closure and packages pinned ICU data, 121 CA roots, and writable keychain directories | retain the image/runtime-package gates while adding target capabilities independently |
+| Unified phase catalog | COMPLETE for current declaration truthfulness; PARTIAL target expansion | eight virtual stages declare 32 native probes, 47 managed JARs, and 14 command gates; Windows has 90 applicable items (69 target-runnable, eight host-review, and 13 compile-only in the product variant), Linux x86-64 has 12 applicable items (nine runnable and three compile-only artifacts), and experimental Linux AArch64 has exactly three runner-backed W-004 gates; CMake rejects runnable shared libraries and compile-only command gates | expand exact-target applicability only with matching behavioral acceptance |
+| Boot/runtime packaging | COMPLETE for Linux x86-64; experimental imageless Linux AArch64; capability-gated elsewhere | deterministic target-local boot/probe JARs include Conscrypt, OkHttp/Okio, and security properties; native Linux x86-64 generates, runtime-tests, and stages a relocatable ART/OAT/VDEX boot image; AArch64 passes exact imageless Hello and GC stress under its explicit runner and records boot image unsupported; staging also validates the complete DSO closure and packages pinned ICU data, 121 CA roots, and writable keychain directories | retain the image/runtime-package gates while adding target capabilities independently |
 | POSIX-free Windows build host | COMPLETE for the accepted native baseline; PARTIAL end to end | Server 2025 uses configured official JDK 21, Python, CMake, Ninja, and plain Clang drivers; all 77 accepted native tests, provider/security packaging, and product/test no-op gates pass without POSIX tooling | migrate every retained behavioral gate; keep Windows AOT/OAT capability work separate |
 | Legacy build removal | COMPLETE | the checked-in Linux snapshot/generator, split overlays, Linux miniature graphs, Windows Phase-0/Phase-1 and libcore/ICU graphs, product package scripts, and final POSIX-only boot-image entry points are retired; historical records remain documentation only | prevent alternative product paths from returning |
 | CI/acceptance automation | IMPLEMENTED / activation pending | checked-in shell-free Python driver and GitHub workflow define host, fresh Linux, Windows-cross, and native Windows cells; machine paths enter only through an external CI TOML binding | register/provision the two self-hosted runner labels and obtain accepted workflow runs |
-| Additional architectures | PARTIAL / Linux AArch64 experimental | all 17 canonical identities are registered; `linux-aarch64-gnu` now generates, builds, stages, and passes exact show-version plus imageless-Hello gates through an explicit QEMU user-mode binding; x86, ARMv7, RISC-V64, Windows AArch64/ARM64EC, and WASI remain capability-gated | broaden AArch64 only with matching evidence, then admit each remaining profile independently |
+| Additional architectures | PARTIAL / Linux AArch64 experimental | all 17 canonical identities are registered; `linux-aarch64-gnu` now generates, builds, stages, and passes exact show-version, imageless-Hello, and GC-stress gates through an explicit QEMU user-mode binding; x86, ARMv7, RISC-V64, Windows AArch64/ARM64EC, and WASI remain capability-gated | broaden AArch64 only with matching evidence, then admit each remaining profile independently |
 | Windows AOT/OAT | BLOCKED / separate track | compiler DSO parity does not provide Windows OAT production or loading | satisfy `win32_aot_oat.md`; do not imply capability from `art-compiler.dll` |
 
 ### Latest verification baseline (2026-08-02)
@@ -2088,7 +2088,16 @@ differences.
   seconds with no `Windows x64` text. Native Windows rebuilt the same sources,
   passed W-004 twice at 36/36 in 52.10 and 52.00 seconds, and reported a Ninja
   no-op on the repeat; its common-prefix audit also found zero stale labels.
-- [ ] Promote Linux AArch64 beyond the experimental two-smoke slice, and
+- [x] Expand the experimental Linux AArch64 interpreter slice with exact-target
+  GC-stress evidence. Reconfiguration generated the new managed JAR edge and
+  passed audits of 2,110 compile commands, 2,196 Ninja commands, and 32 product
+  links. Official QEMU user mode ran allocation/collection stress to its three
+  required markers and exact zero exit in 2.20 seconds. The resulting W-004
+  stage passed 3/3 in 4.13 seconds and repeated at 3/3 in 4.14 seconds after a
+  true Ninja no-op. This broadens only the GC contract; JNI, JIT, boot-image,
+  compiler-DSO loading, and native-AArch64-host acceptance remain excluded.
+- [ ] Promote Linux AArch64 beyond the experimental three-gate interpreter
+  slice, and
   validate/admit Linux x86, ARMv7, and RISC-V64 separately.
 - [x] Migrate the ARM64EC identity from transitional
   `windows-aarch64-arm64ec/cpu_arch=aarch64` to
@@ -2607,7 +2616,7 @@ combination is implicitly available:
 | `linux-x86-gnu` | `x86` | GNU | ELF32 | `planned` |
 | `linux-x86_64-gnu` | `x86_64` | GNU | ELF64 | `supported` after ID migration |
 | `linux-armv7-gnu` | `armv7` | GNU EABI hard-float fixed by this profile | ELF32 | `planned` |
-| `linux-aarch64-gnu` | `aarch64` | GNU | ELF64 | `experimental`; complete product plus exact show-version/imageless-Hello runner gates |
+| `linux-aarch64-gnu` | `aarch64` | GNU | ELF64 | `experimental`; complete product plus exact show-version/imageless-Hello/GC-stress runner gates |
 | `linux-riscv64-gnu` | `riscv64` | GNU | ELF64 | `planned` |
 | `windows-x86-gnu` | `x86` | GNU | PE32 | valid `planned` placeholder; no near/far implementation commitment; also blocked by the no-MinGW contract |
 | `windows-x86-msvc` | `x86` | MSVC | PE32 | valid `planned` placeholder; no near/far implementation commitment |
