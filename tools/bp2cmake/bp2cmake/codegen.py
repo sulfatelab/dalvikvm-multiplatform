@@ -41,6 +41,7 @@ class CodegenConfig:
     mterp_source_dir: str = ""
     mterp_output: str = ""
     clang: str = "clang++"
+    asm_target_triple: str = ""
     # Root of the art tree. art/* inputs (mterp, asm_defines, operator_out
     # headers) come from here (nested vendor/art). Defaults to native_root for
     # standalone runs where art lives under the same root.
@@ -266,8 +267,14 @@ def gen_asm_defines(cfg: CodegenConfig) -> str:
     over it -> asm_defines.h. Mirrors generateArtAsmDefinitions +
     generateArtAsmHeader (which the archive split between CMake and Gradle).
 
-    For PE (asm_target_os=windows), uses ART_TARGET_WINDOWS so offsets match
-    the MSVC/PE Runtime layout (notably RUNTIME_INSTRUMENTATION_OFFSET)."""
+    The explicit target triple and target-OS macros keep layout generation
+    independent of the build host."""
+    if not cfg.asm_target_triple or any(
+        character.isspace() for character in cfg.asm_target_triple
+    ):
+        raise CodegenError(
+            f"invalid explicit asm target triple: {cfg.asm_target_triple!r}"
+        )
     asm_cc = cfg.pa("art/tools/cpp-define-generator/asm_defines.cc")
     s_path = cfg.out("art/asm_defines.s")
     staged_s_path = s_path + ".tmp"
@@ -277,7 +284,14 @@ def gen_asm_defines(cfg: CodegenConfig) -> str:
 
     # Stage 1: clang -S to human-readable assembly carrying the >>NAME val neg<<
     # markers. Needs the runtime include + define context.
-    cmd = [cfg.clang, "-std=gnu++20", "-S", "-o", staged_s_path]
+    cmd = [
+        cfg.clang,
+        f"--target={cfg.asm_target_triple}",
+        "-std=gnu++20",
+        "-S",
+        "-o",
+        staged_s_path,
+    ]
     for inc in cfg.asm_includes:
         cmd += ["-I", cfg.inc(inc)]
     # aconfig-generated headers (com_android_art_flags.h etc.) staged in gensrc.
@@ -288,7 +302,7 @@ def gen_asm_defines(cfg: CodegenConfig) -> str:
     # and project compatibility headers own their declarations explicitly.
     os_name = (cfg.asm_target_os or "linux").lower()
     if os_name in ("windows", "win32", "windows_x64", "pe"):
-        cmd += ["--target=x86_64-pc-windows-msvc", "-nostdinc++"]
+        cmd += ["-nostdinc++"]
         for inc in cfg.asm_target_include_dirs:
             cmd += ["-isystem", inc]
     for m in _asm_defines_macros_for(cfg):

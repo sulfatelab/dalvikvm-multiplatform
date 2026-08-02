@@ -37,6 +37,7 @@ def _cfg(tmp, *, arch="x86_64", source_dir="x86_64ng", output="mterp_x86_64.S"):
         arch=arch,
         mterp_source_dir=source_dir,
         mterp_output=output,
+        asm_target_triple="x86_64-unknown-linux-gnu",
         art_root=ART_ROOT,
     )
 
@@ -160,6 +161,34 @@ def test_asm_defines():
         assert any("ACCESS_FLAGS_CLASS_IS_INTERFACE" in d for d in defines)
 
 
+def test_asm_defines_uses_the_explicit_target_triple(monkeypatch, tmp_path):
+    from bp2cmake import codegen
+
+    commands = []
+
+    def fake_run(command, cwd=None, capture_stdout_to=None):
+        del cwd
+        commands.append(command)
+        if "-S" in command:
+            output = command[command.index("-o") + 1]
+            with open(output, "w", encoding="utf-8") as output_file:
+                output_file.write("generated assembly\n")
+        if capture_stdout_to is not None:
+            with open(capture_stdout_to, "w", encoding="utf-8") as output_file:
+                output_file.write("#define GENERATED 1\n")
+
+    monkeypatch.setattr(codegen, "_run", fake_run)
+    cfg = CodegenConfig(
+        native_root=str(tmp_path),
+        gensrc_dir=str(tmp_path / "gensrc"),
+        asm_target_triple="aarch64-unknown-linux-gnu",
+    )
+    gen_asm_defines(cfg)
+
+    assert "--target=aarch64-unknown-linux-gnu" in commands[0]
+    assert all("x86_64-pc-windows-msvc" not in argument for argument in commands[0])
+
+
 def test_windows_asm_defines_config():
     cfg = _cfg("unused")
     cfg.asm_target_os = "windows"
@@ -251,6 +280,7 @@ def test_windows_asm_defines_runtime_layout():
     with tempfile.TemporaryDirectory() as tmp:
         cfg = _cfg(tmp)
         cfg.asm_target_os = "windows"
+        cfg.asm_target_triple = "x86_64-pc-windows-msvc"
         cfg.asm_target_include_dirs = includes
         from bp2cmake.codegen import gen_aconfig
         gen_aconfig(cfg)

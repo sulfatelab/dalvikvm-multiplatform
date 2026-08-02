@@ -34,6 +34,7 @@ rebuild.
 PYTHONPATH=tools/bp2cmake python3 -m bp2cmake.codegen_main \
     --root <repo>/vendor --gensrc <out-dir> --arch x86_64 \
     --mterp-source-dir x86_64ng --mterp-output mterp_x86_64.S \
+    --target-triple x86_64-unknown-linux-gnu \
     --clang clang++
 ```
 
@@ -53,10 +54,10 @@ The asm_defines define-set here is the single source of truth for the runtime
 behavioral overlay (CMS GC, `ART_TARGET_LINUX` or `ART_TARGET_WINDOWS` via
 `--os`, base addresses) and must stay in sync with the libart overlay.
 
-For PE (`--os windows` / `asm_target_os=windows`), codegen swaps
-`ART_TARGET_LINUX` for `ART_TARGET_WINDOWS` and prefers
-`--target=x86_64-pc-windows-msvc` so offsets match the PE Runtime layout.
-Cross-build callers pass their libc++, UCRT, SDK, and CRT include roots with
-repeatable `--target-include` arguments.
+All asm-definition generation requires the target profile's explicit
+`--target-triple`; it is never inferred from the build host. For PE (`--os
+windows` / `asm_target_os=windows`), codegen also swaps `ART_TARGET_LINUX` for
+`ART_TARGET_WINDOWS`. Cross-build callers pass their libc++, UCRT, SDK, and CRT
+include roots with repeatable `--target-include` arguments.
 Notably `RUNTIME_INSTRUMENTATION_OFFSET` is **0x328** on PE vs **0x340** on
 Linux host; shipping the wrong header causes nterp/quick AVs on Wine.

@@ -73,8 +73,17 @@ items are closed.
   Linux and Windows profiles emitted byte-identical 37/36-module CMake graphs
   relative to the accepted baseline, passed 2,088/2,082 compile-command audits,
   completed 2,173/2,128 Ninja edges at 32 jobs, and repeated as true no-ops.
+- [x] Target-layout asm-definition generation now receives the canonical
+  profile triple explicitly on every host. The former embedded
+  `x86_64-pc-windows-msvc` choice is gone; Windows-specific handling now adds
+  only PE headers/macros to the selected triple. Focused regression coverage
+  proves an AArch64 triple reaches plain Clang unchanged. Fresh Linux and
+  Windows configurations passed the 2,088/2,082-command audits, and their
+  `asm_defines.h`, mterp assembly, and 37/36-module CMake graphs are
+  byte-identical to the preceding fully built products.
 - [x] `PYTHONPATH=tools/bp2cmake python3 -m pytest tools/bp2cmake/tests tests/host -q`:
-  227 passed, including explicit RISC-V mterp-layout generation,
+  228 passed, including explicit RISC-V mterp-layout generation and
+  profile-triple asm-definition propagation,
   boot-image construction/staging/runtime gates, the
   unified boot-JAR ownership gate, fresh
   Linux/Windows topology contract, ART embedding, UDP socket-option, scoped
@@ -160,7 +169,7 @@ items are closed.
   acronym endings such as `_CA`, `_RSA`, and `_DATA` while continuing to
   reject known or unclassified encoding-selecting suffix-`A` calls; its native
   and cross gates pass. The focused host regressions and full maintained host
-  suite pass at 227/227.
+  suite pass at 228/228.
 - [x] The native generated-graph freshness check reports 36 modules from the
   same 260 Blueprint files. Running the complete product build after runtime
   testing built the remaining 350 edges, including `art-compiler.dll`,
@@ -1874,7 +1883,7 @@ differences.
   until the self-hosted `linux/x64/art-build` and `windows/x64/art-build`
   runners are registered and the checked-in workflow has accepted all cells.
   The actual `host-checks` entry point currently passes the VCS audit, fresh
-  topology audit, and 227/227 tests; official actionlint 1.7.12 accepts the
+  topology audit, and 228/228 tests; official actionlint 1.7.12 accepts the
   workflow and its custom runner-label configuration.
 
 #### P2: remove migration scaffolding and harden orchestration
@@ -1931,8 +1940,10 @@ differences.
   explicit `mterp_source_dir`/`mterp_output` profile metadata. RISC-V uses
   `riscv64/` rather than an `ng` directory, and a focused generation test
   exercises that exact mapping without claiming target admission.
-- [ ] Remove fixed x86-64 triples, preludes, stack-gap definitions, CPU-feature
+- [ ] Remove the remaining fixed x86-64 stack-gap definitions, CPU-feature
   sources, BoringSSL assembly, probe names, and object-inspection assumptions.
+  Target-layout codegen now uses the profile triple, and broad toolchain
+  preludes are already retired; those completed parts must not be reintroduced.
 - [ ] Validate and admit Linux AArch64, x86, ARMv7, and RISC-V64 separately.
 - [x] Migrate the ARM64EC identity from transitional
   `windows-aarch64-arm64ec/cpu_arch=aarch64` to
@@ -2609,8 +2620,6 @@ The remaining conversion path is materially x86-64-specific:
   explicitly models x86-64, x86, ARM64, and ARM codegen sibling selection;
   other architecture values only fall through generic paths and are not a
   validated profile;
-- the same code generator hard-codes `x86_64-pc-windows-msvc` for
-  target-layout assembly generation;
 - Linux BoringSSL policy injects a fixed set of x86-64 assembly files; and
 - the Windows compatibility policy, verification graphs, and ABI checks are
   Windows x86-64-specific.

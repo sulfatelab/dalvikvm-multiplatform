@@ -56,6 +56,7 @@ foreach(_kind IN LISTS _art_codegen_kinds)
                 --libcore-root ${MDVM_LIBCORE_DIR}
                 --gensrc ${MDVM_GENSRC_DIR}
                 --arch ${ART_TARGET_AOSP_ARCH} --clang ${CMAKE_CXX_COMPILER}
+                --target-triple ${ART_TARGET_TRIPLE}
                 --mterp-source-dir ${ART_TARGET_MTERP_SOURCE_DIR}
                 --mterp-output ${ART_TARGET_MTERP_OUTPUT}
                 ${_art_codegen_options} --only ${_kind}

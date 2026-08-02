@@ -4,6 +4,7 @@ Usage:
     python3 -m bp2cmake.codegen_main --root <native-root> --gensrc <out-dir> \
         [--arch x86_64] [--mterp-source-dir x86_64ng]
         [--mterp-output mterp_x86_64.S] [--clang clang++]
+        [--target-triple x86_64-unknown-linux-gnu]
         [--only operator_out|mterp|asm_defines]
 """
 
@@ -33,6 +34,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--mterp-source-dir", default="")
     ap.add_argument("--mterp-output", default="")
     ap.add_argument("--clang", default="clang++")
+    ap.add_argument("--target-triple", default="")
     ap.add_argument("--os", default="linux",
                     help="Target OS for layout-sensitive codegen (linux|windows). "
                          "windows selects ART_TARGET_WINDOWS for asm_defines.")
@@ -49,7 +51,9 @@ def main(argv: list[str] | None = None) -> int:
                         arch=args.arch,
                         mterp_source_dir=args.mterp_source_dir,
                         mterp_output=args.mterp_output,
-                        clang=args.clang, art_root=args.art_root,
+                        clang=args.clang,
+                        asm_target_triple=args.target_triple,
+                        art_root=args.art_root,
                         libcore_root=args.libcore_root,
                         asm_target_os=args.os,
                         asm_target_include_dirs=args.target_include,
