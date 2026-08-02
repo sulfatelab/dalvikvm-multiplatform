@@ -768,6 +768,11 @@ set(_art_handle_leak_ids_selector
         linux-x86_64-gnu
         linux-aarch64-gnu
         windows-x86_64-msvc)
+set(_art_core_probe_ids_selector
+    TARGET_IDS
+        linux-x86_64-gnu
+        linux-aarch64-gnu
+        windows-x86_64-msvc)
 set(_art_perf_smoke_ids_selector
     TARGET_IDS
         linux-x86_64-gnu
@@ -1272,22 +1277,22 @@ art_add_target_probe(
         --repeat 2
         --timeout 180)
 
-# These managed libcore probes remain Windows-specific until each behavioral
-# contract is reviewed on another exact target.
-set(_art_windows_libcore_managed_classes
+# These managed libcore probes default to the current Windows selector until
+# each behavioral contract is reviewed and assigned its own exact target set.
+set(_art_libcore_managed_classes
     PathProbe AbsPathProbe AsyncCloseProbe BnProbe CoreProbe DnsProbe ExecProbe
     GcForced GcProbe GoldenApp InterruptProbe IoProbe Ipv6Probe LocaleProbe
     NetProbe OsConstantsProbe OsErrnoProbe PropsProbe RtMem
     SocketAddressProbe SslProviderProbe ThreadStressProbe ThrowProbe UdpProbe
     XmlProbe ZipProbe)
-set(_art_windows_libcore_runnable_classes
+set(_art_libcore_runnable_classes
     PathProbe AbsPathProbe AsyncCloseProbe BnProbe CoreProbe DnsProbe GcForced
     GcProbe GoldenApp InterruptProbe IoProbe ExecProbe Ipv6Probe LocaleProbe
     NetProbe OsErrnoProbe OsConstantsProbe PropsProbe RtMem SocketAddressProbe
     SslProviderProbe ThreadStressProbe ThrowProbe UdpProbe XmlProbe ZipProbe)
-foreach(_art_libcore_class IN LISTS _art_windows_libcore_managed_classes)
+foreach(_art_libcore_class IN LISTS _art_libcore_managed_classes)
     string(TOLOWER "${_art_libcore_class}" _art_libcore_name)
-    list(FIND _art_windows_libcore_runnable_classes
+    list(FIND _art_libcore_runnable_classes
         "${_art_libcore_class}" _art_libcore_runnable_index)
     if(_art_libcore_runnable_index EQUAL -1)
         set(_art_libcore_execution compile-only)
@@ -1330,12 +1335,18 @@ foreach(_art_libcore_class IN LISTS _art_windows_libcore_managed_classes)
                 --icu-data "${_art_icu_data}"
                 ${_art_managed_runtime_library_args})
         list(APPEND _art_libcore_runtime_arguments
-            ${_art_libcore_additional_command_arguments})
+            ${_art_libcore_additional_command_arguments}
+            ${_art_target_runner_args})
+    endif()
+    if(_art_libcore_class STREQUAL "CoreProbe")
+        set(_art_libcore_selector ${_art_core_probe_ids_selector})
+    else()
+        set(_art_libcore_selector ${_art_windows_current_selector})
     endif()
     art_add_target_probe(
         NAME "managed_${_art_libcore_name}" STAGE w004
         TYPE MANAGED EXECUTION "${_art_libcore_execution}"
-        ${_art_windows_current_selector}
+        ${_art_libcore_selector}
         SOURCES
             "${_art_test_cases_root}/windows-libcore-smoke/${_art_libcore_class}.java"
         CONTRACTS libcore runtime-load

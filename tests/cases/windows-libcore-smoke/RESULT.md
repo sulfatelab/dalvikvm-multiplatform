@@ -1,10 +1,11 @@
-# Windows libcore smoke — result
+# Libcore smoke — result
 
-**Status:** **COMPLETE for the promoted native matrix** — 25 unified libcore
-behaviors pass on the authoritative Windows Server 2025 host; no named L-003
-case remains native-open
+**Status:** **COMPLETE for the promoted native Windows matrix and the exact
+Linux CoreProbe slice** — 25 unified libcore behaviors pass on the
+authoritative Windows Server 2025 host; CoreProbe additionally passes on Linux
+x86-64 and AArch64; no named L-003 case remains native-open
 
-**Latest acceptance:** 2026-08-01
+**Latest acceptance:** 2026-08-02
 
 **Original Phase-3 acceptance:** 2026-07-16
 **Plan:** [win32_filesystem.md](../../../win32_filesystem.md) (Option H locked; Windows NIO non-goal)
@@ -81,6 +82,33 @@ AsyncCloseProbe requires a closed server to unblock its blocked accept with a
 socket error and a closed peer to unblock the client read with EOF or an I/O
 error; both worker threads must terminate and no unexpected peer may appear.
 Historical Wine success is evidence only and does not broaden this result.
+
+Applicability remains per probe. CoreProbe is accepted on exactly
+`linux-x86_64-gnu`, `linux-aarch64-gnu`, and `windows-x86_64-msvc`. Every
+other declaration in this case keeps its existing Windows x86-64/MSVC selector
+until independently reviewed, built, and runtime-tested on another exact
+target.
+
+### Latest Linux CoreProbe acceptance
+
+Fresh Linux graphs generated from the same 262 Blueprint files retained their
+audited 2,089 x86-64 and 2,113 AArch64 compile commands, 2,172/2,196 Ninja
+commands, and 32 product links. The fresh 1,863-edge x86-64 W-004 build passed
+10/10 in 3.69 seconds, including CoreProbe in 0.23 seconds; its true Ninja
+no-op repeat passed 10/10 in 3.68 seconds, including CoreProbe in 0.22 seconds.
+The fresh 1,628-edge AArch64 build passed 9/9 in 92.17 seconds, including
+CoreProbe in 1.55 seconds under the explicit target runner; its true Ninja
+no-op repeat passed 9/9 in 92.92 seconds, including CoreProbe in 1.52 seconds.
+
+Both CoreProbe records require exact-zero exit, successful array copy, the
+UTF-8 `hello-χ` round trip, reflective `String` construction, the exact
+2,000-update monitor result, `CoreProbe.done=ok`, and
+`main end exception=0`. They use app JAR SHA-256
+`063225c8763992495aa29267c07b479f86811905799fcba67de2d3d3e14128c1`
+and boot JAR SHA-256
+`45e19b8cc4a4161d7b7b011e268bf262069d9a7b70c9cfd9c37e324feb249eae`.
+The manifests contain only normalized native/QEMU runner identity and no
+absolute machine path; neither result tree contains a filesystem link.
 
 ```text
 python tools/build_art.py test --target-id windows-x86_64-msvc --stage w004 --parallel 16

@@ -137,11 +137,17 @@ def test_windows_libcore_runtime_matrix_matches_promoted_cases():
     assert all("AssertionError" in case["forbidden_markers"] for case in matrix.values())
 
 
-def test_windows_libcore_runner_cleans_output_and_passes_explicit_contract(
+def test_libcore_runner_cleans_output_and_passes_explicit_contract(
     tmp_path, monkeypatch
 ):
     files = {}
-    for name in ("dalvikvm.exe", "boot.jar", "coreprobe.jar", "icudt72l.dat"):
+    for name in (
+        "dalvikvm.exe",
+        "boot.jar",
+        "coreprobe.jar",
+        "icudt72l.dat",
+        "qemu-aarch64",
+    ):
         path = tmp_path / name
         path.write_bytes(name.encode())
         files[name] = path
@@ -168,12 +174,16 @@ def test_windows_libcore_runner_cleans_output_and_passes_explicit_contract(
         work_root=work,
         icu_data=files["icudt72l.dat"],
         library_dirs=[tmp_path],
+        runner=files["qemu-aarch64"],
+        runner_args=["-L", "/target-root"],
     )
     assert not (work / "stale.txt").exists()
     assert len(calls) == 1
     assert calls[0]["main_class"] == "CoreProbe"
     assert calls[0]["vm_options"] == ["-Xint"]
     assert calls[0]["require_nonzero"] is False
+    assert calls[0]["runner"] == files["qemu-aarch64"]
+    assert calls[0]["runner_args"] == ["-L", "/target-root"]
     assert "CoreProbe.done=ok" in calls[0]["expected"]
 
 

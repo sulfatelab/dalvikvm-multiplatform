@@ -39,17 +39,17 @@ items are closed.
 | Area | Status | Current position | Exit condition |
 |---|---|---|---|
 | Python frontend | COMPLETE for the initial slice | `generate`, `check-generated`, `configure`, `audit`, `build`, `test`, and `stage` exist; subprocesses are shell-free; configured JDK 21 is validated and passed to CMake; regenerated Blueprint/overlay graphs can reconfigure an identity-compatible Ninja tree in place | keep regression coverage current |
-| Linux x86-64 product | COMPLETE for the current W-003/W-004/W-013 runtime slice | exact-target CriticalNative and normal/FastNative W-003 gates join all nine W-004 gates, including imageless and generated-boot-image Hello plus HandleLeak, PerfSmoke, and ThreadHeavy, and the shared W-013 128 MiB non-moving-heap gate; the staged runtime includes its verified ART/OAT/VDEX image set | migrate the remaining behavioral stages |
+| Linux x86-64 product | COMPLETE for the current W-003/W-004/W-013 runtime slice | exact-target CriticalNative and normal/FastNative W-003 gates join all ten W-004 gates, including imageless and generated-boot-image Hello plus HandleLeak, PerfSmoke, ThreadHeavy, and libcore CoreProbe, and the shared W-013 128 MiB non-moving-heap gate; the staged runtime includes its verified ART/OAT/VDEX image set | migrate the remaining behavioral stages |
 | Windows x86-64 product | PARTIAL / experimental | Linux-hosted cross and native Windows Server 2025 product builds pass; the accepted native baseline passes 77/77 across W-002, W-003, W-004, W-010, W-013, W-014, W-025, and W-027, including the FS-1 product-isolation review; complete-package import/stale-path acceptance and identical no-op builds pass | migrate additional target applicability; keep Windows AOT/OAT in its separate blocked track |
 | Compiler DSO parity | COMPLETE for `art-compiler` | both targets emit a shared compiler DSO; Windows imports `art.dll` and exports `art_compiler_jit_create` | retain exact ABI and no-cycle gates |
 | Windows runtime DSO exports | COMPLETE for current x86-64 closure | `art.dll` combines explicit source annotations with a reviewed 187-entry runtime-consumer DEF, never CMake auto-export; Debug has 2,065 exports and RelWithDebInfo has 2,066 | keep the consumer allowlist and actual PE boundary under regression review |
 | Full DSO topology parity | PARTIAL / mechanically controlled | the fresh graphs have five reviewed module-kind differences and one reviewed generated/platform module mapping; every current difference is checked against a versioned contract | convert reviewed exceptions where practical; reject every unreviewed graph change |
-| Unified phase catalog | COMPLETE for current declaration truthfulness; PARTIAL target expansion | eight virtual stages declare 33 native probes, 47 managed JARs, and 13 command gates; Windows has 90 applicable items (69 target-runnable, eight host-review, and 13 compile-only in the product variant), Linux x86-64 has 15 applicable items (twelve runnable and three compile-only artifacts), and experimental Linux AArch64 has 14 applicable items (eleven runner-backed gates and three compile-only artifacts); CMake rejects runnable shared libraries and compile-only command gates | expand exact-target applicability only with matching behavioral acceptance |
-| Boot/runtime packaging | COMPLETE for Linux x86-64; experimental Linux AArch64; capability-gated elsewhere | deterministic target-local boot/probe JARs include Conscrypt, OkHttp/Okio, and security properties; native Linux x86-64 generates, runtime-tests, and stages a relocatable ART/OAT/VDEX boot image; AArch64 passes exact CriticalNative and normal/FastNative JNI/JIT/tracing, Math CriticalNative `-Xint`/JIT, compiler-DSO topology/loading, imageless Hello, GC stress, HandleLeak, PerfSmoke, ThreadHeavy, show-version, and 128 MiB non-moving-heap gates under its explicit runner while recording boot image unsupported; staging also validates the complete DSO closure and packages pinned ICU data, 121 CA roots, and writable keychain directories | retain the image/runtime-package gates while adding target capabilities independently |
+| Unified phase catalog | COMPLETE for current declaration truthfulness; PARTIAL target expansion | eight virtual stages declare 33 native probes, 47 managed JARs, and 13 command gates; Windows has 90 applicable items (69 target-runnable, eight host-review, and 13 compile-only in the product variant), Linux x86-64 has 16 applicable items (thirteen runnable and three compile-only artifacts), and experimental Linux AArch64 has 15 applicable items (twelve runner-backed gates and three compile-only artifacts); CMake rejects runnable shared libraries and compile-only command gates | expand exact-target applicability only with matching behavioral acceptance |
+| Boot/runtime packaging | COMPLETE for Linux x86-64; experimental Linux AArch64; capability-gated elsewhere | deterministic target-local boot/probe JARs include Conscrypt, OkHttp/Okio, and security properties; native Linux x86-64 generates, runtime-tests, and stages a relocatable ART/OAT/VDEX boot image; AArch64 passes exact CriticalNative and normal/FastNative JNI/JIT/tracing, Math CriticalNative `-Xint`/JIT, compiler-DSO topology/loading, imageless Hello, GC stress, HandleLeak, PerfSmoke, ThreadHeavy, libcore CoreProbe, show-version, and 128 MiB non-moving-heap gates under its explicit runner while recording boot image unsupported; staging also validates the complete DSO closure and packages pinned ICU data, 121 CA roots, and writable keychain directories | retain the image/runtime-package gates while adding target capabilities independently |
 | POSIX-free Windows build host | COMPLETE for the accepted native baseline; PARTIAL end to end | Server 2025 uses configured official JDK 21, Python, CMake, Ninja, and plain Clang drivers; all 77 accepted native tests, provider/security packaging, and product/test no-op gates pass without POSIX tooling | migrate every retained behavioral gate; keep Windows AOT/OAT capability work separate |
 | Legacy build removal | COMPLETE | the checked-in Linux snapshot/generator, split overlays, Linux miniature graphs, Windows Phase-0/Phase-1 and libcore/ICU graphs, product package scripts, and final POSIX-only boot-image entry points are retired; historical records remain documentation only | prevent alternative product paths from returning |
 | CI/acceptance automation | IMPLEMENTED / activation pending | checked-in shell-free Python driver and GitHub workflow define host, fresh Linux, Windows-cross, and native Windows cells; machine paths enter only through an external CI TOML binding | register/provision the two self-hosted runner labels and obtain accepted workflow runs |
-| Additional architectures | PARTIAL / Linux AArch64 experimental | all 17 canonical identities are registered; `linux-aarch64-gnu` now generates, builds, stages, and passes exact CriticalNative and normal/FastNative JNI/JIT/tracing, Math CriticalNative, compiler-DSO topology/loading, show-version, imageless-Hello, GC-stress, HandleLeak, PerfSmoke, ThreadHeavy, and 128 MiB non-moving-heap gates through an explicit QEMU user-mode binding; x86, ARMv7, RISC-V64, Windows AArch64/ARM64EC, and WASI remain capability-gated | broaden AArch64 only with matching evidence, then admit each remaining profile independently |
+| Additional architectures | PARTIAL / Linux AArch64 experimental | all 17 canonical identities are registered; `linux-aarch64-gnu` now generates, builds, stages, and passes exact CriticalNative and normal/FastNative JNI/JIT/tracing, Math CriticalNative, compiler-DSO topology/loading, show-version, imageless-Hello, GC-stress, HandleLeak, PerfSmoke, ThreadHeavy, libcore CoreProbe, and 128 MiB non-moving-heap gates through an explicit QEMU user-mode binding; x86, ARMv7, RISC-V64, Windows AArch64/ARM64EC, and WASI remain capability-gated | broaden AArch64 only with matching evidence, then admit each remaining profile independently |
 | Windows AOT/OAT | BLOCKED / separate track | compiler DSO parity does not provide Windows OAT production or loading | satisfy `win32_aot_oat.md`; do not imply capability from `art-compiler.dll` |
 
 ### Latest verification baseline (2026-08-02)
@@ -732,10 +732,10 @@ items are closed.
   scanner is promoted into the live W-027 catalog gate.
 - [x] `check-generated` passes for both frontend-owned canonical graphs.
 - [x] Fresh Linux configuration with Clang 21, CMake, Ninja, and configured
-  JDK 21 emits a 93-declaration catalog. Fifteen declarations apply to
+  JDK 21 emits a 93-declaration catalog. Sixteen declarations apply to
   `linux-x86_64-gnu`: two runnable and two compile-only W-003 declarations,
-  nine runnable W-004 gates, and the W-013 non-moving managed artifact plus its
-  runnable 128 MiB gate. Twelve register with CTest; the three managed/shared
+  ten runnable W-004 gates, and the W-013 non-moving managed artifact plus its
+  runnable 128 MiB gate. Thirteen register with CTest; the three managed/shared
   artifacts are compile-only dependencies of their behavioral gates.
 - [x] Windows-target configuration emits the same 93 declarations and keeps
   90 items applicable. Sixty-nine product-variant items are
@@ -1497,13 +1497,13 @@ One historical work stage maps to exactly one virtual target named
 |---|---:|---|---|---|
 | `w002` | 1 EXE, 1 DLL, 2 managed, 1 gate | 3 exact / 2 typed | 3 runnable, 1 host-review, 1 compile-only | registered Windows x86-64 coverage is complete |
 | `w003` | 4 DLLs, 4 managed, 1 gate | 7 exact / 2 typed | product: 3 runnable, 1 host-review, 5 compile-only; frame variant: 4 runnable, 1 host-review, 4 compile-only | registered Windows x86-64 coverage is complete; CriticalNative and normal/FastNative are also verified on Linux x86-64 and AArch64 GNU |
-| `w004` | 3 EXEs, 1 DLL, 33 managed, 3 gates | 11 exact / 29 typed | product: 38 target-runnable, 1 host-review, 1 compile-only; Windows applicable subset: 35 target-runnable, 1 host-review, 1 compile-only | HandleLeak, PerfSmoke, and ThreadHeavy are accepted on both Linux targets; Linux boot-image/runtime packaging, Linux AArch64 Math CriticalNative and compiler-DSO topology/loading, and Windows provider/security packaging are accepted; no named libcore case remains outside its explicit runtime/compile-only status |
+| `w004` | 3 EXEs, 1 DLL, 33 managed, 3 gates | 12 exact / 28 typed | product: 38 target-runnable, 1 host-review, 1 compile-only; Windows applicable subset: 35 target-runnable, 1 host-review, 1 compile-only | HandleLeak, PerfSmoke, ThreadHeavy, and CoreProbe are accepted on both Linux targets; Linux boot-image/runtime packaging, Linux AArch64 Math CriticalNative and compiler-DSO topology/loading, and Windows provider/security packaging are accepted; no named libcore case remains outside its explicit runtime/compile-only status |
 | `w010` | 4 EXEs, 3 managed, 1 gate | 2 exact / 6 typed | 7 target-runnable, 1 host-review | registered Windows x86-64 coverage is complete |
 | `w013` | 4 EXEs, 1 managed, 3 gates | 3 exact / 5 typed | 6 runnable, 1 host-review, 1 compile-only | registered x86-64 native, managed, and source-policy coverage is complete |
 | `w014` | 7 EXEs, 1 DLL, 1 managed, 1 gate | 3 exact / 7 typed | product: 7 runnable, 1 host-review, 2 compile-only; FS-1 variant: 8 runnable, 1 host-review, 1 compile-only | registered Windows x86-64 product coverage is complete; the instrumented FS-1 variant remains a separate exact-target acceptance |
 | `w025` | 4 EXEs, 3 DLLs, 3 managed, 2 gates | 7 exact / 5 typed | 8 target-runnable, 1 host-review, 3 compile-only | registered Windows x86-64 coverage is complete |
 | `w027` | 1 gate | 0 exact / 1 typed | 1 host-review | registered Windows x86-64 coverage is complete |
-| Total | 23 EXEs, 10 DLLs, 47 managed, 13 gates | 36 exact / 57 typed | product: 72 target-runnable, 8 host-review, 13 compile-only | Windows applies 90 declarations (69 runnable, eight host-review, 13 compile-only); Linux x86-64 applies 15 (twelve runnable, three compile-only), and Linux AArch64 applies 14 (eleven runnable, three compile-only) |
+| Total | 23 EXEs, 10 DLLs, 47 managed, 13 gates | 37 exact / 56 typed | product: 72 target-runnable, 8 host-review, 13 compile-only | Windows applies 90 declarations (69 runnable, eight host-review, 13 compile-only); Linux x86-64 applies 16 (thirteen runnable, three compile-only), and Linux AArch64 applies 15 (twelve runnable, three compile-only) |
 
 The shared registry now references zero source files from historical
 verification directories. All 93 declarations own canonical source under
@@ -1630,6 +1630,11 @@ exact three-target set and use the common interpreter-only runner with the
 optional AArch64 execution prefix. Each probe retains its own selector so
 future applicability changes remain independently reviewed.
 
+The managed libcore CoreProbe independently lists the same exact three-target
+set and exercises platform-neutral arraycopy, UTF-8 charset, reflection, and
+monitor/thread behavior. Every other declaration in its shared case directory
+retains the Windows x86-64/MSVC selector pending independent review.
+
 Current evidence remains much narrower than theoretical applicability:
 
 - all 32 Windows-applicable native probes have compile evidence for the
@@ -1639,12 +1644,13 @@ Current evidence remains much narrower than theoretical applicability:
   `windows-x86_64-msvc` runtime evidence across the accepted W-002, W-004,
   W-010, W-013, and W-014 slices;
 - Linux x86-64 builds and runs the two W-003 JNI ABI probes through four exact
-  declarations, in addition to its nine runnable W-004 gates and shared W-013
+  declarations, in addition to its ten runnable W-004 gates and shared W-013
   gate;
 - Linux AArch64 builds and runs both W-003 JNI probes through four exact
   declarations, plus Math CriticalNative, compiler-DSO topology/loading,
   show-version, imageless Hello, GC stress, HandleLeak, PerfSmoke, ThreadHeavy,
-  and the shared 128 MiB W-013 gate under its explicit runner; and
+  libcore CoreProbe, and the shared 128 MiB W-013 gate under its explicit
+  runner; and
 - no probe has build or runtime evidence for Windows x86, ARMv7, AArch64, or
   ARM64EC.
 
@@ -2185,8 +2191,19 @@ differences.
   Their manifests use normalized native/QEMU runner identities, the same
   content-addressed app and boot JARs, no absolute machine path, and no
   filesystem link.
-- [ ] Promote Linux AArch64 beyond the experimental eleven-gate
-  JNI/math/interpreter/allocator/compiler/handle/performance/threading slice, and
+- [x] Admit libcore CoreProbe independently on both Linux targets without
+  broadening any other libcore declaration. The shared runner now forwards the
+  explicit target runner for managed cases and rejects it for the Windows-only
+  path modes. Fresh x86-64/AArch64 builds completed 1,863/1,628 edges and
+  passed W-004 at 10/10 in 3.69 seconds and 9/9 in 92.17 seconds; CoreProbe
+  passed in 0.23/1.55 seconds. True Ninja no-op repeats passed 10/10 in 3.68
+  seconds and 9/9 in 92.92 seconds, with CoreProbe at 0.22/1.52 seconds. Both
+  records require exact-zero exit plus arraycopy, UTF-8 charset, reflection,
+  2,000-update monitor, and ART main-completion markers. Their manifests use
+  the same content-addressed app/boot JARs, normalized native/QEMU identity,
+  no absolute machine path, and no filesystem link.
+- [ ] Promote Linux AArch64 beyond the experimental twelve-gate
+  JNI/math/interpreter/allocator/compiler/handle/performance/threading/core slice, and
   validate/admit Linux x86, ARMv7, and RISC-V64 separately.
 - [x] Migrate the ARM64EC identity from transitional
   `windows-aarch64-arm64ec/cpu_arch=aarch64` to

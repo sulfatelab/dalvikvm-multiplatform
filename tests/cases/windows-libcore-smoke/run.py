@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run one accepted Windows libcore smoke case without shell tooling."""
+"""Run one accepted libcore smoke case without shell tooling."""
 
 from __future__ import annotations
 
@@ -371,10 +371,12 @@ def run_gate(
     path_jar: Path | None = None,
     cacerts_dir: Path | None = None,
     security_properties: Path | None = None,
+    runner: Path | None = None,
+    runner_args: list[str] | None = None,
 ) -> None:
     matrix = load_matrix()
     if case not in matrix:
-        raise runtime_gate.GateError(f"unknown Windows libcore case: {case}")
+        raise runtime_gate.GateError(f"unknown libcore case: {case}")
     config = matrix[case]
 
     work_root = runtime_gate._managed_path(work_root, allow_missing=True)
@@ -401,8 +403,14 @@ def run_gate(
             require_nonzero=config["require_nonzero"],
             cacerts_dir=cacerts_dir,
             security_properties=security_properties,
+            runner=runner,
+            runner_args=runner_args,
         )
     else:
+        if runner is not None or runner_args:
+            raise runtime_gate.GateError(
+                f"{case} path mode does not support a target runner"
+            )
         if hello_jar is None:
             raise runtime_gate.GateError(f"{case} requires --hello-jar")
         if config["mode"] == "absolute-path" and path_jar is None:
@@ -437,6 +445,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--path-jar", type=Path)
     parser.add_argument("--cacerts-dir", type=Path)
     parser.add_argument("--security-properties", type=Path)
+    parser.add_argument("--runner", type=runtime_gate._regular_file)
+    parser.add_argument("--runner-arg", action="append", default=[])
     return parser
 
 
@@ -456,6 +466,8 @@ def main(argv: list[str] | None = None) -> int:
             path_jar=args.path_jar,
             cacerts_dir=args.cacerts_dir,
             security_properties=args.security_properties,
+            runner=args.runner,
+            runner_args=args.runner_arg,
         )
         return 0
     except (runtime_gate.GateError, OSError, UnicodeError) as exc:

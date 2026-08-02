@@ -69,8 +69,8 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     assert catalog["target_id"] == "windows-x86_64-msvc"
     assert len(catalog["probes"]) == 93
     assert sum(probe["applicable"] for probe in catalog["probes"]) == 90
-    assert sum(bool(probe["target_ids"]) for probe in catalog["probes"]) == 36
-    assert sum(not probe["target_ids"] for probe in catalog["probes"]) == 57
+    assert sum(bool(probe["target_ids"]) for probe in catalog["probes"]) == 37
+    assert sum(not probe["target_ids"] for probe in catalog["probes"]) == 56
     w002_attach = next(
         probe for probe in catalog["probes"] if probe["name"] == "managed_w002_attach"
     )
@@ -105,6 +105,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "managed_handleleakprobe",
         "managed_perfsmokeprobe",
         "managed_threadheavyprobe",
+        "managed_coreprobe",
     ):
         probe = next(probe for probe in catalog["probes"] if probe["name"] == name)
         assert probe["target_ids"] == [
@@ -446,6 +447,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "managed_perfsmokeprobe",
         "managed_threadheavyprobe",
         "managed_math_critical",
+        "managed_coreprobe",
         "art_runtime_show_version",
         "art_compiler_dso_topology",
         "managed_w013_non_moving",
@@ -465,6 +467,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "w004",
         "w004",
         "w004",
+        "w004",
         "w013",
         "w013",
     ]
@@ -473,7 +476,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         for probe in applicable
         if probe["execution"] == "target-runnable"
     ]
-    assert len(runnable) == 12
+    assert len(runnable) == 13
     assert all(probe["ctest_registered"] for probe in runnable)
     artifact = applicable[-2]
     assert artifact["type"] == "MANAGED"
@@ -553,6 +556,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "managed_perfsmokeprobe",
         "managed_threadheavyprobe",
         "managed_math_critical",
+        "managed_coreprobe",
         "art_runtime_show_version",
         "art_compiler_dso_topology",
         "managed_w013_non_moving",
@@ -571,12 +575,14 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "target-runnable",
         "target-runnable",
         "target-runnable",
+        "target-runnable",
         "compile-only",
         "target-runnable",
     ]
     assert [probe["ctest_registered"] for probe in applicable] == [
         False,
         False,
+        True,
         True,
         True,
         True,
@@ -604,6 +610,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "art.w004.managed_perfsmokeprobe",
         "art.w004.managed_threadheavyprobe",
         "art.w004.managed_math_critical",
+        "art.w004.managed_coreprobe",
         "art.w004.art_compiler_dso_topology",
     ):
         runner_line = next(
