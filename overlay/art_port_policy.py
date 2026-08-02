@@ -6,8 +6,10 @@ with a small, explicit delta for the selected target platform. Layer 3 emits
 the resulting target-resolved CMake graph.
 
 The currently generatable profiles are linux-x86_64-gnu and
-windows-x86_64-msvc. Their x86-64 source selections remain visible in the
-target deltas so future architecture admission cannot inherit them silently.
+windows-x86_64-msvc. The architecture-neutral Linux delta is also available to
+planned Linux profiles for pre-admission graph audits; their registry status
+still rejects normal generation. Windows x86-64 source substitutions remain
+visible in its exact target delta so another architecture cannot inherit them.
 """
 
 from __future__ import annotations
@@ -622,7 +624,7 @@ def _module_policies(
 
 
 def make_overlay(profile: TargetProfile) -> Overlay:
-    if profile.target_id == "linux-x86_64-gnu":
+    if profile.target_platform == "linux":
         delta = _LINUX_MODULE_DELTA
     elif profile.target_id == "windows-x86_64-msvc":
         delta = _WINDOWS_MODULE_DELTA

@@ -247,5 +247,30 @@ def test_unified_overlay_factory_selects_current_target_policy():
     openjdk = windows.policy_for("libopenjdk")
     assert "LinuxNativeDispatcher.c" in openjdk.remove_srcs
     assert "NativeThread.c" in openjdk.remove_srcs
+
+
+def test_linux_overlay_policy_is_available_for_pre_admission_graph_audits():
+    repo = Path(__file__).resolve().parents[3]
+    factory = repo / "overlay" / "art_port_policy.py"
+    for target_id in (
+        "linux-x86-gnu",
+        "linux-x86_64-gnu",
+        "linux-armv7-gnu",
+        "linux-aarch64-gnu",
+        "linux-riscv64-gnu",
+    ):
+        target = resolve_target(target_id)
+        overlay = load_overlay_factory(str(factory), target)
+        assert len(overlay.modules) == 40
+        assert overlay.global_policy.add_ldflags == []
+        assert overlay.policy_for("libart").add_gensrc_sources == [
+            f"art/asm/mterp/{target.mterp_output}"
+        ]
+        assert overlay.policy_for("libcrypto").add_srcs == []
+
+
+def test_planned_windows_target_has_no_inherited_x86_64_overlay():
+    repo = Path(__file__).resolve().parents[3]
+    factory = repo / "overlay" / "art_port_policy.py"
     with pytest.raises(ValueError, match="no reviewed ART overlay policy"):
-        load_overlay_factory(str(factory), resolve_target("linux-aarch64-gnu"))
+        load_overlay_factory(str(factory), resolve_target("windows-aarch64-msvc"))

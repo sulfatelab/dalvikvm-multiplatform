@@ -102,7 +102,9 @@ items are closed.
   `asm_defines.h`, mterp assembly, and 37/36-module CMake graphs are
   byte-identical to the preceding fully built products.
 - [x] `PYTHONPATH=tools/bp2cmake python3 -m pytest tools/bp2cmake/tests tests/host -q`:
-  232 passed, including exact profile-owned LLVM file identities,
+  235 passed, including the Linux AArch64 pre-admission graph,
+  planned-Linux overlay selection,
+  exact profile-owned LLVM file identities,
   profile-driven staged artifact inspection,
   absorbed target-specific CPU-feature substitution,
   target-selected `cc_object` source expansion,
@@ -2003,6 +2005,14 @@ differences.
   37/36-module graphs, and topology/VCS plus all 232 host/bp2cmake tests passed.
   Exact Microsoft x86-64 ABI/assembly reviewers remain intentionally scoped to
   `windows-x86_64-msvc` rather than pretending to be generic.
+- [x] Make the architecture-neutral Linux overlay delta available to every
+  registered Linux profile for pre-admission graph review without changing any
+  `planned` support status. A target-resolved AArch64 audit emits 37 modules,
+  ARM64 mterp/quick-entrypoint sources, and Blueprint-selected
+  `linux-aarch64` BoringSSL assembly, with no x86-64 quick entrypoint or BCM
+  source inheritance. Both admitted profiles still pass `check-generated`,
+  topology/VCS audits pass, and all 235 host/bp2cmake tests pass. Future
+  Windows profiles remain unable to inherit the exact Windows x86-64 delta.
 - [ ] Validate and admit Linux AArch64, x86, ARMv7, and RISC-V64 separately.
 - [x] Migrate the ARM64EC identity from transitional
   `windows-aarch64-arm64ec/cpu_arch=aarch64` to
