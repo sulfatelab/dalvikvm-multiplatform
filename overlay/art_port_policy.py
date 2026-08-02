@@ -61,6 +61,17 @@ _PRODUCT_BLUEPRINT_SCAN = BlueprintScanPolicy(
     excluded_top_levels=(("MDVM_NATIVE_SRC_ROOT_DIR", ("art",)),),
 )
 
+_PRODUCT_ROOT_MODULES = (
+    "dalvikvm",
+    "dex2oat",
+    "libart-compiler",
+    "libjavacrypto",
+    "libjavacore",
+    "libopenjdk",
+    "libicu_jni",
+    "libopenjdkjvmti",
+)
+
 
 def _global_policy(profile: TargetProfile) -> GlobalPolicy:
     """Compose cross-module policy without hiding target-specific flags."""
@@ -643,4 +654,5 @@ def make_overlay(profile: TargetProfile) -> Overlay:
         global_policy=_global_policy(profile),
         modules=_module_policies(profile, delta),
         blueprint_scan=_PRODUCT_BLUEPRINT_SCAN,
+        product_root_modules=_PRODUCT_ROOT_MODULES,
     )

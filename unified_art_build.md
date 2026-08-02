@@ -54,6 +54,18 @@ items are closed.
 
 ### Latest verification baseline (2026-08-02)
 
+- [x] Product closure roots now belong to the target-aware Python overlay as
+  one immutable, duplicate-free tuple shared by Linux and Windows. The public
+  frontend no longer contains or forwards a module-root list. `bp2cmake`
+  consumes policy roots by default, rejects command-line module/root overrides
+  for a policy-owned product graph, and records both the effective roots and
+  their `overlay-policy` source in the generated manifest. Low-level selectors
+  remain available only to generic overlays that do not declare product roots.
+  Policy-owned and former command-line selection produce byte-identical current
+  graphs (`3c4df2...` Linux and `01d52a...` Windows); the fresh 37/36-module
+  topology audit retains exactly one approved set difference and five approved
+  kind differences.
+
 - [x] The frontend owns shell-free cleanup of one exact
   `out/<target-id>/<build-type-or-variant>` tree. `clean` accepts only a
   matching schema-1/schema-2 build fingerprint or schema-2 generated graph
@@ -119,7 +131,8 @@ items are closed.
   `asm_defines.h`, mterp assembly, and 37/36-module CMake graphs are
   byte-identical to the preceding fully built products.
 - [x] `PYTHONPATH=tools/bp2cmake python3 -m pytest tools/bp2cmake/tests tests/host -q`:
-  257 passed, including exact shell-free clean ownership/safety, the Linux
+  262 passed, including policy-owned product roots, exact shell-free clean
+  ownership/safety, the Linux
   AArch64 experimental graph, and explicit
   target-runner contract,
   planned-Linux overlay selection,
@@ -3970,8 +3983,8 @@ so a failed or partial invocation cannot contaminate another target build.
 - Replace the two overlay entry points with `make_overlay(profile)`.
 - Add the strict canonical target registry and the ignored
   `.art-build.local.toml` loader/generator.
-- Move scan exclusions into typed product policy and record them in the graph
-  manifest; moving the root-module set out of frontend constants remains.
+- Move scan exclusions and the root-module set into typed product policy and
+  record both in the graph manifest.
 - Make build-host and target fields distinct throughout evaluator, codegen, and
   emitter APIs.
 - Generate both target graphs into isolated build directories and compare their

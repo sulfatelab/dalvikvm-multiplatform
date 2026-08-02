@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from bp2cmake.__main__ import main
 
 
@@ -60,6 +62,8 @@ def test_target_generation_writes_relocatable_graph_and_manifest(tmp_path):
     assert graph_manifest["target"]["target_platform"] == "linux"
     assert graph_manifest["target"]["target_arch"] == "x86_64"
     assert graph_manifest["target"]["target_abi"] == "gnu"
+    assert graph_manifest["root_module_source"] == "command-line"
+    assert graph_manifest["root_modules"] == []
     assert graph_manifest["modules"][0]["cmake_target"] == "sample"
     assert graph_manifest["blueprint_inputs"][0]["path"] == "Android.bp"
     assert str(source) not in manifest.read_text(encoding="utf-8")
@@ -70,6 +74,61 @@ def test_target_generation_writes_relocatable_graph_and_manifest(tmp_path):
     assert 'set(ART_TARGET_MTERP_OUTPUT "mterp_x86_64.S")' in profile_text
     assert str(source) not in profile_text
     assert main(args + ["--check"]) == 0
+
+
+def test_target_overlay_can_own_product_roots(tmp_path):
+    source, _blueprint, factory = _fixture(tmp_path)
+    factory.write_text(
+        "from bp2cmake.overlay import Overlay\n"
+        "def make_overlay(target):\n"
+        "    return Overlay(product_root_modules=('libsample',))\n",
+        encoding="utf-8",
+    )
+    generated = tmp_path / "out" / "art_graph.cmake"
+    manifest = tmp_path / "out" / "graph_manifest.json"
+    args = [
+        "--root",
+        str(source),
+        "--overlay-factory",
+        str(factory),
+        "--target-id",
+        "linux-x86_64-gnu",
+        "--out",
+        str(generated),
+        "--manifest-out",
+        str(manifest),
+    ]
+
+    assert main(args) == 0
+
+    graph_manifest = json.loads(manifest.read_text(encoding="utf-8"))
+    assert graph_manifest["root_modules"] == ["libsample"]
+    assert graph_manifest["root_module_source"] == "overlay-policy"
+    assert graph_manifest["modules"][0]["aosp_name"] == "libsample"
+
+
+def test_policy_owned_product_roots_reject_cli_overrides(tmp_path):
+    source, blueprint, factory = _fixture(tmp_path)
+    blueprint.unlink()
+    factory.write_text(
+        "from bp2cmake.overlay import Overlay\n"
+        "def make_overlay(target):\n"
+        "    return Overlay(product_root_modules=('libsample',))\n",
+        encoding="utf-8",
+    )
+    base = [
+        "--root",
+        str(source),
+        "--overlay-factory",
+        str(factory),
+        "--target-id",
+        "linux-x86_64-gnu",
+    ]
+
+    for selector in ("--module", "--root-module"):
+        with pytest.raises(SystemExit) as exc:
+            main(base + [selector, "libsample"])
+        assert exc.value.code == 2
 
 
 def test_check_detects_stale_output_without_rewriting(tmp_path):

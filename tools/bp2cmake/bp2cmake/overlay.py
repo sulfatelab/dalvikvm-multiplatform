@@ -165,6 +165,20 @@ class Overlay:
     global_policy: GlobalPolicy = field(default_factory=GlobalPolicy)
     modules: dict[str, ModulePolicy] = field(default_factory=dict)
     blueprint_scan: BlueprintScanPolicy = field(default_factory=BlueprintScanPolicy)
+    # A target-aware product overlay owns its complete closure roots here.
+    # Generic converter overlays leave this empty and use explicit CLI
+    # selectors instead. A tuple prevents in-place mutation of graph identity
+    # after the policy has been loaded.
+    product_root_modules: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        roots = self.product_root_modules
+        if not isinstance(roots, tuple):
+            raise ValueError("product_root_modules must be a tuple")
+        if any(not isinstance(name, str) or not name for name in roots):
+            raise ValueError("product_root_modules must contain non-empty names")
+        if len(set(roots)) != len(roots):
+            raise ValueError("product_root_modules must not contain duplicates")
 
     def policy_for(self, name: str) -> ModulePolicy:
         return self.modules.get(name, ModulePolicy())

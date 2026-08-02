@@ -42,6 +42,58 @@ def _configured_build(tmp_path: Path) -> Path:
     return binary_dir
 
 
+def test_generation_delegates_product_roots_to_overlay(tmp_path, monkeypatch):
+    commands = []
+    python = tmp_path / "python"
+    python.write_bytes(b"")
+    monkeypatch.setattr(build_art, "_python_executable", lambda: python)
+    monkeypatch.setattr(
+        build_art.subprocess,
+        "run",
+        lambda command, **_kwargs: commands.append(command)
+        or subprocess.CompletedProcess(command, 0),
+    )
+    monkeypatch.setattr(build_art, "_validate_graph_manifest", lambda *_args: None)
+    target = build_art.resolve_target("linux-x86_64-gnu")
+
+    build_art._generate(
+        target,
+        "RelWithDebInfo",
+        tmp_path / target.target_id / "RelWithDebInfo",
+        check=False,
+    )
+
+    assert len(commands) == 1
+    assert "--overlay-factory" in commands[0]
+    assert "--module" not in commands[0]
+    assert "--root-module" not in commands[0]
+
+
+def test_product_graph_manifest_requires_overlay_owned_roots(tmp_path):
+    target = build_art.resolve_target("linux-x86_64-gnu")
+    manifest = tmp_path / "graph_manifest.json"
+    data = {
+        "schema_version": 2,
+        "target": target.to_dict(),
+        "root_module_source": "command-line",
+        "root_modules": ["dalvikvm"],
+        "modules": [
+            {
+                "aosp_name": "libart-compiler",
+                "kind": "shared",
+            }
+        ],
+    }
+    manifest.write_text(json.dumps(data) + "\n", encoding="utf-8")
+
+    with pytest.raises(build_art.BuildFrontendError, match="overlay-owned roots"):
+        build_art._validate_graph_manifest(manifest, target)
+
+    data["root_module_source"] = "overlay-policy"
+    manifest.write_text(json.dumps(data) + "\n", encoding="utf-8")
+    build_art._validate_graph_manifest(manifest, target)
+
+
 def test_stage_selector_builds_one_virtual_group_and_filters_ctest(
     tmp_path, monkeypatch
 ):

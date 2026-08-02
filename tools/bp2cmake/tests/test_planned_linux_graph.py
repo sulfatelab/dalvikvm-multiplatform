@@ -28,17 +28,6 @@ def test_linux_aarch64_experimental_graph_uses_selected_architecture(tmp_path):
         "--extra-root",
         f"{vendor / 'java-external' / 'fdlibm'}:MDVM_FDLIBM_DIR",
     ]
-    for module in (
-        "dalvikvm",
-        "dex2oat",
-        "libart-compiler",
-        "libjavacrypto",
-        "libjavacore",
-        "libopenjdk",
-        "libicu_jni",
-        "libopenjdkjvmti",
-    ):
-        arguments.extend(("--root-module", module))
     arguments.extend(
         (
             "--out",
@@ -65,6 +54,8 @@ def test_linux_aarch64_experimental_graph_uses_selected_architecture(tmp_path):
         for source in module.get("sources", [])
     }
     assert manifest["target"]["target_id"] == "linux-aarch64-gnu"
+    assert manifest["root_module_source"] == "overlay-policy"
+    assert manifest["root_modules"] == list(overlay.product_root_modules)
     assert len(manifest["modules"]) == 38
     modules = {module["aosp_name"]: module for module in manifest["modules"]}
     assert modules["libvixl"]["kind"] == "static"

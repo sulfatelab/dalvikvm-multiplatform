@@ -39,16 +39,6 @@ BUILD_VARIANTS = (
     "win32-frame-attribution",
     "win32-stack-high-water",
 )
-ROOT_MODULES = (
-    "dalvikvm",
-    "dex2oat",
-    "libart-compiler",
-    "libjavacrypto",
-    "libjavacore",
-    "libopenjdk",
-    "libicu_jni",
-    "libopenjdkjvmti",
-)
 
 _LINUX_SYSTEM_NEEDED = frozenset(
     {
@@ -442,8 +432,6 @@ def _generate(
         "--extra-root",
         f"{REPO_ROOT / 'vendor' / 'java-external' / 'fdlibm'}:MDVM_FDLIBM_DIR",
     ]
-    for root_module in ROOT_MODULES:
-        command.extend(("--root-module", root_module))
     command.extend(
         (
             "--out",
@@ -475,9 +463,33 @@ def _validate_graph_manifest(path: Path, target: TargetProfile) -> None:
         manifest = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise BuildFrontendError(f"cannot read generated graph manifest: {path}: {exc}") from exc
+    if not isinstance(manifest, dict):
+        raise BuildFrontendError("generated graph manifest must be a JSON object")
+    if manifest.get("target") != target.to_dict():
+        raise BuildFrontendError(
+            f"generated graph manifest does not describe {target.target_id}"
+        )
+    roots = manifest.get("root_modules")
+    if (
+        manifest.get("root_module_source") != "overlay-policy"
+        or not isinstance(roots, list)
+        or not roots
+        or any(not isinstance(name, str) or not name for name in roots)
+        or len(set(roots)) != len(roots)
+    ):
+        raise BuildFrontendError(
+            "generated product graph does not have valid overlay-owned roots"
+        )
+    modules = manifest.get("modules")
+    if not isinstance(modules, list):
+        raise BuildFrontendError("generated graph manifest has no module list")
     compiler = next(
-        (module for module in manifest.get("modules", [])
-         if module.get("aosp_name") == "libart-compiler"),
+        (
+            module
+            for module in modules
+            if isinstance(module, dict)
+            and module.get("aosp_name") == "libart-compiler"
+        ),
         None,
     )
     if compiler is None:

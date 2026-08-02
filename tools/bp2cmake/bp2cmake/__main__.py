@@ -14,7 +14,7 @@ from .closure import dependency_closure
 from .config import Config
 from .emitter import Emitter
 from .evaluator import Evaluator
-from .overlay import BlueprintScanPolicy, load_overlay, load_overlay_factory
+from .overlay import BlueprintScanPolicy, Overlay, load_overlay, load_overlay_factory
 from .target import TargetError, TargetProfile, resolve_target
 
 
@@ -142,8 +142,22 @@ def _generate(
     parser: argparse.ArgumentParser,
     target: TargetProfile | None,
     config: Config,
-    overlay,
+    overlay: Overlay,
 ) -> int:
+    if overlay.product_root_modules and (args.module or args.root_module):
+        parser.error(
+            "overlay-owned product roots cannot be combined with "
+            "--module or --root-module"
+        )
+    root_modules = (
+        list(overlay.product_root_modules)
+        if overlay.product_root_modules
+        else list(args.root_module)
+    )
+    root_module_source = (
+        "overlay-policy" if overlay.product_root_modules else "command-line"
+    )
+
     evaluator = Evaluator(config)
     root_paths: dict[str, str] = {}
     input_records: list[dict[str, str]] = []
@@ -175,12 +189,15 @@ def _generate(
 
     emitter = Emitter(evaluator, overlay, root_paths)
     modules = list(args.module)
-    if args.root_module:
-        for name in dependency_closure(evaluator, overlay, args.root_module):
+    if root_modules:
+        for name in dependency_closure(evaluator, overlay, root_modules):
             if name not in modules:
                 modules.append(name)
     if not modules:
-        parser.error("nothing to emit: pass --module and/or --root-module")
+        parser.error(
+            "nothing to emit: define overlay product roots or pass "
+            "--module/--root-module"
+        )
 
     if args.list_only:
         for name in modules:
@@ -209,7 +226,8 @@ def _generate(
         "blueprint_inputs": sorted(
             input_records, key=lambda item: (item["root_variable"], item["path"])
         ),
-        "root_modules": list(args.root_module),
+        "root_module_source": root_module_source,
+        "root_modules": root_modules,
         "modules": module_manifest,
         "graph_sha256": graph_digest,
     }

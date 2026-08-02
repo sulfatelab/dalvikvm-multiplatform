@@ -183,6 +183,16 @@ def test_unified_overlay_factory_selects_current_target_policy():
     windows = load_overlay_factory(str(factory), resolve_target("windows-x86_64-msvc"))
     assert len(linux.modules) == 41
     assert len(windows.modules) == 35
+    assert linux.product_root_modules == windows.product_root_modules == (
+        "dalvikvm",
+        "dex2oat",
+        "libart-compiler",
+        "libjavacrypto",
+        "libjavacore",
+        "libopenjdk",
+        "libicu_jni",
+        "libopenjdkjvmti",
+    )
     assert linux.global_policy.host_libs == windows.global_policy.host_libs
     assert linux.blueprint_scan == windows.blueprint_scan
     assert linux.blueprint_scan.excludes(
@@ -251,6 +261,13 @@ def test_unified_overlay_factory_selects_current_target_policy():
     openjdk = windows.policy_for("libopenjdk")
     assert "LinuxNativeDispatcher.c" in openjdk.remove_srcs
     assert "NativeThread.c" in openjdk.remove_srcs
+
+
+def test_product_root_module_policy_is_immutable_unique_data():
+    with pytest.raises(ValueError, match="must be a tuple"):
+        Overlay(product_root_modules=["dalvikvm"])  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="must not contain duplicates"):
+        Overlay(product_root_modules=("dalvikvm", "dalvikvm"))
 
 
 def test_linux_overlay_policy_is_available_for_pre_admission_graph_audits():
