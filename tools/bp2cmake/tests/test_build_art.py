@@ -613,6 +613,22 @@ def test_windows_configure_uses_target_bundle_and_clang_target(tmp_path, monkeyp
     assert "-DART_TEST_VARIANT=product" in commands[0]
 
 
+def test_gnu_runtime_binding_uses_clang_external_toolchain(tmp_path):
+    sysroot = tmp_path / "sysroot"
+    runtime = tmp_path / "gnu-runtime"
+    bindings = {"sysroot": sysroot, "runtime_root": runtime}
+
+    assert build_art._target_compiler_binding_arguments(
+        build_art.resolve_target("linux-aarch64-gnu"),
+        bindings,
+    ) == [
+        f"-DCMAKE_SYSROOT={sysroot}",
+        f"-DCMAKE_C_COMPILER_EXTERNAL_TOOLCHAIN={runtime}",
+        f"-DCMAKE_CXX_COMPILER_EXTERNAL_TOOLCHAIN={runtime}",
+        f"-DCMAKE_ASM_COMPILER_EXTERNAL_TOOLCHAIN={runtime}",
+    ]
+
+
 def test_test_variant_has_distinct_output_and_cannot_be_staged(tmp_path):
     target = build_art.resolve_target("windows-x86_64-msvc")
     binary = build_art._binary_dir(

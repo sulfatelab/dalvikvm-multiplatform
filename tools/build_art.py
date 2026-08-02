@@ -465,19 +465,39 @@ def _configure(
             "Windows-hosted Linux targets require targets."
             f"{target.target_id}.sysroot in .art-build.local.toml"
         )
+    elif not _host_can_run_target(target):
+        # Compiler identification runs before product link policy is loaded.
+        # A cross host cannot execute the probe and must not fall back to the
+        # host linker merely to prove that target Clang can compile an object.
+        command.append("-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY")
     for key, cmake_key in (("sdk_root", "ART_TARGET_SDK_ROOT"),
                            ("sysroot", "ART_TARGET_SYSROOT"),
                            ("runtime_root", "ART_TARGET_RUNTIME_ROOT")):
         if key in bindings:
             command.append(f"-D{cmake_key}={bindings[key]}")
-    if "sysroot" in bindings:
-        command.append(f"-DCMAKE_SYSROOT={bindings['sysroot']}")
+    command.extend(_target_compiler_binding_arguments(target, bindings))
     fingerprint["configure_command"] = command
     _guard_binary_directory(binary_dir, manifest_path, fingerprint)
     _run_checked(command)
     _audit_generated_commands(target, binary_dir, local)
     _write_json_atomic(manifest_path, fingerprint)
     print(f"configured {target.target_id} in {binary_dir}")
+
+
+def _target_compiler_binding_arguments(
+    target: TargetProfile,
+    bindings: dict[str, Path],
+) -> list[str]:
+    arguments: list[str] = []
+    if "sysroot" in bindings:
+        arguments.append(f"-DCMAKE_SYSROOT={bindings['sysroot']}")
+    runtime_root = bindings.get("runtime_root")
+    if target.target_abi == "gnu" and runtime_root is not None:
+        for language in ("C", "CXX", "ASM"):
+            arguments.append(
+                f"-DCMAKE_{language}_COMPILER_EXTERNAL_TOOLCHAIN={runtime_root}"
+            )
+    return arguments
 
 
 def _build(
@@ -895,6 +915,13 @@ def _audit_generated_commands(
         "CMAKE_CXX_COMPILER_TARGET": target.target_triple,
         "CMAKE_ASM_COMPILER_TARGET": target.target_triple,
     }
+    bindings = _target_bindings(target, local)
+    runtime_root = bindings.get("runtime_root")
+    if target.target_abi == "gnu" and runtime_root is not None:
+        for language in ("C", "CXX", "ASM"):
+            expected_cache[
+                f"CMAKE_{language}_COMPILER_EXTERNAL_TOOLCHAIN"
+            ] = str(runtime_root)
     for key, expected in expected_cache.items():
         if cache.get(key) != expected:
             raise BuildFrontendError(
