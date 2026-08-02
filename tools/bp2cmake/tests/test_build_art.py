@@ -625,7 +625,6 @@ def test_gnu_runtime_binding_uses_clang_external_toolchain(tmp_path):
         f"-DCMAKE_SYSROOT={sysroot}",
         f"-DCMAKE_C_COMPILER_EXTERNAL_TOOLCHAIN={runtime}",
         f"-DCMAKE_CXX_COMPILER_EXTERNAL_TOOLCHAIN={runtime}",
-        f"-DCMAKE_ASM_COMPILER_EXTERNAL_TOOLCHAIN={runtime}",
     ]
 
 

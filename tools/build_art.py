@@ -493,7 +493,11 @@ def _target_compiler_binding_arguments(
         arguments.append(f"-DCMAKE_SYSROOT={bindings['sysroot']}")
     runtime_root = bindings.get("runtime_root")
     if target.target_abi == "gnu" and runtime_root is not None:
-        for language in ("C", "CXX", "ASM"):
+        # CMake's generic ASM external-toolchain rule spells Clang's option as
+        # the invalid single-dash `-gcc-toolchain`. Preprocessed assembly needs
+        # the target/sysroot but never the C++ runtime search root, so bind the
+        # GNU installation only to the C and C++ drivers.
+        for language in ("C", "CXX"):
             arguments.append(
                 f"-DCMAKE_{language}_COMPILER_EXTERNAL_TOOLCHAIN={runtime_root}"
             )
@@ -918,7 +922,7 @@ def _audit_generated_commands(
     bindings = _target_bindings(target, local)
     runtime_root = bindings.get("runtime_root")
     if target.target_abi == "gnu" and runtime_root is not None:
-        for language in ("C", "CXX", "ASM"):
+        for language in ("C", "CXX"):
             expected_cache[
                 f"CMAKE_{language}_COMPILER_EXTERNAL_TOOLCHAIN"
             ] = str(runtime_root)

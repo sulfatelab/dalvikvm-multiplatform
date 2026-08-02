@@ -2025,6 +2025,20 @@ differences.
   `MAP_32BIT` without testing whether the target architecture provides it. All
   236 host/bp2cmake tests pass. This is pre-admission evidence, not AArch64
   product admission.
+- [x] Complete the first Linux AArch64 compile/link bring-up. ART's low-address
+  path now uses `MAP_32BIT` only when the target headers provide it, while
+  AArch64/RISC-V64 retain the upstream linear-scan allocator. GNU runtime-root
+  binding applies to Clang C/C++ drivers but not CMake's broken
+  single-dash ASM external-toolchain rule; preprocessed assembly continues to
+  receive the same target and sysroot. Release symbols explicitly marked
+  `LIBART_PROTECTED` regain protected ELF binding without restoring general
+  hidden/protected visibility, allowing AArch64 quick/JNI assembly to link its
+  direct `Runtime::instance_` references into `libart.so`. The complete
+  38-module AArch64 product built all DSOs and executables at `--parallel 32`,
+  then repeated as a true Ninja no-op under the same 2,110-compile-command,
+  2,196-Ninja-command, 32-product-link audit. Packaging admission remains open:
+  the first stage attempt correctly rejected a sysroot-derived absolute `/lib`
+  RUNPATH that must be removed in favor of the relocatable `$ORIGIN` contract.
 - [ ] Validate and admit Linux AArch64, x86, ARMv7, and RISC-V64 separately.
 - [x] Migrate the ARM64EC identity from transitional
   `windows-aarch64-arm64ec/cpu_arch=aarch64` to
