@@ -1,6 +1,6 @@
 # Windows libcore smoke — result
 
-**Status:** **COMPLETE for the promoted native matrix** — 24 unified libcore
+**Status:** **COMPLETE for the promoted native matrix** — 25 unified libcore
 behaviors pass on the authoritative Windows Server 2025 host; no named L-003
 case remains native-open
 
@@ -49,7 +49,7 @@ Ninja 1.13.2, LLVM 21.1.8 GNU-style Clang drivers, and the official configured
 JDK 21.0.12. No POSIX shell, Make, NMake, PowerShell, WSL, Cygwin, MSVC
 compiler driver, or `clang-cl` participated.
 
-Twenty-four accepted Phase-3 behaviors are now target-runnable through the common
+Twenty-five accepted Phase-3 behaviors are now target-runnable through the common
 W-004 catalog and one case-local Python runner with a checked-in JSON contract
 matrix. Core/charset/monitor, DNS, ordinary and forced GC, GoldenApp,
 interruption, file I/O, TCP loopback, errno/UTF-8 paths, properties/clocks,
@@ -77,14 +77,17 @@ XmlProbe requires namespace-aware SAX parsing through the Harmony Expat path,
 with exactly three elements and `helloworld` character content.
 SocketAddressProbe requires `android.system.Os` bind/connect/accept and address
 conversion to return positive-port loopback local and peer addresses.
+AsyncCloseProbe requires a closed server to unblock its blocked accept with a
+socket error and a closed peer to unblock the client read with EOF or an I/O
+error; both worker threads must terminate and no unexpected peer may appear.
 Historical Wine success is evidence only and does not broaden this result.
 
 ```text
 python tools/build_art.py test --target-id windows-x86_64-msvc --stage w004 --parallel 16
 
-W-004 after SocketAddress JAR rebuild: 34/34 PASS in 47.84 seconds
-repeat: ninja: no work to do; 34/34 PASS in 47.86 seconds
-complete catalog: ninja: no work to do; 74/74 PASS in 132.82 seconds
+W-004: ninja: no work to do; 35/35 PASS in 49.03 seconds
+repeat: ninja: no work to do; 35/35 PASS in 49.23 seconds
+complete catalog: ninja: no work to do; 75/75 PASS in 132.83 seconds
 Linux-hosted Windows cross reviewer: PASS; repeat Ninja no-op with --parallel 32
 ```
 
@@ -115,6 +118,8 @@ XmlProbe passed its exact element/text contract in 0.93/0.98 seconds and wrote
 the same sanitized result shape.
 SocketAddressProbe passed its strengthened local/peer loopback contract in
 0.94/0.94 seconds; its result is likewise clean.
+AsyncCloseProbe passed both unblock contracts in 1.44/1.48 seconds, with no
+forbidden unexpected-peer or explicit-failure marker and a clean result.
 
 The generated binaries, managed artifacts, routine logs, and build trees
 remain outside VCS. W-027 now rejects known or unclassified Win32 suffix-`A`

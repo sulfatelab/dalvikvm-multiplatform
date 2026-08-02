@@ -188,9 +188,20 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     assert socket_address["execution"] == "target-runnable"
     assert socket_address["timeout_seconds"] == 600
     assert socket_address["ctest_registered"] is False
+    async_close = next(
+        probe
+        for probe in catalog["probes"]
+        if probe["name"] == "managed_asynccloseprobe"
+    )
+    assert async_close["platforms"] == ["windows"]
+    assert async_close["target_arches"] == ["x86_64"]
+    assert async_close["target_abis"] == ["msvc"]
+    assert async_close["execution"] == "target-runnable"
+    assert async_close["timeout_seconds"] == 600
+    assert async_close["ctest_registered"] is False
     assert sum(
         probe["execution"] == "target-runnable" for probe in catalog["probes"]
-    ) == 69
+    ) == 70
     assert {
         probe["name"]: probe["timeout_seconds"]
         for probe in catalog["probes"]
@@ -205,6 +216,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "managed_jvmti_force": 1200,
         "managed_pathprobe": 600,
         "managed_abspathprobe": 600,
+        "managed_asynccloseprobe": 600,
         "managed_bnprobe": 600,
         "managed_coreprobe": 600,
         "managed_dnsprobe": 600,

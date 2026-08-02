@@ -24,6 +24,7 @@ def test_windows_libcore_runtime_matrix_matches_promoted_cases():
     matrix = runner.load_matrix()
     assert set(matrix) == {
         "AbsPathProbe",
+        "AsyncCloseProbe",
         "BnProbe",
         "CoreProbe",
         "DnsProbe",
@@ -100,6 +101,21 @@ def test_windows_libcore_runtime_matrix_matches_promoted_cases():
         "accepted=true peer=",
         "peer.loopback=true",
         "SocketAddressProbe.done=ok",
+    ]
+    assert matrix["AsyncCloseProbe"]["expected_markers"] == [
+        "accept.blocking",
+        "server.closing",
+        "accept.unblocked=true alive=false",
+        "client.reading",
+        "peer.closing",
+        "read.unblocked=true alive=false",
+        "AsyncCloseProbe.done=ok",
+    ]
+    assert "accept.unexpectedPeer=" in matrix["AsyncCloseProbe"][
+        "forbidden_markers"
+    ]
+    assert "AsyncCloseProbe.done=fail" in matrix["AsyncCloseProbe"][
+        "forbidden_markers"
     ]
     assert matrix["PathProbe"]["mode"] == "path"
     assert matrix["AbsPathProbe"]["mode"] == "absolute-path"

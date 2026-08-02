@@ -12,6 +12,22 @@
       "mode": "absolute-path",
       "timeout_seconds": 120
     },
+    "AsyncCloseProbe": {
+      "expected_markers": [
+        "accept.blocking",
+        "server.closing",
+        "accept.unblocked=true alive=false",
+        "client.reading",
+        "peer.closing",
+        "read.unblocked=true alive=false",
+        "AsyncCloseProbe.done=ok"
+      ],
+      "forbidden_markers": [
+        "accept.unexpectedPeer=",
+        "AsyncCloseProbe.done=fail"
+      ],
+      "timeout_seconds": 60
+    },
     "BnProbe": {
       "expected_markers": [
         "BnProbe.done=ok sum=1111111110111111111011111111100 mod=9000000000900000000090 pow=483792039048379203904837920390"
