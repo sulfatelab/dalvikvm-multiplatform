@@ -47,7 +47,8 @@ def test_native_windows_ci_cell_uses_vm_memory_limit(tmp_path):
 def test_host_checks_are_python_only():
     commands = ci_art.commands_for_cell(ci_art.CELLS["host-checks"], None)
     assert commands[0] == [ci_art.sys.executable, str(ci_art.VCS_AUDIT)]
-    assert commands[1][1:4] == ["-m", "pytest", "-q"]
+    assert commands[1] == [ci_art.sys.executable, str(ci_art.TOPOLOGY_AUDIT)]
+    assert commands[2][1:4] == ["-m", "pytest", "-q"]
     assert all(isinstance(command, list) for command in commands)
 
 

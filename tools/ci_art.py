@@ -17,6 +17,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BUILD_FRONTEND = REPO_ROOT / "tools" / "build_art.py"
 VCS_AUDIT = REPO_ROOT / "tools" / "check_vcs_files.py"
+TOPOLOGY_AUDIT = REPO_ROOT / "tools" / "check_art_topology.py"
 CI_CONFIG_ENV = "ART_BUILD_CI_CONFIG"
 CI_RUN_KEY_ENV = "ART_BUILD_CI_RUN_KEY"
 
@@ -111,6 +112,7 @@ def _frontend_command(
 def commands_for_cell(cell: Cell, output_root: Path | None) -> list[list[str]]:
     commands = [[sys.executable, str(VCS_AUDIT)]]
     if cell.target_id is None:
+        commands.append([sys.executable, str(TOPOLOGY_AUDIT)])
         commands.append(
             [
                 sys.executable,

@@ -43,7 +43,7 @@ items are closed.
 | Windows x86-64 product | PARTIAL / experimental | Linux-hosted cross and native Windows Server 2025 product builds pass; the accepted native baseline passes 76/76 across W-002, W-003, W-004, W-010, W-013, W-014, W-025, and W-027; complete-package import/stale-path acceptance and identical no-op builds pass | add boot images and migrate the remaining behavioral coverage |
 | Compiler DSO parity | COMPLETE for `art-compiler` | both targets emit a shared compiler DSO; Windows imports `art.dll` and exports `art_compiler_jit_create` | retain exact ABI and no-cycle gates |
 | Windows runtime DSO exports | COMPLETE for current x86-64 closure | `art.dll` combines explicit source annotations with a reviewed 187-entry runtime-consumer DEF, never CMake auto-export; Debug has 2,065 exports and RelWithDebInfo has 2,066 | keep the consumer allowlist and actual PE boundary under regression review |
-| Full DSO topology parity | PARTIAL | five module kinds and two target-specific module pairs still differ | convert each difference or record a reviewed target exception |
+| Full DSO topology parity | PARTIAL / mechanically controlled | the fresh graphs have five reviewed module-kind differences and one reviewed generated/platform module mapping; every current difference is checked against a versioned contract | convert reviewed exceptions where practical; reject every unreviewed graph change |
 | Unified phase catalog | PARTIAL | eight virtual stages declare 32 native probes, 47 managed JARs, and 13 command gates; Windows has 90 applicable items (69 target-runnable, seven host-review, and 14 compile-only in the product variant), while Linux x86-64 has eleven applicable items (eight runnable and three compile-only artifacts) | migrate the remaining behavioral runners, portable JNI expansion, and result checks |
 | Boot/runtime packaging | PARTIAL | deterministic target-local boot/probe JARs now include Conscrypt and security properties; staging starts empty, selects only current Ninja link outputs, validates the complete DSO import closure, records approved system dependencies, and packages pinned ICU data, 121 CA roots, writable keychain directories, and the native DSO closure | add boot images and their runtime acceptance |
 | POSIX-free Windows build host | COMPLETE for the accepted native baseline; PARTIAL end to end | Server 2025 uses configured official JDK 21, Python, CMake, Ninja, and plain Clang drivers; all 76 accepted native tests, provider/security packaging, and product/test no-op gates pass without POSIX tooling | migrate every retained behavioral gate and complete boot-image/runtime packaging |
@@ -55,7 +55,8 @@ items are closed.
 ### Latest verification baseline (2026-08-02)
 
 - [x] `PYTHONPATH=tools/bp2cmake python3 -m pytest tools/bp2cmake/tests tests/host -q`:
-  201 passed, including the ART embedding, UDP socket-option, scoped Locale,
+  218 passed, including the fresh Linux/Windows topology contract, ART
+  embedding, UDP socket-option, scoped Locale,
   Zip, NativeBN BigInteger, OS-constants, SAX/Expat XML, and direct `Os`
   socket-address plus async-close gates,
   generated PE-header,
@@ -100,7 +101,7 @@ items are closed.
   acronym endings such as `_CA`, `_RSA`, and `_DATA` while continuing to
   reject known or unclassified encoding-selecting suffix-`A` calls; its native
   and cross gates pass. The focused host regressions and full maintained host
-  suite pass at 201/201.
+  suite pass at 218/218.
 - [x] The native generated-graph freshness check reports 36 modules from the
   same 260 Blueprint files. Running the complete product build after runtime
   testing built the remaining 350 edges, including `art-compiler.dll`,
@@ -170,7 +171,9 @@ items are closed.
   emits 37 generated modules for `linux-x86_64-gnu` and 36 for
   `windows-x86_64-msvc`. Both graphs emit the separate `openjdkjvmti` DSO;
   Linux additionally emits `sigchain`, while Windows supplies the reviewed
-  platform-source `sigchain` target from the common native entry point.
+  platform-source `sigchain` target from the common native entry point. The
+  fresh-manifest topology audit accepts exactly that one module-set difference
+  and five reviewed module-kind differences; it rejects any unreviewed change.
 - [x] Blueprint discovery no longer has hard-coded global path filtering or an
   `--exclude-top` product argument. The unified overlay carries one typed,
   path-free scan policy keyed by stable logical root variables. Graph-manifest
@@ -1705,22 +1708,30 @@ and reviewed; normal test execution never performs it.
 
 ### Fresh Linux/Windows topology comparison
 
-`libart-compiler` is shared on both targets, but full module-kind equality is
-not yet achieved:
+`libart-compiler` and `libart-dex2oat` are shared generated modules with the
+same CMake target names on both targets. The former Windows-only
+`libnativehelper_compat_libc++` product target is absent from both generated
+graphs. Full module-kind equality is not yet achieved, but every remaining
+difference has a reviewed disposition in `overlay/art_topology_contract.json`:
 
-| Module | Linux | Windows | Required disposition |
+| Generated module | Linux | Windows | Reviewed disposition |
 |---|---|---|---|
-| `libartbase` | shared | static | convert or document exception |
-| `libdexfile` | shared | static | convert or document exception |
-| `libprofile` | shared | static | convert or document exception |
-| `libunwindstack` | shared | static | convert or document exception |
-| `libicuuc_stubdata` | static | shared | convert or document exception |
-| compiler tool component | `libart-dex2oat` | `libdex2oat_static` | reconcile capability/topology |
-| signal-chain component | generated `libsigchain` | handwritten Windows `sigchain` | record the platform mapping and validate ABI |
-| native-helper compatibility | none | `libnativehelper_compat_libc++` | record or remove compatibility exception |
+| `libartbase` | shared | static | keep the implementation internal to PE consumers until its C++ DLL boundary is reviewed |
+| `libdexfile` | shared | static | keep the implementation internal to ART and dex2oat until its C++ PE boundary is reviewed |
+| `libprofile` | shared | static | keep the implementation internal to ART and dex2oat until its PE boundary is reviewed |
+| `libunwindstack` | shared | static | embed the adapted unwinder until a standalone Windows DLL ABI is reviewed |
+| `libicuuc_stubdata` | static | shared | retain the Windows ICU stub-data import topology |
 
-The next topology gate must compare fresh manifests mechanically and fail on
-an unreviewed module-set or kind change.
+There is one module-set difference: Linux generates shared `libsigchain`,
+while Windows supplies the equivalent shared `sigchain` target from
+`native/cmake/ArtPlatform.cmake` and `sigchain_windows.cc`. There are no
+Windows-only generated modules.
+
+`tools/check_art_topology.py` regenerates both manifests, checks target and
+CMake target identities, and fails on any module-set or kind change not
+described by the contract. The accepted comparison is 37 Linux modules, 36
+Windows modules, one approved set difference, and five approved kind
+differences.
 
 ### Prioritized work queue
 
@@ -1755,8 +1766,10 @@ an unreviewed module-set or kind change.
 
 #### P1: complete parity and mechanical acceptance
 
-- [ ] Resolve or explicitly approve every topology difference in the table
-  above.
+- [x] Resolve or explicitly approve every topology difference above and enforce
+  it mechanically. The fresh-manifest audit accepts exactly 37 Linux modules,
+  36 Windows modules, one reviewed set difference, and five reviewed kind
+  differences; any unreviewed change fails.
 - [x] Enforce the exact `art-compiler.dll` export allowlist, required
   `art.dll` import, and absence of an `art.dll -> art-compiler.dll` reverse
   dependency. Architecture/object-format and ASLR checks remain in their
@@ -1780,9 +1793,9 @@ an unreviewed module-set or kind change.
   TOML file per runner, so no machine path enters Git. This item remains open
   until the self-hosted `linux/x64/art-build` and `windows/x64/art-build`
   runners are registered and the checked-in workflow has accepted all cells.
-  The actual `host-checks` entry point currently passes the VCS audit and
-  216/216 tests; official actionlint 1.7.12 accepts the workflow and its custom
-  runner-label configuration.
+  The actual `host-checks` entry point currently passes the VCS audit, fresh
+  topology audit, and 218/218 tests; official actionlint 1.7.12 accepts the
+  workflow and its custom runner-label configuration.
 
 #### P2: remove migration scaffolding and harden orchestration
 

@@ -1,0 +1,46 @@
+{
+  "kind_differences": {
+    "libartbase": {
+      "linux": "shared",
+      "reason": "Windows keeps ART base implementation internal to its PE consumers until a reviewed C++ DLL export/import boundary exists.",
+      "windows": "static"
+    },
+    "libdexfile": {
+      "linux": "shared",
+      "reason": "Windows keeps the DEX implementation internal to ART and dex2oat until its C++ PE ABI and ownership annotations are reviewed.",
+      "windows": "static"
+    },
+    "libicuuc_stubdata": {
+      "linux": "static",
+      "reason": "Windows preserves ICU's shared stub-data import topology while Linux folds the zero-data stub into its shared ICU closure.",
+      "windows": "shared"
+    },
+    "libprofile": {
+      "linux": "shared",
+      "reason": "Windows keeps profile implementation internal to ART and dex2oat until a stable PE export/import boundary is defined.",
+      "windows": "static"
+    },
+    "libunwindstack": {
+      "linux": "shared",
+      "reason": "Windows embeds the adapted unwinder in its consumers because the port has no reviewed standalone libunwindstack DLL ABI.",
+      "windows": "static"
+    }
+  },
+  "module_set_differences": {
+    "linux_only": {
+      "libsigchain": {
+        "cmake_target": "sigchain",
+        "kind": "shared",
+        "reason": "Linux emits upstream libsigchain; Windows supplies the same logical shared target from native/cmake/ArtPlatform.cmake and sigchain_windows.cc.",
+        "windows_cmake_target": "sigchain",
+        "windows_kind": "shared"
+      }
+    },
+    "windows_only": {}
+  },
+  "schema_version": 1,
+  "targets": {
+    "linux": "linux-x86_64-gnu",
+    "windows": "windows-x86_64-msvc"
+  }
+}
