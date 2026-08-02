@@ -151,6 +151,16 @@
       ],
       "require_nonzero": true,
       "timeout_seconds": 60
+    },
+    "UdpProbe": {
+      "expected_markers": [
+        "udp.sent=true",
+        "udp.got=udp.probe.ok",
+        "udp.from=/127.0.0.1:",
+        "udp6.note=covered_by_Ipv6Probe",
+        "UdpProbe.done=ok"
+      ],
+      "timeout_seconds": 60
     }
   }
 }

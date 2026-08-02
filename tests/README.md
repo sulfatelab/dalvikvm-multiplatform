@@ -128,13 +128,13 @@ and compiler-DSO topology gates, for five W-004 CTest gates. Together with the
 shared W-013 gate, the Linux catalog has eight runnable declarations and three
 compile-only artifacts. Windows adds its BoringSSL SHA executable plus the exact
 `windows-x86_64-msvc` JVMTI managed gate and runtime-load/assembly-dependency
-reviewer. Fifteen more accepted Phase-3 libcore behaviors use one checked-in
+reviewer. Eighteen accepted Phase-3 libcore behaviors use one checked-in
 JSON contract matrix and one case-local, shell-free Python runner. The expanded
-native W-004 stage has 27 gates: ART embedding, core/charset/monitor, DNS,
+native W-004 stage has 28 gates: ART embedding, core/charset/monitor, DNS,
 ordinary and forced GC, GoldenApp, interruption, file I/O, TCP loopback,
-errno/UTF-8 paths, properties/clocks, runtime memory, thread stress, and
-expected-nonzero uncaught
-exception behavior join the earlier six. Exec validates `Runtime.exec` and
+UDP loopback, errno/UTF-8 paths, properties/clocks, runtime memory, thread
+stress, and expected-nonzero uncaught exception behavior join the earlier six.
+Exec validates `Runtime.exec` and
 `ProcessBuilder`; IPv6 validates AF_INET6 bind and `getsockname`. PathProbe and
 AbsPathProbe add a
 standalone Hello regression, multi-JAR `;` classpath, structured
@@ -146,14 +146,14 @@ DLL closure beside the probe and gives each repetition an isolated runtime
 root. It requires the complete create/destroy, VEH, predecessor/late UEF, and
 frame-SEH contract plus exactly one intentional ART UEF minidump per process;
 the dumps remain ignored build artifacts and the aggregate records only
-relative names. Windows Server 2025 passed 27/27 twice with `--parallel 16`,
+relative names. Windows Server 2025 passed 28/28 twice with `--parallel 16`,
 including a true Ninja no-op repeat. Its first DNS
 run exposed recursive `getnameinfo` JNI behavior; the maintained bridge now
 uses `GetNameInfoW` with explicit bionic-to-Winsock flag mapping. The remaining
-L-003 Locale and Zip probes timed out after 120 seconds natively, and UDP failed
-at `DatagramSocket` construction with `setsockopt EINVAL`; all three stay
-compile-only until their exact native contracts pass. Historical Wine results
-do not promote them. The JVMTI runner, native agent, managed
+L-003 Locale and Zip probes timed out after 120 seconds natively and stay
+compile-only until their exact native contracts pass. UdpProbe now passes after
+the JNI bridge maps bionic `SO_BROADCAST` to the Winsock option. Historical
+Wine results do not promote cases. The JVMTI runner, native agent, managed
 source, and result live together under `cases/jvmti-force/`; its current
 selector is deliberately not generalized to another Windows architecture or
 ABI.
@@ -194,9 +194,9 @@ sources, strips comments and literals, distinguishes JNI `Call*MethodA` from
 Win32 suffix-`A` APIs, and fails on either a known ANSI call or an unclassified
 suffix-`A` family. The active 1,441-source graph has zero ANSI calls, source
 files, or API families. The Linux-hosted Windows-cross stage passes. Native
-Windows Server 2025 now passes W-027 as part of the complete 67/67 catalog;
+Windows Server 2025 now passes W-027 as part of the complete 68/68 catalog;
 the first run completed in 12.38 seconds and the no-op repeat in 12.33 seconds.
-The complete catalog contains 60 target-runnable gates and seven host reviewers,
+The complete catalog contains 61 target-runnable gates and seven host reviewers,
 and its repeated `art-tests` build reports `ninja: no work to do`.
 Remaining legacy shell runners and retained per-probe CMake entry points use
 canonical files as temporary compatibility shims; they must be replaced by the

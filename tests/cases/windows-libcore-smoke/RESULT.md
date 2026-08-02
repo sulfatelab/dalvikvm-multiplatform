@@ -1,8 +1,8 @@
 # Windows libcore smoke — result
 
-**Status:** **COMPLETE for the promoted native matrix** — 17 unified libcore
-behaviors pass on the authoritative Windows Server 2025 host; L-003 Locale,
-UDP, and Zip remain explicitly native-open and compile-only
+**Status:** **COMPLETE for the promoted native matrix** — 18 unified libcore
+behaviors pass on the authoritative Windows Server 2025 host; L-003 Locale and
+Zip remain explicitly native-open and compile-only
 
 **Latest acceptance:** 2026-08-01
 
@@ -49,27 +49,29 @@ Ninja 1.13.2, LLVM 21.1.8 GNU-style Clang drivers, and the official configured
 JDK 21.0.12. No POSIX shell, Make, NMake, PowerShell, WSL, Cygwin, MSVC
 compiler driver, or `clang-cl` participated.
 
-Seventeen accepted Phase-3 behaviors are now target-runnable through the common
+Eighteen accepted Phase-3 behaviors are now target-runnable through the common
 W-004 catalog and one case-local Python runner with a checked-in JSON contract
 matrix. Core/charset/monitor, DNS, ordinary and forced GC, GoldenApp,
 interruption, file I/O, TCP loopback, errno/UTF-8 paths, properties/clocks,
 runtime memory, thread stress, and the expected-nonzero uncaught-exception path
-all run without Bash, Wine, PowerShell, or a package handoff. PathProbe and
+all run without Bash, Wine, PowerShell, or a package handoff. UDP now validates
+an IPv4 loopback datagram payload and peer address. PathProbe and
 AbsPathProbe add eight shell-free subcases covering multi-JAR semicolon
 classpath, structured drive/mixed/UNC paths, three absolute JAR path forms,
 and two required colon-separator failures. ExecProbe adds `Runtime.exec` and
 `ProcessBuilder` marker/exit validation; Ipv6Probe adds AF_INET6 bind and
 `getsockname` validation without reverse-DNS side effects. The other L-003
 artifacts stay compile-only: LocaleProbe and ZipProbe each timed out after 120
-seconds on native Windows, while UdpProbe failed during `DatagramSocket`
-construction with `setsockopt failed: EINVAL`. Historical Wine success is
-evidence only and does not broaden this native result.
+seconds on native Windows. Historical Wine success is evidence only and does
+not broaden this native result.
 
 ```text
 python tools/build_art.py test --target-id windows-x86_64-msvc --stage w004 --parallel 16
 
-W-004: 26/26 PASS in 38.24 seconds
-repeat: ninja: no work to do; 26/26 PASS in 38.37 seconds
+W-004: 28/28 PASS in 42.16 seconds
+repeat: ninja: no work to do; 28/28 PASS in 41.85 seconds
+peer-address contract revalidation: ninja: no work to do; 28/28 PASS in 42.26 seconds
+complete catalog: ninja: no work to do; 68/68 PASS in 126.93 seconds
 Linux-hosted Windows cross reviewer: PASS; repeat Ninja no-op with --parallel 32
 ```
 
@@ -78,10 +80,15 @@ Java `InetAddress.getHostAddress()`, which calls the same native bridge and
 recursed. The maintained bridge now converts the Java address to `sockaddr`,
 maps bionic name-info flag values to Winsock values, and calls Unicode
 `GetNameInfoW`; the rebuilt `javacore.dll` passes DNS resolution and loopback
-payload acceptance. All superseded Phase-3 Bash producers and runners were
-removed after the supported behavior moved into the native catalog. The three
-native-open L-003 cases remain ordinary compile-only declarations rather than
-a second runner.
+payload acceptance. Native UDP then exposed that Android's bionic
+`SO_BROADCAST = 6` crossed the JNI boundary unchanged. The maintained bridge
+now maps that option to Winsock `SO_BROADCAST`; UdpProbe passes in 0.93/0.93
+seconds across the stage and no-op repeat, then in 0.94 seconds after its peer
+address marker was made mandatory. Its sanitized result contains no machine
+path. All superseded Phase-3 Bash producers and runners were removed
+after the supported behavior moved into the native catalog. The two remaining
+native-open L-003 cases are ordinary compile-only declarations rather than a
+second runner.
 
 The generated binaries, managed artifacts, routine logs, and build trees
 remain outside VCS. W-027 now rejects known or unclassified Win32 suffix-`A`

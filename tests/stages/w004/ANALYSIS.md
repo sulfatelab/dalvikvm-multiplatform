@@ -117,10 +117,13 @@ Linux controls also passed:
 ## Unified stage acceptance
 
 The maintained Windows acceptance path is shell-free unified `stage:w004`.
-Windows Server 2025 x86-64 passes all 27 gates, including the exact-target ART
-embedding gate and the live source/object/PE/dependency reviewer described
-above, with `--parallel 16` on the 16 GiB VM. Its immediate repeat reports
-`ninja: no work to do` and passes 27/27 again. The embedding gate stages a
+Windows Server 2025 x86-64 passes all 28 gates, including the exact-target ART
+embedding and UDP loopback gates plus the live source/object/PE/dependency
+reviewer described above, with `--parallel 16` on the 16 GiB VM. Its immediate
+repeat reports `ninja: no work to do` and passes 28/28 again. The UDP gate maps
+Android's
+bionic `SO_BROADCAST` value at the JNI/Winsock boundary and requires the exact
+loopback payload contract. The embedding gate stages a
 regular-file DLL closure and requires two successful processes with exact
 VEH/UEF/frame-SEH behavior and one intentional ART UEF dump per process; its
 result contains no absolute machine path. A Linux-hosted Windows cross build

@@ -40,8 +40,10 @@ def test_windows_libcore_runtime_matrix_matches_promoted_cases():
         "RtMem",
         "ThreadStressProbe",
         "ThrowProbe",
+        "UdpProbe",
     }
     assert matrix["ThrowProbe"]["require_nonzero"] is True
+    assert "udp.from=/127.0.0.1:" in matrix["UdpProbe"]["expected_markers"]
     assert matrix["PathProbe"]["mode"] == "path"
     assert matrix["AbsPathProbe"]["mode"] == "absolute-path"
     assert all(case["expected_markers"] for case in matrix.values())
@@ -105,6 +107,35 @@ def test_windows_getnameinfo_uses_unicode_winsock_without_java_recursion():
     assert "java_addr_to_sockaddr(" in implementation
     assert "getHostAddress" not in implementation
     assert "GetNameInfoA(" not in implementation
+
+
+def test_windows_datagram_broadcast_maps_bionic_option_to_winsock():
+    source = (
+        REPO_ROOT / "tools" / "windows_x64" / "jni_stubs" / "win_net_natives.c"
+    ).read_text(encoding="utf-8")
+    assert "A_SO_BROADCAST = 6" in source
+    set_start = source.index(
+        "__declspec(dllexport) void Java_libcore_io_Linux_setsockoptInt("
+    )
+    set_end = source.index(
+        "__declspec(dllexport) void "
+        "Java_libcore_io_Linux_setsockoptInt__Ljava_io_FileDescriptor_2III(",
+        set_start,
+    )
+    get_start = source.index(
+        "__declspec(dllexport) jint Java_libcore_io_Linux_getsockoptInt("
+    )
+    get_end = source.index(
+        "__declspec(dllexport) jint "
+        "Java_libcore_io_Linux_getsockoptInt__Ljava_io_FileDescriptor_2II(",
+        get_start,
+    )
+    assert "option == A_SO_BROADCAST) wopt = SO_BROADCAST" in source[
+        set_start:set_end
+    ]
+    assert "option == A_SO_BROADCAST) wopt = SO_BROADCAST" in source[
+        get_start:get_end
+    ]
 
 
 def test_path_probe_block_review_is_scoped_per_sample():

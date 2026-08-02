@@ -117,9 +117,18 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     assert embedding["execution"] == "target-runnable"
     assert embedding["timeout_seconds"] == 600
     assert embedding["ctest_registered"] is False
+    udp = next(
+        probe for probe in catalog["probes"] if probe["name"] == "managed_udpprobe"
+    )
+    assert udp["platforms"] == ["windows"]
+    assert udp["target_arches"] == ["x86_64"]
+    assert udp["target_abis"] == ["msvc"]
+    assert udp["execution"] == "target-runnable"
+    assert udp["timeout_seconds"] == 600
+    assert udp["ctest_registered"] is False
     assert sum(
         probe["execution"] == "target-runnable" for probe in catalog["probes"]
-    ) == 62
+    ) == 63
     assert {
         probe["name"]: probe["timeout_seconds"]
         for probe in catalog["probes"]
@@ -152,6 +161,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "managed_threadheavyprobe": 600,
         "managed_threadstressprobe": 600,
         "managed_throwprobe": 600,
+        "managed_udpprobe": 600,
         "win32_uef_probe": 600,
         "win32_fault_record_probe": 60,
         "win32_sigchain_probe": 60,

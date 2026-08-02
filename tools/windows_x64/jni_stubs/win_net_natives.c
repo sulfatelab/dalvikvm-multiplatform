@@ -33,6 +33,7 @@ enum {
   A_SOL_SOCKET = 1,
   A_SO_REUSEADDR = 2,
   A_SO_ERROR = 4,
+  A_SO_BROADCAST = 6,
   A_SO_LINGER = 13,
   A_SO_DOMAIN = 39,
   A_SO_PROTOCOL = 38,
@@ -540,6 +541,7 @@ __declspec(dllexport) void Java_libcore_io_Linux_setsockoptInt(JNIEnv* env, jobj
   if (level == A_SOL_SOCKET) {
     wlevel = SOL_SOCKET;
     if (option == A_SO_REUSEADDR) wopt = SO_REUSEADDR;
+    if (option == A_SO_BROADCAST) wopt = SO_BROADCAST;
   } else if (level == 41 /* IPPROTO_IPV6 android */) {
     wlevel = IPPROTO_IPV6;
     if (option == A_IPV6_V6ONLY) wopt = IPV6_V6ONLY;
@@ -579,6 +581,7 @@ __declspec(dllexport) jint Java_libcore_io_Linux_getsockoptInt(JNIEnv* env, jobj
     wlevel = SOL_SOCKET;
     if (option == A_SO_REUSEADDR) wopt = SO_REUSEADDR;
     if (option == A_SO_ERROR) wopt = SO_ERROR;
+    if (option == A_SO_BROADCAST) wopt = SO_BROADCAST;
   }
   if (getsockopt(s, wlevel, wopt, (char*)&v, &len) != 0) {
     int werr = WSAGetLastError();
