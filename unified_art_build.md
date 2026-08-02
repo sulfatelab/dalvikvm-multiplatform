@@ -2074,11 +2074,20 @@ differences.
   both passed in 1.91 seconds. Staging produced 158 regular files including
   its manifest, validated 32 AArch64 executable/DSO identities, retained only
   `$ORIGIN` runtime paths, and found no links. The immediate full repeat was a
-  true Ninja no-op, and all 244 host/bp2cmake tests pass. GC, JNI, JIT,
+  true Ninja no-op, and all 246 host/bp2cmake tests pass. GC, JNI, JIT,
   boot-image, compiler-DSO loading, and native-AArch64-host claims remain
-  excluded. Common runtime diagnostics still contain stale `Windows x64`
-  wording from bring-up instrumentation; this is cleanup debt, not an
-  architecture selector or acceptance marker.
+  excluded.
+- [x] Remove stale Windows x86-64 labels from common runtime bring-up
+  diagnostics without weakening real target-specific terminology. `dalvikvm`,
+  class-loader/runtime startup, class-path, and DEX-open messages now use
+  target-neutral prefixes; the accepted `main end exception=0` marker and
+  uncaught-exception behavior are unchanged. A source regression forbids the
+  exact false prefixes while leaving PE-x64 unwind, Windows x86-64 quick ABI,
+  and target-specific JIT controls intact. Linux AArch64 rebuilt four objects
+  plus dependent DSOs/executable and passed its two W-004 gates in 1.98
+  seconds with no `Windows x64` text. Native Windows rebuilt the same sources,
+  passed W-004 twice at 36/36 in 52.10 and 52.00 seconds, and reported a Ninja
+  no-op on the repeat; its common-prefix audit also found zero stale labels.
 - [ ] Promote Linux AArch64 beyond the experimental two-smoke slice, and
   validate/admit Linux x86, ARMv7, and RISC-V64 separately.
 - [x] Migrate the ARM64EC identity from transitional

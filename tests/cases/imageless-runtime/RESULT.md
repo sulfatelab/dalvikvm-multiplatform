@@ -24,7 +24,7 @@ not claim Windows AOT/OAT support or AArch64 boot-image support.
 | Target ID | Imageless | Boot image | Last accepted |
 |---|---:|---:|---:|
 | `linux-x86_64-gnu` | runtime-verified | runtime-verified | 2026-08-02 14:22:00 CST |
-| `linux-aarch64-gnu` | runtime-verified under explicit QEMU user mode | unsupported | 2026-08-02 18:37:13 CST |
+| `linux-aarch64-gnu` | runtime-verified under explicit QEMU user mode | unsupported | 2026-08-02 19:24:29 CST |
 | `windows-x86_64-msvc` | runtime-verified on the authoritative native host | unsupported | 2026-08-02 |
 
 Only `linux-x86_64-gnu` currently declares the `boot_image` capability.
@@ -60,9 +60,17 @@ manifest, validated 32 AArch64 executable/DSO identities, retained only
 `$ORIGIN` runtime paths, and found no filesystem links. The immediate full
 product repeat reported `ninja: no work to do`. This admits an experimental
 AArch64 interpreter/runtime smoke; it does not claim GC, JNI, JIT, boot-image,
-or native-AArch64-host acceptance. Shared runtime diagnostics still contain
-some stale `Windows x64` text labels from earlier bring-up instrumentation;
-that wording is tracked as cleanup debt and is not used as AArch64 evidence.
+or native-AArch64-host acceptance.
+
+A follow-up rebuilt the four common sources that owned bring-up diagnostics
+plus their dependent runtime DSOs and executable. The same AArch64 W-004 slice
+passed 2/2 in 1.98 seconds. Its stderr retained the accepted
+`main end exception=0` marker while using target-neutral `dalvikvm InvokeMain`
+and `ART Runtime::Start` prefixes; no `Windows x64` text remained. Native
+Windows rebuilt the same sources and passed W-004 twice at 36/36 in 52.10 and
+52.00 seconds, with the second build a Ninja no-op. Its common-prefix audit
+also found zero stale architecture labels. Actual x86-64 PE/JIT diagnostics
+remain explicitly scoped and were not generalized.
 
 ## Latest Linux acceptance
 
