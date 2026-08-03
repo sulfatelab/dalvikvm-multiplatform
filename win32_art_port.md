@@ -9,7 +9,7 @@ Phase 4 Wine-complete with the authoritative Windows Server 2025 build-26100
 native gate accepted, x86_64 quick/nterp/managed/native JIT enabled by default,
 and W-010/W-014 Stage E accepted on that host. The former Windows 10 lab host
 is no longer available for future gates.
-Updated: 2026-07-30
+Updated: 2026-08-03
 
 Future native-gate policy: use only Windows Server 2025 Datacenter Evaluation
 x64 build 26100. See
@@ -40,9 +40,9 @@ Grounding: current Linux port (`bp2cmake_linux_scope.md`, `overlay/art_port_poli
 - Full Java SE / OpenJDK replacement semantics beyond what Android libcore already provides on Linux.
 - Cygwin/MSYS2/MinGW as toolchains or runtime personalities (no `msys-2.0.dll` / `libgcc_s` / MinGW binutils dependency).
 - MSVC **as the C/C++ compiler** (`cl`, `clang-cl`). **Using the MSVC/Windows SDK header set with Clang is required**, not forbidden.
-- PE32+ OAT. Windows AOT retains a restricted ELF64 OAT coat and uses an
-  ART-owned, OAT-only loader; PE remains the process/DLL format, not the OAT
-  container.
+- PE32+ OAT. Windows boot AOT keeps the current Linux ART ELF64 identity and
+  page-size-agnostic layout and uses an ART-owned private-copy mapping path;
+  PE remains the process/DLL format, not the OAT container.
 - `ProhibitDynamicCode`/ACG compatibility. ART-created executable memory is an
   explicit product prerequisite for JIT and OAT; policy rejection must be
   clean but is not a supported operating mode.
@@ -101,7 +101,8 @@ unmet W-025 feature; CFG remains separate.
 
 The original plan allowed JIT/dex2oat to be a v1.1 gate. Current x86_64 quick,
 nterp, managed-JIT, and native-JIT entrypoints are correct and default-on;
-dex2oat and restricted ELF64 OAT production remain deferred.
+Windows `dex2oat` boot-set production and executable boot-OAT loading remain
+deferred.
 
 ---
 
@@ -767,18 +768,27 @@ all product paths. Windows NIO.2 remains a non-goal.
   process under W-010's activation contract.
 - dex2oat/AOT remains deferred; the imageless interpreter+JIT product does not
   require it.
-- Windows AOT retains a restricted ELF64 OAT coat. A dedicated OAT-only loader
-  consumes exact ART reservations, creates independent BSS instances, preserves
-  the initial `oatdex`/VDEX contract, registers Windows x64 unwind data, and
-  rejects every general DSO feature such as imports, ELF relocations, TLS, and
-  constructors.
-- The first implementation uses private copy for correctness. A later
-  versioned 64-KiB-aligned ELF layout may use placeholder-backed data views for
-  sharing after it proves exact equivalence. PE32+ OAT, `LoadLibraryExW`,
-  `SEC_IMAGE`, and a general Bionic-linker port are rejected.
-- Executable-memory capability is a platform prerequisite. CFG remains a gate;
-  `ProhibitDynamicCode`/ACG execution is a non-goal and receives only a clean
-  negative rejection test.
+- Windows boot AOT keeps the current Linux ART ELF64 identity and
+  page-size-agnostic layout unchanged: `ART_PAGE_SIZE_AGNOSTIC=1`, Linux
+  `EI_OSABI`/ABI version/e_flags behavior, and the current 16-KiB
+  `PT_LOAD` alignment. There is no separate Windows ELF coat identity.
+- The first implementation is boot-only and reuses
+  `ElfOatFile`/`ElfFile`/`OatFileBase` where practical. A narrow private-copy
+  helper consumes the exact already committed ART reservation, preserves the
+  `oatdex`/VDEX contract, applies final protections, flushes code, and
+  registers Windows x64 AOT unwind data. Whole-span commit is selected for the
+  initial OAT-1 path to match current Windows `MemMap` semantics.
+- PE32+ OAT, `LoadLibraryExW`, `SEC_IMAGE`, a general Bionic-linker port,
+  application OAT, unloading, and shared-view/OAT-2 work are outside the
+  initial milestone. Security hardening is deferred. CFG is TBD and will be
+  characterized rather than treated as an early gate.
+- The remaining functional design work is native Windows `dex2oat` boot-set
+  generation/staging, boot-component topology, exact image-reservation and
+  VDEX ownership, experimental startup selection with imageless fallback, and
+  proof that real boot methods execute from the OAT RX range rather than
+  JIT/nterp. The compiler-to-OAT unwind transport is no longer open design: its
+  format, writer integration, and runtime registration are specified and now
+  await implementation.
 - The format analysis, Bionic reuse boundary, mapping design, risk register,
   correctness invariants, and Server 2025 proof gates are in
   [win32_aot_oat.md](win32_aot_oat.md).

@@ -4244,10 +4244,16 @@ not change that status.
 compiler tools. It does not by itself provide:
 
 - a working Windows `dex2oat.exe`;
-- the selected restricted Windows OAT-ELF writer profile;
+- Windows boot ART/OAT/VDEX generation and target-specific staging;
+- proof that the existing Linux-identical ELF identity and
+  `ART_PAGE_SIZE_AGNOSTIC=1` 16-KiB segment alignment are preserved;
 - OAT/VDEX/image transaction and relocation behavior;
-- the dedicated Windows OAT loader;
-- Windows quick-code unwind/CFG publication; or
+- the `ElfOatFile`-based Windows private-copy mapping and VDEX owner-sharing
+  path;
+- compiler-to-OAT Windows x64 unwind transport and runtime registration;
+- experimental boot selection, clean imageless fallback, and proof of real
+  OAT entrypoint execution;
+- the still-TBD CFG disposition; or
 - the acceptance gates in `win32_aot_oat.md`.
 
 Until those gates pass, Windows product capability should continue to be
