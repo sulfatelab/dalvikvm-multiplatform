@@ -1,10 +1,11 @@
 # Windows AOT and OAT design
 
-Status: early bring-up design baseline (2026-08-03). This document records the
+Status: early bring-up design baseline (2026-08-05). This document records the
 current ART OAT/VDEX/image contracts and the selected Windows AOT artifact and
-loader design. Windows keeps the same ELF64 coat and page-size-agnostic layout
-that ART currently emits for Linux. An ART-owned, OAT-only private-copy path
-loads it; PE32+ OAT is rejected.
+loader design. Windows keeps the same ELF64 coat and header identity as Linux,
+while using 64-KiB ELF/image segment alignment for the Windows allocation
+granularity. An ART-owned, OAT-only private-copy path loads it; PE32+ OAT is
+rejected.
 
 Windows OAT generation and executable loading are not implemented yet.
 Implementation stage 1, the pre-dispatch characterization suite, is now in the
@@ -26,12 +27,18 @@ The source snapshot is `vendor/art` at
    coat and loading contract are tightly coupled to ELF program headers,
    dynamic symbols, load bias, BSS, image reservations, and VDEX placement.
 3. Windows OAT remains the ordinary ART ELF64 format. `EI_OSABI`,
-   `EI_ABIVERSION`, `e_flags`, program-header structure, and
-   `kElfSegmentAlignment` remain exactly those emitted by the current Linux
-   ART writer. In particular, both products retain
-   `ART_PAGE_SIZE_AGNOSTIC=1`, so the current x86-64 `PT_LOAD` alignment is
-   16 KiB. There is no separate Windows ELF coat identity or literal 4-KiB
-   Windows layout.
+   `EI_ABIVERSION`, `e_flags`, and the program-header encoding/semantics remain
+   those of the Linux ART writer. The optional Windows-only unwind and CFG
+   metadata share a read-only `PT_LOAD`; they do not define a second coat.
+   Both products retain
+   `ART_PAGE_SIZE_AGNOSTIC=1`.
+   Linux keeps the current 16-KiB `kMaxPageSize` and 16-KiB
+   `kElfSegmentAlignment` unchanged. Windows has 4-KiB virtual-memory pages but
+   a 64-KiB allocation granularity, so it keeps `kMaxPageSize` as an OS-page/GC
+   bound and selects a target-specific 64-KiB `kElfSegmentAlignment` for ELF
+   and image layout. WASM also selects 64 KiB. The current source alias
+   `kElfSegmentAlignment = kMaxPageSize` must therefore be split; setting the
+   Windows `kMaxPageSize` to 64 KiB merely to obtain ELF alignment is rejected.
 4. PE32+ OAT is rejected. `LoadLibraryExW` cannot consume an ART-owned
    reservation or force an independent instance of the same artifact. A
    manual PE loader would add a new writer and relocation format without
@@ -45,9 +52,13 @@ The source snapshot is `vendor/art` at
    privately copies `PT_LOAD` bytes, zeroes BSS, leaves gaps `PAGE_NOACCESS`,
    applies final R/RX/RW protections, registers Windows x64 unwind data, and
    publishes entrypoints last.
-7. AOT unwind is required for usable Windows stack walking. CFG behavior is
-   TBD and shall be characterized on the authoritative native host; CFG is not
-   yet a bring-up requirement or a support claim.
+7. AOT unwind is required for usable Windows stack walking. CFG has two
+   deliberately separate modes. Early bring-up defaults to observation mode,
+   which records policy and proves real indirect OAT calls without changing
+   target state. A later explicit-target mode consumes the independently
+   versioned `.oat_cfg.windows` target list. That mode is not an early blocker
+   and cannot be enabled until the invalid-by-default allocation sequence is
+   proven with the committed OAT-1 reservation.
 8. Application OAT, successful-load unloading, shared-view/OAT-2 work, and
    cache/adversarial-input security hardening are outside the early bring-up
    scope. Security-sensitive product enablement requires a later review.
@@ -60,8 +71,9 @@ The source snapshot is `vendor/art` at
 
 Terminology: older project discussion sometimes used “Windows OAT” for the
 rejected PE32+ coat proposal. In this document it means the ordinary ART ELF
-container, with Linux-identical ELF header/layout policy, carrying
-Windows-targeted x86-64 quick code and Windows unwind metadata.
+container, with Linux-identical ELF header identity and a Windows-specific
+64-KiB segment alignment, carrying Windows-targeted x86-64 quick code and
+Windows unwind/CFG metadata.
 
 ## Format stability and identity
 
@@ -114,12 +126,15 @@ Recent upstream changes illustrate the volatility:
 | 2026-01 | Removed a VDEX section from OAT | OAT/VDEX coupling and version changed |
 | 2026-03 | Bumped OAT version after a revert | Even reverted semantics invalidated artifacts |
 
-This project's own Windows unwind section adds one more entry to that list: the
-`.oat_unwind` section and its two anchors require an OAT version increment in
-the same change, so a pre-section Windows artifact rejects by version instead
-of by a missing anchor. Because the version is shared with Linux ART, the bump
-also invalidates existing Linux artifacts; that is the established upstream
-behavior for any layout change and needs no separate compatibility path.
+The Windows unwind and CFG transports do not bump the shared OAT version.
+Linux and Android do not emit either Windows-only section, and their OAT
+format and byte layout must remain unchanged. The independently versioned
+`.oat_unwind.win64` header identifies its own encoding; a Windows executable
+boot load rejects a quick-code artifact that lacks the required unwind
+anchors. The earlier validation-only boot pass rejects it as well.
+`.oat_cfg.windows` is optional in observation mode and required only by
+explicit-target mode. There are no legacy Windows AOT artifacts that require
+a shared-version transition.
 
 ## Current artifact set
 
@@ -150,10 +165,17 @@ The current `ElfBuilder` constructs these conceptual regions:
 | `.dynstr`, `.dynsym`, `.hash`, `.dynamic` | Small lookup structure for the OAT anchors |
 | Debug sections | Build ID and optional DWARF/minidebug data; never mapping authority |
 
-The Windows product adds one read-only loadable section, `.oat_unwind`, holding
-the AOT `RUNTIME_FUNCTION` equivalents and their `UNWIND_INFO` bytes. It is
-specified under "AOT unwind format and transport" and is absent from Linux and
-Android output.
+The Windows x64 product adds one required read-only loadable section,
+`.oat_unwind.win64`, holding the AOT `RUNTIME_FUNCTION` equivalents and their
+`UNWIND_INFO` bytes. The suffix names the Windows x64 ABI actually encoded;
+`.win32_oat_unwind` would put the platform before ART's namespace and could be
+misread as a 32-bit format. The section is specified under "AOT unwind format
+and transport" and is absent from Linux and Android output. Windows may also
+emit the architecture-neutral read-only `.oat_cfg.windows` section. It carries
+exact indirect-call target offsets for CFG and has its own target-ABI field;
+there are no `.win32`/`.win64` CFG section-name variants. It is specified under
+"Windows CFG format and integration" and is also absent from Linux and Android
+output.
 
 The dynamic table currently needs only `DT_HASH`, `DT_STRTAB`, `DT_SYMTAB`,
 `DT_SYMENT`, `DT_STRSZ`, `DT_SONAME`, and `DT_NULL`. There are no normal DSO
@@ -167,14 +189,64 @@ imports or ELF relocation dependencies.
    lookup tables;
 2. emit `OatHeader`, key/value data, dex records, class/method tables, maps,
    BSS mappings, and image-relro metadata;
-3. finalize compiled-code and method offsets;
-4. emit quick code and trampolines;
-5. assign ELF virtual/file offsets and dynamic anchors;
-6. emit BSS and optional DEX virtual ranges;
-7. finalize checksums and ELF headers; and
-8. emit the matching ART image where requested.
+3. finalize compiled-code, method, trampoline, and indirect-target offsets;
+4. serialize any target-specific unwind and CFG metadata;
+5. emit quick code and trampolines;
+6. assign ELF virtual/file offsets and dynamic anchors;
+7. emit BSS and optional DEX virtual ranges;
+8. finalize checksums and ELF headers; and
+9. emit the matching ART image where requested.
 
 OAT offsets are often 32-bit. Windows does not implicitly widen them.
+
+### Current and designed loaded layout
+
+The current writer lays out allocatable regions in this order. Optional
+regions disappear without changing the order of the regions that remain:
+
+```text
+ELF/program headers
+  -> .dynstr/.dynsym/.hash/.dynamic       R
+  -> .rodata (oatdata)                    R
+  -> .text (oatexec .. oatlastword)       RX
+  -> .data.img.rel.ro                     RW, optional; sealed R by Setup()
+  -> .bss                                 RW, NOBITS, optional
+  -> .dex                                 R, NOBITS, optional VDEX aperture
+  -> non-loaded debug/section tables
+```
+
+`oatlastword` ends the logical metadata/quick-code range; it does not include
+`.data.img.rel.ro`. `OatWriter::oat_size_` does include the optional
+image-relocation section and its alignment, and `bss_start_` is aligned from
+that size.
+
+The Windows design inserts its metadata last among `PROGBITS` regions:
+
+```text
+ELF/program headers
+  -> .dynstr/.dynsym/.hash/.dynamic       R
+  -> .rodata (oatdata)                    R
+  -> .text (oatexec .. oatlastword)       RX
+  -> .data.img.rel.ro                     RW, optional; sealed R by Setup()
+  -> .oat_unwind.win64                    R, Windows x64 boot output only
+  -> .oat_cfg.windows                     R, optional Windows CFG target list
+  -> .bss                                 RW, NOBITS, optional
+  -> .dex                                 R, NOBITS, optional VDEX aperture
+  -> non-loaded debug/section tables
+```
+
+The first emitted Windows metadata section starts a distinct R `PT_LOAD`,
+whether its predecessor is RX `.text` or RW `.data.img.rel.ro`. If unwind is
+present, CFG follows it at 4-byte alignment in the same R segment; if CFG is
+the only metadata section, `ElfBuilder::Section::AddSection()` raises its
+effective alignment to `kElfSegmentAlignment` when the program-header flags
+change. Thus CFG does not create a second 64-KiB gap after unwind.
+`oatlastword` stays unchanged. The Windows writer finalizes both serialized
+payloads after code offsets are known, runs `InitDataImgRelRoLayout()`, assigns
+the optional unwind and CFG starts in that order, advances the running offset
+through both payloads, and only then assigns `oat_size_` and derives
+`bss_start_`. Linux and Android never reserve these sections, their symbols,
+or extra dynamic-section capacity.
 
 ### VDEX layout
 
@@ -273,12 +345,13 @@ lookup. It does not replace `OatFileBase::ComputeFields()`, `LoadVdex()`,
 
 | Artifact | Selected treatment | Owner |
 |---|---|---|
-| OAT | Current ART ELF64 with Windows x64 quick code and unwind data | `ElfOatFile` plus a Windows private-copy mapping helper |
+| OAT | Current ART ELF64 with Windows x64 quick code, unwind data, and optional CFG targets | `ElfOatFile` plus a Windows private-copy mapping helper |
 | VDEX | Read-mostly data, initially populated in the existing `oatdex` range | `VdexFile` inside OAT transaction |
 | ART image | Reserved mapping, copy/decompression and ART relocation | `ImageSpace` |
 
-The private-copy helper is not exported as `dlopen`. It is selected only by
-the Windows executable-OAT path and does not become a general ELF DSO loader.
+The private-copy helper is not exported as `dlopen`. It is selected by both
+Windows validation-only and executable `ElfOatFile` opens and does not become
+a general ELF DSO loader.
 
 ### Explicit non-goals
 
@@ -294,11 +367,15 @@ the Windows executable-OAT path and does not become a general ELF DSO loader.
 - Cache threat modeling, hostile-input hardening, Authenticode treatment, and
   debugger/profiler behavior equivalent to a DLL in early bring-up.
 - `ProhibitDynamicCode`/ACG compatibility or policy bypasses.
+- XFG, CFG export suppression, strict CFG policy, and fine-grained CFG
+  enforcement as an early support requirement.
 
-CFG is TBD. The initial native execution tests shall record the process CFG
-policy and observed indirect-call behavior without declaring CFG support or
-requiring a mitigation bypass. CET user shadow stacks remain unsupported
-under the existing Windows process contract.
+CFG observation mode is the initial default. Native execution tests record the
+process policy and exercise real indirect targets without calling
+`SetProcessValidCallTargets`, disabling CFG, or requiring a mitigation bypass.
+The `.oat_cfg.windows` format and explicit-target mode are designed below, but
+the latter remains gated and is not an early support claim. CET user shadow
+stacks remain unsupported under the existing Windows process contract.
 
 ## Why PE32+ OAT is rejected
 
@@ -353,7 +430,8 @@ The smallest-diff implementation starts with ART's existing
 `ElfOatFile`/`ElfFile` parser, loaded-size calculation, dynamic-symbol lookup,
 and `OatFileBase` transaction. The Windows-only addition supplies private
 population of the already committed reservation, final protections, VDEX
-copy ownership, cache flush, and AOT unwind registration.
+copy ownership, cache flush, AOT unwind registration, and narrow CFG policy/
+target handling.
 
 If implementation or characterization finds a concrete correctness gap,
 selected Bionic algorithms may be copied under this boundary:
@@ -365,9 +443,9 @@ selected Bionic algorithms may be copied under this boundary:
 | Segment zero-fill and PHDR containment rules | Reuse semantics, not POSIX calls |
 | POSIX `mmap(MAP_FIXED)` backend | Do not copy |
 | `soinfo`, dependencies, relocations, namespaces, TLS, constructors | Do not copy or implement |
-| OAT anchor lookup | Reuse `ElfFile::FindDynamicSymbolAddress()`; `OatFileBase::ComputeFields()` changes only by resolving the two additive `oatunwind` anchors |
+| OAT anchor lookup | Reuse `ElfFile::FindDynamicSymbolAddress()`; `OatFileBase::ComputeFields()` resolves the two required `oatunwindwin64` anchors and the two optional `oatcfgwindows` anchors under Windows-only guards |
 | Logical OAT validation | Keep existing `OatFile` setup logic |
-| Windows reservation/protection/VDEX/unwind | Add an OAT-only private-copy helper; CFG remains TBD |
+| Windows reservation/protection/VDEX/unwind/CFG | Add an OAT-only private-copy helper, unwind registry, and narrow CFG manager; do not turn them into a general loader |
 
 Bionic's `linker_phdr.cpp` is BSD-licensed. Copied code retains its copyright,
 conditions, disclaimer, source provenance, pinned tag, and required binary
@@ -395,8 +473,8 @@ Accept only:
   versioned allowed notes;
 - R, RX, and RW segments, never W+X or execute-without-read;
 - `p_filesz <= p_memsz`;
-- the current page-size-agnostic writer alignment,
-  `kElfSegmentAlignment == 16384`;
+- the Windows page-size-agnostic writer alignment,
+  `kElfSegmentAlignment == 65536`;
 - checked in-file file ranges and checked in-span virtual ranges;
 - required file/virtual offset congruence;
 - sorted non-overlapping load ranges with no conflicting shared page; and
@@ -427,12 +505,13 @@ oatdataimgrelro, oatdataimgrelrolastword,
 oatdataimgrelroappimage,
 oatbss, oatbssmethods, oatbssroots, oatbsslastword,
 oatdex, oatdexlastword,
-oatunwind, oatunwindlastword
+oatunwindwin64, oatunwindwin64lastword
 ```
 
-`oatunwind`/`oatunwindlastword` are the two anchors added for the AOT unwind
-table. They are required whenever the artifact contains quick code and must
-resolve inside an R segment.
+`oatunwindwin64`/`oatunwindwin64lastword` are the two anchors added for the
+Windows x64 AOT unwind table. They are required for a Windows boot OAT with
+quick code and must resolve inside an R segment. Both open modes validate the
+pair and section; a validation-only open does not register it.
 
 Validate complete dynamic/string/symbol/hash ranges, exact entry sizes, bounded
 counts, in-range NUL termination, bucket/chain indexes and termination,
@@ -467,14 +546,61 @@ artifact from ELF identity.
 
 Windows protects committed pages at ordinary page boundaries but requires
 file-view offsets and bases to satisfy the allocation granularity, normally
-64 KiB. ART retains `ART_PAGE_SIZE_AGNOSTIC=1`: `kMinPageSize` is 4 KiB,
-`kMaxPageSize` and `kElfSegmentAlignment` are 16 KiB, and the current Linux
-`boot.oat` uses `PT_LOAD.p_align == 0x4000`. This is the layout Windows keeps.
+64 KiB. ART retains `ART_PAGE_SIZE_AGNOSTIC=1`. The selected target artifact
+alignment is 16 KiB on Linux and 64 KiB on Windows and WASM. Consequently a
+Windows `boot.oat` uses `PT_LOAD.p_align == 0x10000`, while the Linux writer
+continues to emit `0x4000` byte-for-byte as before.
+
+These constants describe different things and must no longer be aliases on
+all targets:
+
+| Quantity | Linux | Windows | WASM |
+|---|---:|---:|---:|
+| Runtime/OS page | 4 or 16 KiB | 4 KiB | 64 KiB |
+| `kMaxPageSize` OS-page bound | 16 KiB | keep 16 KiB (actual page is 4 KiB) | 64 KiB after the required GC/runtime fixes |
+| Allocation/artifact granularity | 16 KiB | 64 KiB | 64 KiB |
+| `kElfSegmentAlignment` | 16 KiB | 64 KiB | 64 KiB |
+| `ART_PAGE_SIZE_AGNOSTIC` | enabled | enabled | enabled |
+
+`kMaxPageSize` is currently 16 KiB whenever `ART_PAGE_SIZE_AGNOSTIC` is
+enabled, and `globals.h` aliases `kElfSegmentAlignment` to it. A direct
+Windows-only increase to 64 KiB is the wrong implementation because
+`kMaxPageSize` is not just an ELF-layout constant. Its current uses are:
+
+- the upper bound checked against the detected runtime page in `MemMap`;
+- GC/allocator sizing for the debug mark stack, rosalloc's dedicated-run
+  storage, and the large-object bitmap test matrix;
+- the maximum-PMD calculation used to statically validate the preferred heap
+  base; at 64 KiB it becomes 512 MiB and the current 32-MiB base fails the
+  assertion;
+- the mark-compact dirty-card mask; 64 KiB contains 64 cards at the current
+  1-KiB card size, which exactly fits a 64-bit `size_t` on Windows x64 and
+  WASM64 but fails the current static assertion on WASM32; and
+- test-only ZIP-entry alignment in `dex2oat_environment_test.h`.
+
+The minimal production change is therefore to introduce a target artifact
+alignment (or make `kElfSegmentAlignment` target-specific): 16 KiB for
+Linux/Android and 64 KiB for Windows/WASM. Windows retains the existing
+`kMaxPageSize` bound because its OS page is 4 KiB. A WASM port whose actual
+runtime page is 64 KiB must separately raise `kMaxPageSize` and compile/run the
+listed GC and allocator gates; that work is not required by Windows OAT. It
+must also replace the current non-Linux `GetPageSizeSlow()` fallback of 4 KiB
+with the actual 64-KiB WASM page size. WASM32 additionally needs a multiword or
+iterative mark-compact card mask. The PMD constraint should become
+architecture-specific rather than moving every target's preferred heap base
+to a 512-MiB boundary for a Linux/AArch64 huge-page assumption that does not
+describe WASM.
 
 The current Windows `MemMap` file path cannot map a file view over an occupied
-`VirtualAlloc` reservation and cannot reproduce POSIX `MAP_FIXED` for 16-KiB
-ELF offsets that are not 64-KiB file-view aligned. OAT-1 avoids the mismatch by
-copying into the existing private allocation; it does not change the writer.
+`VirtualAlloc` reservation. Making ELF offsets 64-KiB aligned satisfies file
+view congruence but still cannot replace a committed reservation with a file
+view. OAT-1 avoids that ownership mismatch by copying into the existing
+private allocation.
+
+The Windows startup/profile gate records `GetSystemInfo()` and requires a
+4-KiB `dwPageSize` and 64-KiB `dwAllocationGranularity` for this initial
+profile. An unexpected value rejects AOT rather than silently applying the
+wrong rounding rule.
 
 Do not mechanically port Bionic's:
 
@@ -487,34 +613,45 @@ Only the private-copy implementation is in the early bring-up scope.
 
 ### OAT-1: private-copy correctness loader
 
-OAT-1 uses the existing ART-owned private allocation and works with the current
-16-KiB-aligned, page-size-agnostic ELF layout, exact boot placement, and
-existing committed `PAGE_NOACCESS` reservation.
+OAT-1 uses an ART-owned private allocation and works with the Windows
+64-KiB-aligned, page-size-agnostic ELF layout.
 
 Load transaction:
 
-1. Open OAT through the existing path/fd boot-artifact APIs.
-2. Validate ELF headers, tables, ranges, Linux-identical ELF identity, dynamic
-   anchors, paired boot metadata, and unwind data without executable memory.
-3. Calculate span/load bias with checked arithmetic.
-4. Consume the exact prefix of the caller's remaining boot-image reservation.
-5. Retain the current Windows `MemMap` whole-span commit. Make only declared
-   load destinations writable and non-executable; leave gaps committed but
-   `PAGE_NOACCESS`.
-6. Read the declared bytes from the opened artifact and zero every
-   `p_memsz - p_filesz` byte including BSS.
-   Keep only the validated `oatdex` aperture writable for the later handoff.
-7. Validate mapped dynamic anchors, apply final protections to all other OAT
-   ranges, flush executable ranges, then validate `.oat_unwind` and register it
-   as one multi-entry function table based at `oatdata`. Record CFG
-   observations but do not gate bring-up on an unresolved CFG design.
-8. Return the unpublished mapping owner to `OatFileBase`.
-9. Open VDEX through the existing transaction, populate and validate it in the
-   exact `oatdex` aperture, then apply its final data protection.
-10. Run existing logical OAT/dex/BSS/class-loader setup and image validation/
-    relocation.
-11. Publish the generated-code range, roots, and method entrypoints only after
-    the complete artifact set succeeds.
+1. Open OAT through the existing path/fd APIs and structurally validate ELF
+   headers, program headers, checked file/virtual ranges, and alignment before
+   granting executable permission.
+2. Calculate the complete span and load bias with checked arithmetic. For a
+   validation-only open (`executable=false`, no reservation), allocate an
+   arbitrary private span. For the later executable boot open, consume the
+   exact prefix of the caller's remaining boot-image reservation.
+3. Populate the whole private span RW/NX, copy declared file bytes, and zero
+   every `p_memsz - p_filesz` byte including BSS. Leave alignment gaps
+   committed but `PAGE_NOACCESS`, and retain only the validated `oatdex`
+   aperture as writable for the later handoff.
+4. Validate mapped segment and dynamic-table containment and apply final
+   protections. Executable opens make code RX and flush it; validation-only
+   opens keep the would-be code range R/NX. Both keep data R/RW as
+   appropriate, and validation-only opens never register an unwind table.
+5. Return the unpublished mapping owner through the existing
+   `ComputeFields -> LoadVdex -> Setup` path. `ComputeFields()` performs the
+   ART-facing anchor resolution. Populate and validate VDEX in the exact
+   `oatdex` aperture and apply its final data protection.
+6. Run a new fallible post-`Setup()` finalization hook that verifies the
+   `.oat_unwind.win64` checksum and encoding and, when present, validates
+   `.oat_cfg.windows`. For an executable open only, construct and register one
+   function table for that OAT component and perform structural lookup checks.
+   Observation mode only records CFG policy. Explicit-target mode additionally
+   requires the CFG section and completes all target-state updates before any
+   code or entrypoint publication.
+7. Complete image validation/relocation and publish generated-code ranges,
+   roots, and method entrypoints only after the complete artifact set succeeds.
+
+This scope is mandatory for both boot-image passes. `BootImageLayout` first
+opens each OAT with `executable=false` and no reservation solely to validate
+freshness, then `ImageSpace::Loader` opens it again with the exact reservation
+for use. Dispatching private-copy only for `executable=true` would leave the
+first pass on an unusable Windows ELF mapping backend.
 
 OAT-1 avoids placeholder splitting, file-view alignment, fragmented ownership,
 and replacement rollback.
@@ -528,7 +665,11 @@ and replacement rollback.
 
 OAT-1 selects whole-span commit. R, RX, BSS, and `oatdex` pages must all be
 committed, so reserve-only primarily saves alignment gaps. Measure total boot
-commit before considering a later optimization.
+commit before considering a later optimization. The Windows 64-KiB segment
+alignment can make these gaps larger than Linux's 16-KiB layout, so report
+payload bytes, padding bytes, reserved span, committed span, and working set
+separately. The validation-only mapping incurs the same temporary private-copy
+cost but is discarded immediately after freshness validation.
 
 Costs:
 
@@ -546,10 +687,11 @@ while aligning backing/protection groups to the Windows allocation granularity
 for cross-process sharing. It would be a separately reviewed format/layout
 change and must not complicate OAT-1 bring-up.
 
-It requires:
+The selected writer already provides 64-KiB-congruent `PT_LOAD` offsets and
+addresses on Windows. Shared-view OAT-2 would still require:
 
-- 64-KiB-congruent file offsets and virtual addresses;
-- padding between R, RX, copy-on-write, BSS, and VDEX groups;
+- independently viewable 64-KiB protection/ownership groups for R, RX,
+  copy-on-write, BSS, and VDEX ranges, with any additional padding they need;
 - one `VirtualAlloc2` placeholder reservation;
 - exact placeholder splitting;
 - `MapViewOfFile3(..., MEM_REPLACE_PLACEHOLDER, ...)` data/pagefile views;
@@ -596,32 +738,38 @@ Windows `dex2oat.exe` shall:
    filter, ISA/features, pointer size, and build identity;
 2. compile with the accepted Windows x64 quick ABI;
 3. emit `OatQuickMethodHeader`, `CodeInfo`, maps, method offsets, trampolines,
-   and Windows unwind descriptions;
+   Windows unwind descriptions, and the exact indirect-entrypoint set;
 4. build VDEX and checksums;
 5. run the shared logical OAT writer;
 6. run the existing `ElfBuilder` with the same Linux-identical ELF identity
-   and page-size-agnostic alignment; do not add a Windows coat switch;
+   and the target-specific 64-KiB page-size-agnostic artifact alignment; do
+   not add a Windows coat switch;
 7. emit only restricted dynamic anchors and no ELF imports/relocations,
-   including the two new `oatunwind` anchors;
-8. emit the bounded read-only `.oat_unwind` section with one entry per unique
-   code range, the shared trampoline record, and deduplicated `UNWIND_INFO`
-   bytes;
-9. emit the matching boot ART image and cross-artifact checksums; and
-10. stage `boot.art`, `boot.oat`, and `boot.vdex` in a Windows-target-specific
+   including the two `oatunwindwin64` anchors and, when CFG metadata is
+   enabled, the two `oatcfgwindows` anchors;
+8. emit the bounded read-only `.oat_unwind.win64` section with one entry per
+   unique code range, deliberate records for the trampolines, and deduplicated
+   `UNWIND_INFO` bytes;
+9. optionally emit `.oat_cfg.windows` with one sorted entry per unique exact
+   indirect target and an independent version/checksum;
+10. emit the matching boot ART image and cross-artifact checksums; and
+11. stage `boot.art`, `boot.oat`, and `boot.vdex` in a Windows-target-specific
     product directory.
 
-`ART_PAGE_SIZE_AGNOSTIC=1` remains in both Linux and Windows compiler/runtime
-definitions. A generation test shall compare the relevant ELF header fields
-and `PT_LOAD.p_align` with Linux ART and require the current 16-KiB alignment.
+`ART_PAGE_SIZE_AGNOSTIC=1` remains in Linux, Windows, and WASM
+compiler/runtime definitions. Generation tests require Linux
+`PT_LOAD.p_align == 0x4000` and Windows/WASM `PT_LOAD.p_align == 0x10000`, and
+prove that the Windows alignment selection does not change Linux output.
 
-The ELF container is Linux-identical, but the quick code inside it is not.
+The ELF coat and header identity remain Linux-style, but the Windows artifact
+has target-specific alignment, anchors, unwind data, and quick code.
 Enabling unwind emission for AOT also applies the §7.9.3 `RBP` frame-anchor
 rule to Windows AOT methods, so Windows boot OAT code for a given DEX input
 differs from Linux boot OAT code by that anchor, its forced spill, and the
 resulting `spill_mask`. This is an intended consequence of the frame rule, not
-a coat difference: header identity, alignment, anchors, and layout policy stay
-the same. Generation tests compare ELF identity and layout, never code bytes,
-between the two targets.
+a coat difference: the shared header identity stays the same while alignment,
+the Windows-only anchors, and quick code are target-selected. Generation tests
+compare the common identity fields, never code bytes, between the targets.
 
 The initial artifacts are trusted build outputs, not a mutable application
 cache. Cache publication, replacement, and adversarial-input policy are
@@ -645,10 +793,14 @@ Keep responsibilities separate:
    class-loader semantics.
 4. A Windows VDEX reuse helper: copy into `oatdex` and return a `MemMap` slice
    sharing the OAT allocation owner.
-5. `WindowsAotUnwindRegistry`: `.oat_unwind` validation, one multi-entry
-   `RtlAddFunctionTable`/`RtlDeleteFunctionTable` lifetime, and the
-   representative lookup/virtual-unwind proof.
-6. Existing generated-code registry: fault/stack readers and publication
+5. `WindowsAotUnwindRegistry`: `.oat_unwind.win64` validation, one multi-entry
+   `RtlAddFunctionTable`/`RtlDeleteFunctionTable` lifetime per OAT component,
+   and structural lookup proof.
+6. `WindowsAotCfgManager`: `.oat_cfg.windows` validation, process-policy
+   observation, and the separately gated explicit target-state transaction.
+   It does not own a fictitious CFG registration handle; CFG state belongs to
+   the virtual memory.
+7. Existing generated-code registry: fault/stack readers and publication
    ordering shared with nterp/JIT.
 
 Do not hide the OAT mapper behind general POSIX `mmap` emulation. One explicit
@@ -666,22 +818,24 @@ segment replacement is the part that does not work on Windows.
 
 The first implementation shall therefore:
 
-1. Select `ElfOatFile` for Windows executable boot OAT instead of trying to
-   make Windows `dlopen` consume the ELF.
+1. Select `ElfOatFile` for both Windows validation-only and executable boot OAT
+   opens instead of trying to make Windows `dlopen` consume the ELF.
 2. Add a Windows-only private-copy mapping mode below that path, preferably as
    a narrow helper invoked by `ElfFileImpl::Load()` rather than a fork of
    `OatFileBase` or a second ELF parser.
 3. Preserve the existing path and fd open logic and dynamic-symbol lookup.
-4. Consume the exact caller reservation prefix and expose the same base,
-   segment, BSS, and `oatdex` addresses expected by `ElfOatFile`.
-5. Keep `runtime/oat/oat_file.h`, `OatFileBase::Setup()`, dex/BSS
-   interpretation, and public `OatFile` APIs unchanged. `ComputeFields()` takes
-   one additive change: resolving the two `oatunwind` anchors alongside the
-   anchors it already resolves, using the same optional-section idiom. This is
-   the one place that knows the mapped anchor addresses, so resolving them
-   elsewhere would mean duplicating its symbol lookup. The addition is
-   target-neutral and inert on Linux and Android, where the section is absent
-   and both pointers stay null.
+4. For validation-only opens, allocate a disposable private span at any
+   suitable address and keep it NX. For executable opens, consume the exact
+   caller reservation prefix. In both cases expose the same base, segment,
+   BSS, and `oatdex` addresses expected by `ElfOatFile`.
+5. Keep `OatFileBase::Setup()`, dex/BSS interpretation, and public `OatFile`
+   APIs unchanged. `oat_file.h` gains only internal unwind-bound storage/access
+   needed by finalization. `ComputeFields()` takes one additive change:
+   resolving the two `oatunwindwin64` anchors alongside the anchors it already
+   resolves, using the same optional-section idiom. This is the one place that
+   knows the mapped anchor addresses, so resolving them elsewhere would mean
+   duplicating its symbol lookup. The addition is target-neutral and inert on
+   Linux and Android, where the section is absent and both pointers stay null.
 6. Keep Android, Linux-host, and Fuchsia behavior unchanged outside obvious
    `ART_TARGET_WINDOWS` mapping/finalization blocks.
 
@@ -719,7 +873,7 @@ The implementation plan must carry, without reusing ELF CFI ambiguously:
 
 1. per-method and JNI `UNWIND_INFO` from the Windows x64 assembler through
    `CompiledCodeStorage`/`CompiledMethod`;
-2. fixed unwind descriptions for every non-leaf OAT trampoline/runtime stub;
+2. fixed unwind descriptions for all emitted OAT trampolines/runtime stubs;
 3. unique final code offsets from `OatWriter`, accounting for deduplicated
    compiled code;
 4. a bounded read-only loadable table containing `RUNTIME_FUNCTION` records
@@ -868,9 +1022,10 @@ code, so the run must fail.
 `OatWriter::InitOatCode()` emits seven trampolines through `DO_TRAMPOLINE`.
 On x86-64 each one is a single `gs:`-relative indirect `jmp` followed by
 `int3` — it allocates no stack, saves no register, and never returns. Such a
-function is a leaf with a zero-size prologue. Windows requires a record for it
-anyway, because an exception raised inside the `jmp` (or a walk that lands on
-it) must be able to continue past the frame:
+function is a leaf with a zero-size prologue. Windows can unwind a leaf without
+a function-table entry. This design nevertheless emits a zero-prologue record
+for uniform, explicit coverage and lookup tests; it is a deliberate ART policy,
+not a Windows ABI requirement:
 
 | OAT code range | Shape | Record |
 |---|---|---|
@@ -892,10 +1047,11 @@ record whose range falls outside the OAT RX segments.
 
 ### Serialized table
 
-Add one read-only loadable section, `.oat_unwind`, emitted by `ElfBuilder`
-after `.data.img.rel.ro` and before `.bss`. It is never executable and never
-writable after load. Two placements that look more natural are both wrong, and
-the existing assertions are what rule them out:
+Add one read-only loadable section, `.oat_unwind.win64`, emitted by `ElfBuilder`
+after `.data.img.rel.ro` and before the optional `.oat_cfg.windows` and `.bss`.
+It is never executable and never writable after load. Two placements that look
+more natural are both wrong, and the existing assertions are what rule them
+out:
 
 - **Not between `.rodata` and `.text`.** `dex2oat.cc` passes
   `GetOatHeader().GetExecutableOffset()` as the `rodata_size` argument to
@@ -908,37 +1064,45 @@ the existing assertions are what rule them out:
   difference, so `.data.img.rel.ro` is required to be the first thing after the
   page-aligned end of code.
 
-Placing it last among the `PROGBITS` sections keeps both invariants untouched and
-adds one `WriteState` (`kWriteUnwind`) between `kWriteDataImgRelRo` and
-`kWriteHeader`, with a `WriteUnwind()` that mirrors `WriteDataImgRelRo()`:
+Placing Windows metadata last among the `PROGBITS` sections keeps both
+invariants untouched. Unwind adds one `WriteState`
+(`kWriteWindowsX64Unwind`) after `kWriteDataImgRelRo`, with a
+`WriteWindowsX64Unwind()` that mirrors `WriteDataImgRelRo()`:
 `ChecksumUpdatingOutputStream`, then a `CheckOatSize()` call. Since the whole
 file is one ELF image, offsets relative to `oatdata` stay valid regardless of
 placement, and the section sits beyond `oatlastword` alongside `.bss` and
-`.dex`, so nothing that parses the OAT code range is affected. It must precede
-`.bss`, which is `SHT_NOBITS` and contributes no file bytes.
+`.dex`, so nothing that parses the OAT code range is affected. Both Windows
+metadata sections must precede `.bss`, which is `SHT_NOBITS` and contributes no
+file bytes.
 
-The placement costs at most one page. `Section::AddSection()` page-aligns a
-section whose `phdr_flags_` differ from the previous section's, and
+The metadata group costs at most one segment-alignment gap.
+`Section::AddSection()` raises the effective alignment of a section whose
+`phdr_flags_` differ from the previous section's to `kElfSegmentAlignment`, and
 `MakeProgramHeaders()` merges adjacent `PT_LOAD`s only when flags match and
 neither is `.bss`-like. Following `PF_R|PF_W` data with `PF_R` starts a new
 segment; when `.data.img.rel.ro` is absent the predecessor is `PF_R|PF_X` text
-and a new segment starts anyway. No explicit `phdr_flags_` assignment is needed,
-since `PF_R` is already the default.
+and a new segment starts anyway. `.oat_cfg.windows` declares only 4-byte
+alignment; when it follows unwind it remains in the same R segment, and when
+unwind is absent `AddSection()` raises CFG to the segment alignment. No
+explicit `phdr_flags_` assignment is needed, since `PF_R` is already the
+default.
 
 The section is self-describing and fully validated before use:
 
 ```text
-OatUnwindHeader {            // 32 bytes, 4-byte aligned
+OatWin64UnwindHeader {       // 36 bytes, 4-byte aligned
   uint32_t magic;            // 'o','u','w','\n'
-  uint32_t version;          // starts at 1; bumped with the OAT version
+  uint32_t version;          // starts at 1; independent of shared OAT version
   uint32_t entry_count;
   uint32_t entries_offset;   // section-relative, 4-byte aligned
   uint32_t unwind_offset;    // section-relative, 4-byte aligned
   uint32_t unwind_size;
   uint32_t code_begin;       // oatexec range, relative to oatdata
   uint32_t code_end;         // exclusive; both bound every entry
+  uint32_t checksum;         // Adler-32 of entire section; this field is zero
+                             // while calculating
 }
-OatUnwindEntry[entry_count] {     // 12 bytes each, sorted by begin_offset
+OatWin64UnwindEntry[entry_count] { // 12 bytes each, sorted by begin_offset
   uint32_t begin_offset;          // relative to oatdata, inclusive
   uint32_t end_offset;            // relative to oatdata, exclusive
   uint32_t unwind_info_offset;    // relative to oatdata, 4-byte aligned
@@ -948,6 +1112,10 @@ uint8_t unwind_info_blobs[unwind_size];   // deduplicated UNWIND_INFO bytes
 
 Design points, each chosen against a rejected alternative:
 
+- **Serialization is explicit little-endian, not a native struct dump.** Write
+  each `uint32_t` field at its specified offset, assert the 36-byte header and
+  12-byte entry sizes in tests, and parse with checked reads. Compiler padding,
+  Windows SDK packing, and host alignment are not part of the file format.
 - **Offsets are relative to `oatdata`, not to the section or the ELF base.**
   The runtime registers `RtlAddFunctionTable()` with `oatdata` as
   `BaseAddress`, which mirrors the JIT rule in §7.9.6 where the primary
@@ -966,7 +1134,7 @@ Design points, each chosen against a rejected alternative:
   need a placement guarantee the OAT loader does not make.
 - **The file layout is not `RUNTIME_FUNCTION`.** A `RUNTIME_FUNCTION` is a
   Windows SDK type, and the ART writer must stay SDK-independent for Linux
-  cross builds. `OatUnwindEntry` is the same three 32-bit fields in the same
+  cross builds. `OatWin64UnwindEntry` is the same three 32-bit fields in the same
   order, so the runtime can build the SDK array by a checked field-by-field
   copy rather than a reinterpret cast. Nothing depends on the layouts being
   identical.
@@ -976,30 +1144,48 @@ Design points, each chosen against a rejected alternative:
   writer bug the loader should surface rather than repair.
 - **The unwind blobs are deduplicated but the entries are not.** Every code
   range gets exactly one entry; identical frame shapes share one blob.
+- **The section has its own checksum.** The writer computes Adler-32 over the
+  complete serialized `.oat_unwind.win64` section while treating the checksum
+  field as zero. The loader repeats exactly that operation before following
+  offsets or parsing any `UNWIND_INFO`. Adler-32 reuses ART's existing checksum
+  convention and provides an accidental-corruption gate; it is not a security
+  or authenticity mechanism.
 - **The table is one registration, not one per method.** The JIT uses one
   one-entry table per allocation because allocations come and go. Boot OAT is
-  a single process-lifetime range, so one multi-entry registration is both
-  cheaper and simpler to unregister.
+  process-lifetime state, so one multi-entry registration per OAT component is
+  both cheaper and simpler to unregister. In a multi-component boot set, only
+  the primary OAT contributes the seven header trampolines; every component
+  contributes its own method/JNI entries and owns its own registration. A
+  single-component boot set remains the simplest first milestone.
 
 Two new dynamic anchors make the section discoverable through the existing
 `ElfFile::FindDynamicSymbolAddress()` path, extending `DynamicSymbol` and
 keeping the restricted allow-list closed:
 
 ```text
-oatunwind, oatunwindlastword
+oatunwindwin64, oatunwindwin64lastword
 ```
 
-The names follow the existing all-lowercase, no-separator convention
-(`oatbsslastword`, `oatdataimgrelrolastword`). Both are appended after
-`kOatDexLastWord` in `ElfBuilder::DynamicSymbol` and added to
-`GetDynamicSymbolName()`; `kLast` moves to `kOatUnwindLastWord` so
-`kDynamicSymbolCount` grows with them. `kDynamicEntriesCount` is unrelated and
-does not change: these are `.dynsym` entries, not `.dynamic` entries.
+The names preserve ART's lowercase anchor namespace while making the encoded
+ABI unambiguous. Append `kOatUnwindWin64` and `kOatUnwindWin64LastWord` to
+`ElfBuilder::DynamicSymbol` and add their names to
+`GetDynamicSymbolName()`.
 
-The loader rejects an OAT that has quick code but no `oatunwind`, and rejects
-`oatunwind` outside an R segment. Because the anchors are additive and the
-section is new, the OAT version must be incremented in the same change; a
-stale artifact then rejects by version rather than by a missing anchor.
+Do not globally increase the dynamic-section reservation. A global
+`kDynamicSymbolCount` increase changes reserved `.dynstr`/`.dynsym`/`.hash`
+capacity and can shift Linux/Android layout even when no extra symbol is
+emitted. Reserve capacity for the two names only when Windows x64 boot unwind
+output is enabled; the emitted dynsym count and SysV hash dimensions continue
+to describe the actual emitted symbols. `kDynamicEntriesCount` is unrelated
+and does not change because these are `.dynsym`, not `.dynamic`, entries.
+Concretely, preserve a base-symbol count ending at `kOatDexLastWord` and add
+two to the reservation helper only for the Windows-unwind mode known when
+`ElfWriterQuick::Start()` calls `ReserveSpaceForDynamicSection()`.
+
+Any Windows boot load rejects quick code with no `oatunwindwin64`, and rejects
+an anchor outside an R segment. The shared OAT
+version remains `265\0`; the section header version and required-anchor check
+gate this Windows-only extension without modifying Linux OAT semantics.
 
 ### Writer integration and dedup-safe offsets
 
@@ -1008,13 +1194,13 @@ identical compiled code, so two methods can share one code range. The unwind
 table must key on the final code range, not on the method.
 
 `CompiledMethodStorage::DeduplicateCode()` interns identical code bytes to a
-single allocation, and `InitCodeMethodVisitor` then dedups on the code *pointer*
-(`CodeOffsetsKeyComparator` compares `GetQuickCode().data()`, per its own
-comment "Code is deduplicated by CompilerDriver"). Two methods therefore share a
-code offset exactly when they share that pointer, and the writer already tracks
-this in its `deduped` flag. Under `--deduplicate-code=false` no interning
-happens, every method keeps a distinct pointer, and every method gets its own
-entry; both modes are correct under the rules below.
+single allocation. The writer's `CodeOffsetsKeyComparator` then compares the
+quick-code pointer, VMap-table pointer, patches pointer, and intrinsic state;
+it is not a quick-code-only comparator. Regardless of which equality path was
+taken, the final visitor `deduped` result is authoritative for whether a fresh
+code range was allocated. Under `--deduplicate-code=false` no code interning
+happens, every method normally keeps a distinct pointer, and every fresh range
+gets its own entry.
 
 The visitor has a second, distinct dedup path: when `--debuggable` is set it
 bypasses `dedupe_map_` entirely and instead reuses
@@ -1050,13 +1236,15 @@ must not.
    forced by the call order in `dex2oat.cc`: `PrepareLayout()` runs first and
    `ElfWriter::PrepareDynamicSection()` immediately after, so the section's size
    must already be known when the ELF layout is reserved. Expose it as
-   `OatWriter::GetUnwindSize()` alongside the existing `GetCodeSize()` and
-   `GetBssSize()` getters, and pass it as one more `PrepareDynamicSection()`
-   argument through `ElfWriter`, `ElfWriterQuick`, and `ElfBuilder`. Because
-   every code offset is final once `InitOatCodeDexFiles()` returns, the table is
-   fully computable there; nothing later moves the ranges it describes.
-4. Add `.oat_unwind` to `ElfBuilder` as a `Section` member declared and
-   constructed between `data_img_rel_ro_` and `bss_` — `SHT_PROGBITS`,
+   `OatWriter::GetWindowsX64UnwindSize()` alongside the existing
+   `GetCodeSize()` and `GetBssSize()` getters, and pass it as one more
+   `PrepareDynamicSection()` argument through `ElfWriter`, `ElfWriterQuick`,
+   and `ElfBuilder`. Because every code offset is final once
+   `InitOatCodeDexFiles()` returns, the table is fully computable there;
+   nothing later moves the ranges it describes.
+4. Add `.oat_unwind.win64` to `ElfBuilder` as a `Section` member declared and
+   constructed between `data_img_rel_ro_` and the optional CFG section and
+   `bss_` — `SHT_PROGBITS`,
    `SHF_ALLOC` without `SHF_EXECINSTR`, `kElfSegmentAlignment` since it always
    opens a new segment — and call `AllocateVirtualMemory()` on it in
    `PrepareDynamicSection()` in that same position, because declaration order in
@@ -1064,41 +1252,53 @@ must not.
    conditional-add pattern: when the size is zero, emit neither the section nor
    its anchors, exactly as `.bss` and `.dex` do. Add the
    two anchors in `PrepareDynamicSection()` with `dynsym_.Add(..., STB_GLOBAL,
-   STT_OBJECT)`, giving `oatunwind` the section address and full size, and
-   `oatunwindlastword` the last four bytes with size 4, matching the existing
-   `oatbss`/`oatbsslastword` pair.
-5. Write the bytes from a new `OatWriter::WriteUnwind()` reached through a new
-   `WriteState::kWriteUnwind` placed after `kWriteDataImgRelRo`, so the buffer is
-   emitted last among the `PROGBITS` sections and before the header is finalized.
+   STT_OBJECT)`, giving `oatunwindwin64` the section address and full size,
+   and `oatunwindwin64lastword` the last four bytes with size 4, matching the
+   existing `oatbss`/`oatbsslastword` pair.
+5. Write the bytes from a new `OatWriter::WriteWindowsX64Unwind()` reached
+   through a new `WriteState::kWriteWindowsX64Unwind` placed after
+   `kWriteDataImgRelRo` and before `kWriteWindowsCfg`, so the buffer precedes
+   optional CFG data and the header is finalized only after both.
    Mirror `WriteDataImgRelRo()`: wrap the stream in
    `ChecksumUpdatingOutputStream`, account the padding and payload in a
-   `size_oat_unwind_*` stat pair for the `DO_STAT` block, and finish with
+   `size_oat_unwind_win64_*` stat pair for the `DO_STAT` block, and finish with
    `CheckOatSize()`. In `dex2oat.cc`, add a size-guarded
-   `StartUnwind()`/`EndUnwind()` pair on `ElfWriter` after the existing
-   `.data.img.rel.ro` block and before `WriteHeader()`, matching how that block is
-   itself guarded on `GetDataImgRelRoSize() != 0u`.
+   `StartWindowsX64Unwind()`/`EndWindowsX64Unwind()` pair on `ElfWriter` after
+   the existing `.data.img.rel.ro` block and before the optional CFG block and
+   `WriteHeader()`, matching how that block is itself guarded on
+   `GetDataImgRelRoSize() != 0u`.
 
    The state transitions are the subtle part, because both preceding sections are
-   optional and each currently jumps straight to `kWriteHeader` when empty. Route
-   every such branch through the unwind state instead: `WriteCode()` selects
-   `kWriteDataImgRelRo`, else `kWriteUnwind` if the unwind size is nonzero, else
-   `kWriteHeader`; `WriteDataImgRelRo()` selects `kWriteUnwind` if nonzero, else
-   `kWriteHeader`; and `WriteUnwind()` always advances to `kWriteHeader`. Each
+   optional and each currently jumps straight to `kWriteHeader` when empty.
+   Route every such branch through the ordered metadata states instead:
+   `WriteCode()` selects data-img-rel-ro, else unwind, else CFG, else header;
+   `WriteDataImgRelRo()` selects unwind, else CFG, else header;
+   `WriteWindowsX64Unwind()` selects CFG when present, else header; and
+   `WriteWindowsCfg()` always advances to the header. Each
    branch that ends a section without a successor keeps its existing
    `CheckOatSize()` call, so the size assertion still runs exactly once on the
    final section.
-6. Reject at write time rather than emit a broken table: an entry outside the
+6. Before writing, set the section checksum field to zero, calculate Adler-32
+   over the finalized header, entries, alignment padding, and unwind blobs,
+   then store the result. Feeding the serialized section through
+   `ChecksumUpdatingOutputStream` may continue to include it in the ordinary
+   generated OAT checksum.
+7. Reject at write time rather than emit a broken table: an entry outside the
    `oatexec` range, a range that overlaps its neighbour, a blob that is not
    4-byte aligned, an entry count or section size that does not fit in 32
    bits, or any method with a nonempty frame and no bytes.
 
-The section is part of the OAT checksum, so a truncated or edited table fails
-the existing checksum gate before the loader parses it.
+The ordinary OAT checksum is not the integrity gate for this section. The
+runtime compares the stored OAT checksum with the value recorded in the image,
+but does not recompute that checksum from mapped OAT bytes. The loader must
+therefore recompute and compare the section-local checksum before parsing the
+table. This is correctness validation for trusted bring-up artifacts, not
+adversarial-input hardening.
 
 ### Runtime registration
 
 `WindowsAotUnwindRegistry` mirrors the JIT registry's ownership shape but with
-one multi-entry table. It lives beside `jit_unwind_windows` in
+one multi-entry table per OAT component. It lives beside `jit_unwind_windows` in
 `runtime/multiplatform/windows/`, keeps every Windows type out of common code,
 and is owned by the Windows OAT mapping transaction rather than by
 `JitCodeCache`.
@@ -1115,28 +1315,34 @@ mapping base instead of a JIT region base, and its entries are read from the
 artifact instead of computed from live pointers — which is why every field must
 be validated before it reaches the SDK call.
 
-Registration happens at step 7 of the OAT-1 transaction, after final
-protections and `FlushInstructionCache` and before the loader returns an
-unpublished owner.
+Registration happens in a new fallible post-`Setup()` finalization hook, after
+final protections, `FlushInstructionCache`, `ComputeFields`, VDEX loading, and
+logical OAT setup, but before any generated-code range or `ArtMethod`
+entrypoint is published. Keeping it out of the raw mapping helper avoids
+registering metadata for a mapping that later fails ordinary OAT/VDEX setup.
+Validation-only opens parse/check the section but never register it.
 
 The section bounds come from `OatFileBase::ComputeFields()`, which already
 resolves every other anchor pair and is the only place that knows the mapped
-addresses. Add `unwind_begin_`/`unwind_end_` there using the established idiom:
-a null `oatunwind` means no section and sets both to null, a present `oatunwind`
-with a missing `oatunwindlastword` is a hard error, and the end pointer is
-readjusted with `+= sizeof(uint32_t)` because the `lastword` symbol addresses the
-final four bytes rather than one-past-the-end. That `+4` convention is why the
-writer gives `oatunwindlastword` size 4 at `address + size - 4`.
+addresses. Add `win64_unwind_begin_`/`win64_unwind_end_` there using the
+established idiom: a null `oatunwindwin64` means no section and sets both to
+null, a present `oatunwindwin64` with a missing `oatunwindwin64lastword` is a
+hard error, and the end pointer is readjusted with `+= sizeof(uint32_t)`
+because the `lastword` symbol addresses the final four bytes rather than
+one-past-the-end. That `+4` convention is why the writer gives
+`oatunwindwin64lastword` size 4 at `address + size - 4`.
 
 Registration then must, in order:
 
-1. validate the header magic, version, and that every declared subrange lies
-   inside the section;
+1. recompute the section-local Adler-32 with the checksum field treated as
+   zero, compare it with the header, then validate magic, independent section
+   version, and every declared subrange;
 2. validate `code_begin`/`code_end` against the mapped `oatexec` range
    resolved from the dynamic anchors;
 3. validate each entry: `begin_offset < end_offset`, both inside the code
    range, entries sorted and non-overlapping, and `unwind_info_offset`
-   4-byte aligned and inside the section;
+   4-byte aligned and inside the declared unwind-blob subrange after checked
+   `oatdata`-relative address conversion;
 4. validate each referenced `UNWIND_INFO`: version 1, no unsupported flags,
    a code count that fits the declared bytes, prologue size within 255,
    frame register and scaled offset within range, `UWOP_*` codes recognized,
@@ -1145,17 +1351,23 @@ Registration then must, in order:
 5. allocate the SDK `RUNTIME_FUNCTION` array in stable native storage, copy
    the three fields per entry with checked arithmetic, and keep the exact
    pointer for later deletion;
-6. call `RtlAddFunctionTable(table, entry_count, oatdata_address)`; and
-7. prove the registration with `RtlLookupFunctionEntry()` on a representative
-   PC from each record kind — a quick method, a JNI stub, and a trampoline —
-   requiring the returned base and all three fields to match, then
-   `RtlVirtualUnwind()` on one managed frame.
+6. for executable opens, call
+   `RtlAddFunctionTable(table, entry_count, oatdata_address)`; and
+7. prove registration structurally with `RtlLookupFunctionEntry()` on one or
+   more known entries, requiring the returned base and all three fields to
+   match. Real managed-frame `RtlVirtualUnwind()` belongs in the native
+   execution gate, not in loader registration.
 
-Any failure unregisters, frees the array, and fails the load. The caller then
-discards the whole unpublished transaction and continues imageless. A
-successful boot keeps the table registered for process lifetime; teardown
-unregisters before the shared mapping owner releases the code or the section,
-which is the same ordering rule the JIT registry uses.
+An ordinary validation or registration failure fails the unpublished load. If
+cleanup succeeds, the caller discards the transaction and continues imageless.
+A successful boot keeps the table registered for process lifetime; teardown
+unregisters before the shared mapping owner releases code or metadata.
+
+If `RtlDeleteFunctionTable()` fails during rollback or teardown, ART aborts
+with `LOG(FATAL)`/`CHECK`. It must not free the SDK table or release the code or
+unwind mapping while Windows may still reference them. Elaborate recovery from
+this invariant violation is deliberately not a bring-up blocker; unsafe
+"continue imageless" behavior is forbidden for this one cleanup failure.
 
 `GetRuntimeFunctionTableForRange()`-style lookups are not exposed to common
 code. Windows stack walking already reaches AOT frames through the ordinary
@@ -1170,12 +1382,14 @@ transport:
 - a `dex2oat` unit gate proving one entry per unique code range, shared
   trampoline blobs, and rejection of a nonempty frame with no bytes;
 - a dedup gate: two methods compiled to identical code produce one entry;
-- a writer gate: sorted, non-overlapping, in-range entries and a
-  checksum-covered section;
+- a writer gate: sorted, non-overlapping, in-range entries and a deterministic
+  section-local checksum; flip one byte independently in the header, entry
+  array, padding, and unwind blob and require both open modes to reject before
+  registration;
 - a layout gate, since the section's placement is what keeps the existing
   assertions true: `.text` still starts at `oatdata + executable_offset`,
   `data_img_rel_ro_start_` still equals the page-aligned end of code, and
-  `.oat_unwind` still precedes `.bss` — asserted with and without
+  `.oat_unwind.win64` still precedes `.bss` — asserted with and without
   `.data.img.rel.ro` present, because the predecessor section and therefore the
   segment split differ between those two cases;
 - a loader gate: each malformed-table class above rejects the load and falls
@@ -1185,6 +1399,267 @@ transport:
   restores the `RBP`-anchored frame from a boot-OAT method; and
 - a native exception gate: a managed throw, a translated NPE, and a fatal dump
   each walk through boot-OAT frames with correct nonvolatile restoration.
+
+## Windows CFG format and integration
+
+CFG metadata is independent of unwind metadata. Unwind describes how to walk a
+function after control has reached it; CFG identifies addresses that may be the
+destination of an indirect call. A function-range start is not automatically
+an indirect-call target, and a CFG target does not need a separate unwind
+record. The writer collects and validates the two sets independently.
+
+Use one architecture-neutral section name and anchor pair:
+
+```text
+.oat_cfg.windows
+oatcfgwindows
+oatcfgwindowslastword
+```
+
+Do not create `.win32`, `.win64`, or per-ISA CFG section names. The format is
+generic and the header carries the target ABI. ARM64EC has its own ABI value
+because its hybrid call thunks and runtime call rules require distinct
+validation, even though its serialized target entries use the same shape.
+This naming decision does not claim ARM64, ARM64EC, x86, or ARM32 OAT support;
+the initial executable profile remains Windows x86-64.
+
+### Serialized CFG target table
+
+The section is an explicit little-endian byte format, never a native-struct or
+Windows SDK dump:
+
+```text
+OatWindowsCfgHeader {         // 48 bytes, 4-byte aligned
+  uint32_t magic;             // bytes 'o','c','f','g' (0x6766636f as LE u32)
+  uint32_t version;           // 1; independent of the shared OAT version
+  uint32_t header_size;       // 48 in version 1
+  uint32_t target_abi;        // OatWindowsCfgTargetAbi
+  uint32_t flags;             // kCompleteTargetSet must be set in version 1
+  uint32_t entry_size;        // 8 in version 1
+  uint32_t target_count;
+  uint32_t targets_offset;    // section-relative; 48 in version 1
+  uint32_t code_begin;        // oatdata-relative RX code bound, inclusive
+  uint32_t code_end;          // oatdata-relative RX code bound, exclusive
+  uint32_t checksum;          // Adler-32; this field is zero while calculating
+  uint32_t reserved;          // zero in version 1
+}
+
+OatWindowsCfgTarget[target_count] { // 8 bytes, sorted by code_offset
+  uint32_t code_offset;             // exact target, relative to oatdata
+  uint32_t kind_flags;              // ART-owned diagnostic classification
+}
+```
+
+Version 1 fixes `header_size`, `entry_size`, and `targets_offset` to the values
+above and requires the section size to equal
+`targets_offset + target_count * entry_size` under checked arithmetic. It
+requires `target_count != 0`, `code_begin < code_end`, no unknown header or
+entry flag bits, and no trailing data. The only version-1 header flag is:
+
+```text
+kCompleteTargetSet = 1u << 0
+```
+
+It asserts that the array is the complete set of indirect-callable addresses
+the ART writer knows inside `[code_begin, code_end)`. Explicit-target mode
+requires it; the writer always sets it when emitting version 1.
+
+`target_abi` uses stable section-local values rather than ELF or PE constants:
+
+```text
+1 = x86_64
+2 = arm64
+3 = arm64ec
+4 = x86
+5 = arm32
+```
+
+The runtime cross-checks this value against the selected ART target/product
+identity and rejects a mismatch. It does not infer ARM64EC from a generic
+64-bit width. Version 1 permits only `x86_64` in the initial Windows AOT
+profile; accepting another defined value requires that ISA's separately
+reviewed OAT and native CFG gate.
+
+Version-1 `kind_flags` are:
+
+```text
+1u << 0 = kQuickMethod
+1u << 1 = kJniStub
+1u << 2 = kBootTrampoline
+1u << 3 = kIndirectCallableThunk
+```
+
+They are ART-owned diagnostics and may be ORed when deduplication gives one
+address multiple roles. Never serialize `CFG_CALL_TARGET_*` SDK bits. The
+runtime derives the Windows API flags itself and rejects every unknown
+`kind_flags` bit.
+
+The array contains sorted, unique, exact target offsets. Each offset is the
+address Windows will see as callable after the target ISA's entrypoint
+adjustment, expressed relative to `oatdata`, and must lie in both the declared
+code range and an RX `PT_LOAD`. For the initial x86-64 profile the adjustment
+is zero. Future tagged or adjusted ISAs must define how their callable pointer
+is normalized to the instruction address accepted by the Windows CFG API as
+part of that ISA's enablement gate; the loader must not guess.
+
+Include:
+
+- each unique compiled quick-method entrypoint, merging `kind_flags` for
+  deduplicated code;
+- each unique JNI stub entrypoint;
+- the seven primary boot-OAT trampolines; and
+- only architecture thunks that can genuinely be reached through an indirect
+  call.
+
+Exclude internal labels, exception/stack-map PCs, all instruction boundaries,
+direct-branch-only relative-patcher thunks, unwind range starts that are not
+callable entrypoints, and PE functions already owned by `art.dll`. An x86-64
+relative patcher currently emits no thunks; assert that fact instead of adding
+synthetic targets. The target list is intentionally finer than “all addresses
+in every executable page.”
+
+Like the unwind section, `.oat_cfg.windows` has its own accidental-corruption
+gate. The writer serializes the complete section with `checksum` zero,
+calculates Adler-32 over every byte, then stores the result. Both open modes
+repeat that calculation before consuming array offsets. This does not change
+shared OAT version `265\0`, does not rely on the image-recorded OAT checksum
+being recomputed from mapped bytes, and is not an authenticity mechanism.
+
+### Writer and ELF layout integration
+
+Final CFG target addresses depend on final code offsets, deduplication,
+trampoline placement, and any emitted architecture thunks. During code-layout
+visitation, collect candidates in a map keyed by the final adjusted
+`code_offset`; a duplicate merges only known `kind_flags`. Add the seven
+trampoline candidates from the same final offsets used for the callable
+`OatHeader` entrypoints, not from unwind range starts. Add a thunk only when
+the relative patcher marks it indirect-callable. Sort and serialize only after
+all of those offsets are final, then validate uniqueness, range containment,
+32-bit fit, and completeness before exposing the section size to
+`ElfWriter::PrepareDynamicSection()`.
+
+Declare `.oat_cfg.windows` in `ElfBuilder` immediately after
+`.oat_unwind.win64` and before `.bss`, as `SHT_PROGBITS`, `SHF_ALLOC`, `PF_R`,
+and 4-byte aligned. If unwind is present, CFG follows it in the same R
+`PT_LOAD`; if unwind is absent, `Section::AddSection()` raises the first R
+section after RX/RW to `kElfSegmentAlignment`. Therefore the four required
+layout combinations are:
+
+```text
+neither:      data-img-rel-ro? -> .bss
+unwind only:  data-img-rel-ro? -> .oat_unwind.win64 -> .bss
+CFG only:     data-img-rel-ro? -> .oat_cfg.windows -> .bss
+both:         data-img-rel-ro? -> .oat_unwind.win64
+                                  -> .oat_cfg.windows -> .bss
+```
+
+In each case `.text` still begins at `oatdata + executable_offset`, optional
+`.data.img.rel.ro` remains the first page-aligned region after code, and
+`oatlastword` remains unchanged. Assign `oat_size_` only after both optional
+metadata payloads; derive `bss_start_` afterward.
+
+Add `WriteState::kWriteWindowsCfg` after `kWriteWindowsX64Unwind` and before
+`kWriteHeader`. `WriteCode()` routes to data-img-rel-ro, unwind, CFG, or header
+according to which payloads exist; data-img-rel-ro routes to unwind, CFG, or
+header; unwind routes to CFG or header; CFG always routes to header. Add a
+size-guarded `StartWindowsCfg()`/`EndWindowsCfg()` block and a
+`WriteWindowsCfg()` using `ChecksumUpdatingOutputStream` and `CheckOatSize()`.
+The conditional block, section, anchors, and capacity exist only when the CFG
+payload is nonempty.
+
+Append `kOatCfgWindows` and `kOatCfgWindowsLastWord` to the restricted dynamic
+symbol allow-list. The begin symbol covers the full section; the lastword
+symbol names its final four bytes and the loader converts it to one-past-end
+with the established `+ sizeof(uint32_t)` convention. Preserve the base
+dynamic-symbol count through `kOatDexLastWord`. Reservation helpers add two
+names for unwind and two names for CFG only when each corresponding Windows
+payload is enabled; do not globally enlarge `.dynstr`, `.dynsym`, or `.hash`
+and shift Linux/Android output. Test neither, unwind-only, CFG-only, and both,
+each with and without `.data.img.rel.ro`.
+
+### Runtime validation and modes
+
+`OatFileBase::ComputeFields()` resolves the optional CFG anchor pair under the
+same rules as other begin/lastword pairs: both absent means no section; only
+one present, an anchor outside an R segment, reversed bounds, or a section
+shorter than the fixed header rejects the load. Validation then recomputes the
+checksum and checks the fixed version-1 fields, target ABI, known bits, checked
+array size, sorted uniqueness, exact adjusted entrypoints, Windows-required
+target granularity/alignment, RX containment, and allowed kinds.
+Validation-only opens perform all of those checks when the section is present
+but never change process CFG state.
+
+There are two product/runtime modes:
+
+1. **Observation mode, the early default.** Query and record
+   `ProcessControlFlowGuardPolicy`. Missing `.oat_cfg.windows` is allowed; when
+   present it is validated. The private-copy loader follows its ordinary
+   RW/NX population to final RX transition and does not call
+   `SetProcessValidCallTargets`. Windows normally makes addresses in newly
+   executable private pages valid CFG targets unless the allocation established
+   invalid-by-default state, but the native gate must verify that behavior for
+   OAT-1 rather than infer it from JIT. With CFG enabled, execute real indirect
+   calls to quick methods, JNI stubs, all boot trampolines, and representative
+   method entrypoints. Passing proves functional compatibility with the
+   observed default policy; it is not a claim of fine-grained target
+   enforcement.
+2. **Explicit-target mode, separately gated.** Require CFG to be enabled, the
+   CFG APIs to be available, and `.oat_cfg.windows` to be present and complete.
+   Establish OAT code pages as CFG-invalid-by-default without ever introducing
+   W+X. After code population, final RX protection, `FlushInstructionCache`,
+   and complete image validation/relocation, batch
+   `SetProcessValidCallTargets()` calls by validated RX mapping/page region.
+   Each call uses a page-aligned base and checked region-relative offsets
+   satisfying the native target granularity, and marks exactly the serialized
+   offsets valid. Publish generated-code ranges, image roots, and `ArtMethod`
+   entrypoints only after every batch succeeds. Any failure rejects the still
+   unpublished OAT and selects imageless fallback after safe cleanup.
+
+The second mode has a deliberate feasibility gate. `PAGE_TARGETS_INVALID` is
+not a general `VirtualProtect()` modifier and cannot simply be applied after
+the current committed OAT-1 reservation has been populated. Likewise,
+`PAGE_TARGETS_NO_UPDATE` preserves suitable pre-existing CFG state; it does not
+create invalid-by-default state. A native allocation/protection probe must
+first establish the supported no-W+X sequence and show how it composes with
+the already committed boot reservation. Until that passes, do not enable
+explicit-target mode or claim that OAT-1 can enforce the serialized allow-list.
+Observation mode remains usable and non-blocking.
+
+CFG has no table-registration handle and no unregister operation analogous to
+`RtlDeleteFunctionTable()`. Target state belongs to the virtual-memory
+allocation. A failed explicit-mode transaction should release the entire
+unpublished boot allocation, which discards its target state. If any design
+later reuses pages without a full `MEM_RELEASE`, it must first mark every
+previously valid offset invalid and prove that no stale valid target survives,
+or forbid that address reuse for the process lifetime. Application OAT and
+successful-load unloading remain deferred, so the first successful boot OAT
+keeps its CFG state for process lifetime.
+
+Do not disable CFG as a workaround. Existing JIT CFG acceptance is useful
+precedent but does not prove boot OAT behavior. ARM64EC needs a distinct native
+behavior gate for hybrid-call thunks even though it shares this section
+format. XFG, export suppression, strict CFG policy, and ACG/
+`ProhibitDynamicCode` require later explicit review and are not implied by
+either CFG mode.
+
+### CFG gates
+
+- a writer gate proving sorted unique adjusted offsets, dedup-role merging,
+  complete quick/JNI/trampoline coverage, deterministic output, and rejection
+  of unknown kinds, internal labels, and out-of-range targets;
+- a corruption gate that flips each header field, array field, and checksum and
+  requires validation-only and executable opens to reject before publication;
+- the eight-case ELF layout matrix: neither/unwind/CFG/both, each with and
+  without `.data.img.rel.ro`, proving a single R metadata segment and unchanged
+  Linux/Android output;
+- a native observation-mode gate with process CFG enabled, policy recorded, no
+  target API calls, and real indirect quick/JNI/trampoline/method execution;
+- a native explicit-mode feasibility gate proving invalid-by-default state,
+  the no-W+X transition, target granularity, page/region batching, exact target
+  acceptance, and rejection of a deliberately omitted interior address;
+- partial-batch and exact-address-reuse failures that leave no published
+  entrypoint and no stale target state; and
+- a separate native gate before any ARM64EC value is accepted.
 
 ### Boot generation, selection, and fallback
 
@@ -1201,7 +1676,8 @@ The product integration must define:
 - an explicit opt-in while AOT remains experimental; and
 - startup behavior when any component is missing, mismatched, cannot consume
   its exact reservation, fails VDEX/setup validation, or cannot register
-  unwind data.
+  unwind data; observation mode also handles malformed optional CFG metadata,
+  while explicit mode handles a missing table or target-state failure.
 
 Early bring-up selects the existing imageless nterp/JIT product as the
 fallback. A failed attempt must discard the entire unpublished boot image/OAT
@@ -1213,22 +1689,30 @@ must not be inferred from a successful `-showversion` smoke run.
 1. Execute the existing characterization tests, closing H-005 rather than
    relying only on syntax/build evidence.
 2. Add the Windows private-copy mode under `ElfOatFile` and test exact
-   reservation consumption, byte copy, zero-fill, whole-span ownership,
-   protections, and failure cleanup with generated structural artifacts.
+   validation-only allocation, executable reservation consumption, byte copy,
+   zero-fill, whole-span ownership, protections, and failure cleanup with
+   generated structural artifacts.
 3. Add the VDEX private-copy handoff and validate exact aperture size,
    ownership, and `ComputeFields -> LoadVdex -> Setup` ordering.
 4. Implement the specified AOT unwind transport in order: the
    `EmitWindowsX64UnwindInfo()` predicate, the `CompiledMethod` array and its
-   dedup, the `OatWriter` entry collection and `.oat_unwind` emission with the
-   two new anchors and an OAT version bump, then `WindowsAotUnwindRegistry`.
-5. Build and stage the Windows `boot.art`, `boot.oat`, and `boot.vdex` set with
-   unchanged ELF identity/alignment and the selected boot-component topology.
-6. Integrate experimental startup selection and verified imageless fallback.
-7. On Server 2025, prove representative method entrypoints lie inside the
+   dedup, the `OatWriter` entry collection and `.oat_unwind.win64` emission
+   with the two new anchors and its section-local version/checksum, then
+   `WindowsAotUnwindRegistry`.
+5. Implement `.oat_cfg.windows` collection, independent serialization,
+   conditional ELF layout/anchors, and runtime validation. Keep observation
+   mode as the default; run the explicit-target allocation feasibility probe
+   as a separate gate.
+6. Build and stage the Windows `boot.art`, `boot.oat`, and `boot.vdex` set with
+   unchanged shared ELF header identity, Windows 64-KiB alignment, and the
+   selected boot-component topology.
+7. Integrate experimental startup selection and verified imageless fallback.
+8. On Server 2025, prove representative method entrypoints lie inside the
    boot OAT RX range and execute without JIT compilation; exercise VDEX,
    image relocation, JNI, faults, stack walking, and unwind lookup.
-8. Record CFG policy/behavior and OAT-1 startup/commit measurements without
-   blocking the initial milestone on OAT-2 or security work.
+9. Pass the native CFG observation-mode gate and record OAT-1 startup/commit
+   measurements. Keep explicit-target CFG, OAT-2, and security work from
+   blocking the initial milestone.
 
 Review each upstream ART update against two invariants: Linux/Android ELF
 generation and loading remain unchanged, and all Windows-specific mapping and
@@ -1282,12 +1766,17 @@ Load state advances only in this order:
 ```text
 opened boot artifacts and structural validation
   -> exact non-executable population
-  -> mapped ELF/anchor validation
+  -> mapped ELF/dynamic-table validation
   -> final OAT protections except the VDEX aperture, then cache flush
-  -> .oat_unwind validation, table registration, lookup proof, CFG observation
   -> return an unpublished mapping owner to OatFileBase
+  -> ComputeFields
   -> VDEX exact population, validation, and data protection
-  -> OAT setup plus image validation and relocation
+  -> OAT Setup
+  -> .oat_unwind.win64 checksum/format validation
+  -> optional .oat_cfg.windows checksum/format validation
+  -> executable-only per-component table registration and structural lookup proof
+  -> image validation and relocation
+  -> explicit CFG target transaction, only when that separately gated mode is enabled
   -> generated-code range publication
   -> roots and method entrypoints
 ```
@@ -1302,7 +1791,11 @@ Successful boot OAT is process-lifetime state. General unpublication,
 quiescence, class unloading, and address reuse are deferred with application
 OAT. Pre-publication failure and orderly process teardown must unregister any
 installed function table before the shared mapping owner releases code or
-unwind metadata.
+unwind metadata. Failure to delete a registered table is fatal, so ART never
+releases memory still referenced by Windows. CFG has no corresponding
+unregister handle: explicit-mode failure releases the complete unpublished
+allocation, and any future partial reuse must invalidate and verify every old
+target before reusing the address.
 
 ## Correctness validation and deferred security
 
@@ -1313,9 +1806,12 @@ copy operation:
 
 - checked loaded-span, load-bias, destination, and file-range arithmetic;
 - `p_filesz <= p_memsz` and bytes within the opened file region;
-- the Linux-identical ELF header fields and 16-KiB segment alignment;
+- Linux-identical ELF OSABI/ABI-version/flags and Windows 64-KiB segment
+  alignment;
 - non-overlapping R/RX/RW load ranges with no W+X segment;
-- exact containment of the dynamic anchors, `oatdex`, and unwind table;
+- exact containment of the dynamic anchors, `oatdex`, unwind table, and optional
+  CFG table, plus recomputed `.oat_unwind.win64` and `.oat_cfg.windows`
+  checksums;
 - exact reservation-prefix and VDEX-aperture sizes; and
 - matching OAT/VDEX/image versions and checksums before publication.
 
@@ -1327,13 +1823,13 @@ prerequisite for the first trusted boot.
 
 ## Windows unwind, faults, and CFG
 
-ELF mappings are not Windows modules. Every AOT function needs a
+ELF mappings are not Windows modules. Every non-leaf AOT function needs a
 `RUNTIME_FUNCTION`/`UNWIND_INFO` matching its actual Windows x64 prologue,
 epilogues, stack allocation, frame register, and nonvolatile GPR/XMM saves.
-This includes the tail-`jmp` trampolines, which take the shared zero-prologue
-leaf record rather than no record at all. "AOT unwind format and transport"
-above is the concrete design; the requirements restated here are the
-acceptance conditions it must satisfy.
+The tail-`jmp` trampolines could use Windows' leaf fallback, but this design
+deliberately gives them shared zero-prologue metadata for uniform coverage.
+"AOT unwind format and transport" above is the concrete design; the
+requirements restated here are the acceptance conditions it must satisfy.
 
 Validate before registration:
 
@@ -1344,25 +1840,29 @@ Validate before registration:
 - read-only non-executable unwind metadata; and
 - functions entirely within RX OAT segments.
 
-After final protection, call `FlushInstructionCache`, then
-`RtlAddFunctionTable`. Prove representative PCs with
-`RtlLookupFunctionEntry`/`RtlVirtualUnwind` before publication.
+After final protection and OAT/VDEX `Setup()`, call `RtlAddFunctionTable` in
+the fallible finalization hook. Prove table structure with
+`RtlLookupFunctionEntry` before publication; exercise `RtlVirtualUnwind` only
+in the native managed-frame gates.
 
 The JIT registry supplies ordering precedent, but AOT gates must cover quick,
 runtime, JNI, deoptimization, managed exception, translated NPE/SOE, and fatal
 frames. Failure before publication unregisters the table; a successful boot
 keeps it registered for process lifetime.
 
-CFG remains TBD. Native tests record the process mitigation policy and execute
-real indirect quick/JNI/trampoline/method targets. Do not add
-`SetProcessValidCallTargets`, disable CFG, or declare CFG compatibility until
-those observations establish the required behavior and a separate design
-decision selects an integration.
+CFG uses the architecture-neutral `.oat_cfg.windows` format and two modes
+specified above. Observation mode records process policy and executes real
+indirect quick/JNI/trampoline/method targets without changing target state; it
+is the early default. Explicit-target mode consumes the exact list through
+`SetProcessValidCallTargets`, but remains disabled until the committed OAT-1
+path proves a supported invalid-by-default, no-W+X allocation sequence. Neither
+mode disables CFG, and observation success is not a fine-grained-enforcement
+claim.
 
 OAT-1 writes only while non-executable and makes code final RX. VDEX, image,
-BSS, dynamic, and unwind pages are never executable. These final permissions
-are retained as ordinary mapping correctness even though security hardening is
-out of the early scope.
+BSS, dynamic, unwind, and CFG-metadata pages are never executable. These final
+permissions are retained as ordinary mapping correctness even though security
+hardening is out of the early scope.
 
 ### Execmem product requirement
 
@@ -1383,18 +1883,22 @@ tool policy are deferred.
 | Risk | Initial severity | Control |
 |---|---:|---|
 | Literal POSIX mapping port | Critical | No `MAP_FIXED` emulation; use OAT-1 |
-| 4-/16-/64-KiB confusion | High | Keep `ART_PAGE_SIZE_AGNOSTIC=1`, require 16-KiB ELF alignment, and use private copy across the 64-KiB Windows view boundary |
+| 4-/16-/64-KiB confusion | High | Keep `ART_PAGE_SIZE_AGNOSTIC=1`; distinguish Windows 4-KiB OS pages from 64-KiB allocation/artifact alignment; keep Linux at 16 KiB |
+| Raising `kMaxPageSize` solely for Windows layout breaks GC assumptions | High | Decouple target `kElfSegmentAlignment`; retain the OS-page/GC bound and gate any future WASM 64-KiB page increase separately |
 | Incorrect x64 unwind | Critical | Generate, transport, validate, register, and exercise every code kind, including the leaf trampolines |
 | Windows AOT code diverges from Linux by the `RBP` anchor | Medium | Accepted consequence of the §7.9.3 frame rule; compare ELF identity and layout across targets, never code bytes |
 | Dedup merges code with mismatched unwind bytes | High | One entry per unique code range; a byte-mismatch on a deduplicated offset fails the `dex2oat` run |
-| CFG rejects entrypoints | Open | Record native policy and real indirect-call results; design remains TBD |
+| Default CFG behavior rejects OAT entrypoints | High | Observation mode records native policy and executes real quick/JNI/trampoline/method indirect calls before publication support is claimed |
+| Explicit CFG cannot establish invalid-by-default state in OAT-1 | Open, non-blocking | Keep observation mode as the default; gate explicit mode on a native allocation/protection probe and never treat `PAGE_TARGETS_NO_UPDATE` as state creation |
+| CFG table misses or over-admits an entrypoint | High for explicit mode | Independently checksummed `.oat_cfg.windows`, complete sorted exact targets, dedup-role merging, negative interior-address tests, and publication only after all batches succeed |
+| CFG state survives failed-load address reuse | High for explicit mode | Fully release the unpublished allocation; otherwise invalidate and verify every old target or forbid reuse |
 | VDEX exact placement/ownership | High | OAT-1 copy into `oatdex` with an owner-sharing `MemMap` slice |
 | Boot exact address failure | High | Consume reservation and verify exact result |
-| Failed load leaves partial image/OAT state | Critical | One unpublished transaction; discard it before imageless fallback |
-| Private-copy memory/startup | High operational | Whole-span commit for simplicity; measure before optimizing |
+| Failed load leaves partial image/OAT state | Critical | One unpublished transaction; discard it before imageless fallback; failed function-table deletion is fatal |
+| Private-copy memory/startup | High operational | Whole-span commit for simplicity; measure 64-KiB padding and committed gaps before optimizing |
 | Wrong cross-OS boot artifacts staged | High | Windows-target-specific staging plus image/OAT checksums and actual AOT execution tests |
 | Boot topology mismatch | High | Explicitly select and test single- or multi-component output |
-| Upstream divergence | High | Reuse `ElfOatFile`, `ElfFile`, `OatFileBase`, and the unchanged `ElfBuilder` path |
+| Upstream divergence | High | Reuse `ElfOatFile`, `ElfFile`, and `OatFileBase`; conditionally gate target alignment, unwind, and CFG additions so Linux output is unchanged |
 
 The aggregate early-bring-up risk is medium/high. It remains lower than PE for
 ART semantic correctness because it preserves the writer, offsets,
@@ -1407,22 +1911,29 @@ Before claiming Windows AOT support, require:
 
 - native Windows x64 `dex2oat.exe` generation of the selected boot component
   set and deterministic checksummed fields;
-- ELF-header comparison proving Linux-identical OSABI/ABI version/flags and
-  16-KiB `PT_LOAD` alignment with `ART_PAGE_SIZE_AGNOSTIC=1`;
+- ELF-header comparison proving Linux-identical OSABI/ABI version/flags,
+  Linux 16-KiB and Windows 64-KiB `PT_LOAD` alignment, and
+  `ART_PAGE_SIZE_AGNOSTIC=1` on both;
+- `GetSystemInfo()` proof of the expected Windows 4-KiB page and 64-KiB
+  allocation granularity;
 - exact boot reservation, deliberate collision, relocation-delta, and selected
   single- or multi-component image tests;
 - VDEX and ART-image positive/mismatch/truncation/relocation cases;
 - `VirtualQuery` proof of R/RX/RW/no-access and no W+X stage;
 - execution after `FlushInstructionCache`;
 - function-table add/lookup/virtual-unwind and exception/stack-walk coverage for
-  compiled methods, JNI stubs, and trampolines, plus the `.oat_unwind`
+  compiled methods, JNI stubs, and trampolines, plus the `.oat_unwind.win64`
   writer/loader/dedup gates listed under "Unwind gates";
 - proof that representative `ArtMethod` entrypoints lie in the boot OAT RX
   range and execute without JIT compilation;
-- real quick/JNI/trampoline/method indirect calls while recording, but not yet
-  gating on, the native CFG policy;
-- missing, mismatched, reservation-failure, VDEX-failure, setup-failure, and
-  unwind-registration-failure cases that continue with imageless nterp/JIT;
+- `.oat_cfg.windows` writer/parser/checksum/anchor/layout tests, with the
+  section optional in observation mode and shared OAT version unchanged;
+- real quick/JNI/trampoline/method indirect calls in observation mode while
+  recording native CFG policy and proving no target API was called;
+- validation-only and executable private-copy opens, plus missing, mismatched,
+  reservation-failure, VDEX-failure, setup-failure, and ordinary
+  unwind-registration-failure cases that clean up and continue with imageless
+  nterp/JIT; a forced `RtlDeleteFunctionTable()` failure must instead abort;
 - focused GC, roots, deoptimization, translated fault, JNI, reflection, class
   initialization, and fatal-dump execution through boot OAT;
 - behavioral execution of the Stage 1 tests currently blocked by H-005; and
@@ -1439,9 +1950,11 @@ not grow into another PE prototype.
 
 ## Open implementation items
 
-1. Keep and test the current Linux-identical ELF identity and
-   page-size-agnostic 16-KiB segment alignment on Windows.
-2. Prototype the OAT-1 private-copy mapping under existing
+1. Keep and test the Linux-identical ELF header identity, retain Linux 16-KiB
+   layout, and select 64-KiB `kElfSegmentAlignment` for Windows/WASM without
+   treating Windows allocation granularity as `kMaxPageSize`.
+2. Prototype the OAT-1 private-copy mapping for both validation-only and
+   executable opens under existing
    `ElfOatFile`/`ElfFile`; introduce a separate parser only if this proves
    unworkable without larger changes.
 3. Implement exact-reservation whole-span private-copy loading without POSIX
@@ -1450,15 +1963,20 @@ not grow into another PE prototype.
 5. Implement the specified AOT unwind transport: the Windows-and-x86-64
    emission predicate replacing the `IsJitCompiler()` gate, the
    `CompiledMethod` unwind array, dedup-safe `OatWriter` entries, the
-   `.oat_unwind` section and anchors, and `WindowsAotUnwindRegistry`.
-6. Build native Windows `dex2oat.exe`, define its boot-generation command and
+   `.oat_unwind.win64` section and anchors, and `WindowsAotUnwindRegistry`.
+6. Implement the specified `.oat_cfg.windows` target collection, format,
+   conditional anchors/layout, parser, and observation mode. Separately prove
+   whether explicit-target mode can establish invalid-by-default CFG state in
+   the already committed OAT-1 reservation without W+X.
+7. Build native Windows `dex2oat.exe`, define its boot-generation command and
    target-specific staging, and select the initial boot-component topology.
-7. Add experimental boot selection and explicit whole-transaction imageless
+8. Add experimental boot selection and explicit whole-transaction imageless
    fallback.
-8. Close H-005 and prove behavioral loader contracts, then prove real boot-OAT
+9. Close H-005 and prove behavioral loader contracts, then prove real boot-OAT
    entrypoints execute on Server 2025.
-9. Characterize CFG and measure OAT-1 commit/startup cost.
-10. Defer application OAT, unloading, OAT-2, cache security, hostile-input
+10. Pass CFG observation-mode characterization and measure OAT-1 commit/startup
+    cost; keep explicit-target CFG as a separately gated follow-on.
+11. Defer application OAT, unloading, OAT-2, cache security, hostile-input
     hardening, and rich tooling integration to separately reviewed work.
 
 PE32+ OAT is not an open item. Reconsidering it requires an explicit owner
@@ -1515,4 +2033,6 @@ Windows APIs:
 - [RtlDeleteFunctionTable](https://learn.microsoft.com/windows/win32/api/winnt/nf-winnt-rtldeletefunctiontable)
 - [RtlVirtualUnwind](https://learn.microsoft.com/windows/win32/api/winnt/nf-winnt-rtlvirtualunwind)
 - [SetProcessValidCallTargets](https://learn.microsoft.com/windows/win32/api/memoryapi/nf-memoryapi-setprocessvalidcalltargets)
+- [Memory protection constants](https://learn.microsoft.com/windows/win32/memory/memory-protection-constants)
+- [Process CFG policy](https://learn.microsoft.com/windows/win32/api/winnt/ns-winnt-process_mitigation_control_flow_guard_policy)
 - [Process dynamic-code policy](https://learn.microsoft.com/windows/win32/api/winnt/ns-winnt-process_mitigation_dynamic_code_policy)

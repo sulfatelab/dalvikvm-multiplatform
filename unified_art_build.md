@@ -3,7 +3,7 @@
 Status: live refactor tracker; the x86-64 product build is unified, while test,
 packaging, topology-parity, and legacy-removal work remains active
 
-Last updated: 2026-08-02
+Last updated: 2026-08-05
 
 This document is the authoritative live tracker and design record for replacing
 the repository's split Linux and Windows ART build paths. Keep the tracker near
@@ -4245,15 +4245,17 @@ compiler tools. It does not by itself provide:
 
 - a working Windows `dex2oat.exe`;
 - Windows boot ART/OAT/VDEX generation and target-specific staging;
-- proof that the existing Linux-identical ELF identity and
-  `ART_PAGE_SIZE_AGNOSTIC=1` 16-KiB segment alignment are preserved;
+- proof that the Linux-identical ELF header identity and
+  `ART_PAGE_SIZE_AGNOSTIC=1` are preserved while Linux stays at 16-KiB and
+  Windows uses 64-KiB segment alignment;
 - OAT/VDEX/image transaction and relocation behavior;
 - the `ElfOatFile`-based Windows private-copy mapping and VDEX owner-sharing
   path;
 - compiler-to-OAT Windows x64 unwind transport and runtime registration;
 - experimental boot selection, clean imageless fallback, and proof of real
   OAT entrypoint execution;
-- the still-TBD CFG disposition; or
+- the `.oat_cfg.windows` writer/loader path, default observation-mode native
+  gate, and separately gated explicit-target allocation semantics; or
 - the acceptance gates in `win32_aot_oat.md`.
 
 Until those gates pass, Windows product capability should continue to be

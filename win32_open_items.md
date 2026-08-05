@@ -2,7 +2,7 @@
 
 **Status:** living tracker  
 **Created:** 2026-07-17  
-**Updated:** 2026-08-03
+**Updated:** 2026-08-05
 **Rule:** Every **temporary workaround** that future work must remove belongs here as **OPEN**.  
 When the proper fix lands, mark the item **CLOSED**, move it into §Closed (sorted), and keep the full history.  
 Do **not** list permanent non-goals as OPEN workarounds—list them under §Non-goals.
@@ -16,7 +16,7 @@ Do **not** list permanent non-goals as OPEN workarounds—list them under §Non-
 | [win32_faults_and_stacks.md](win32_faults_and_stacks.md) | Authoritative coupled W-010/W-014 managed-fault, VEH-chain, pthread, and ART stack design |
 | [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md) | Implemented x86_64 TLS / managed ABI / quick / nterp / JIT contract plus cross-ISA design record |
 | [win32_jit_memory.md](win32_jit_memory.md) | JIT memory contract, historical separated-view diagnosis, and implemented Windows 10 pagefile-section design |
-| [win32_aot_oat.md](win32_aot_oat.md) | Early boot-only AOT design: Linux-identical ART ELF, OAT-1 private copy, PE rejection, the specified AOT unwind format/transport, fallback work, and acceptance gates |
+| [win32_aot_oat.md](win32_aot_oat.md) | Early boot-only AOT design: Linux-style ART ELF identity with Windows 64-KiB alignment, OAT-1 private copy, PE rejection, specified AOT unwind and `.oat_cfg.windows` transports, fallback work, and acceptance gates |
 | [win32_heap_memory.md](win32_heap_memory.md) | W-013 heap / embedded-dlmalloc ownership, low-address, and MoreCore target design |
 | [win32_libcore_os_natives.md](win32_libcore_os_natives.md) | Os/`Linux` natives: Implemented / Needed / ENOSYS |
 | [win32_host_gate_policy.md](win32_host_gate_policy.md) | Current native lab host and future-gate policy |
@@ -63,7 +63,7 @@ canonical policy is [win32_host_gate_policy.md](win32_host_gate_policy.md).
 
 ---
 
-## Snapshot (2026-08-03)
+## Snapshot (2026-08-05)
 
 | Bucket | Summary |
 |--------|---------|
@@ -74,7 +74,7 @@ canonical policy is [win32_host_gate_policy.md](win32_host_gate_policy.md).
 | Memory | One unnamed pagefile section is mapped as a contiguous low R/RX primary view plus a full RW alias; native 64 MiB/1 GiB, low-VA, pressure, and CFG acceptance passes; `ProhibitDynamicCode` rejection is negative fail-closed evidence, not a supported profile; ART `389158d46f` removes J-1 and fails closed on construction errors; the retired environment key is inert |
 | Heap memory | **W-013 CLOSED:** explicit MoreCore-only dlmalloc, direct mspace owners, constrained `VirtualAlloc2`, page-state operations, Linux-like metadata placement, and native R2 pressure/JIT/repeated-start acceptance PASS |
 | Threads / managed faults | **W-010/W-014 core path, FS-1, FS-2, authoritative-host FS-4, FS-5 conditional disposition, and H-001 scoped host subset accepted:** E9 passes 30/30 and FS-1 passes Release/Debug switch, nterp, and JIT on authoritative Windows Server 2025 build 26100. FS-2 passes native debugger continue, named CET policy classification, exception-unwind XMM, and embedding/UEF teardown. H-001's gcstress, threadheavy, handleleak, crash-abort, and native AV/minidump subset also passes on build 26100. FS-4 repeats E9/FS-1/FS-2/FS-3, parameterized stack geometry, fiber rejection, and join/detach stress on that host; the separate Windows 10/second-host repetition is skipped by policy. FS-5 closes the pending 88-byte bridge tail conditionally because it is entered only by ART's managed pending-exception branch; structural and synthetic unwind evidence pass, but a real native fault would require product fault injection. Remaining work is reservation correlation, negative-exception cases, and debugger-quality dump-stack reconstruction. |
-| AOT/OAT | Early boot-only ELF64 design selected. Windows keeps the current Linux ART ELF identity and `ART_PAGE_SIZE_AGNOSTIC=1` 16-KiB segment alignment. OAT-1 starts by reusing `ElfOatFile` with whole-span private copy into the committed boot reservation; application OAT, OAT-2, unloading, and security hardening are deferred, while CFG is TBD. Stage 1 characterization is present but does not implement loading. The AOT unwind transport is now specified end to end (Windows-and-x86-64 emission predicate replacing the `IsJitCompiler()` gate, `CompiledMethod` unwind array, dedup-safe `OatWriter` entries, the `.oat_unwind` section with `oatunwind`/`oatunwindlastword` anchors and an OAT version bump, and `WindowsAotUnwindRegistry`); it is designed, not implemented. Remaining blockers include native `dex2oat` boot-set generation/staging, exact VDEX/image ownership, implementing that transport, imageless fallback, and proof of real OAT execution. H-004 tracks the glibc positive-dlopen skip; H-005 tracks focused behavioral execution outside the minimal product CMake graph. |
+| AOT/OAT | Early boot-only ELF64 design selected. Windows keeps the current Linux ART ELF header identity and `ART_PAGE_SIZE_AGNOSTIC=1`, while using 64-KiB ELF/image alignment (Linux stays 16 KiB; WASM also selects 64 KiB). OAT-1 reuses `ElfOatFile` with whole-span private copy for both validation-only and executable opens; the executable pass consumes the committed boot reservation. Application OAT, OAT-2, unloading, and security hardening are deferred. Stage 1 characterization is present but does not implement loading. The AOT unwind transport is specified end to end: Windows-and-x86-64 emission, a `CompiledMethod` unwind array, dedup-safe writer entries, independently versioned/checksummed `.oat_unwind.win64` with `oatunwindwin64` anchors, no shared OAT-version bump or Linux layout change, post-`Setup()` registration, and fatal handling of a failed `RtlDeleteFunctionTable()`. CFG now has an architecture-neutral, independently versioned/checksummed `.oat_cfg.windows` design with `oatcfgwindows` anchors, exact sorted target offsets, target ABI in the header, and no shared-version or Linux-layout change. Observation mode is the non-blocking default; explicit-target mode requires the section and remains gated on proving invalid-by-default CFG state in the committed OAT-1 reservation without W+X. Both transports are designed, not implemented. Remaining blockers include native `dex2oat` boot-set generation/staging, exact VDEX/image ownership, implementing these transports, imageless fallback, and proof of real OAT execution. H-004 tracks the glibc positive-dlopen skip; H-005 tracks focused behavioral execution outside the minimal product CMake graph. |
 | Linux multiplatform | Full native rebuild, L-005 imageless Hello, and GC stress PASS after the Windows-only JIT-5 removal using the staged shared multipath `boot.jar` |
 
 ---
