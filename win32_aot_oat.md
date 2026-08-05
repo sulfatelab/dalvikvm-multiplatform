@@ -15,12 +15,14 @@ authoritative implementation gate is Windows Server 2025 Datacenter
 Evaluation, x64 build 26100. Linux and Wine remain development and structural
 gates; the former Windows 10 lab host is unavailable.
 
-A design review on 2026-08-05 verified this document's source claims and found
-one critical generation-side prerequisite that had been missed: the seven boot
-OAT trampolines are still emitted with Linux `GS` Thread addressing and must be
-regenerated for the Windows `R15` base before any other AOT milestone can be
-exercised. That finding and nine others are recorded, with their dispositions,
-under "Design review findings".
+A design review on 2026-08-05 added eleven findings. A source-level re-audit
+accepted the location-string, image-mode, native-`dex2oat`, commit-charge,
+dynamic-symbol, predicate, and snapshot findings; refined the CFG-alignment
+finding; and rejected three proposed blockers. In particular, the claimed
+`GS`-based Windows trampoline defect is false because the shared x86-64
+assembler already turns the same source expression into an `R15`-relative
+jump on Windows. The current verdict for every finding is recorded under
+"Design review findings".
 
 The source snapshot is `vendor/art` at
 `android-16.0.0_r4-92-gffbfe48fd1`. The design was originally written against
@@ -650,14 +652,23 @@ Load transaction:
    validation-only open (`executable=false`, no reservation), allocate an
    arbitrary private span. For the later executable boot open, consume the
    exact prefix of the caller's remaining boot-image reservation.
-3. Populate the whole private span RW/NX, copy declared file bytes, and zero
-   every `p_memsz - p_filesz` byte including BSS. Leave alignment gaps
-   committed but `PAGE_NOACCESS`, and retain only the validated `oatdex`
-   aperture as writable for the later handoff.
-4. Validate mapped segment and dynamic-table containment and apply final
-   protections. Executable opens make code RX and flush it; validation-only
-   opens keep the would-be code range R/NX. Both keep data R/RW as
-   appropriate, and validation-only opens never register an unwind table.
+3. Keep `ElfFileImpl::Load()` in control of the reservation, segment walk,
+   anonymous zero-fill tails, load bias, and gap layout. On Windows only,
+   replace each unrepresentable file-backed
+   `MapFileAtAddress(..., reuse=true)` with a private-copy equivalent: make
+   the destination pages temporarily RW/NX, copy exactly `p_filesz` checked
+   bytes into the already committed reservation, then restore the `prot`
+   calculated by the existing loader. Thus executable code becomes RX only
+   after copying, validation-only code remains R/NX, and writable data remains
+   RW; flush copied executable ranges. Continue using the existing anonymous
+   `reuse=true` path for `p_memsz - p_filesz`; it applies the segment
+   protection within one `AllocationBase`, while the fresh whole-span Windows
+   allocation supplies the required initial zero bytes.
+4. Leave pages outside declared load ranges committed but `PAGE_NOACCESS`, and
+   retain only the validated `oatdex` aperture as writable for the later
+   handoff. Validate mapped-segment and dynamic-table containment and verify
+   the final R/RX/RW/no-access map. Validation-only opens never register an
+   unwind table.
 5. Return the unpublished mapping owner through the existing
    `ComputeFields -> LoadVdex -> Setup` path. `ComputeFields()` performs the
    ART-facing anchor resolution. Populate and validate VDEX in the exact
@@ -843,17 +854,16 @@ Two consequences are Windows-specific and must be designed for explicitly.
    back to imageless nterp/JIT. That failure looks exactly like "Windows AOT
    does not work" while every checksum matches, so it is the first thing to
    rule out during bring-up, not the last.
-2. **A canonical form must be pinned.** The product must define one canonical
-   Windows spelling for boot class path and dex locations — absolute,
-   normalized to a single separator, with a fixed drive-letter case — apply it
-   in the staging command that runs `dex2oat.exe`, apply the same
-   normalization to `-Xbootclasspath` before the runtime records its own
-   locations, and gate the pair with a test that deliberately varies separator
-   flavour and drive-letter case and requires either a match or an explicit
-   diagnosed rejection. [win32_filesystem.md](win32_filesystem.md) defines the
-   normalization used at the Win32 API boundary; these strings never reach that
-   boundary, so the rule has to be applied by the staging and startup paths
-   themselves.
+2. **One identity form must be pinned.** The product must pass the same exact
+   boot-class-path and dex-location strings to generation and startup. A fixed
+   installation may choose canonical absolute Windows paths; a relocatable
+   package should instead choose stable product-logical locations through
+   `--dex-location` and `-Xbootclasspath-locations`. Do not bake an absolute
+   build/staging directory into a relocatable artifact, and do not case-fold or
+   normalize only one side. Gate the chosen identity with deliberate separator,
+   drive-case, and absolute/relative mismatches and require an explicit
+   diagnosed rejection. [win32_filesystem.md](win32_filesystem.md) governs
+   Win32 API paths, but these OAT identity strings need their own product rule.
 
 The same reasoning applies to the `-Ximage:` location. Windows resolution of a
 default boot image location currently runs through the `ANDROID_ROOT` path in
@@ -873,18 +883,17 @@ the image space as a GC continuous space, image relocation, the interned-string
 and class tables, `.data.img.rel.ro` sealing, and the boot-image method arrays.
 None of it is exercised by the current product.
 
-This deserves its own milestone and its own failure-mode analysis, because the
-image path does not share the loader's careful "reject and continue imageless"
-discipline. `Heap`'s image-space consistency checks are `CHECK_EQ`/`CHECK_GT`
-over image begin, OAT begin, and `RoundUp(GetImageSize(), kElfSegmentAlignment)`
-contiguity — that is a fatal abort, not a rejection. A mismatched or
-wrong-target artifact set that survives the checksum and version gates and
-reaches heap construction will therefore terminate the process rather than fall
-back. The design's promise that "a failed attempt must discard the entire
-unpublished boot image/OAT transaction and continue imageless" holds for the
-paths this document specifies, and the product must verify it also holds for
-the image-space paths it delegates, or explicitly record which checks are
-fatal-by-construction upstream.
+This deserves an explicit sub-milestone and failure-mode analysis. Ordinary
+missing, version, checksum, location, mapping, and relocation failures must be
+returned by `ImageSpace::LoadBootImage()` and select imageless fallback before
+publication. `Heap::VerifyBootImagesContiguity()` also contains fatal
+`CHECK_EQ`/`CHECK_GT` invariants over image begin, OAT begin, and
+`RoundUp(GetImageSize(), kElfSegmentAlignment)`. Those post-load internal
+invariants need not be converted into recoverable hostile-input checks for the
+trusted bring-up scope, but native negative tests must show that expected
+compatibility failures do not reach them. The fallback promise applies to
+ordinary fallible validation; a violated accepted-layout invariant remains a
+runtime abort.
 
 Note also that `kElfSegmentAlignment` is not confined to the ELF writer.
 Selecting 64 KiB for Windows changes `ImageWriter`, `ImageHeader`,
@@ -899,9 +908,12 @@ Keep responsibilities separate:
 
 1. Existing `ElfOatFile`/`ElfFile`: ELF parsing, loaded-span calculation,
    dynamic anchors, path/fd inputs, and the ART-facing owner.
-2. A narrow Windows OAT private-copy helper: consumption of the boot
-   reservation, byte population, zero-fill, gap/final protections, cache
-   flush, shared allocation ownership, and pre-publication rollback.
+2. A narrow Windows OAT file-segment helper: checked byte population inside
+   the reservation already created by `ElfFileImpl::Load()`, temporary RW/NX
+   copy protection, restoration of the loader-computed protection, and cache
+   flush. Existing anonymous mapping code retains reservation consumption,
+   zero-fill-tail, gap, load-bias, and exact-address semantics; the surrounding
+   transaction owns the allocation and pre-publication rollback.
 3. Existing `OatFileBase`: OAT anchor requirements, dex, BSS, VDEX, image, and
    class-loader semantics.
 4. A Windows VDEX reuse helper: copy into `oatdex` and return a `MemMap` slice
@@ -1036,7 +1048,7 @@ bool CompilerOptions::EmitWindowsX64UnwindInfo() const {
 }
 ```
 
-The Windows term must be spelled exactly as the three existing gates spell it.
+The helper must preserve the semantics of the three existing gates.
 `code_generator_x86_64.cc`, `jni_compiler.cc`, and `optimizing_compiler.cc` all
 use `#if defined(_WIN32) || defined(ART_TARGET_WINDOWS)`, whereas
 `globals.h`'s `kIsTargetWindows` is true only under `ART_TARGET_WINDOWS` and is
@@ -1044,9 +1056,9 @@ defined `false` for every host build, including a Windows host build. Writing
 the predicate as `kIsTargetWindows && ...` would therefore narrow the condition
 and silently disable JIT unwind emission on a Windows-host (non-`ART_TARGET`)
 build, contradicting row 1 of the table above and defeating the "three call
-sites stay in sync" property the helper exists to provide. The compile-time
-`#if` is required because `kIsTargetWindows` alone cannot express "Windows host
-or Windows target".
+sites stay in sync" property the helper exists to provide. The shown
+compile-time `#if`, or a new common constexpr with exactly the same host-or-
+target meaning, is valid; `kIsTargetWindows` alone is not.
 
 Either spelling is a build-time property of the binary being compiled, not a
 property of a requested output target: ART has no target-OS field in
@@ -1174,11 +1186,10 @@ static `.pdata`/`.xdata` and by the existing §7.10 static OSR work. The OAT
 table must not attempt to describe them, and its validation must reject any
 record whose range falls outside the OAT RX segments.
 
-#### The trampolines must be regenerated for the Windows Thread base
+#### Trampoline Thread-base selection is already target-aware
 
-This is a prerequisite for any Windows boot OAT, not a detail of the unwind
-table. `compiler/trampolines/trampoline_compiler.cc` is unmodified upstream and
-its x86-64 producer emits the Linux managed self base:
+`compiler/trampolines/trampoline_compiler.cc` is intentionally shared and its
+x86-64 source expression looks Linux-specific:
 
 ```text
 // All x86 trampolines call via the Thread* held in gs.
@@ -1186,33 +1197,20 @@ __ gs()->jmp(x86_64::Address::ThreadOffsetAddr(offset));
 __ int3();
 ```
 
-Windows ART does not put `Thread*` in `GS`; `GS` is the TEB and rSELF is `R15`
-(closed W-002; [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md) is
-explicit that Windows x86-64 managed self must not use `%gs:offset`). These
-seven stubs are not inert metadata: `ImageWriter::GetOatAddress(StubType)`
-installs their addresses as boot-image `ArtMethod` entrypoints for the
-resolution trampoline, the quick-to-interpreter bridge, the nterp trampoline,
-the generic-JNI trampoline, and the IMT conflict trampoline. A Windows boot OAT
-built from the current producer would therefore branch through the TEB on the
-first unresolved or uncompiled method entered from the image.
+That expression is already target-aware below the call site. On Linux,
+`X86_64Assembler::gs()` emits the `0x65` segment override and
+`Address::ThreadOffsetAddr()` produces the absolute displacement. Under
+`_WIN32` or `ART_TARGET_WINDOWS`, `gs()` deliberately emits no prefix and
+`ThreadOffsetAddr()` produces `Address(R15, offset)`. The resulting Windows
+stub is therefore an `R15`-relative indirect `jmp` followed by `int3`; it does
+not read the TEB. No new trampoline producer or regeneration fix is required.
 
-Required work, ahead of the unwind transport:
-
-1. add a Windows x86-64 trampoline form that addresses the Thread base through
-   `R15` instead of `GS`, under the same target guard the rest of the Windows
-   x86-64 managed ABI uses, and leave the Linux/Android bytes unchanged;
-2. keep the shape a true leaf — one indirect `jmp` plus `int3`, no stack
-   allocation and no register save — so the shared zero-prologue
-   `UNWIND_INFO` blob above remains correct by construction rather than by
-   assumption; and
-3. add a structural gate that disassembles the seven emitted OAT trampolines on
-   both targets and requires `GS` addressing on Linux and `R15` addressing on
-   Windows, in the same style as the existing Windows/Linux stack-probe
-   divergence gate.
-
-Until this lands, no other part of the boot OAT path can be meaningfully
-exercised, because the first entry into an image method that is not directly
-compiled goes through one of these stubs.
+Keep a structural regression gate because the shared spelling is easy to
+misread and either helper could drift: disassemble all seven emitted
+trampolines and require a `GS`-relative jump on Linux and an `R15`-relative jump
+with no `GS` prefix on Windows. Also keep the leaf-shape assertion so the shared
+zero-prologue `UNWIND_INFO` remains correct. This is verification of an existing
+port mechanism, not a blocker ahead of loader work.
 
 ### Serialized table
 
@@ -1754,18 +1752,24 @@ according to which payloads exist; data-img-rel-ro routes to unwind, CFG, or
 header; unwind routes to CFG or header; CFG always routes to header. Add a
 size-guarded `StartWindowsCfg()`/`EndWindowsCfg()` block and a
 `WriteWindowsCfg()` using `ChecksumUpdatingOutputStream` and `CheckOatSize()`.
-The conditional block, section, anchors, and capacity exist only when the CFG
-payload is nonempty.
+The conditional block, section, and emitted anchors exist only when the CFG
+payload is nonempty. Dynamic-section *capacity* is different: it must be
+chosen from the Windows metadata/writer mode already known at
+`ElfWriterQuick::Start()`, before payload sizes are available.
 
 Append `kOatCfgWindows` and `kOatCfgWindowsLastWord` to the restricted dynamic
 symbol allow-list. The begin symbol covers the full section; the lastword
 symbol names its final four bytes and the loader converts it to one-past-end
 with the established `+ sizeof(uint32_t)` convention. Preserve the base
-dynamic-symbol count through `kOatDexLastWord`. Reservation helpers add two
-names for unwind and two names for CFG only when each corresponding Windows
-payload is enabled; do not globally enlarge `.dynstr`, `.dynsym`, or `.hash`
-and shift Linux/Android output. Test neither, unwind-only, CFG-only, and both,
-each with and without `.data.img.rel.ro`.
+dynamic-symbol count through `kOatDexLastWord`. Keep new enum values after
+`kLast`, so `kDynamicSymbolCount` remains the base count. The reservation
+helper adds two-name capacity for the Windows-x86-64 unwind writer mode and
+two-name capacity for a Windows CFG-capable writer mode, even if a particular
+artifact later has an empty payload. `PrepareDynamicSection()` still emits
+only symbols whose sections exist. Linux/Android select neither mode, so their
+`.dynstr`, `.dynsym`, `.hash`, addresses, and bytes remain unchanged. Test
+neither, unwind-only, CFG-only, and both, each with and without
+`.data.img.rel.ro`, plus an enabled-mode/empty-payload case.
 
 ### Runtime validation and modes
 
@@ -1805,17 +1809,15 @@ There are two product/runtime modes:
    entrypoints only after every batch succeeds. Any failure rejects the still
    unpublished OAT and selects imageless fallback after safe cleanup.
 
-The "native target granularity" above is 16 bytes on x86-64: CFG target state
-is tracked per 16-byte granule, so marking one offset valid necessarily
-validates the whole granule containing it. That is safe for this target list
-only because `GetInstructionSetCodeAlignment(kX86_64)` is also 16 and every
-serialized entry is a compiled entrypoint, trampoline, or thunk start, so no
-two distinct entries can share a granule and no interior address can be
-admitted as a side effect. Both facts must be asserted at write time rather
-than assumed: reject a target list containing two offsets in the same granule,
-and reject a target that is not aligned to the code alignment. A future ISA
-whose code alignment is below its CFG granularity cannot reuse this argument
-and must resolve it in its own enablement gate.
+For the x86-64 API contract used here, every CFG offset must be 16-byte
+aligned and the array passed to `SetProcessValidCallTargets()` must be in
+ascending order. ART's current x86-64 code alignment is also 16 bytes. The
+writer and loader therefore require sorted, unique, exact target offsets and
+reject any offset that is not 16-byte aligned. Do not infer that accepting one
+offset admits every address in a 16-byte region, and do not add a redundant
+"one target per granule" rule: the native gate verifies the exact documented
+offset semantics. A future ISA must state and test its own API and code-
+alignment requirements before enabling explicit-target mode.
 
 The second mode has a deliberate feasibility gate. `PAGE_TARGETS_INVALID` is
 not a general `VirtualProtect()` modifier and cannot simply be applied after
@@ -1858,7 +1860,7 @@ either CFG mode.
   target API calls, and real indirect quick/JNI/trampoline/method execution;
 - a native explicit-mode feasibility gate proving invalid-by-default state,
   the no-W+X transition, target granularity, page/region batching, exact target
-  acceptance, and rejection of a deliberately omitted interior address;
+  acceptance, and rejection of a deliberately omitted, 16-byte-aligned target;
 - partial-batch and exact-address-reuse failures that leave no published
   entrypoint and no stale target state; and
 - a separate native gate before any ARM64EC value is accepted.
@@ -1888,52 +1890,51 @@ must not be inferred from a successful `-showversion` smoke run.
 
 ### Implementation sequence
 
-The first three steps exist to convert the generation-side unknowns into
-evidence before the well-specified loader and transport work begins. The
-original sequence started at the loader, which front-loads effort onto the part
-of this design that carries the least risk.
+The first three steps convert generation and compatibility unknowns into
+evidence before transport and image integration.
 
-1. Prove the native Windows `dex2oat.exe` runs at all on the authoritative
-   host: `--version`, then a trivial single-jar compile to `.oat`/`.vdex` with
-   no image. The binary already links from the Windows target graph, but
-   linking is not operation. This step is where the compiler-side platform
-   surface gets exercised for the first time — the watchdog's
-   `pthread_condattr_setclock(CLOCK_MONOTONIC)` and `pthread_cond_timedwait`
-   use, swap-file and `madvise` behavior, and `ImageWriter` operation — and it
-   is cheap relative to discovering the same gaps underneath a boot-set
-   milestone.
-2. Regenerate the seven OAT trampolines for the Windows Thread base and land
-   the disassembly gate described under "The trampolines must be regenerated
-   for the Windows Thread base". Nothing downstream can execute an image method
-   without this.
-3. Pin the canonical Windows boot class path, dex location, and `-Ximage:`
-   string forms, and gate them, per "Artifact location strings are part of the
-   cross-artifact contract".
-4. Execute the existing characterization tests, closing H-005 rather than
-   relying only on syntax/build evidence.
-5. Add the Windows private-copy mode under `ElfOatFile` and test exact
-   validation-only allocation, executable reservation consumption, byte copy,
-   zero-fill, whole-span ownership, protections, and failure cleanup with
-   generated structural artifacts.
-6. Add the VDEX private-copy handoff and validate exact aperture size,
+1. Prove native Windows `dex2oat.exe` operation on the authoritative host with
+   a real trivial single-JAR, no-image compile that produces parseable `.oat`
+   and `.vdex` output. Do not use `--version`; current `dex2oat` does not
+   support that option. This gate exercises option parsing, the compiler,
+   watchdog, swap-file, memory-advice, and writer paths, but not `ImageWriter`.
+2. Select stable textual boot-class-path, dex-location, and `-Ximage:`
+   identities. A fixed installation may use canonical absolute paths; a
+   relocatable package should use stable logical `--dex-location` and
+   `-Xbootclasspath-locations` values. Prove generation and startup pass the
+   exact same strings.
+3. Execute the existing characterization tests, closing H-005 rather than
+   relying only on syntax/build evidence. Add a two-target trampoline
+   regression gate proving that the shared producer emits Linux `GS` Thread
+   access and Windows `R15` Thread access through the target-aware assembler.
+4. Add the narrow Windows private-copy replacement for file-backed
+   `MapFileAtAddress(..., reuse=true)` under `ElfOatFile`. Test both
+   validation-only allocation and executable reservation consumption while
+   retaining the existing whole-span reservation, anonymous zero-fill,
+   load-bias, gap, and protection logic.
+5. Add the VDEX private-copy handoff and validate exact aperture size,
    ownership, and `ComputeFields -> LoadVdex -> Setup` ordering.
-7. Implement the specified AOT unwind transport in order: the
+6. Implement the specified AOT unwind transport in order: the
    `EmitWindowsX64UnwindInfo()` predicate, the `CompiledMethod` array and its
    dedup, the `OatWriter` entry collection and `.oat_unwind.win64` emission
    with the two new anchors and its section-local version/checksum, then
    `WindowsAotUnwindRegistry`.
-8. Implement `.oat_cfg.windows` collection, independent serialization,
+7. Implement `.oat_cfg.windows` collection, independent serialization,
    conditional ELF layout/anchors, and runtime validation. Keep observation
    mode as the default; run the explicit-target allocation feasibility probe
    as a separate gate.
-9. Build and stage the Windows `boot.art`, `boot.oat`, and `boot.vdex` set with
+8. Build and stage the Windows `boot.art`, `boot.oat`, and `boot.vdex` set with
    unchanged shared ELF header identity, Windows 64-KiB alignment, and the
-   selected boot-component topology.
-10. Integrate experimental startup selection and verified imageless fallback.
-11. On Server 2025, prove representative method entrypoints lie inside the
+   selected boot-component topology. This is the first gate that exercises
+   `ImageWriter`.
+9. Integrate experimental startup selection and verified imageless fallback.
+   Reject expected missing, stale, wrong-target, or cross-artifact mismatches
+   before entering trusted-layout `ImageSpace`/`Heap` invariants; do not turn
+   those internal invariants into hostile-input recovery paths.
+10. On Server 2025, prove representative method entrypoints lie inside the
     boot OAT RX range and execute without JIT compilation; exercise VDEX,
     image relocation, JNI, faults, stack walking, and unwind lookup.
-12. Pass the native CFG observation-mode gate and record OAT-1 startup/commit
+11. Pass the native CFG observation-mode gate and record OAT-1 startup/commit
     measurements. Keep explicit-target CFG, OAT-2, and security work from
     blocking the initial milestone.
 
@@ -1986,10 +1987,9 @@ comparison for non-Windows.
 
 Recorded 2026-08-05 against `vendor/art` at `android-16.0.0_r4-92-gffbfe48fd1`.
 The review re-derived this document's source claims from the tree, then looked
-for design gaps rather than editorial ones. Its corrections are already applied
-in the sections above; this record exists so the findings are not silently
-absorbed and so the verified baseline does not have to be rebuilt by the next
-reader.
+for design gaps rather than editorial ones. The observations were then checked
+independently; some are accepted, some need narrower conclusions, and some are
+rejected below. This record keeps source evidence separate from disposition.
 
 ### Verified as accurate
 
@@ -2019,19 +2019,19 @@ The PE32+ rejection remains sound and closed.
 
 ### Findings and disposition
 
-| # | Finding | Severity | Applied in |
+| # | Review observation | Verdict | Disposition |
 |---|---|---|---|
-| 1 | The seven OAT trampolines are still emitted with `GS`-relative Thread addressing by unmodified upstream `trampoline_compiler.cc`, while Windows ART uses `R15`. `ImageWriter` installs these stubs as boot-image entrypoints, so a Windows boot OAT would branch through the TEB on the first unresolved or uncompiled method. The document also described the Windows shape as a `gs` tail jump, propagating the defect into the specification | Critical | "The trampolines must be regenerated for the Windows Thread base"; sequence step 2; risk register; open item 12; new trampoline gate |
-| 2 | The proposed `EmitWindowsX64UnwindInfo()` predicate used `kIsTargetWindows`, which is false for a Windows host build, contradicting row 1 of its own enablement table and silently narrowing the three existing `#if defined(_WIN32) \|\| defined(ART_TARGET_WINDOWS)` gates | High | "Compiler enablement"; risk register; new JIT non-regression gate |
-| 3 | Boot class path and dex location strings are compared as `':'`-joined text with no normalization and no case folding, so ordinary Windows spelling differences reject the image and fall back imageless while every checksum matches | High | "Artifact location strings are part of the cross-artifact contract"; sequence step 3; risk register; open item 14; new location-string gate |
-| 4 | Image loading was delegated to `ImageSpace` as a single table row. It is the first execution of a large body of Windows runtime code, and `Heap`'s image consistency checks are fatal `CHECK`s rather than rejections, so the document's blanket imageless-fallback promise does not hold uniformly | High | "Loading an image is a distinct runtime bring-up, not just OAT loading"; risk register; open item 15; new image-mode gate |
-| 5 | Native `dex2oat.exe` operation was assumed. The binary links from the Windows target graph but has never been run; its compiler-side platform surface, including the watchdog's `pthread_condattr_setclock`/`pthread_cond_timedwait` use, is unexercised | High | Sequence step 1; risk register; open item 13; new `dex2oat` operation gate |
-| 6 | The commit-charge analysis was scoped to 64-KiB alignment gaps, but Windows `MemMap` commits whole spans, so the combined image and OAT reservation dominates | Medium | "Whole-span commit decision"; risk register; measurement gate wording |
-| 7 | `kDynamicSymbolCount` derives from `DynamicSymbol::kLast`, so appending enumerators changes reserved capacity on every target; the reservation also happens in `ElfWriterQuick::Start()`, before any per-artifact knowledge exists | Medium | "Serialized table" anchors discussion; risk register; new Linux byte-identity gate |
-| 8 | CFG explicit mode referred to "the native target granularity" without stating it or proving the target list is safe under it | Medium | "Runtime validation and modes" |
-| 9 | Fatal `RtlDeleteFunctionTable()` handling is correct while running but can convert a clean process exit into an abort | Medium | "Publication, rollback, and lifetime"; risk register; new teardown gate |
-| 10 | No out-of-process inspector exists for the artifacts every writer and layout gate is supposed to check; `oatdump` is absent from the product graph | Medium | Risk register; open item 16 |
-| 11 | The stated source snapshot was 16 commits stale | Low | Header |
+| 1 | The seven shared OAT trampolines still use the source spelling `gs()->jmp(Address::ThreadOffsetAddr(...))`, allegedly leaving Windows output `GS`-relative | **Rejected: false critical finding** | On Windows, `X86_64Assembler::gs()` emits no `0x65` prefix and `ThreadOffsetAddr()` constructs an `R15`-relative address. The existing producer is already target-aware. Retain Linux/Windows disassembly and execution gates as regression tests; no trampoline regeneration is required. |
+| 2 | A proposed unwind-emission predicate based only on `kIsTargetWindows` would exclude Windows host builds | **Accepted, with wording correction** | Preserve the semantic union of host Windows and target Windows used by the current `_WIN32 \|\| ART_TARGET_WINDOWS` gates. A shared constexpr is acceptable if it expresses that union; identical preprocessor spelling is not required. |
+| 3 | Boot-class-path and dex-location identity is exact `':'`-joined text, without Windows path normalization or case folding | **Accepted, with solution correction** | Generation and startup must use identical stable strings. Fixed products may choose canonical absolute paths; relocatable products should use stable logical `--dex-location`/`-Xbootclasspath-locations` identities rather than physical absolute paths. |
+| 4 | Image mode reaches Windows runtime paths not covered by imageless smoke tests, while some heap/image layout invariants are fatal | **Accepted, with narrower scope** | Expected compatibility failures must reject the artifact before trusted-layout invariants. `ImageSpace::LoadBootImage()` already supports a false-return/imageless path; debug-only trusted-layout `CHECK`s such as boot-image contiguity remain internal invariants and need not become hostile-input recovery checks. |
+| 5 | Native `dex2oat.exe` operation is unproven | **Accepted, with gate correction** | `--version` is unsupported. The first operational gate is a real trivial single-JAR no-image OAT/VDEX compile. It exercises compiler and watchdog paths, but does not exercise `ImageWriter`; boot-set generation does that later. |
+| 6 | Whole-span Windows commit, not just 64-KiB alignment gaps, dominates reservation cost | **Accepted** | Measure the full boot-image reservation, OAT prefix, padding, committed span, and working set separately. |
+| 7 | `kDynamicSymbolCount` follows `kLast`, and dynamic-section capacity is reserved in `ElfWriterQuick::Start()` before payload sizes are known | **Accepted** | Keep the base enum/count unchanged, append Windows-only values after `kLast`, and reserve optional-name capacity from writer mode known at `Start()`. Section/anchor emission remains conditional on actual payload. Prove Linux/Android byte identity. |
+| 8 | CFG target alignment and exactness were insufficiently specified | **Accepted, with semantic correction** | Require ascending, unique, exact, 16-byte-aligned x86-64 offsets and test rejection of a deliberately omitted aligned target. Reject the unsupported claim that enabling one offset necessarily admits a whole 16-byte granule. |
+| 9 | Fatal `RtlDeleteFunctionTable()` failure should become nonfatal during orderly exit | **Rejected as a design change** | Keep strict unregister-before-release ordering and the existing fatal invariant. A deletion failure aborts; designing a recoverable teardown exception is not an early bring-up blocker. |
+| 10 | Lack of a product `oatdump`/out-of-process inspector blocks writer and layout verification | **Rejected as a blocker** | Writer/unit/runtime parser tests plus available `llvm-readelf`, `llvm-objdump`, and `llvm-nm` cover the required structure. A small inspector may be added for convenience, but is not required for bring-up. |
+| 11 | The stated source snapshot was stale | **Accepted** | The header and this review now name `android-16.0.0_r4-92-gffbfe48fd1`. |
 
 ### Scope correction in the loader's favour
 
@@ -2045,13 +2045,17 @@ OAT-1 replaces one operation, not a segment mapper. This is recorded under
 
 ### Overall assessment
 
-The loader half of this design — OAT-1, the VDEX handoff, the unwind transport,
-and the CFG format — is specified to implementation depth and carries low
-residual risk. The generation half was specified as output requirements without
-a feasibility position, and that is where every finding above except 6 and 9
-lands. The sequence change at "Implementation sequence" reflects this: prove
-`dex2oat` runs, fix the trampolines, and pin the location strings before
-building the parts that are already designed.
+The review found no critical trampoline defect. OAT-1's mapping delta is also
+narrower than a new segment loader: only Windows private-copy replacement of
+file-backed segment operations is new. Those conclusions reduce code-change
+risk, but they do not make residual risk low. Native `dex2oat.exe` compilation,
+boot `ImageWriter` output, image-mode execution, VDEX ownership, unwind
+registration, and the OAT-1 protection sequence remain unproven on Server
+2025. Explicit CFG additionally depends on an unresolved invalid-by-default
+allocation sequence. The aggregate status therefore remains medium/high until
+the operational gates pass. CFG explicit enforcement, teardown recovery from
+a failed function-table deletion, security hardening, application OAT, and
+OAT-2 do not block the initial boot-only observation-mode milestone.
 
 ## Publication, rollback, and lifetime
 
@@ -2091,18 +2095,10 @@ unregister handle: explicit-mode failure releases the complete unpublished
 allocation, and any future partial reuse must invalidate and verify every old
 target before reusing the address.
 
-The fatal-deletion rule needs one bounded exception to be safe at process exit.
-It is correct while the process continues to run, because releasing memory that
-Windows may still reference through a live function table is worse than
-aborting. At orderly teardown the trade is different: aborting a process that
-is already exiting converts a clean exit into a crash, and W-014 already
-recorded a Wine case where teardown reached code in an already non-executable
-`art.dll`. The design must therefore state, and the teardown gate must prove,
-which of these applies — either unregistration is ordered strictly before any
-`art.dll` unload so the fatal rule can hold unchanged at exit, or the exit path
-downgrades a deletion failure to a logged error because nothing will observe
-the stale table afterwards. Leaving it unstated risks turning a benign shutdown
-race into a fatal dump on the authoritative host.
+Keep this invariant unchanged during early bring-up, including orderly exit:
+unregister before `art.dll` unload or mapping release, and abort if Windows
+refuses deletion. Recovery from a failed `RtlDeleteFunctionTable()` is not a
+prerequisite for the boot-only milestone.
 
 ## Correctness validation and deferred security
 
@@ -2197,7 +2193,7 @@ tool policy are deferred.
 | Dedup merges code with mismatched unwind bytes | High | One entry per unique code range; a byte-mismatch on a deduplicated offset fails the `dex2oat` run |
 | Default CFG behavior rejects OAT entrypoints | High | Observation mode records native policy and executes real quick/JNI/trampoline/method indirect calls before publication support is claimed |
 | Explicit CFG cannot establish invalid-by-default state in OAT-1 | Open, non-blocking | Keep observation mode as the default; gate explicit mode on a native allocation/protection probe and never treat `PAGE_TARGETS_NO_UPDATE` as state creation |
-| CFG table misses or over-admits an entrypoint | High for explicit mode | Independently checksummed `.oat_cfg.windows`, complete sorted exact targets, dedup-role merging, negative interior-address tests, and publication only after all batches succeed |
+| CFG table misses or over-admits an entrypoint | High for explicit mode | Independently checksummed `.oat_cfg.windows`, complete sorted unique exact 16-byte-aligned targets, dedup-role merging, a deliberately omitted aligned-target test, and publication only after all batches succeed |
 | CFG state survives failed-load address reuse | High for explicit mode | Fully release the unpublished allocation; otherwise invalidate and verify every old target or forbid reuse |
 | VDEX exact placement/ownership | High | OAT-1 copy into `oatdex` with an owner-sharing `MemMap` slice |
 | Boot exact address failure | High | Consume reservation and verify exact result |
@@ -2205,15 +2201,13 @@ tool policy are deferred.
 | Private-copy memory/startup | High operational | Whole-span commit for simplicity; measure 64-KiB padding and committed gaps before optimizing |
 | Wrong cross-OS boot artifacts staged | High | Windows-target-specific staging plus image/OAT checksums and actual AOT execution tests |
 | Boot topology mismatch | High | Explicitly select and test single- or multi-component output |
-| OAT trampolines still address the Thread base through `GS` | Critical | Upstream `trampoline_compiler.cc` is unmodified; boot-image entrypoints point at these stubs. Regenerate them for `R15` and gate both targets by disassembly before any other AOT milestone |
-| Native `dex2oat.exe` operation is unproven | High | It links from the Windows graph but has never run. Prove `--version` and a trivial imageless compile before the boot-set output specification is treated as actionable |
-| Boot class path / dex location strings disagree between generation and load | High | The comparison is byte equality on `':'`-joined text with no normalization; pin one canonical Windows spelling and test separator/drive-case variation |
-| Image-mode runtime paths have never executed on Windows | High | Every accepted gate to date is imageless; treat image bring-up as a distinct milestone and classify which `ImageSpace`/`Heap` consistency checks are fatal rather than rejecting |
+| Target-aware trampoline lowering regresses | Medium | The shared producer already lowers Thread access to Linux `GS` or Windows `R15`; retain two-target disassembly plus resolution/quick-to-interpreter execution gates |
+| Native `dex2oat.exe` operation is unproven | High | It links from the Windows graph but has never run. Prove a real trivial single-JAR no-image `.oat`/`.vdex` compile before boot-set output is treated as actionable; `--version` is not supported |
+| Boot class path / dex location strings disagree between generation and load | High | The comparison is byte equality on `':'`-joined text with no normalization; use matching canonical absolute identities for fixed installs or stable logical identities for relocatable packages, and test intentional mismatches |
+| Image-mode runtime paths have never executed on Windows | High | Every accepted gate to date is imageless; reject expected compatibility failures before trusted-layout invariants and treat successful image loading/execution as a distinct milestone |
 | Boot reservation commit dominates the measured cost | Medium operational | Windows `MemMap` commits whole spans, so the image+OAT reservation, not the 64-KiB padding, is the term to report and later optimize |
-| Unwind predicate narrows the existing Windows condition | Medium | Spell it `#if defined(_WIN32) \|\| defined(ART_TARGET_WINDOWS)` as the three current gates do; `kIsTargetWindows` is false on a Windows host build |
-| `kDynamicSymbolCount` grows implicitly with the enum | Medium | It derives from `DynamicSymbol::kLast`; append after `kLast`, `static_assert` the base count, and test Linux byte identity |
-| Fatal function-table deletion aborts an exiting process | Medium | Order unregistration strictly before `art.dll` unload, or downgrade the failure at orderly exit; prove whichever is chosen |
-| No out-of-process inspector for the generated artifact | Medium | Every writer/layout/checksum gate needs an external verifier; `oatdump` is absent from the product graph |
+| Unwind predicate narrows the existing Windows condition | Medium | Preserve the semantic union of Windows-host and Windows-target compilation; test both even if a shared constexpr replaces the current preprocessor spelling |
+| `kDynamicSymbolCount` grows implicitly with the enum | Medium | It derives from `DynamicSymbol::kLast`; append Windows-only values after `kLast`, `static_assert` the base count, reserve from writer mode at `Start()`, and test Linux byte identity |
 | Upstream divergence | High | Reuse `ElfOatFile`, `ElfFile`, and `OatFileBase`; conditionally gate target alignment, unwind, and CFG additions so Linux output is unchanged |
 
 The aggregate early-bring-up risk is medium/high. It remains lower than PE for
@@ -2249,7 +2243,7 @@ Before claiming Windows AOT support, require:
 - validation-only and executable private-copy opens, plus missing, mismatched,
   reservation-failure, VDEX-failure, setup-failure, and ordinary
   unwind-registration-failure cases that clean up and continue with imageless
-  nterp/JIT; a forced `RtlDeleteFunctionTable()` failure must instead abort;
+  nterp/JIT;
 - focused GC, roots, deoptimization, translated fault, JNI, reflection, class
   initialization, and fatal-dump execution through boot OAT;
 - behavioral execution of the Stage 1 tests currently blocked by H-005; and
@@ -2260,28 +2254,27 @@ Before claiming Windows AOT support, require:
 The 2026-08-05 review adds these gates, which cover generation-side
 prerequisites the original list assumed rather than required:
 
-- a trampoline gate: disassemble the seven emitted OAT trampolines on both
-  targets and require `GS` addressing on Linux and `R15` addressing on Windows,
+- a trampoline regression gate: disassemble the seven emitted OAT trampolines
+  on both targets and require Linux `GS` and Windows `R15` Thread addressing,
   then execute a boot-image method reached through the resolution trampoline
   and one reached through the quick-to-interpreter bridge;
-- a `dex2oat` operation gate on Server 2025: `--version` and a trivial
-  single-jar imageless compile, run before any boot-set generation claim;
-- a location-string gate: vary separator flavour, drive-letter case, and
-  absolute-versus-relative form between generation and startup, and require
-  either an exact match or an explicitly diagnosed rejection, never a silent
-  imageless fallback;
+- a `dex2oat` operation gate on Server 2025: a real trivial single-JAR
+  no-image compile producing parseable `.oat`/`.vdex`, run before any boot-set
+  generation claim; do not use the unsupported `--version` option;
+- a location-string gate: prove the selected canonical-absolute or stable-
+  logical identities are byte-identical at generation and startup, then vary
+  separator flavour, drive-letter case, and absolute-versus-relative form and
+  require intentional mismatches to be explicitly diagnosed and rejected;
 - a JIT non-regression gate proving the new `EmitWindowsX64UnwindInfo()`
-  predicate still emits unwind data for a Windows host build, not only for an
-  `ART_TARGET_WINDOWS` build;
+  predicate covers both a Windows host build and an `ART_TARGET_WINDOWS`
+  build, regardless of the helper's exact spelling;
 - a Linux byte-identity gate over `.dynstr`, `.dynsym`, and `.hash` proving the
-  two or four added anchor names changed no non-Windows output, plus the
-  `static_assert` on the base symbol count;
+  optional anchors changed no non-Windows output, plus the `static_assert` on
+  the base symbol count and a Windows enabled-mode/empty-payload reservation
+  case;
 - an image-mode gate that deliberately supplies a mismatched or wrong-target
-  artifact set and records whether the outcome is a clean imageless fallback or
-  a fatal upstream consistency check, so the fallback promise is scoped
-  honestly;
-- a teardown gate covering function-table unregistration ordering against
-  `art.dll` unload at orderly process exit; and
+  artifact set and requires a diagnosed rejection/imageless fallback before
+  trusted-layout `ImageSpace`/`Heap` invariants; and
 - boot OAT size and a throughput comparison against the Linux boot OAT,
   recording the cost of reserving both `R15` and `RBP` in Windows AOT code.
 
@@ -2299,44 +2292,41 @@ not grow into another PE prototype.
 1. Keep and test the Linux-identical ELF header identity, retain Linux 16-KiB
    layout, and select 64-KiB `kElfSegmentAlignment` for Windows/WASM without
    treating Windows allocation granularity as `kMaxPageSize`.
-2. Prototype the OAT-1 private-copy mapping for both validation-only and
-   executable opens under existing
-   `ElfOatFile`/`ElfFile`; introduce a separate parser only if this proves
-   unworkable without larger changes.
-3. Implement exact-reservation whole-span private-copy loading without POSIX
-   `MAP_FIXED` emulation.
-4. Preserve `oatdex` semantics with a VDEX copy and shared allocation owner.
-5. Implement the specified AOT unwind transport: the Windows-and-x86-64
+2. Prove native `dex2oat.exe` operation with a trivial single-JAR no-image
+   compile on Server 2025; do not use the unsupported `--version` option.
+3. Select and gate identical generation/startup boot-class-path, dex-location,
+   and `-Ximage:` strings, using canonical absolute identities for a fixed
+   install or stable logical identities for a relocatable package.
+4. Close H-005 and prove the existing loader characterization contracts. Add
+   the two-target trampoline disassembly/execution regression gate; no
+   trampoline producer change is currently required.
+5. Add the narrow Windows private-copy replacement for file-backed
+   `MapFileAtAddress(..., reuse=true)` for both validation-only and executable
+   opens under the existing `ElfOatFile`/`ElfFile` flow. Preserve the current
+   anonymous whole-span reservation and zero-fill reuse paths.
+6. Preserve `oatdex` semantics with a VDEX copy and shared allocation owner,
+   including exact aperture sizing and rollback.
+7. Implement the specified AOT unwind transport: the Windows-and-x86-64
    emission predicate replacing the `IsJitCompiler()` gate, the
    `CompiledMethod` unwind array, dedup-safe `OatWriter` entries, the
    `.oat_unwind.win64` section and anchors, and `WindowsAotUnwindRegistry`.
-6. Implement the specified `.oat_cfg.windows` target collection, format,
+8. Implement the specified `.oat_cfg.windows` target collection, checksum,
    conditional anchors/layout, parser, and observation mode. Separately prove
    whether explicit-target mode can establish invalid-by-default CFG state in
-   the already committed OAT-1 reservation without W+X.
-7. Build native Windows `dex2oat.exe`, define its boot-generation command and
-   target-specific staging, and select the initial boot-component topology.
-8. Add experimental boot selection and explicit whole-transaction imageless
-   fallback.
-9. Close H-005 and prove behavioral loader contracts, then prove real boot-OAT
-   entrypoints execute on Server 2025.
-10. Pass CFG observation-mode characterization and measure OAT-1 commit/startup
-    cost; keep explicit-target CFG as a separately gated follow-on.
-11. Defer application OAT, unloading, OAT-2, cache security, hostile-input
+   the already committed OAT-1 reservation without W+X; this does not block
+   observation-mode bring-up.
+9. Define the native boot-generation command, exercise `ImageWriter`, stage the
+   target-specific `boot.art`/`.oat`/`.vdex` set, and select the initial boot-
+   component topology.
+10. Add experimental boot selection and whole-transaction imageless fallback.
+    Reject expected missing, stale, wrong-target, and cross-artifact mismatch
+    cases before trusted-layout image/heap invariants.
+11. Prove real boot-OAT entrypoints, image relocation, JNI, faults, GC/roots,
+    and unwind/stack-walk behavior on Server 2025.
+12. Pass CFG observation-mode characterization and measure OAT-1 startup,
+    reservation, commit, padding, and working-set cost. Defer explicit CFG,
+    application OAT, unloading, OAT-2, cache security, hostile-input
     hardening, and rich tooling integration to separately reviewed work.
-12. Regenerate the seven OAT trampolines against the Windows `R15` Thread base
-    and add the two-target disassembly gate. This is a prerequisite for items
-    7-10, not a follow-on.
-13. Prove native `dex2oat.exe` operation on the authoritative host before its
-    output specification is treated as actionable.
-14. Pin and gate the canonical Windows boot class path, dex location, and
-    `-Ximage:` string forms.
-15. Treat boot image loading as its own Windows runtime bring-up milestone, and
-    record which `ImageSpace`/`Heap` consistency failures are fatal rather than
-    recoverable, so the imageless-fallback promise is scoped accurately.
-16. Provide an out-of-process inspector for generated Windows artifacts,
-    sufficient to check section order, anchors, alignment, and the two
-    section-local checksums without running the runtime.
 
 PE32+ OAT is not an open item. Reconsidering it requires an explicit owner
 decision and a new design revision.
@@ -2360,8 +2350,9 @@ ART:
 
 Reviewed 2026-08-05 for the generation-side findings:
 
-- `vendor/art/compiler/trampolines/trampoline_compiler.cc` (the `GS`-relative
-  x86-64 OAT trampoline producer that must gain a Windows `R15` form)
+- `vendor/art/compiler/trampolines/trampoline_compiler.cc` (the shared x86-64
+  OAT trampoline producer; its `gs()`/`ThreadOffsetAddr()` spelling is lowered
+  by the target-aware assembler to Linux `GS` or Windows `R15`)
 - `vendor/art/dex2oat/linker/image_writer.cc` (`GetOatAddress(StubType)`, which
   installs those trampolines as boot-image entrypoints)
 - `vendor/art/libartbase/base/globals.h` (`kElfSegmentAlignment`,
