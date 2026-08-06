@@ -10,14 +10,17 @@ load it.
 Numbered implementation-sequence step 1 is complete: the target alignment,
 native `dex2oat.exe` build path, and W-028 trivial no-image operation gate are
 implemented, and W-028 passes twice on the authoritative native host with
-byte-identical output. Boot-image generation and executable OAT loading are
-not implemented. The earlier
+byte-identical output. Step 2 now has an accepted W-029 identity preflight,
+but actual boot-image generation/startup identity is not proven. Boot-image
+generation and executable OAT loading are not implemented. The earlier
 pre-dispatch characterization suite is also in the tree; it does not enable
 Windows AOT. The supported Windows product remains imageless nterp/JIT while
 this experimental track is incomplete. Progress and evidence are tracked in
 [`win32_aot_oat_tracker.md`](win32_aot_oat_tracker.md). The
 accepted native result is
 [`docs/history/windows_x64_w028_result.md`](docs/history/windows_x64_w028_result.md).
+The accepted W-029 preflight is
+[`docs/history/windows_x64_w029_result.md`](docs/history/windows_x64_w029_result.md).
 The authoritative implementation gate is Windows Server 2025 Datacenter
 Evaluation, x64 build 26100. Linux and Wine remain development and structural
 gates; the former Windows 10 lab host is unavailable.
@@ -784,10 +787,12 @@ The initial artifacts are trusted build outputs, not a mutable application
 cache. Cache publication, replacement, and adversarial-input policy are
 deferred.
 
-The product plan must still select and test the initial boot topology: either
-one `boot.art/oat/vdex` component or the complete multi-component layout
-emitted by the Windows build. The loader must not silently support only the
-first component when the staged image header declares more.
+The initial topology is one `boot.art/oat/vdex` component for the combined
+target-neutral `boot.jar`. The generator, staged manifest, and loader must all
+enforce that choice. The loader must reject rather than silently accept a
+staged image header that declares more components. A later move to a
+multi-component boot class path is an explicit contract/version change, not
+automatic discovery.
 
 ### Artifact location strings are part of the cross-artifact contract
 
@@ -813,24 +818,28 @@ Two consequences are Windows-specific and must be designed for explicitly.
    back to imageless nterp/JIT. That failure looks exactly like "Windows AOT
    does not work" while every checksum matches, so it is the first thing to
    rule out during bring-up, not the last.
-2. **One identity form must be pinned.** The product must pass the same exact
-   boot-class-path and dex-location strings to generation and startup. A fixed
-   installation may choose canonical absolute Windows paths; a relocatable
-   package should instead choose stable product-logical locations through
-   `--dex-location` and `-Xbootclasspath-locations`. Do not bake an absolute
-   build/staging directory into a relocatable artifact, and do not case-fold or
-   normalize only one side. Gate the chosen identity with deliberate separator,
-   drive-case, and absolute/relative mismatches and require an explicit
-   diagnosed rejection. [win32_filesystem.md](win32_filesystem.md) governs
-   Win32 API paths, but these OAT identity strings need their own product rule.
+2. **One identity form is pinned.** Generation uses
+   `--dex-location=/system/framework/boot.jar`; startup uses the exact same
+   bytes in `-Xbootclasspath-locations:/system/framework/boot.jar`. The
+   physical relocatable package JAR is `runtime/boot.jar`. No absolute build or
+   staging directory enters the logical identity, and neither side case-folds
+   or normalizes it. [win32_filesystem.md](win32_filesystem.md) governs Win32
+   API paths, but these OAT identity strings retain this separate product rule.
 
 The same reasoning applies to the `-Ximage:` location. Windows resolution of a
 default boot image location currently runs through the `ANDROID_ROOT` path in
 `file_utils.cc`, which requires that variable to be set and produces
-APEX-shaped subdirectories. The product must state whether Windows staging
-mirrors that layout or whether the launcher always passes an explicit
-`-Ximage:` path; leaving it implicit reintroduces the same string-identity
-problem at a different layer.
+APEX-shaped subdirectories. Windows does not use that implicit layout. The
+experimental launcher runs from the package root and always passes
+`-Ximage:runtime/boot-image/boot.art`; ART inserts the `x86_64` directory and
+opens `runtime/boot-image/x86_64/boot.art`, with `.oat` and `.vdex` companions.
+Forward slashes and relative spelling are contract bytes, not normalization
+suggestions.
+
+W-029 freezes these choices and diagnoses seven deliberate generation/startup
+mismatches covering case, separators, physical absolute paths, and component
+count. It is a preflight: the real Windows generator, manifest, launcher, and
+ART mismatch path must still consume and prove the values.
 
 ### Loading an image is a distinct runtime bring-up, not just OAT loading
 
@@ -1868,10 +1877,10 @@ evidence before transport and image integration.
    W-028 implements the operation and artifact-validation contract and passes
    twice on Server 2025 build 26100, completing this step.
 2. Select stable textual boot-class-path, dex-location, and `-Ximage:`
-   identities. A fixed installation may use canonical absolute paths; a
-   relocatable package should use stable logical `--dex-location` and
-   `-Xbootclasspath-locations` values. Prove generation and startup pass the
-   exact same strings.
+   identities. W-029 selects the single-component package-relative contract
+   and passes its mismatch preflight on native Server 2025. Complete the step
+   only when the Windows generator and launcher consume it and native ART
+   accepts the canonical strings while diagnosing the intentional mismatches.
 3. Execute the existing characterization tests, closing H-005 rather than
    relying only on syntax/build evidence. Add a two-target trampoline
    regression gate proving that the shared producer emits Linux `GS` Thread
@@ -1968,6 +1977,33 @@ does not exercise `ImageWriter` or executable loading. See the
 [accepted result](docs/history/windows_x64_w028_result.md) and tracker for the
 exact evidence and remaining sequence.
 
+### Numbered sequence step 2 implementation status
+
+W-029 `windows_w029_aot_identity` is a host-review gate for the identity
+boundary that precedes Windows `ImageWriter` and boot startup. Its canonical
+record is:
+
+```text
+component topology        single: boot
+logical boot JAR          /system/framework/boot.jar
+package boot JAR          runtime/boot.jar
+startup image location    runtime/boot-image/boot.art
+physical ART/OAT/VDEX     runtime/boot-image/x86_64/boot.{art,oat,vdex}
+```
+
+The gate compares generation and startup records byte-for-byte, then requires
+field-specific rejection of boot-class-path and image case changes, backslash
+spellings, physical `C:/...` substitutions, and an unexpected second
+component. It neither calls Windows path normalization nor assumes that equal
+Win32 file identities make the ART strings equal.
+
+The gate passes in a fresh Linux-hosted Windows cross configuration and on the
+authoritative Server 2025 host. W-028 now imports the same boot/probe identity
+source and records the selected contract; its native OAT/VDEX bytes remain
+unchanged. Step 2 remains `PARTIAL` because no generated Windows image or
+startup launcher consumes the record yet. See the
+[accepted preflight](docs/history/windows_x64_w029_result.md).
+
 ### Pre-dispatch characterization record
 
 This characterization work is a prerequisite for numbered sequence step 3,
@@ -2048,7 +2084,7 @@ cannot sit between `.text` and `.data.img.rel.ro` without breaking
 |---|---|---|---|
 | 1 | The seven shared OAT trampolines still use the source spelling `gs()->jmp(Address::ThreadOffsetAddr(...))`, allegedly leaving Windows output `GS`-relative | **Rejected: false critical finding** | On Windows, `X86_64Assembler::gs()` emits no `0x65` prefix and `ThreadOffsetAddr()` constructs an `R15`-relative address. The existing producer is already target-aware. Retain Linux/Windows disassembly and execution gates as regression tests; no trampoline regeneration is required. |
 | 2 | A proposed unwind-emission predicate based only on `kIsTargetWindows` would exclude Windows host builds | **Accepted, with wording correction** | Preserve the semantic union of host Windows and target Windows used by the current `_WIN32 \|\| ART_TARGET_WINDOWS` gates. A shared constexpr is acceptable if it expresses that union; identical preprocessor spelling is not required. |
-| 3 | Boot-class-path and dex-location identity is exact `':'`-joined text, without Windows path normalization or case folding | **Accepted, with solution correction** | Generation and startup must use identical stable strings. Fixed products may choose canonical absolute paths; relocatable products should use stable logical `--dex-location`/`-Xbootclasspath-locations` identities rather than physical absolute paths. |
+| 3 | Boot-class-path and dex-location identity is exact `':'`-joined text, without Windows path normalization or case folding | **Accepted; preflight implemented** | W-029 pins `/system/framework/boot.jar`, the single-component topology, and package-relative `runtime/boot-image/boot.art`; it rejects seven intentional mismatches natively. Actual Windows generation and ART startup must still consume and prove the contract. |
 | 4 | Image mode reaches Windows runtime paths not covered by imageless smoke tests, while some heap/image layout invariants are fatal | **Accepted, with narrower scope** | Expected compatibility failures must reject the artifact before trusted-layout invariants. `ImageSpace::LoadBootImage()` already supports a false-return/imageless path; debug-only trusted-layout `CHECK`s such as boot-image contiguity remain internal invariants and need not become hostile-input recovery checks. |
 | 5 | Native `dex2oat.exe` operation was unproven | **Accepted and closed, with gate correction** | `--version` is unsupported. W-028 defines the real trivial single-JAR no-image OAT/VDEX compile and passes twice on native Server 2025 with byte-identical artifacts; post-correction Wine output also matches. It exercises compiler and watchdog paths, not `ImageWriter`; boot-set generation remains a later step. |
 | 6 | Whole-span Windows commit, not just 64-KiB alignment gaps, dominates reservation cost | **Accepted** | Measure the full boot-image reservation, OAT prefix, padding, committed span, and working set separately. |
@@ -2228,10 +2264,10 @@ tool policy are deferred.
 | Failed load leaves partial image/OAT state | Critical | One unpublished transaction; discard it before imageless fallback; failed function-table deletion is fatal |
 | Private-copy memory/startup | High operational | Whole-span commit for simplicity; measure 64-KiB padding and committed gaps before optimizing |
 | Wrong cross-OS boot artifacts staged | High | Windows-target-specific staging plus image/OAT checksums and actual AOT execution tests |
-| Boot topology mismatch | High | Explicitly select and test single- or multi-component output |
+| Boot topology mismatch | High | Enforce W-029's selected single `boot` component in generation, the staged manifest, image-header validation, and startup; reject an unexpected extension component |
 | Target-aware trampoline lowering regresses | Medium | The shared producer already lowers Thread access to Linux `GS` or Windows `R15`; retain two-target disassembly plus resolution/quick-to-interpreter execution gates |
 | Native `dex2oat.exe` operation regresses | Medium | Keep the accepted W-028 real single-JAR no-image `.oat`/`.vdex` compile as a native Server 2025 regression gate; `--version` is not supported and is not a substitute |
-| Boot class path / dex location strings disagree between generation and load | High | The comparison is byte equality on `':'`-joined text with no normalization; use matching canonical absolute identities for fixed installs or stable logical identities for relocatable packages, and test intentional mismatches |
+| Boot class path / dex location strings disagree between generation and load | High | W-029 pins logical `/system/framework/boot.jar` and rejects preflight mismatches without normalization; wire the same record into native generation/startup and require ART-level intentional-mismatch diagnostics |
 | Image-mode runtime paths have never executed on Windows | High | Every accepted gate to date is imageless; reject expected compatibility failures before trusted-layout invariants and treat successful image loading/execution as a distinct milestone |
 | Boot reservation commit dominates the measured cost | Medium operational | Windows `MemMap` commits whole spans, so the image+OAT reservation, not the 64-KiB padding, is the term to report and later optimize |
 | Unwind predicate narrows the existing Windows condition | Medium | Preserve the semantic union of Windows-host and Windows-target compilation; test both even if a shared constexpr replaces the current preprocessor spelling |
@@ -2317,9 +2353,9 @@ semantics; Wine is structural only.
 1. Promote the existing cross-target comparison into a repeatable gate proving
    Linux retains 16-KiB output and `kMaxPageSize = 16384` while Windows retains
    the Linux ELF identity and uses 64-KiB `kElfSegmentAlignment`.
-2. Select and gate identical generation/startup boot-class-path, dex-location,
-   and `-Ximage:` strings, using canonical absolute identities for a fixed
-   install or stable logical identities for a relocatable package.
+2. Wire W-029's selected single-component identity into the Windows boot-image
+   generator, staged manifest, and experimental package-root launcher. Prove
+   native ART startup accepts it and diagnoses the intentional mismatch matrix.
 3. Close H-005 and prove the existing loader characterization contracts. Add
    the two-target trampoline disassembly/execution regression gate; no
    trampoline producer change is currently required.

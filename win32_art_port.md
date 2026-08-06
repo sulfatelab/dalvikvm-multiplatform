@@ -777,6 +777,12 @@ all product paths. Windows NIO.2 remains a non-goal.
   OAT/VDEX files; post-correction Wine output matches them exactly. This
   completes generation step 1. Boot-set generation and executable loading
   remain pending. The imageless interpreter+JIT product does not require them.
+- W-029 starts sequence step 2 by pinning one `boot` component, logical
+  `/system/framework/boot.jar`, package `runtime/boot.jar`, and explicit
+  package-relative `-Ximage:runtime/boot-image/boot.art`. Its native preflight
+  passes and diagnoses seven deliberate spelling/path/topology mismatches.
+  Step 2 remains partial until Windows `ImageWriter` and native ART startup
+  consume that contract.
 - Windows boot AOT keeps the current Linux ART ELF64 header identity:
   `ART_PAGE_SIZE_AGNOSTIC=1` remains enabled and Linux `EI_OSABI`/ABI
   version/e_flags behavior is retained. Linux stays at 16-KiB `PT_LOAD`

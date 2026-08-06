@@ -243,10 +243,10 @@ suffix-`A` family. The active 1,441-source graph has zero ANSI calls, source
 files, or API families. The Linux-hosted Windows-cross stage passes. Native
 Windows Server 2025 now passes W-027 as part of the complete 77/77 catalog;
 the fresh run completed in 13.38 seconds and the no-op repeat in 13.21 seconds.
-The complete 93-declaration catalog contains 72 target-runnable items, eight
-host reviewers, and 13 compile-only artifacts. The Windows product subset
-remains 90 applicable declarations: 69 target-runnable, eight host-review, and
-13 compile-only. The complete native baseline passes 77/77 twice; the second
+The complete 95-declaration catalog contains 73 target-runnable items, nine
+host reviewers, and 13 compile-only artifacts. The Windows product subset has
+92 applicable declarations: 70 target-runnable, nine host-review, and 13
+compile-only. The complete pre-AOT native baseline passes 77/77 twice; the second
 `art-tests` build is a Ninja no-op. Both product and FS-1 Windows-cross W-014
 reviewers also pass with Ninja no-op repeats.
 The former legacy shell runners and per-probe CMake entry points have been

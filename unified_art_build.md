@@ -46,13 +46,13 @@ items are closed.
 | Compiler DSO parity | COMPLETE for `art-compiler` | both targets emit a shared compiler DSO; Windows imports `art.dll` and exports `art_compiler_jit_create` | retain exact ABI and no-cycle gates |
 | Windows runtime DSO exports | COMPLETE for current x86-64 closure | `art.dll` combines explicit source annotations with a reviewed 187-entry runtime-consumer DEF, never CMake auto-export; Debug has 2,065 exports and RelWithDebInfo has 2,066 | keep the consumer allowlist and actual PE boundary under regression review |
 | Full DSO topology parity | PARTIAL / mechanically controlled | the fresh graphs have four reviewed module-kind differences and one reviewed generated/platform module mapping; every current difference is checked against a versioned contract | convert reviewed exceptions where practical; reject every unreviewed graph change |
-| Unified phase catalog | COMPLETE for current declaration truthfulness; PARTIAL target expansion | nine virtual stages declare 33 native probes, 47 managed JARs, and 14 command gates; Windows has 91 applicable items (70 target-runnable, eight host-review, and 13 compile-only in the product variant), Linux x86-64 has 18 applicable items (fifteen runnable and three compile-only artifacts), and experimental Linux AArch64 has 17 applicable items (fourteen runner-backed gates and three compile-only artifacts); CMake rejects runnable shared libraries and compile-only command gates; native W-028 is accepted | expand exact-target applicability only with matching behavioral acceptance |
+| Unified phase catalog | COMPLETE for current declaration truthfulness; PARTIAL target expansion | ten virtual stages declare 33 native probes, 47 managed JARs, and 15 command gates; Windows has 92 applicable items (70 target-runnable, nine host-review, and 13 compile-only in the product variant), Linux x86-64 has 18 applicable items (fifteen runnable and three compile-only artifacts), and experimental Linux AArch64 has 17 applicable items (fourteen runner-backed gates and three compile-only artifacts); CMake rejects runnable shared libraries and compile-only command gates; native W-028 and W-029 are accepted | expand exact-target applicability only with matching behavioral acceptance |
 | Boot/runtime packaging | COMPLETE for Linux x86-64; experimental Linux AArch64; capability-gated elsewhere | deterministic target-local boot/probe JARs include Conscrypt, OkHttp/Okio, and security properties; native Linux x86-64 generates, runtime-tests, and stages a relocatable ART/OAT/VDEX boot image; AArch64 passes exact CriticalNative and normal/FastNative JNI/JIT/tracing, Math CriticalNative `-Xint`/JIT, compiler-DSO topology/loading, imageless Hello, GC stress, HandleLeak, PerfSmoke, ThreadHeavy, libcore CoreProbe, InterruptProbe, and RtMem, show-version, and 128 MiB non-moving-heap gates under its explicit runner while recording boot image unsupported; staging also validates the complete DSO closure and packages pinned ICU data, 121 CA roots, and writable keychain directories | retain the image/runtime-package gates while adding target capabilities independently |
 | POSIX-free Windows build host | COMPLETE for the accepted native baseline; PARTIAL end to end | Server 2025 uses configured official JDK 21, Python, CMake, Ninja, and plain Clang drivers; all 77 accepted native tests, provider/security packaging, and product/test no-op gates pass without POSIX tooling | migrate every retained behavioral gate; keep Windows AOT/OAT capability work separate |
 | Legacy build removal | COMPLETE | the checked-in Linux snapshot/generator, split overlays, Linux miniature graphs, Windows Phase-0/Phase-1 and libcore/ICU graphs, product package scripts, and final POSIX-only boot-image entry points are retired; historical records remain documentation only | prevent alternative product paths from returning |
 | CI/acceptance automation | IMPLEMENTED / activation pending | checked-in shell-free Python driver and GitHub workflow define host, fresh Linux, Windows-cross, and native Windows cells; machine paths enter only through an external CI TOML binding | register/provision the two self-hosted runner labels and obtain accepted workflow runs |
 | Additional architectures | PARTIAL / Linux AArch64 experimental | all 15 identities in the revised closed registry are registered; `linux-aarch64-gnu` now generates, builds, stages, and passes exact CriticalNative and normal/FastNative JNI/JIT/tracing, Math CriticalNative, compiler-DSO topology/loading, show-version, imageless-Hello, GC-stress, HandleLeak, PerfSmoke, ThreadHeavy, libcore CoreProbe, InterruptProbe, and RtMem, and 128 MiB non-moving-heap gates through an explicit QEMU user-mode binding; Windows AArch64/ARM64EC remain planned and unstarted while their design is incomplete, Windows x86/ARMv7 remain unstarted and outside current scope, and all PosixShim profiles remain capability-gated | admit another target only after its design and target-specific evidence are complete |
-| Windows AOT/OAT | PARTIAL / separate track | Windows 64-KiB artifact alignment, shared-`libartbase` compiler topology, and W-028 trivial no-image OAT/VDEX generation gate are implemented; watchdog, VDEX publication, mapped-file flush, and binary-descriptor blockers are fixed; W-028 passes twice on native Server 2025 with byte-identical artifacts, and corrected Wine output matches | continue with stable boot identities, boot-set generation, and executable loading in `win32_aot_oat_tracker.md` |
+| Windows AOT/OAT | PARTIAL / separate track | Windows 64-KiB artifact alignment, shared-`libartbase` compiler topology, and W-028 trivial no-image OAT/VDEX generation gate are implemented; W-029 pins a single-component package-relative identity and passes its seven-case native preflight; W-028 passes natively with byte-identical artifacts after consuming the shared record | make Windows generation/startup consume W-029, then continue boot-set generation and executable loading in `win32_aot_oat_tracker.md` |
 
 ### Latest verification baseline (2026-08-06)
 
@@ -72,6 +72,14 @@ items are closed.
   matches both hashes. Step 1 is complete; boot-image generation and
   executable OAT loading remain pending. See
   `docs/history/windows_x64_w028_result.md`.
+
+- [x] Windows AOT/OAT sequence step 2 has an accepted W-029 identity
+  preflight. It selects one `boot` component, logical
+  `/system/framework/boot.jar`, package `runtime/boot.jar`, and explicit
+  `-Ximage:runtime/boot-image/boot.art`. The native host-review gate passes
+  1/1 and rejects seven case, separator, physical-path, and topology
+  mismatches. Step 2 remains partial until the real Windows generator and ART
+  startup consume the contract. See `docs/history/windows_x64_w029_result.md`.
 
 - [x] Parallelism is now deterministic when callers omit `--parallel`:
   non-Windows build hosts use 32 jobs, Windows build hosts use 16, and Windows
@@ -1578,10 +1586,11 @@ One historical work stage maps to exactly one virtual target named
 | `w025` | 4 EXEs, 3 DLLs, 3 managed, 2 gates | 7 exact / 5 typed | 8 target-runnable, 1 host-review, 3 compile-only | registered Windows x86-64 coverage is complete |
 | `w027` | 1 gate | 0 exact / 1 typed | 1 host-review | registered Windows x86-64 coverage is complete |
 | `w028` | 1 gate | 1 exact / 0 typed | 1 target-runnable | native Server 2025 `dex2oat` no-image operation passes twice with byte-identical OAT/VDEX artifacts |
-| Total | 23 EXEs, 10 DLLs, 47 managed, 14 gates | 40 exact / 54 typed | product: 73 target-runnable, 8 host-review, 13 compile-only | Windows applies 91 declarations (70 runnable, eight host-review, 13 compile-only); Linux x86-64 applies 18 (fifteen runnable, three compile-only), and Linux AArch64 applies 17 (fourteen runnable, three compile-only) |
+| `w029` | 1 gate | 1 exact / 0 typed | 1 host-review | native Server 2025 identity preflight passes and rejects all seven intentional mismatches; actual generation/startup remains pending |
+| Total | 23 EXEs, 10 DLLs, 47 managed, 15 gates | 41 exact / 54 typed | product: 73 target-runnable, 9 host-review, 13 compile-only | Windows applies 92 declarations (70 runnable, nine host-review, 13 compile-only); Linux x86-64 applies 18 (fifteen runnable, three compile-only), and Linux AArch64 applies 17 (fourteen runnable, three compile-only) |
 
 The shared registry now references zero source files from historical
-verification directories. All 94 declarations own canonical source under
+verification directories. All 95 declarations own canonical source under
 `tests/cases/` or a shell-free runner under `tests/support/`; all 30 native
 source cases and all 48 Java sources have adjacent results, and shared stage
 analysis remains under `tests/stages/`. The final three historical Markdown
@@ -2476,7 +2485,7 @@ translation units. This keeps `vendor/art` clean, requires no source-tree
 symlink, and avoids committing generated or absolute-path-bearing headers.
 
 The test-ownership migration moves the registry from `native/` to the top-level
-`tests/` tree and places all 94 declarations under stable logical ownership.
+`tests/` tree and places all 95 declarations under stable logical ownership.
 All 33 native probes and 47 managed artifacts consume canonical source under
 `tests/cases/`; the common W-004 managed gates, Windows W-002/W-003 managed
 commands, Linux command gates, and target-object reviewers use shell-free

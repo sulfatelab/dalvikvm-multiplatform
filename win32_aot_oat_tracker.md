@@ -46,6 +46,13 @@ build-26100 executions pass and produce byte-identical, structurally valid OAT
 same bytes. The sanitized result is
 [`docs/history/windows_x64_w028_result.md`](docs/history/windows_x64_w028_result.md).
 
+Numbered step 2 is `PARTIAL`. W-029 now pins and validates a single-component,
+package-relative generation/startup identity contract. It passes on the
+authoritative native host and deliberately rejects seven case, separator,
+physical-path, and topology mismatches. Actual Windows boot-image generation
+and ART startup do not consume this contract yet. The accepted preflight is
+[`docs/history/windows_x64_w029_result.md`](docs/history/windows_x64_w029_result.md).
+
 The earlier `runtime/oat/oat_file_test.cc` additions are a pre-dispatch loader
 characterization suite. They support sequence step 3 and do not constitute
 numbered step 1 or executable Windows OAT loading.
@@ -55,13 +62,13 @@ numbered step 1 or executable Windows OAT loading.
 | Step | State | Implemented position | Remaining exit condition |
 |---:|---|---|---|
 | 1. Native trivial no-image `dex2oat` compile | `COMPLETE` | W-028 builds `dex2oat`, `boot.jar`, and `hello.jar`; runs a deterministic single-JAR `speed` compile with watchdog and forced swap; validates ELF64/ET_DYN/x86-64, Linux ART OSABI/ABI/flags, 64-KiB `PT_LOAD`, OAT 265, and the complete four-section VDEX 027 envelope; two native runs and a post-correction Wine diagnostic produce byte-identical outputs | Retain W-028 as a regression gate; no step-1 exit condition remains |
-| 2. Stable generation/startup identities | `PARTIAL` | W-028 uses candidate logical identities `/system/framework/boot.jar` and `/data/local/tmp/win32-oat-probe.jar` independently of physical package paths and uses relative `probe.oat` so ELF `DT_SONAME` does not inherit a host path | Select boot-image/component topology and `-Ximage:` identity; prove byte-identical generation/startup strings and intentional mismatch diagnostics |
+| 2. Stable generation/startup identities | `PARTIAL` | W-029 pins one `boot` component, logical `/system/framework/boot.jar`, package `runtime/boot.jar`, explicit package-relative `-Ximage:runtime/boot-image/boot.art`, and the x86-64 ART/OAT/VDEX package paths; native preflight accepts the byte-identical canonical pair and diagnoses seven intentional mismatches; W-028 consumes the shared record without changing artifact bytes | Make the Windows boot generator and launcher consume the contract; prove native ART accepts the canonical set and diagnoses the mismatches |
 | 3. Pre-dispatch characterization and trampoline regression | `PARTIAL` | Characterization tests exist in `oat_file_test.cc` and the shared trampoline lowering has been source-reviewed | Close H-005 by running the focused tests; add Linux-`GS`/Windows-`R15` disassembly and resolution/quick-to-interpreter execution gates |
 | 4. Windows private-copy `ElfOatFile` mapping | `NOT STARTED` | Design limits the new operation to the file-backed segment copy | Implement and test validation-only allocation and executable exact-reservation opens, gaps, zero-fill, final protections, and cache flush |
 | 5. VDEX aperture and ownership | `NOT STARTED` | Owner-sharing slice and transaction ordering are specified | Implement exact private copy into `oatdex`, validation, protection, owner lifetime, and rollback |
 | 6. `.oat_unwind.windows` | `NOT STARTED` | Writer format, machine value, checksum, anchors, validation, and registration lifetime are specified | Implement emission through `WindowsAotUnwindRegistry`; pass structural, lookup, virtual-unwind, exception, and stack-walk gates |
 | 7. `.oat_cfg.windows` | `NOT STARTED` | Independent format and observation/explicit mode split are specified | Implement collection/serialization/parser; pass observation mode; keep explicit mode gated on the separate committed-allocation feasibility proof |
-| 8. Boot ART/OAT/VDEX generation and staging | `NOT STARTED` | Windows 64-KiB artifact alignment is implemented | Select component topology; exercise `ImageWriter`; reproducibly build, validate, and stage the matching boot set |
+| 8. Boot ART/OAT/VDEX generation and staging | `NOT STARTED` | Windows 64-KiB artifact alignment and a single-component package topology are selected | Exercise `ImageWriter`; reproducibly build, validate, and stage the matching boot set |
 | 9. Experimental selection and fallback | `NOT STARTED` | Whole-transaction publication/rollback ordering is specified | Add opt-in startup, compatibility rejection before trusted-layout invariants, and native imageless fallback cases |
 | 10. Real boot-OAT execution | `NOT STARTED` | Required entrypoint, relocation, JNI, fault, GC, and unwind evidence is specified | Prove representative methods execute from boot-OAT RX ranges without JIT on Server 2025 |
 | 11. CFG observation and OAT-1 measurements | `NOT STARTED` | Required policy, call-path, reservation, commit, padding, startup, and working-set observations are specified | Pass the native observation gate and record the measurements; explicit CFG, OAT-2, application OAT, unloading, and security remain deferred |
@@ -161,6 +168,45 @@ The gate is native-only in the catalog. A cross configuration still builds all
 dependencies and exposes the declaration without registering a misleading
 CTest execution.
 
+## Step 2 implementation record
+
+### Selected single-component identity
+
+`tools/windows_aot_identity.py` is the canonical preflight source for the
+initial x86-64 boot-only package:
+
+- one `boot` component;
+- generation `--dex-location=/system/framework/boot.jar` and startup
+  `-Xbootclasspath-locations:/system/framework/boot.jar`;
+- physical package JAR `runtime/boot.jar`;
+- explicit startup `-Ximage:runtime/boot-image/boot.art`, resolved from the
+  package root; and
+- physical `runtime/boot-image/x86_64/boot.art`, `.oat`, and `.vdex` files.
+
+The forward-slash image value is deliberately relative and contains no drive,
+build, or staging root. ART's existing image lookup inserts `x86_64` between
+the image directory and basename. An existing Linux x86-64 boot set was loaded
+successfully with this relative form as a path-resolution diagnostic; the
+Linux launcher itself remains unchanged.
+
+W-028 imports its boot, probe-dex, and relative OAT identities from the same
+module and serializes the selected contract in `result.json`. Its native OAT
+and VDEX hashes remain unchanged.
+
+### W-029 preflight and remaining boundary
+
+W-029 is a `host-review` gate because it compares product strings and package
+topology without executing target ART. It requires an exact canonical pair and
+rejects boot-class-path and image-location case changes, backslash spellings,
+physical `C:/...` substitutions, and an added boot component. Diagnostics name
+the mismatched field and preserve both values without normalization.
+
+The gate passes under both the Linux-hosted Windows cross configuration and
+native Server 2025. This closes the design choice, not sequence step 2. The
+real Windows `ImageWriter` command, staged manifest, experimental launcher,
+and ART startup mismatch behavior must consume and prove the contract before
+the step becomes `COMPLETE`.
+
 ## Evidence log
 
 | Date | Environment | Result | Interpretation |
@@ -172,6 +218,8 @@ CTest execution.
 | 2026-08-06 | Fresh Linux current-source compile plus coherent Linux baseline generation | The affected `mem_map.cc`, `fd_file.cc`, and `oat_writer.cc` paths compile for `linux-x86_64-gnu`; the Linux no-image baseline remains four non-W+X 16-KiB `PT_LOAD` segments with the same ELF identity, OAT 265, and VDEX 027 | Confirms the new branches are Windows-scoped and retains the Linux layout baseline |
 | 2026-08-06 | Windows Server 2025 build 26100 | A fresh coherent native build and target-binding audit pass; W-028 passes twice in 0.64/0.61 s and emits the same 66,888-byte OAT and 1,000-byte VDEX on both runs | **Authoritative step-1 acceptance**; see [`docs/history/windows_x64_w028_result.md`](docs/history/windows_x64_w028_result.md) |
 | 2026-08-06 | Post-correction Wine diagnostic | Relative `probe.oat` removes the physical path from `DT_SONAME`; the OAT and VDEX hashes exactly match both authoritative native runs | Cross-environment reproducibility diagnostic; not the acceptance authority |
+| 2026-08-06 | Fresh Linux-hosted Windows cross configuration | W-029 passes 1/1 in 0.06 s; the target-binding audit remains 2,081 compile commands, 2,126 Ninja commands, and 30 product links | Cross-host preflight evidence for step 2 |
+| 2026-08-06 | Windows Server 2025 build 26100 | W-029 passes 1/1 in 0.13 s after a no-op build and rejects all seven intentional mismatches; W-028 then passes 1/1 in 0.68 s with unchanged artifact hashes | **Authoritative identity-preflight acceptance**; step 2 remains partial; see [`docs/history/windows_x64_w029_result.md`](docs/history/windows_x64_w029_result.md) |
 
 The two accepted native runs and the post-correction Wine diagnostic have
 SHA-256
@@ -185,8 +233,9 @@ diagnostic evidence; native Server 2025 is the acceptance authority.
 
 ## Immediate work queue
 
-1. Select and gate the boot component/location identity contract, including
-   the startup `-Ximage:` identity.
+1. Wire the accepted W-029 contract into the Windows `ImageWriter` generation
+   command, staged boot manifest, and experimental startup launcher; add
+   native canonical and intentional-mismatch ART cases.
 2. Promote the cross-target 16-/64-KiB artifact comparison into a repeatable
    automated regression rather than relying on the recorded development run.
 3. Close H-005 and add the two-target trampoline regression.
