@@ -221,6 +221,9 @@ def test_unified_overlay_factory_selects_current_target_policy():
     assert windows.policy_for("libart").add_gensrc_sources == [
         "art/asm/mterp/mterp_x86_64.S"
     ]
+    artbase = windows.policy_for("libartbase")
+    assert artbase.kind == "shared"
+    assert "BUILDING_LIBARTBASE" in artbase.add_defines
     assert windows.policy_for("libart-runtime").add_gensrc_sources == [
         "art/asm/mterp/mterp_x86_64.S"
     ]

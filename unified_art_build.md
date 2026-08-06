@@ -3,7 +3,7 @@
 Status: live refactor tracker; the x86-64 product build is unified, while test,
 packaging, topology-parity, and legacy-removal work remains active
 
-Last updated: 2026-08-05
+Last updated: 2026-08-06
 
 This document is the authoritative live tracker and design record for replacing
 the repository's split Linux and Windows ART build paths. Keep the tracker near
@@ -42,19 +42,31 @@ items are closed.
 |---|---|---|---|
 | Python frontend | COMPLETE for the initial slice | `generate`, `check-generated`, `configure`, `audit`, `build`, `test`, `stage`, and ownership-checked `clean` exist; subprocesses are shell-free; configured JDK 21 is validated and passed to CMake; regenerated Blueprint/overlay graphs can reconfigure an identity-compatible Ninja tree in place | keep regression coverage current |
 | Linux x86-64 product | COMPLETE for the current W-003/W-004/W-013 runtime slice | exact-target CriticalNative and normal/FastNative W-003 gates join all twelve W-004 gates, including imageless and generated-boot-image Hello plus HandleLeak, PerfSmoke, ThreadHeavy, and libcore CoreProbe/InterruptProbe/RtMem, and the shared W-013 128 MiB non-moving-heap gate; the staged runtime includes its verified ART/OAT/VDEX image set | migrate the remaining behavioral stages |
-| Windows x86-64 product | PARTIAL / experimental | Linux-hosted cross and native Windows Server 2025 product builds pass; the accepted native baseline passes 77/77 across W-002, W-003, W-004, W-010, W-013, W-014, W-025, and W-027, including the FS-1 product-isolation review; complete-package import/stale-path acceptance and identical no-op builds pass | migrate additional target applicability; keep Windows AOT/OAT in its separate blocked track |
+| Windows x86-64 product | PARTIAL / experimental | Linux-hosted cross and native Windows Server 2025 product builds pass; the accepted native baseline passes 77/77 across W-002, W-003, W-004, W-010, W-013, W-014, W-025, and W-027, including the FS-1 product-isolation review; W-028 adds a pending native `dex2oat` operation gate; complete-package import/stale-path acceptance and identical no-op builds pass | migrate additional target applicability and obtain native W-028 acceptance |
 | Compiler DSO parity | COMPLETE for `art-compiler` | both targets emit a shared compiler DSO; Windows imports `art.dll` and exports `art_compiler_jit_create` | retain exact ABI and no-cycle gates |
 | Windows runtime DSO exports | COMPLETE for current x86-64 closure | `art.dll` combines explicit source annotations with a reviewed 187-entry runtime-consumer DEF, never CMake auto-export; Debug has 2,065 exports and RelWithDebInfo has 2,066 | keep the consumer allowlist and actual PE boundary under regression review |
-| Full DSO topology parity | PARTIAL / mechanically controlled | the fresh graphs have five reviewed module-kind differences and one reviewed generated/platform module mapping; every current difference is checked against a versioned contract | convert reviewed exceptions where practical; reject every unreviewed graph change |
-| Unified phase catalog | COMPLETE for current declaration truthfulness; PARTIAL target expansion | eight virtual stages declare 33 native probes, 47 managed JARs, and 13 command gates; Windows has 90 applicable items (69 target-runnable, eight host-review, and 13 compile-only in the product variant), Linux x86-64 has 18 applicable items (fifteen runnable and three compile-only artifacts), and experimental Linux AArch64 has 17 applicable items (fourteen runner-backed gates and three compile-only artifacts); CMake rejects runnable shared libraries and compile-only command gates | expand exact-target applicability only with matching behavioral acceptance |
+| Full DSO topology parity | PARTIAL / mechanically controlled | the fresh graphs have four reviewed module-kind differences and one reviewed generated/platform module mapping; every current difference is checked against a versioned contract | convert reviewed exceptions where practical; reject every unreviewed graph change |
+| Unified phase catalog | COMPLETE for current declaration truthfulness; PARTIAL target expansion | nine virtual stages declare 33 native probes, 47 managed JARs, and 14 command gates; Windows has 91 applicable items (70 target-runnable, eight host-review, and 13 compile-only in the product variant), Linux x86-64 has 18 applicable items (fifteen runnable and three compile-only artifacts), and experimental Linux AArch64 has 17 applicable items (fourteen runner-backed gates and three compile-only artifacts); CMake rejects runnable shared libraries and compile-only command gates | run the new W-028 gate natively and expand exact-target applicability only with matching behavioral acceptance |
 | Boot/runtime packaging | COMPLETE for Linux x86-64; experimental Linux AArch64; capability-gated elsewhere | deterministic target-local boot/probe JARs include Conscrypt, OkHttp/Okio, and security properties; native Linux x86-64 generates, runtime-tests, and stages a relocatable ART/OAT/VDEX boot image; AArch64 passes exact CriticalNative and normal/FastNative JNI/JIT/tracing, Math CriticalNative `-Xint`/JIT, compiler-DSO topology/loading, imageless Hello, GC stress, HandleLeak, PerfSmoke, ThreadHeavy, libcore CoreProbe, InterruptProbe, and RtMem, show-version, and 128 MiB non-moving-heap gates under its explicit runner while recording boot image unsupported; staging also validates the complete DSO closure and packages pinned ICU data, 121 CA roots, and writable keychain directories | retain the image/runtime-package gates while adding target capabilities independently |
 | POSIX-free Windows build host | COMPLETE for the accepted native baseline; PARTIAL end to end | Server 2025 uses configured official JDK 21, Python, CMake, Ninja, and plain Clang drivers; all 77 accepted native tests, provider/security packaging, and product/test no-op gates pass without POSIX tooling | migrate every retained behavioral gate; keep Windows AOT/OAT capability work separate |
 | Legacy build removal | COMPLETE | the checked-in Linux snapshot/generator, split overlays, Linux miniature graphs, Windows Phase-0/Phase-1 and libcore/ICU graphs, product package scripts, and final POSIX-only boot-image entry points are retired; historical records remain documentation only | prevent alternative product paths from returning |
 | CI/acceptance automation | IMPLEMENTED / activation pending | checked-in shell-free Python driver and GitHub workflow define host, fresh Linux, Windows-cross, and native Windows cells; machine paths enter only through an external CI TOML binding | register/provision the two self-hosted runner labels and obtain accepted workflow runs |
 | Additional architectures | PARTIAL / Linux AArch64 experimental | all 17 canonical identities are registered; `linux-aarch64-gnu` now generates, builds, stages, and passes exact CriticalNative and normal/FastNative JNI/JIT/tracing, Math CriticalNative, compiler-DSO topology/loading, show-version, imageless-Hello, GC-stress, HandleLeak, PerfSmoke, ThreadHeavy, libcore CoreProbe, InterruptProbe, and RtMem, and 128 MiB non-moving-heap gates through an explicit QEMU user-mode binding; Windows AArch64/ARM64EC remain planned and unstarted while their design is incomplete, Windows x86/ARMv7 remain unstarted and outside current scope, and the other profiles remain capability-gated | keep the current implementation focused on the unified build system; admit another target only after its design and target-specific evidence are complete |
-| Windows AOT/OAT | BLOCKED / separate track | compiler DSO parity does not provide Windows OAT production or loading | satisfy `win32_aot_oat.md`; do not imply capability from `art-compiler.dll` |
+| Windows AOT/OAT | PARTIAL / separate track | Windows 64-KiB artifact alignment, shared-`libartbase` compiler topology, and W-028 trivial no-image OAT/VDEX generation gate are implemented; watchdog, VDEX publication, mapped-file flush, and binary-descriptor blockers are fixed; repeated Wine output passes the structural validator, while native acceptance, boot-set generation, and executable loading remain pending | pass W-028 on Server 2025, then continue the sequence in `win32_aot_oat_tracker.md` |
 
-### Latest verification baseline (2026-08-02)
+### Latest verification baseline (2026-08-06)
+
+- [x] Windows AOT/OAT sequence step 1 now has the W-028 native operation gate.
+  A Linux-hosted Windows x64 build produces `dex2oat.exe`, `boot.jar`, and the
+  trivial input JAR while the command audit accepts 2,081 compile commands,
+  2,126 Ninja commands, and 30 product links. The extra product link is the
+  shared `artbase.dll`: `dex2oat.exe`, `art-dex2oat.dll`, and `art.dll` import
+  its single process-wide `MemMap` and mutable-base state. W-028 is declared
+  but correctly not registered for cross execution. Repeated Wine diagnostics
+  now complete the operation and produce byte-identical validator-clean OAT
+  265/VDEX 027 artifacts after fixing the watchdog lock, VDEX publication,
+  mapped flush, and binary-descriptor prerequisites. Native Server 2025
+  acceptance remains pending.
 
 - [x] Parallelism is now deterministic when callers omit `--parallel`:
   non-Windows build hosts use 32 jobs, Windows build hosts use 16, and Windows
@@ -1560,10 +1572,11 @@ One historical work stage maps to exactly one virtual target named
 | `w014` | 7 EXEs, 1 DLL, 1 managed, 1 gate | 3 exact / 7 typed | product: 7 runnable, 1 host-review, 2 compile-only; FS-1 variant: 8 runnable, 1 host-review, 1 compile-only | registered Windows x86-64 product coverage is complete; the instrumented FS-1 variant remains a separate exact-target acceptance |
 | `w025` | 4 EXEs, 3 DLLs, 3 managed, 2 gates | 7 exact / 5 typed | 8 target-runnable, 1 host-review, 3 compile-only | registered Windows x86-64 coverage is complete |
 | `w027` | 1 gate | 0 exact / 1 typed | 1 host-review | registered Windows x86-64 coverage is complete |
-| Total | 23 EXEs, 10 DLLs, 47 managed, 13 gates | 39 exact / 54 typed | product: 72 target-runnable, 8 host-review, 13 compile-only | Windows applies 90 declarations (69 runnable, eight host-review, 13 compile-only); Linux x86-64 applies 18 (fifteen runnable, three compile-only), and Linux AArch64 applies 17 (fourteen runnable, three compile-only) |
+| `w028` | 1 gate | 1 exact / 0 typed | 1 target-runnable | native Server 2025 `dex2oat` no-image operation acceptance is pending |
+| Total | 23 EXEs, 10 DLLs, 47 managed, 14 gates | 40 exact / 54 typed | product: 73 target-runnable, 8 host-review, 13 compile-only | Windows applies 91 declarations (70 runnable, eight host-review, 13 compile-only); Linux x86-64 applies 18 (fifteen runnable, three compile-only), and Linux AArch64 applies 17 (fourteen runnable, three compile-only) |
 
 The shared registry now references zero source files from historical
-verification directories. All 93 declarations own canonical source under
+verification directories. All 94 declarations own canonical source under
 `tests/cases/` or a shell-free runner under `tests/support/`; all 30 native
 source cases and all 48 Java sources have adjacent results, and shared stage
 analysis remains under `tests/stages/`. The final three historical Markdown
@@ -1921,7 +1934,6 @@ difference has a reviewed disposition in `overlay/art_topology_contract.json`:
 
 | Generated module | Linux | Windows | Reviewed disposition |
 |---|---|---|---|
-| `libartbase` | shared | static | keep the implementation internal to PE consumers until its C++ DLL boundary is reviewed |
 | `libdexfile` | shared | static | keep the implementation internal to ART and dex2oat until its C++ PE boundary is reviewed |
 | `libprofile` | shared | static | keep the implementation internal to ART and dex2oat until its PE boundary is reviewed |
 | `libunwindstack` | shared | static | embed the adapted unwinder until a standalone Windows DLL ABI is reviewed |
@@ -1935,7 +1947,7 @@ Windows-only generated modules.
 `tools/check_art_topology.py` regenerates both manifests, checks target and
 CMake target identities, and fails on any module-set or kind change not
 described by the contract. The accepted comparison is 37 Linux modules, 36
-Windows modules, one approved set difference, and five approved kind
+Windows modules, one approved set difference, and four approved kind
 differences.
 
 ### Prioritized work queue
@@ -1962,7 +1974,9 @@ differences.
 - [x] Add capability-gated boot images and complete Linux x86-64
   runtime-package acceptance. Native builds require and stage the verified
   ART/OAT/VDEX set; cross hosts and unsupported targets record explicit status.
-  Windows AOT/OAT remains blocked under its separate design contract.
+  Windows boot-image packaging remains capability-gated under its separate
+  design contract; the earlier W-028 no-image compiler operation is an
+  independent partial step.
 - [x] Convert Phase-3 Java and Phase-4 managed probe compilation/D8 packaging
   into declared CMake/Ninja custom commands implemented by Python helpers.
 - [x] Register behavioral commands and expected-result reviewers for every
@@ -1979,7 +1993,7 @@ differences.
 
 - [x] Resolve or explicitly approve every topology difference above and enforce
   it mechanically. The fresh-manifest audit accepts exactly 37 Linux modules,
-  36 Windows modules, one reviewed set difference, and five reviewed kind
+  36 Windows modules, one reviewed set difference, and four reviewed kind
   differences; any unreviewed change fails.
 - [x] Re-audit the `libicuuc_stubdata` kind difference against a fresh Windows
   cross link. Making it static fails `icuuc.dll` with the expected unresolved
@@ -1987,7 +2001,7 @@ differences.
   a DLL. The reviewed contract now records that exact PE boundary and
   mechanically requires both Linux and Windows `libicuuc` to link their
   target-correct stub-data artifact. The contract now records the exact direct
-  consumer set for all five kind differences, so a new, missing, or renamed
+  consumer set for all four kind differences, so a new, missing, or renamed
   consumer fails the fresh-manifest audit instead of silently widening a
   static/shared boundary.
 - [x] Enforce the exact `art-compiler.dll` export allowlist, required
@@ -2459,7 +2473,7 @@ translation units. This keeps `vendor/art` clean, requires no source-tree
 symlink, and avoids committing generated or absolute-path-bearing headers.
 
 The test-ownership migration moves the registry from `native/` to the top-level
-`tests/` tree and places all 93 declarations under stable logical ownership.
+`tests/` tree and places all 94 declarations under stable logical ownership.
 All 33 native probes and 47 managed artifacts consume canonical source under
 `tests/cases/`; the common W-004 managed gates, Windows W-002/W-003 managed
 commands, Linux command gates, and target-object reviewers use shell-free
@@ -4236,14 +4250,18 @@ Audit `compile_commands.json` and `ninja -t commands` for every matrix cell:
 
 ## Relationship to Windows AOT/OAT
 
-[`win32_aot_oat.md`](win32_aot_oat.md) explicitly states that Windows OAT
-generation and executable loading are not implemented. This build design does
-not change that status.
+[`win32_aot_oat.md`](win32_aot_oat.md) now records active boot-only
+implementation. The build graph provides Windows 64-KiB artifact alignment,
+one shared `artbase.dll` state owner, and the native-only W-028 trivial
+no-image compiler gate. The cross-built compiler completes that operation
+under a repeated Wine diagnostic and emits structurally valid, byte-identical
+artifacts. This is sequence step 1 development evidence, not native
+acceptance, boot-image generation, or executable OAT loading.
 
 `art-compiler.dll` is necessary DSO parity and may be a prerequisite for future
 compiler tools. It does not by itself provide:
 
-- a working Windows `dex2oat.exe`;
+- native acceptance of the W-028 Windows `dex2oat.exe` operation gate;
 - Windows boot ART/OAT/VDEX generation and target-specific staging;
 - proof that the Linux-identical ELF header identity and
   `ART_PAGE_SIZE_AGNOSTIC=1` are preserved while Linux stays at 16-KiB and
@@ -4258,9 +4276,11 @@ compiler tools. It does not by itself provide:
   gate, and separately gated explicit-target allocation semantics; or
 - the acceptance gates in `win32_aot_oat.md`.
 
-Until those gates pass, Windows product capability should continue to be
-described as interpreter/JIT work only. The build manifest may expose
-`windows_aot=false`; generating a compiler DLL must not flip it.
+Until the loader and execution gates pass, the default Windows product
+capability remains interpreter/JIT only. The build manifest may expose
+`windows_aot=false`; building the compiler operation gate must not flip it.
+Step-level progress is tracked in
+[`win32_aot_oat_tracker.md`](win32_aot_oat_tracker.md).
 
 ## Final recommendation
 

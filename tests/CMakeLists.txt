@@ -663,7 +663,7 @@ endfunction()
 
 add_custom_target(art-tests)
 add_custom_target(art-managed-tests)
-foreach(stage w002 w003 w004 w010 w013 w014 w025 w027)
+foreach(stage w002 w003 w004 w010 w013 w014 w025 w027 w028)
     art_define_test_stage("${stage}")
 endforeach()
 
@@ -2050,6 +2050,30 @@ art_add_target_probe(
         "${_art_test_repo_root}/tests/support/windows/check_win32_unicode_api_policy.py"
         --repo "${_art_test_repo_root}"
         --compile-commands "${CMAKE_BINARY_DIR}/compile_commands.json")
+
+# W-028 begins boot-only Windows AOT implementation with a native compiler
+# operation gate. It deliberately produces no ART image: ImageWriter and the
+# executable OAT loader belong to later milestones.
+art_add_target_probe(
+    NAME windows_w028_dex2oat_no_image STAGE w028 TYPE GATE
+    EXECUTION target-runnable TIMEOUT 900
+    ${_art_windows_x86_64_msvc_selector}
+    DEPENDS dex2oat art-managed-boot-jar managed_imageless_hello
+    CONTRACTS aot oat vdex dex2oat elf-layout
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_test_repo_root}/tools/run_dex2oat_no_image.py"
+        --target-id "${ART_TARGET_ID}"
+        --dex2oat "$<TARGET_FILE:dex2oat>"
+        --boot-jar "${_art_boot_jar}"
+        --input-jar "${_art_managed_root}/hello.jar"
+        --output-root
+            "${CMAKE_CURRENT_BINARY_DIR}/results/w028-dex2oat-no-image"
+        --instruction-set x86_64
+        --library-dir "$<TARGET_FILE_DIR:dex2oat>"
+        --library-dir "${ART_TARGET_BUNDLE_ROOT}/lib/libcxx/bin"
+        --parallel 2
+        --timeout 600)
 
 get_property(_art_test_catalog_records GLOBAL PROPERTY ART_TEST_CATALOG_RECORDS)
 string(JOIN ",\n" _art_test_catalog_body ${_art_test_catalog_records})

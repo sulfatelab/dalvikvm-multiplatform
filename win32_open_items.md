@@ -2,7 +2,7 @@
 
 **Status:** living tracker  
 **Created:** 2026-07-17  
-**Updated:** 2026-08-05
+**Updated:** 2026-08-06
 **Rule:** Every **temporary workaround** that future work must remove belongs here as **OPEN**.  
 When the proper fix lands, mark the item **CLOSED**, move it into §Closed (sorted), and keep the full history.  
 Do **not** list permanent non-goals as OPEN workarounds—list them under §Non-goals.
@@ -16,7 +16,8 @@ Do **not** list permanent non-goals as OPEN workarounds—list them under §Non-
 | [win32_faults_and_stacks.md](win32_faults_and_stacks.md) | Authoritative coupled W-010/W-014 managed-fault, VEH-chain, pthread, and ART stack design |
 | [win32_tls_jit_entrypoints.md](win32_tls_jit_entrypoints.md) | Implemented x86_64 TLS / managed ABI / quick / nterp / JIT contract plus cross-ISA design record |
 | [win32_jit_memory.md](win32_jit_memory.md) | JIT memory contract, historical separated-view diagnosis, and implemented Windows 10 pagefile-section design |
-| [win32_aot_oat.md](win32_aot_oat.md) | Early boot-only AOT design: Linux-style ART ELF identity with Windows 64-KiB alignment, OAT-1 private copy, PE rejection, specified AOT unwind and `.oat_cfg.windows` transports, fallback work, and acceptance gates |
+| [win32_aot_oat.md](win32_aot_oat.md) | Early boot-only AOT design: Linux-style ART ELF identity with Windows 64-KiB alignment, OAT-1 private copy, specified unwind and `.oat_cfg.windows` transports, fallback work, and acceptance gates |
+| [win32_aot_oat_tracker.md](win32_aot_oat_tracker.md) | Live AOT/OAT implementation sequence, evidence, and remaining native gates |
 | [win32_heap_memory.md](win32_heap_memory.md) | W-013 heap / embedded-dlmalloc ownership, low-address, and MoreCore target design |
 | [win32_libcore_os_natives.md](win32_libcore_os_natives.md) | Os/`Linux` natives: Implemented / Needed / ENOSYS |
 | [win32_host_gate_policy.md](win32_host_gate_policy.md) | Current native lab host and future-gate policy |
@@ -63,7 +64,7 @@ canonical policy is [win32_host_gate_policy.md](win32_host_gate_policy.md).
 
 ---
 
-## Snapshot (2026-08-05)
+## Snapshot (2026-08-06)
 
 | Bucket | Summary |
 |--------|---------|
@@ -74,7 +75,7 @@ canonical policy is [win32_host_gate_policy.md](win32_host_gate_policy.md).
 | Memory | One unnamed pagefile section is mapped as a contiguous low R/RX primary view plus a full RW alias; native 64 MiB/1 GiB, low-VA, pressure, and CFG acceptance passes; `ProhibitDynamicCode` rejection is negative fail-closed evidence, not a supported profile; ART `389158d46f` removes J-1 and fails closed on construction errors; the retired environment key is inert |
 | Heap memory | **W-013 CLOSED:** explicit MoreCore-only dlmalloc, direct mspace owners, constrained `VirtualAlloc2`, page-state operations, Linux-like metadata placement, and native R2 pressure/JIT/repeated-start acceptance PASS |
 | Threads / managed faults | **W-010/W-014 core path, FS-1, FS-2, authoritative-host FS-4, FS-5 conditional disposition, and H-001 scoped host subset accepted:** E9 passes 30/30 and FS-1 passes Release/Debug switch, nterp, and JIT on authoritative Windows Server 2025 build 26100. FS-2 passes native debugger continue, named CET policy classification, exception-unwind XMM, and embedding/UEF teardown. H-001's gcstress, threadheavy, handleleak, crash-abort, and native AV/minidump subset also passes on build 26100. FS-4 repeats E9/FS-1/FS-2/FS-3, parameterized stack geometry, fiber rejection, and join/detach stress on that host; the separate Windows 10/second-host repetition is skipped by policy. FS-5 closes the pending 88-byte bridge tail conditionally because it is entered only by ART's managed pending-exception branch; structural and synthetic unwind evidence pass, but a real native fault would require product fault injection. Remaining work is reservation correlation, negative-exception cases, and debugger-quality dump-stack reconstruction. |
-| AOT/OAT | Early boot-only ELF64 design selected. Windows keeps the current Linux ART ELF header identity and `ART_PAGE_SIZE_AGNOSTIC=1`, while using 64-KiB ELF/image alignment (Linux stays 16 KiB; WASM also selects 64 KiB). OAT-1 reuses `ElfOatFile` with whole-span private copy for both validation-only and executable opens; the executable pass consumes the committed boot reservation. Application OAT, OAT-2, unloading, and security hardening are deferred. Stage 1 characterization is present but does not implement loading. The AOT unwind transport is specified end to end: Windows-and-x86-64 emission, a `CompiledMethod` unwind array, dedup-safe writer entries, independently versioned/checksummed `.oat_unwind.windows` with `oatunwindwindows` anchors and the standard PE/COFF machine value in the header, no shared OAT-version bump or Linux layout change, post-`Setup()` registration, and fatal handling of a failed `RtlDeleteFunctionTable()`. CFG now has an architecture-neutral, independently versioned/checksummed `.oat_cfg.windows` design with `oatcfgwindows` anchors, exact sorted target offsets, the standard PE/COFF machine value in the header, and no shared-version or Linux-layout change. Observation mode is the non-blocking default; explicit-target mode requires the section and remains gated on proving invalid-by-default CFG state in the committed OAT-1 reservation without W+X. Both transports are designed, not implemented. Remaining blockers include native `dex2oat` boot-set generation/staging, exact VDEX/image ownership, implementing these transports, imageless fallback, and proof of real OAT execution. H-004 tracks the glibc positive-dlopen skip; H-005 tracks focused behavioral execution outside the minimal product CMake graph. |
+| AOT/OAT | Boot-only implementation is active. Windows keeps the current Linux ART ELF header identity and `ART_PAGE_SIZE_AGNOSTIC=1`; Linux remains 16-KiB aligned while the implemented Windows `kElfSegmentAlignment` is 64 KiB and `kMaxPageSize` remains 16384. W-028 builds the native x64 compiler and shell-free trivial no-image OAT/VDEX operation gate. Windows now shares `artbase.dll`; its watchdog mutex has real one-time initialization; and its VDEX writer uses an anonymous compiler copy, ordered file-view publication, exact final truncation, and binary CRT descriptors. Repeated Wine compilation produces byte-identical validator-clean OAT 265/VDEX 027 artifacts, and Linux source/baseline checks retain 16-KiB output. Sequence step 1 remains partial until W-028 passes on Server 2025 build 26100. OAT-1 still requires private-copy validation-only/executable opens, exact runtime VDEX/image ownership, unwind and CFG transports, boot-set generation/staging, experimental selection and imageless fallback, and proof of real OAT execution. Application OAT, OAT-2, unloading, explicit CFG enforcement, and security hardening are deferred. H-004 tracks the glibc positive-dlopen skip; H-005 tracks pre-dispatch characterization execution. See the dedicated implementation tracker for step-level status. |
 | Linux multiplatform | Full native rebuild, L-005 imageless Hello, and GC stress PASS after the Windows-only JIT-5 removal using the staged shared multipath `boot.jar` |
 
 ---

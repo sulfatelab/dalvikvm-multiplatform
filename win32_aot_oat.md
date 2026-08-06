@@ -1,15 +1,20 @@
 # Windows AOT and OAT design
 
-Status: early bring-up design baseline (revised 2026-08-06). This document records the
-current ART OAT/VDEX/image contracts and the selected Windows AOT artifact and
-loader design. Windows keeps the same ELF64 coat and header identity as Linux,
-while using 64-KiB ELF/image segment alignment for the Windows allocation
-granularity. An ART-owned, OAT-only private-copy path loads it.
+Status: active boot-only early bring-up (revised 2026-08-06). This document
+records the current ART OAT/VDEX/image contracts and the selected Windows AOT
+artifact and loader design. Windows keeps the same ELF64 coat and header
+identity as Linux, while using 64-KiB ELF/image segment alignment for the
+Windows allocation granularity. An ART-owned, OAT-only private-copy path will
+load it.
 
-Windows OAT generation and executable loading are not implemented yet.
-Implementation stage 1, the pre-dispatch characterization suite, is now in the
-tree; it does not enable Windows AOT. The supported Windows product remains
-imageless nterp/JIT while this independent future track is open. The
+Numbered implementation-sequence step 1 has started: the target alignment,
+native `dex2oat.exe` build path, and W-028 trivial no-image operation gate are
+implemented. Authoritative native execution remains pending, and boot-image
+generation plus executable OAT loading are not implemented. The earlier
+pre-dispatch characterization suite is also in the tree; it does not enable
+Windows AOT. The supported Windows product remains imageless nterp/JIT while
+this experimental track is incomplete. Progress and evidence are tracked in
+[`win32_aot_oat_tracker.md`](win32_aot_oat_tracker.md). The
 authoritative implementation gate is Windows Server 2025 Datacenter
 Evaluation, x64 build 26100. Linux and Wine remain development and structural
 gates; the former Windows 10 lab host is unavailable.
@@ -24,10 +29,12 @@ jump on Windows. The current verdict for every finding is recorded under
 "Design review findings".
 
 The source snapshot is `vendor/art` at
-`android-16.0.0_r4-92-gffbfe48fd1`. The design was originally written against
-`android-16.0.0_r4-76-g4eab6e7423`; the 16 intervening commits are W-027
-Unicode and build-prelude cleanups, and the 2026-08-05 review re-verified every
-source claim below against the newer snapshot. See "Design review findings".
+`android-16.0.0_r4-93-g681f2f38a2`. The design was originally written against
+`android-16.0.0_r4-76-g4eab6e7423`; the 16 commits through
+`android-16.0.0_r4-92-gffbfe48fd1` are W-027 Unicode and build-prelude
+cleanups, and the next commit is the first implementation slice recorded here.
+The 2026-08-05 review re-verified every source claim below before that slice.
+See "Design review findings".
 
 ## Executive decision
 
@@ -1855,6 +1862,8 @@ evidence before transport and image integration.
    and `.vdex` output. Do not use `--version`; current `dex2oat` does not
    support that option. This gate exercises option parsing, the compiler,
    watchdog, swap-file, memory-advice, and writer paths, but not `ImageWriter`.
+   W-028 implements the operation and artifact-validation contract; the step
+   remains partial until it passes on Server 2025 build 26100.
 2. Select stable textual boot-class-path, dex-location, and `-Ximage:`
    identities. A fixed installation may use canonical absolute paths; a
    relocatable package should use stable logical `--dex-location` and
@@ -1899,12 +1908,60 @@ Review each upstream ART update against two invariants: Linux/Android ELF
 generation and loading remain unchanged, and all Windows-specific mapping and
 unwind behavior stays behind small target guards or new Windows-only helpers.
 
-### Stage 1 implementation record
+### Numbered sequence step 1 implementation status
 
-Stage 1 is the characterization step above, not the OAT-1 private-copy loader.
-It was implemented on 2026-07-30 in `runtime/oat/oat_file_test.cc` before any
-Windows executable-loader dispatch was added. It freezes these current
-contracts:
+The first implementation sequence step is now represented by the native-only
+W-028 `windows_w028_dex2oat_no_image` gate. Its shell-free runner builds a
+trivial input and target-neutral boot JAR, invokes the native Windows x64
+compiler with stable logical locations, an intentionally absent boot image,
+enabled watchdog, forced swap, and deterministic output, then validates:
+
+- ELF64 little-endian `ET_DYN` for x86-64;
+- Linux ART `EI_OSABI`, ABI version, and `e_flags` identity;
+- 64-KiB alignment and congruence for every `PT_LOAD`, with no W+X load;
+- the required dynamic and OAT sections, including `SHT_NOBITS` handling; and
+- OAT `265` and VDEX `027` output plus non-empty artifact hashes.
+
+The first real Wine probe exposed a prerequisite outside the writer itself.
+The old Windows topology statically embedded stateful `libartbase` copies in
+`dex2oat.exe`, `art-dex2oat.dll`, and `art.dll`. The executable initialized one
+`MemMap` registry, but boot-JAR parsing crossed into `art.dll` and failed
+`MemMap::IsInitialized()` against another. Windows now matches Linux by using
+one shared `artbase.dll`; explicit `ART_BASE_DATA` annotations give that DLL
+ownership of the mutable logging, flags, allocator-counter, and `MemMap`
+state that CMake's automatic function export does not cover. PE inspection
+proves all three consumers import the shared owner.
+
+The operation probe also established three Windows writer contracts. The
+watchdog's static mutex needs one-time native initialization because this
+port's `PTHREAD_MUTEX_INITIALIZER` is not a constructed `CRITICAL_SECTION`.
+New VDEX compilation uses an anonymous long-lived working copy, then publishes
+through a short-lived page-rounded file view and truncates to the exact logical
+size after releasing that view; Windows cannot resize the file while the
+compiler's `DexFile` mapping is live. File-backed `MemMap::Sync()` uses
+`FlushViewOfFile()` plus the writer's file-buffer flush ordering, while
+anonymous maps have no backing file to sync. Finally, ART `FdFile` opens are
+binary on Windows so MSVCRT cannot translate `0A` bytes into `0D 0A` inside
+ELF/OAT/VDEX artifacts. These changes are compiler-output prerequisites, not
+the OAT-1 executable loader described below.
+
+The Windows 64-KiB `kElfSegmentAlignment` split, shared-`libartbase` boundary,
+compiler build, and W-028 dependencies pass the Linux-hosted Windows cross
+build. A repeated Wine run now completes the full compile and produces
+byte-identical artifacts that pass the W-028 structural validator: four
+non-W+X 64-KiB `PT_LOAD` segments, OAT 265, and an exact-size four-section
+VDEX 027 containing one input DEX. A Linux source compile accepts every shared
+writer change, and the coherent Linux baseline remains 16-KiB aligned. This is
+development evidence only. Step 1 remains `PARTIAL` until W-028 completes on
+Server 2025 build 26100. See the tracker for the exact result and remaining
+sequence.
+
+### Pre-dispatch characterization record
+
+This characterization work is a prerequisite for numbered sequence step 3,
+not numbered step 1 and not the OAT-1 private-copy loader. It was implemented
+on 2026-07-30 in `runtime/oat/oat_file_test.cc` before any Windows
+executable-loader dispatch was added. It freezes these current contracts:
 
 | Characterization | Contract captured |
 |---|---|
@@ -1942,11 +1999,12 @@ comparison for non-Windows.
 
 ## Design review findings
 
-Recorded 2026-08-05 against `vendor/art` at `android-16.0.0_r4-92-gffbfe48fd1`.
-The review re-derived this document's source claims from the tree, then looked
-for design gaps rather than editorial ones. The observations were then checked
-independently; some are accepted, some need narrower conclusions, and some are
-rejected below. This record keeps source evidence separate from disposition.
+Recorded 2026-08-05 against the pre-implementation `vendor/art` snapshot
+`android-16.0.0_r4-92-gffbfe48fd1`. The review re-derived this document's
+source claims from the tree, then looked for design gaps rather than editorial
+ones. The observations were then checked independently; some are accepted,
+some need narrower conclusions, and some are rejected below. This record keeps
+source evidence separate from disposition.
 
 ### Verified as accurate
 
@@ -1980,13 +2038,13 @@ cannot sit between `.text` and `.data.img.rel.ro` without breaking
 | 2 | A proposed unwind-emission predicate based only on `kIsTargetWindows` would exclude Windows host builds | **Accepted, with wording correction** | Preserve the semantic union of host Windows and target Windows used by the current `_WIN32 \|\| ART_TARGET_WINDOWS` gates. A shared constexpr is acceptable if it expresses that union; identical preprocessor spelling is not required. |
 | 3 | Boot-class-path and dex-location identity is exact `':'`-joined text, without Windows path normalization or case folding | **Accepted, with solution correction** | Generation and startup must use identical stable strings. Fixed products may choose canonical absolute paths; relocatable products should use stable logical `--dex-location`/`-Xbootclasspath-locations` identities rather than physical absolute paths. |
 | 4 | Image mode reaches Windows runtime paths not covered by imageless smoke tests, while some heap/image layout invariants are fatal | **Accepted, with narrower scope** | Expected compatibility failures must reject the artifact before trusted-layout invariants. `ImageSpace::LoadBootImage()` already supports a false-return/imageless path; debug-only trusted-layout `CHECK`s such as boot-image contiguity remain internal invariants and need not become hostile-input recovery checks. |
-| 5 | Native `dex2oat.exe` operation is unproven | **Accepted, with gate correction** | `--version` is unsupported. The first operational gate is a real trivial single-JAR no-image OAT/VDEX compile. It exercises compiler and watchdog paths, but does not exercise `ImageWriter`; boot-set generation does that later. |
+| 5 | Native `dex2oat.exe` operation was unproven | **Accepted, with gate correction** | `--version` is unsupported. W-028 now defines the real trivial single-JAR no-image OAT/VDEX compile and passes as a Wine diagnostic, but remains unaccepted until it runs on native Server 2025. It exercises compiler and watchdog paths, not `ImageWriter`; boot-set generation does that later. |
 | 6 | Whole-span Windows commit, not just 64-KiB alignment gaps, dominates reservation cost | **Accepted** | Measure the full boot-image reservation, OAT prefix, padding, committed span, and working set separately. |
 | 7 | `kDynamicSymbolCount` follows `kLast`, and dynamic-section capacity is reserved in `ElfWriterQuick::Start()` before payload sizes are known | **Accepted** | Keep the base enum/count unchanged, append Windows-only values after `kLast`, and reserve optional-name capacity from writer mode known at `Start()`. Section/anchor emission remains conditional on actual payload. Prove Linux/Android byte identity. |
 | 8 | CFG target alignment and exactness were insufficiently specified | **Accepted, with semantic correction** | Require ascending, unique, exact, 16-byte-aligned x86-64 offsets and test rejection of a deliberately omitted aligned target. Reject the unsupported claim that enabling one offset necessarily admits a whole 16-byte granule. |
 | 9 | Fatal `RtlDeleteFunctionTable()` failure should become nonfatal during orderly exit | **Rejected as a design change** | Keep strict unregister-before-release ordering and the existing fatal invariant. A deletion failure aborts; designing a recoverable teardown exception is not an early bring-up blocker. |
 | 10 | Lack of a product `oatdump`/out-of-process inspector blocks writer and layout verification | **Rejected as a blocker** | Writer/unit/runtime parser tests plus available `llvm-readelf`, `llvm-objdump`, and `llvm-nm` cover the required structure. A small inspector may be added for convenience, but is not required for bring-up. |
-| 11 | The stated source snapshot was stale | **Accepted** | The header and this review now name `android-16.0.0_r4-92-gffbfe48fd1`. |
+| 11 | The stated source snapshot was stale | **Accepted** | The review is pinned to `android-16.0.0_r4-92-gffbfe48fd1`; the document header now advances separately with each implementation slice. |
 
 ### Scope correction in the loader's favour
 
@@ -2151,13 +2209,16 @@ tool policy are deferred.
 | CFG table misses or over-admits an entrypoint | High for explicit mode | Independently checksummed `.oat_cfg.windows`, complete sorted unique exact 16-byte-aligned targets, dedup-role merging, a deliberately omitted aligned-target test, and publication only after all batches succeed |
 | CFG state survives failed-load address reuse | High for explicit mode | Fully release the unpublished allocation; otherwise invalidate and verify every old target or forbid reuse |
 | VDEX exact placement/ownership | High | OAT-1 copy into `oatdex` with an owner-sharing `MemMap` slice |
+| Compiler VDEX resize conflicts with a live Windows file view | High | Keep compiler `DexFile` pointers in an anonymous working copy; publish through a short-lived page-rounded view, flush body before header, release it, then truncate to exact VDEX size |
+| MSVCRT text mode corrupts binary ART artifacts | High | Add `O_BINARY` to Windows `FdFile` opens and make W-028 reject malformed ELF or inexact VDEX section ranges |
+| Static watchdog mutex is not a constructed Windows lock | High | Initialize it through `pthread_once` before both watchdog access paths and run W-028 with the watchdog enabled |
 | Boot exact address failure | High | Consume reservation and verify exact result |
 | Failed load leaves partial image/OAT state | Critical | One unpublished transaction; discard it before imageless fallback; failed function-table deletion is fatal |
 | Private-copy memory/startup | High operational | Whole-span commit for simplicity; measure 64-KiB padding and committed gaps before optimizing |
 | Wrong cross-OS boot artifacts staged | High | Windows-target-specific staging plus image/OAT checksums and actual AOT execution tests |
 | Boot topology mismatch | High | Explicitly select and test single- or multi-component output |
 | Target-aware trampoline lowering regresses | Medium | The shared producer already lowers Thread access to Linux `GS` or Windows `R15`; retain two-target disassembly plus resolution/quick-to-interpreter execution gates |
-| Native `dex2oat.exe` operation is unproven | High | It links from the Windows graph but has never run. Prove a real trivial single-JAR no-image `.oat`/`.vdex` compile before boot-set output is treated as actionable; `--version` is not supported |
+| Native `dex2oat.exe` operation is not yet accepted | High | W-028 now builds and validates the real trivial single-JAR no-image `.oat`/`.vdex` compile; cross-build and complete Wine execution are development evidence, while native Server 2025 execution remains mandatory; `--version` is not supported |
 | Boot class path / dex location strings disagree between generation and load | High | The comparison is byte equality on `':'`-joined text with no normalization; use matching canonical absolute identities for fixed installs or stable logical identities for relocatable packages, and test intentional mismatches |
 | Image-mode runtime paths have never executed on Windows | High | Every accepted gate to date is imageless; reject expected compatibility failures before trusted-layout invariants and treat successful image loading/execution as a distinct milestone |
 | Boot reservation commit dominates the measured cost | Medium operational | Windows `MemMap` commits whole spans, so the image+OAT reservation, not the 64-KiB padding, is the term to report and later optimize |
@@ -2241,11 +2302,13 @@ semantics; Wine is structural only.
 
 ## Open implementation items
 
-1. Keep and test the Linux-identical ELF header identity, retain Linux 16-KiB
-   layout, and select 64-KiB `kElfSegmentAlignment` for Windows without
-   treating Windows allocation granularity as `kMaxPageSize`.
-2. Prove native `dex2oat.exe` operation with a trivial single-JAR no-image
-   compile on Server 2025; do not use the unsupported `--version` option.
+1. Complete native acceptance of the implemented Linux-identical ELF header
+   identity and Windows 64-KiB `kElfSegmentAlignment`. The development
+   comparison already retains Linux's 16-KiB output and
+   `kMaxPageSize = 16384`; promote that comparison into a repeatable gate.
+2. Run the implemented W-028 trivial single-JAR no-image compiler gate on
+   Server 2025 and preserve its accepted `.oat`/`.vdex` manifest; do not use
+   the unsupported `--version` option.
 3. Select and gate identical generation/startup boot-class-path, dex-location,
    and `-Ximage:` strings, using canonical absolute identities for a fixed
    install or stable logical identities for a relocatable package.

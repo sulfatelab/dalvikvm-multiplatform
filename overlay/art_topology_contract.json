@@ -1,21 +1,5 @@
 {
   "kind_differences": {
-    "libartbase": {
-      "direct_consumers": [
-        "dex2oat",
-        "libart",
-        "libart-compiler",
-        "libdexfile",
-        "libelffile",
-        "libodrstatslog",
-        "libopenjdkjvm",
-        "libopenjdkjvmti",
-        "libprofile"
-      ],
-      "linux": "shared",
-      "reason": "Windows keeps ART base implementation internal to its PE consumers until a reviewed C++ DLL export/import boundary exists.",
-      "windows": "static"
-    },
     "libdexfile": {
       "direct_consumers": [
         "dex2oat",

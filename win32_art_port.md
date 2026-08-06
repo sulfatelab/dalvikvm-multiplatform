@@ -9,7 +9,7 @@ Phase 4 Wine-complete with the authoritative Windows Server 2025 build-26100
 native gate accepted, x86_64 quick/nterp/managed/native JIT enabled by default,
 and W-010/W-014 Stage E accepted on that host. The former Windows 10 lab host
 is no longer available for future gates.
-Updated: 2026-08-05
+Updated: 2026-08-06
 
 Future native-gate policy: use only Windows Server 2025 Datacenter Evaluation
 x64 build 26100. See
@@ -40,10 +40,10 @@ Grounding: current Linux port (`bp2cmake_linux_scope.md`, `overlay/art_port_poli
 - Full Java SE / OpenJDK replacement semantics beyond what Android libcore already provides on Linux.
 - Cygwin/MSYS2/MinGW as toolchains or runtime personalities (no `msys-2.0.dll` / `libgcc_s` / MinGW binutils dependency).
 - MSVC **as the C/C++ compiler** (`cl`, `clang-cl`). **Using the MSVC/Windows SDK header set with Clang is required**, not forbidden.
-- PE32+ OAT. Windows boot AOT keeps the current Linux ART ELF64 header identity,
-  uses a page-size-agnostic 64-KiB artifact layout, and uses an ART-owned
-  private-copy mapping path;
-  PE remains the process/DLL format, not the OAT container.
+- An alternate PE-form OAT container. Windows boot AOT keeps the current Linux
+  ART ELF64 header identity, uses a page-size-agnostic 64-KiB artifact layout,
+  and uses an ART-owned private-copy mapping path. PE remains the process/DLL
+  format, not the OAT container.
 - `ProhibitDynamicCode`/ACG compatibility. ART-created executable memory is an
   explicit product prerequisite for JIT and OAT; policy rejection must be
   clean but is not a supported operating mode.
@@ -102,8 +102,9 @@ unmet W-025 feature; CFG remains separate.
 
 The original plan allowed JIT/dex2oat to be a v1.1 gate. Current x86_64 quick,
 nterp, managed-JIT, and native-JIT entrypoints are correct and default-on;
-Windows `dex2oat` boot-set production and executable boot-OAT loading remain
-deferred.
+Windows `dex2oat` trivial no-image generation is under the W-028 native
+operation gate. Boot-set production and executable boot-OAT loading remain
+pending.
 
 ---
 
@@ -753,7 +754,7 @@ all product paths. Windows NIO.2 remains a non-goal.
   Phase-4 host rerun remains H-001.
 - See `docs/history/windows_x64_phase4_result.md`.
 
-### Phase 5 — JIT / oat — **JIT COMPLETE FOR X86_64; AOT DEFERRED**
+### Phase 5 — JIT / oat — **JIT COMPLETE FOR X86_64; AOT STEP 1 PARTIAL**
 
 > **Implemented x86_64 design and cross-ISA record:** TLS / managed ABI / quick
 > entrypoints / nterp / JIT:
@@ -767,13 +768,19 @@ all product paths. Windows NIO.2 remains a non-goal.
   is a negative boundary, not a supported runtime profile. CET user
   shadow stacks are explicitly unsupported and must be disabled for the ART
   process under W-010's activation contract.
-- dex2oat/AOT remains deferred; the imageless interpreter+JIT product does not
-  require it.
+- Boot-only AOT implementation has started. W-028 now builds the Windows x64
+  `dex2oat.exe` and its trivial no-image operation gate; the target alignment
+  and process-wide `artbase.dll` prerequisite are implemented. The enabled
+  watchdog, VDEX finalization, mapped-file flushing, and binary-descriptor
+  prerequisites now complete under a repeated Wine diagnostic and produce
+  byte-identical validator-clean OAT/VDEX files. Native Server 2025 execution,
+  boot-set generation, and executable loading remain pending. The imageless
+  interpreter+JIT product does not require them.
 - Windows boot AOT keeps the current Linux ART ELF64 header identity:
   `ART_PAGE_SIZE_AGNOSTIC=1` remains enabled and Linux `EI_OSABI`/ABI
   version/e_flags behavior is retained. Linux stays at 16-KiB `PT_LOAD`
-  alignment; Windows uses 64 KiB to match its allocation granularity (WASM
-  also selects 64 KiB). There is no separate Windows ELF coat identity.
+  alignment; Windows uses 64 KiB to match its allocation granularity. There is
+  no separate Windows ELF coat identity.
 - The first implementation is boot-only and reuses
   `ElfOatFile`/`ElfFile`/`OatFileBase` where practical. A narrow private-copy
   helper serves validation-only opens at an arbitrary private address and
@@ -782,9 +789,9 @@ all product paths. Windows NIO.2 remains a non-goal.
   registers Windows x64 AOT unwind data after `Setup()`. Whole-span commit is
   selected for the initial OAT-1 path to match current Windows `MemMap`
   semantics.
-- PE32+ OAT, `LoadLibraryExW`, `SEC_IMAGE`, a general Bionic-linker port,
-  application OAT, unloading, and shared-view/OAT-2 work are outside the
-  initial milestone. Security hardening is deferred. CFG uses one
+- An alternate PE-form OAT, `LoadLibraryExW`, `SEC_IMAGE`, a general
+  Bionic-linker port, application OAT, unloading, and shared-view/OAT-2 work
+  are outside the initial milestone. Security hardening is deferred. CFG uses one
   architecture-neutral `.oat_cfg.windows` section with target ABI in its
   independently versioned header. Observation mode is the early default and
   characterizes real indirect OAT calls without target API changes;
@@ -799,7 +806,8 @@ all product paths. Windows NIO.2 remains a non-goal.
   mode boundaries are specified and now await implementation and native gates.
 - The format analysis, Bionic reuse boundary, mapping design, risk register,
   correctness invariants, and Server 2025 proof gates are in
-  [win32_aot_oat.md](win32_aot_oat.md).
+  [win32_aot_oat.md](win32_aot_oat.md); live progress is in
+  [win32_aot_oat_tracker.md](win32_aot_oat_tracker.md).
 
 **Historical planning estimate:** the original estimate was 12–24 months for a
 solid interpreter product with one part-time engineer. It is retained only as

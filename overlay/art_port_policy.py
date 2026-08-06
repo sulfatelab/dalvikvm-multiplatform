@@ -437,7 +437,10 @@ _WINDOWS_MODULE_DELTA: dict[str, dict[str, object]] = {
         force_enabled=True,
     ),
     "libartbase": dict(
-        kind="static",
+        # dex2oat, art-dex2oat, and art exchange MemMap objects and must share
+        # the process-wide MemMap registry. Embedding libartbase in each PE
+        # module creates independent registries and aborts before Runtime::Create().
+        kind="shared",
         add_shared_libs=["libziparchive", "libz", "liblog", "libartpalette", "libbase"],
         remove_static_libs=[
             "art-aconfig-flags-lib",
@@ -452,7 +455,7 @@ _WINDOWS_MODULE_DELTA: dict[str, dict[str, object]] = {
             "libbase",
         ],
         add_cflags=_WINDOWS_CFLAGS,
-        add_defines=["_CRT_SECURE_NO_WARNINGS"],
+        add_defines=["_CRT_SECURE_NO_WARNINGS", "BUILDING_LIBARTBASE"],
         add_gensrc_includes=["art/aconfig/include"],
         force_enabled=True,
     ),

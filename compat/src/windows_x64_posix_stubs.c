@@ -1155,7 +1155,12 @@ int pthread_getname_np(pthread_t t, char* buf, size_t len) {
 /* ---- aliases expected by openjdk NIO/file natives ---- */
 int fsync(int fd) { return _commit(fd); }
 int fdatasync(int fd) { return _commit(fd); }
-int mdvm_ftruncate(int fd, long long length) { return _chsize_s(fd, length); }
+int mdvm_ftruncate(int fd, long long length) {
+  errno_t result = _chsize_s(fd, length);
+  if (result == 0) return 0;
+  errno = result;
+  return -1;
+}
 int open64(const char* path, int flags, ...) {
   va_list ap; va_start(ap, flags); int mode = va_arg(ap, int); va_end(ap);
   return _open(path, flags | _O_BINARY, mode);

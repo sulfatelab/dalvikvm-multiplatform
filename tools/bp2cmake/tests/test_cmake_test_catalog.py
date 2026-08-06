@@ -42,6 +42,8 @@ add_library(art SHARED IMPORTED GLOBAL)
 set_target_properties(art PROPERTIES IMPORTED_LOCATION "{tmp_path / 'art.dll'}")
 add_executable(dalvikvm IMPORTED GLOBAL)
 set_target_properties(dalvikvm PROPERTIES IMPORTED_LOCATION "{tmp_path / 'dalvikvm.exe'}")
+add_executable(dex2oat IMPORTED GLOBAL)
+set_target_properties(dex2oat PROPERTIES IMPORTED_LOCATION "{tmp_path / 'dex2oat.exe'}")
 foreach(_art_runtime_library IN ITEMS icu_jni javacore javacrypto openjdk openjdkjvm)
   add_library(${{_art_runtime_library}} SHARED IMPORTED GLOBAL)
 endforeach()
@@ -67,9 +69,9 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         (binary / "art-tests" / "art_test_catalog.json").read_text(encoding="utf-8")
     )
     assert catalog["target_id"] == "windows-x86_64-msvc"
-    assert len(catalog["probes"]) == 93
-    assert sum(probe["applicable"] for probe in catalog["probes"]) == 90
-    assert sum(bool(probe["target_ids"]) for probe in catalog["probes"]) == 39
+    assert len(catalog["probes"]) == 94
+    assert sum(probe["applicable"] for probe in catalog["probes"]) == 91
+    assert sum(bool(probe["target_ids"]) for probe in catalog["probes"]) == 40
     assert sum(not probe["target_ids"] for probe in catalog["probes"]) == 54
     w002_attach = next(
         probe for probe in catalog["probes"] if probe["name"] == "managed_w002_attach"
@@ -208,7 +210,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     assert async_close["ctest_registered"] is False
     assert sum(
         probe["execution"] == "target-runnable" for probe in catalog["probes"]
-    ) == 72
+    ) == 73
     assert all(
         probe["type"] != "SHARED"
         for probe in catalog["probes"]
@@ -288,6 +290,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "windows_w025_section_policy_probe": 900,
         "windows_w025_policy_launcher": 1200,
         "windows_w025_jit_runtime_controls": 1800,
+        "windows_w028_dex2oat_no_image": 900,
     }
     assert [
         probe["name"] for probe in catalog["probes"] if probe["ctest_registered"]
@@ -317,6 +320,12 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     assert w027[0]["platforms"] == ["windows"]
     assert w027[0]["target_arches"] == ["x86_64"]
     assert w027[0]["target_abis"] == ["msvc"]
+    w028 = [probe for probe in catalog["probes"] if probe["stage"] == "w028"]
+    assert len(w028) == 1
+    assert w028[0]["name"] == "windows_w028_dex2oat_no_image"
+    assert w028[0]["execution"] == "target-runnable"
+    assert w028[0]["ctest_registered"] is False
+    assert w028[0]["target_ids"] == ["windows-x86_64-msvc"]
 
     variant_binary = tmp_path / "variant-build"
     (source / "CMakeLists.txt").write_text(
@@ -436,7 +445,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         (binary / "art-tests" / "art_test_catalog.json").read_text(encoding="utf-8")
     )
     applicable = [probe for probe in catalog["probes"] if probe["applicable"]]
-    assert len(catalog["probes"]) == 93
+    assert len(catalog["probes"]) == 94
     assert [probe["name"] for probe in applicable] == [
         "criticalnativeprobe",
         "nativeabiprobe",
