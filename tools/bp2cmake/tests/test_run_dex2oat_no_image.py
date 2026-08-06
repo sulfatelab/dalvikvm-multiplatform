@@ -125,6 +125,11 @@ def test_no_image_probe_runs_shell_free_and_validates_outputs(tmp_path, monkeypa
     assert result["target_id"] == "windows-x86_64-msvc"
     assert result["image_mode"] == "none"
     assert result["logical_oat"] == "probe.oat"
+    assert result["windows_aot_identity"]["component_topology"] == "single"
+    assert (
+        result["windows_aot_identity"]["startup_image_location"]
+        == "runtime/boot-image/boot.art"
+    )
     assert result["watchdog"] == "enabled"
     assert result["elf"]["segment_alignment"] == 64 * 1024
     assert result["elf"]["oat_version"] == "265"

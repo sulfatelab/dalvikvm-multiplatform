@@ -69,9 +69,9 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         (binary / "art-tests" / "art_test_catalog.json").read_text(encoding="utf-8")
     )
     assert catalog["target_id"] == "windows-x86_64-msvc"
-    assert len(catalog["probes"]) == 94
-    assert sum(probe["applicable"] for probe in catalog["probes"]) == 91
-    assert sum(bool(probe["target_ids"]) for probe in catalog["probes"]) == 40
+    assert len(catalog["probes"]) == 95
+    assert sum(probe["applicable"] for probe in catalog["probes"]) == 92
+    assert sum(bool(probe["target_ids"]) for probe in catalog["probes"]) == 41
     assert sum(not probe["target_ids"] for probe in catalog["probes"]) == 54
     w002_attach = next(
         probe for probe in catalog["probes"] if probe["name"] == "managed_w002_attach"
@@ -303,6 +303,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "win32_fs1_stack_high_water_structure",
         "windows_w025_jit_structure",
         "windows_w027_unicode_api_policy",
+        "windows_w029_aot_identity",
     ]
     w025 = [probe for probe in catalog["probes"] if probe["stage"] == "w025"]
     assert len(w025) == 12
@@ -326,6 +327,12 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     assert w028[0]["execution"] == "target-runnable"
     assert w028[0]["ctest_registered"] is False
     assert w028[0]["target_ids"] == ["windows-x86_64-msvc"]
+    w029 = [probe for probe in catalog["probes"] if probe["stage"] == "w029"]
+    assert len(w029) == 1
+    assert w029[0]["name"] == "windows_w029_aot_identity"
+    assert w029[0]["execution"] == "host-review"
+    assert w029[0]["ctest_registered"] is True
+    assert w029[0]["target_ids"] == ["windows-x86_64-msvc"]
 
     variant_binary = tmp_path / "variant-build"
     (source / "CMakeLists.txt").write_text(
@@ -445,7 +452,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         (binary / "art-tests" / "art_test_catalog.json").read_text(encoding="utf-8")
     )
     applicable = [probe for probe in catalog["probes"] if probe["applicable"]]
-    assert len(catalog["probes"]) == 94
+    assert len(catalog["probes"]) == 95
     assert [probe["name"] for probe in applicable] == [
         "criticalnativeprobe",
         "nativeabiprobe",

@@ -10,6 +10,8 @@ set(_art_test_cases_root "${CMAKE_CURRENT_LIST_DIR}/cases")
 set(_art_managed_builder "${CMAKE_CURRENT_LIST_DIR}/support/managed_artifact.py")
 set(_art_boot_image_builder
     "${_art_test_repo_root}/tools/build_boot_image.py")
+set(_art_windows_aot_identity
+    "${_art_test_repo_root}/tools/windows_aot_identity.py")
 set(_art_conscrypt_constants_builder
     "${CMAKE_CURRENT_LIST_DIR}/support/generate_conscrypt_constants.py")
 set(_art_managed_root "${CMAKE_CURRENT_BINARY_DIR}/managed")
@@ -663,7 +665,7 @@ endfunction()
 
 add_custom_target(art-tests)
 add_custom_target(art-managed-tests)
-foreach(stage w002 w003 w004 w010 w013 w014 w025 w027 w028)
+foreach(stage w002 w003 w004 w010 w013 w014 w025 w027 w028 w029)
     art_define_test_stage("${stage}")
 endforeach()
 
@@ -2074,6 +2076,21 @@ art_add_target_probe(
         --library-dir "${ART_TARGET_BUNDLE_ROOT}/lib/libcxx/bin"
         --parallel 2
         --timeout 600)
+
+# W-029 begins the stable generation/startup identity step without claiming a
+# boot image exists. It freezes the single-component package contract and
+# rejects case, separator, physical-path, and component-count mismatches.
+art_add_target_probe(
+    NAME windows_w029_aot_identity STAGE w029 TYPE GATE
+    EXECUTION host-review
+    ${_art_windows_x86_64_msvc_selector}
+    CONTRACTS aot boot-image identity packaging
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_windows_aot_identity}"
+        --target-id "${ART_TARGET_ID}"
+        --result
+            "${CMAKE_CURRENT_BINARY_DIR}/results/w029-aot-identity/result.json")
 
 get_property(_art_test_catalog_records GLOBAL PROPERTY ART_TEST_CATALOG_RECORDS)
 string(JOIN ",\n" _art_test_catalog_body ${_art_test_catalog_records})

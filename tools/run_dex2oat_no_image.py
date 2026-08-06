@@ -16,10 +16,24 @@ import subprocess
 import sys
 import time
 
+if __package__:
+    from .windows_aot_identity import (
+        LOGICAL_BOOT_JAR,
+        LOGICAL_PROBE_INPUT_JAR,
+        LOGICAL_PROBE_OAT,
+        contract_record,
+    )
+else:
+    from windows_aot_identity import (  # type: ignore[no-redef]
+        LOGICAL_BOOT_JAR,
+        LOGICAL_PROBE_INPUT_JAR,
+        LOGICAL_PROBE_OAT,
+        contract_record,
+    )
 
-LOGICAL_BOOT_JAR = "/system/framework/boot.jar"
-LOGICAL_INPUT_JAR = "/data/local/tmp/win32-oat-probe.jar"
-LOGICAL_OAT = "probe.oat"
+
+LOGICAL_INPUT_JAR = LOGICAL_PROBE_INPUT_JAR
+LOGICAL_OAT = LOGICAL_PROBE_OAT
 OAT_VERSION = b"265\0"
 VDEX_VERSION = b"027\0"
 WINDOWS_X64_ELF_ALIGNMENT = 64 * 1024
@@ -181,6 +195,7 @@ def run_probe(args: argparse.Namespace) -> Path:
         "logical_boot_jar": LOGICAL_BOOT_JAR,
         "logical_input_jar": LOGICAL_INPUT_JAR,
         "logical_oat": LOGICAL_OAT,
+        "windows_aot_identity": contract_record(),
         "compiler_filter": "speed",
         "image_mode": "none",
         "watchdog": "enabled",
