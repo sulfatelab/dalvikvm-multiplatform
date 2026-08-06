@@ -112,6 +112,23 @@ void TestFixedRspCriticalNativeShape() {
               "CriticalNative descriptor has no frame register");
 }
 
+void TestNonvolatileXmmSaves() {
+  ++g_cases;
+  WindowsX64UnwindInfoBuilder builder;
+  builder.Enable();
+  builder.RecordStackAllocation(/*size=*/ 64u, /*code_offset=*/ 4u);
+  builder.RecordSaveXmm128(/*XMM12=*/ 12u, /*stack_offset=*/ 32u, /*code_offset=*/ 10u);
+  builder.RecordSaveXmm128(/*XMM15=*/ 15u, /*stack_offset=*/ 24u, /*code_offset=*/ 16u);
+  builder.Finalize(/*prologue_size=*/ 16u);
+  Expect(builder.IsValid(), "nonvolatile XMM saves are valid");
+  ExpectBytes(builder.GetData(),
+              {1u, 16u, 6u, 0u,
+               16u, 0xf9u, 24u, 0u, 0u, 0u,
+               10u, 0xc8u, 2u, 0u,
+               4u, 0x72u},
+              "XMM saves select scaled and far encodings and descending offsets");
+}
+
 template <typename Fn>
 void ExpectInvalid(Fn fn, std::string_view message) {
   WindowsX64UnwindInfoBuilder builder;
@@ -146,6 +163,13 @@ void TestInvalidInputs() {
     builder->RecordSetFramePointer(/*RAX=*/ 0u, 0u, 1u);
   }, "volatile frame register is rejected");
   ExpectInvalid([](WindowsX64UnwindInfoBuilder* builder) {
+    builder->RecordSaveXmm128(/*XMM5=*/ 5u, /*stack_offset=*/ 16u, /*code_offset=*/ 1u);
+  }, "volatile XMM save is rejected");
+  ExpectInvalid([](WindowsX64UnwindInfoBuilder* builder) {
+    builder->RecordSaveXmm128(/*XMM12=*/ 12u, /*stack_offset=*/ 16u, /*code_offset=*/ 1u);
+    builder->RecordSaveXmm128(/*XMM12=*/ 12u, /*stack_offset=*/ 32u, /*code_offset=*/ 2u);
+  }, "duplicate XMM saves are rejected");
+  ExpectInvalid([](WindowsX64UnwindInfoBuilder* builder) {
     builder->RecordPushNonvolatile(/*RBX=*/ 3u, 256u);
   }, "operation beyond byte-sized prologue is rejected");
 
@@ -175,6 +199,7 @@ int main() {
   TestLargeAllocations();
   TestEveryNonvolatileGpr();
   TestFixedRspCriticalNativeShape();
+  TestNonvolatileXmmSaves();
   TestInvalidInputs();
   std::cout << "win32_jit_unwind_info_probe failures=" << g_failures
             << " cases=" << g_cases << '\n';

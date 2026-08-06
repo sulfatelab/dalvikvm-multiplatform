@@ -680,7 +680,7 @@ endfunction()
 
 add_custom_target(art-tests)
 add_custom_target(art-managed-tests)
-foreach(stage w002 w003 w004 w010 w013 w014 w025 w027 w028 w029 w030)
+foreach(stage w002 w003 w004 w010 w013 w014 w025 w027 w028 w029 w030 w031)
     art_define_test_stage("${stage}")
 endforeach()
 
@@ -1844,7 +1844,7 @@ art_add_target_probe(
         --work-root "${CMAKE_CURRENT_BINARY_DIR}/results/w025-unwind-info"
         --library-dir "${CMAKE_BINARY_DIR}"
         --library-dir "${_art_bundle_lib}/libcxx/bin"
-        --expect "win32_jit_unwind_info_probe failures=0 cases=6"
+        --expect "win32_jit_unwind_info_probe failures=0 cases=7"
         --expect "win32_jit_unwind_info_probe OK"
         --forbid "FAIL:"
         --timeout 60)
@@ -2143,6 +2143,56 @@ art_add_target_probe(
         --icu-data "${_art_icu_data}"
         --work-root
             "${CMAKE_CURRENT_BINARY_DIR}/results/w030-boot-image-startup"
+        ${_art_managed_runtime_library_args}
+        --timeout 600)
+
+# W-031 exercises the registered AOT table through the ordinary Windows APIs.
+# It keeps JIT disabled, locates selected underlying boot-OAT bodies, and calls
+# corresponding managed/JNI methods; startup may dispatch those calls through nterp.
+art_add_target_probe(
+    NAME w031aotunwindprobe STAGE w031 TYPE SHARED EXECUTION compile-only
+    ${_art_windows_x86_64_msvc_selector}
+    SOURCES "${_art_test_cases_root}/aot-unwind/probe.cc"
+    LINK_LIBRARIES art
+    COMPILE_OPTIONS
+        -fno-rtti -Wno-thread-safety -Wno-unused-command-line-argument
+        -Wno-microsoft-cast -Wno-invalid-offsetof
+    COMPILE_DEFINITIONS ART_CONSUMING_LIBART
+    CONTRACTS aot unwind stack-walk
+    PREFIX lib OUTPUT_NAME w031aotunwindprobe WINDOWS_EXPORT_ALL_SYMBOLS PRODUCT_POLICY)
+art_add_target_probe(
+    NAME managed_w031_aot_unwind STAGE w031 TYPE MANAGED
+    EXECUTION target-runnable TIMEOUT 1800
+    ${_art_windows_x86_64_msvc_selector}
+    SOURCES "${_art_test_cases_root}/aot-unwind/W031AotUnwindProbe.java"
+    DEPENDS
+        art-runtime-boot-image
+        w031aotunwindprobe
+        dalvikvm
+        icu_jni
+        javacore
+        openjdk
+    CONTRACTS aot boot-image unwind stack-walk runtime-load
+    OUTPUT_NAME w031aotunwindprobe
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_windows_boot_image_runner}"
+        --target-id "${ART_TARGET_ID}"
+        --dalvikvm "$<TARGET_FILE:dalvikvm>"
+        --boot-jar "${_art_boot_jar}"
+        --app-jar "${_art_managed_root}/w031aotunwindprobe.jar"
+        --boot-image-dir "${_art_boot_image_root}"
+        --icu-data "${_art_icu_data}"
+        --work-root "${CMAKE_CURRENT_BINARY_DIR}/results/w031-aot-unwind"
+        --probe "$<TARGET_FILE:w031aotunwindprobe>"
+        --probe-name w031aotunwindprobe
+        --main-class W031AotUnwindProbe
+        --execution-mode aot
+        --expect "W031_AOT_UNWIND_PASS"
+        --expect "W031AotUnwindProbe PASS"
+        --expect "main end exception=0"
+        --forbid "W031_AOT_UNWIND_FAIL"
+        --forbid AssertionError
         ${_art_managed_runtime_library_args}
         --timeout 600)
 

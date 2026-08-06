@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import struct
 import subprocess
+import zlib
 
 import pytest
 
@@ -96,6 +97,199 @@ def _fake_vdex() -> bytes:
     return bytes(data)
 
 
+def _fake_windows_boot_oat() -> bytes:
+    section_names = (
+        b"\0.rodata\0.text\0.oat_unwind.windows\0.bss\0.dynsym\0.dynstr\0.shstrtab\0"
+    )
+    section_name_offsets = {
+        name: section_names.index(name.encode("ascii"))
+        for name in (
+            ".rodata",
+            ".text",
+            ".oat_unwind.windows",
+            ".bss",
+            ".dynsym",
+            ".dynstr",
+            ".shstrtab",
+        )
+    }
+    dynamic_names = b"\0oatunwindwindows\0oatunwindwindowslastword\0"
+    dynamic_name_offsets = {
+        name: dynamic_names.index(name.encode("ascii"))
+        for name in ("oatunwindwindows", "oatunwindwindowslastword")
+    }
+
+    data = bytearray(0x1000)
+    program_offset = 64
+    program_count = 3
+    section_offset = 0x900
+    section_count = 8
+    section_names_index = 7
+    rodata_address = 0x10200
+    text_address = 0x20300
+    text_size = 0x100
+    unwind_address = 0x30500
+    unwind_file_offset = 0x500
+    entry_count = 7
+    entries_offset = 48
+    unwind_blob_offset = entries_offset + entry_count * 12
+    unwind_payload = bytearray(unwind_blob_offset + 4)
+    struct.pack_into(
+        "<4s11I",
+        unwind_payload,
+        0,
+        b"ouw\n",
+        1,
+        48,
+        0x8664,
+        12,
+        entry_count,
+        entries_offset,
+        unwind_blob_offset,
+        4,
+        text_address - rodata_address,
+        text_address - rodata_address + text_size,
+        0,
+    )
+    for index in range(entry_count):
+        begin = text_address - rodata_address + index * 0x10
+        struct.pack_into(
+            "<III",
+            unwind_payload,
+            entries_offset + index * 12,
+            begin,
+            begin + 8,
+            unwind_address - rodata_address + unwind_blob_offset,
+        )
+    unwind_payload[unwind_blob_offset:] = b"\x01\0\0\0"
+    struct.pack_into(
+        "<I", unwind_payload, 44, zlib.adler32(unwind_payload) & 0xFFFFFFFF
+    )
+
+    ident = b"\x7fELF" + bytes((2, 1, 1, 3, 0)) + bytes(7)
+    struct.pack_into(
+        "<16sHHIQQQIHHHHHH",
+        data,
+        0,
+        ident,
+        3,
+        62,
+        1,
+        0,
+        program_offset,
+        section_offset,
+        0,
+        64,
+        56,
+        program_count,
+        64,
+        section_count,
+        section_names_index,
+    )
+    program_headers = (
+        (1, 4, 0x200, rodata_address, 0, 0x80, 0x80, 0x10000),
+        (1, 5, 0x300, text_address, 0, text_size, text_size, 0x10000),
+        (
+            1,
+            4,
+            unwind_file_offset,
+            unwind_address,
+            0,
+            len(unwind_payload),
+            len(unwind_payload),
+            0x10000,
+        ),
+    )
+    for index, values in enumerate(program_headers):
+        struct.pack_into("<IIQQQQQQ", data, program_offset + index * 56, *values)
+
+    data[0x200:0x208] = b"oat\n265\0"
+    data[unwind_file_offset : unwind_file_offset + len(unwind_payload)] = unwind_payload
+    dynsym_offset = 0x700
+    dynstr_offset = 0x780
+    data[dynstr_offset : dynstr_offset + len(dynamic_names)] = dynamic_names
+    struct.pack_into(
+        "<IBBHQQ",
+        data,
+        dynsym_offset + 24,
+        dynamic_name_offsets["oatunwindwindows"],
+        0x11,
+        0,
+        3,
+        unwind_address,
+        len(unwind_payload),
+    )
+    struct.pack_into(
+        "<IBBHQQ",
+        data,
+        dynsym_offset + 48,
+        dynamic_name_offsets["oatunwindwindowslastword"],
+        0x11,
+        0,
+        3,
+        unwind_address + len(unwind_payload) - 4,
+        4,
+    )
+    section_names_offset = 0xB00
+    data[section_names_offset : section_names_offset + len(section_names)] = section_names
+    section_values = (
+        (0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+        (section_name_offsets[".rodata"], 1, 2, rodata_address, 0x200, 0x80, 0, 0, 4, 0),
+        (section_name_offsets[".text"], 1, 6, text_address, 0x300, text_size, 0, 0, 16, 0),
+        (
+            section_name_offsets[".oat_unwind.windows"],
+            1,
+            2,
+            unwind_address,
+            unwind_file_offset,
+            len(unwind_payload),
+            0,
+            0,
+            0x10000,
+            0,
+        ),
+        (section_name_offsets[".bss"], 8, 3, 0x40000, 0x600, 0x80, 0, 0, 0x10000, 0),
+        (section_name_offsets[".dynsym"], 11, 2, 0x10100, dynsym_offset, 72, 6, 1, 8, 24),
+        (
+            section_name_offsets[".dynstr"],
+            3,
+            2,
+            0x10180,
+            dynstr_offset,
+            len(dynamic_names),
+            0,
+            0,
+            1,
+            0,
+        ),
+        (
+            section_name_offsets[".shstrtab"],
+            3,
+            0,
+            0,
+            section_names_offset,
+            len(section_names),
+            0,
+            0,
+            1,
+            0,
+        ),
+    )
+    for index, values in enumerate(section_values):
+        struct.pack_into("<IIQQQQIIQQ", data, section_offset + index * 64, *values)
+    return bytes(data)
+
+
+def _rewrite_fake_unwind_checksum(data: bytearray) -> None:
+    unwind_file_offset = 0x500
+    unwind_size = struct.unpack_from("<Q", data, 0x900 + 3 * 64 + 32)[0]
+    struct.pack_into("<I", data, unwind_file_offset + 44, 0)
+    checksum = zlib.adler32(
+        data[unwind_file_offset : unwind_file_offset + unwind_size]
+    ) & 0xFFFFFFFF
+    struct.pack_into("<I", data, unwind_file_offset + 44, checksum)
+
+
 def test_no_image_probe_runs_shell_free_and_validates_outputs(tmp_path, monkeypatch):
     args = _args(tmp_path)
     calls = []
@@ -143,6 +337,50 @@ def test_oat_validator_rejects_linux_alignment_for_windows(tmp_path):
     oat.write_bytes(_fake_oat(16 * 1024))
     with pytest.raises(run_dex2oat_no_image.Dex2OatProbeError, match="alignment"):
         run_dex2oat_no_image.validate_oat_elf(oat, expected_alignment=64 * 1024)
+
+
+def test_windows_unwind_validator_accepts_canonical_transport(tmp_path):
+    oat = tmp_path / "boot.oat"
+    oat.write_bytes(_fake_windows_boot_oat())
+
+    result = run_dex2oat_no_image.validate_windows_oat_unwind(oat)
+
+    assert result["section"] == ".oat_unwind.windows"
+    assert result["target_machine"] == 0x8664
+    assert result["entry_count"] == 7
+    assert result["unique_unwind_info_count"] == 1
+
+
+def test_windows_unwind_validator_rejects_header_checksum_corruption(tmp_path):
+    oat = tmp_path / "boot.oat"
+    data = bytearray(_fake_windows_boot_oat())
+    data[0x500 + 8] ^= 1
+    oat.write_bytes(data)
+
+    with pytest.raises(run_dex2oat_no_image.Dex2OatProbeError, match="header"):
+        run_dex2oat_no_image.validate_windows_oat_unwind(oat)
+
+
+def test_windows_unwind_validator_rejects_entry_corruption(tmp_path):
+    oat = tmp_path / "boot.oat"
+    data = bytearray(_fake_windows_boot_oat())
+    struct.pack_into("<I", data, 0x500 + 48 + 4, 0x20000)
+    _rewrite_fake_unwind_checksum(data)
+    oat.write_bytes(data)
+
+    with pytest.raises(run_dex2oat_no_image.Dex2OatProbeError, match="entry 0"):
+        run_dex2oat_no_image.validate_windows_oat_unwind(oat)
+
+
+def test_windows_unwind_validator_rejects_blob_corruption(tmp_path):
+    oat = tmp_path / "boot.oat"
+    data = bytearray(_fake_windows_boot_oat())
+    data[0x500 + 132] = 2
+    _rewrite_fake_unwind_checksum(data)
+    oat.write_bytes(data)
+
+    with pytest.raises(run_dex2oat_no_image.Dex2OatProbeError, match="flags/version"):
+        run_dex2oat_no_image.validate_windows_oat_unwind(oat)
 
 
 def test_elf_section_reader_accepts_nobits_beyond_file_bytes():

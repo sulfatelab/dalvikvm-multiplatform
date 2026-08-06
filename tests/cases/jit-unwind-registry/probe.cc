@@ -58,11 +58,13 @@ int main() {
   uint8_t* code = base + page_size;
   const std::vector<uint8_t> machine_code = {
       0x55u,                                      // push rbp
-      0x48u, 0x83u, 0xecu, 0x20u,                // sub rsp, 32
+      0x48u, 0x83u, 0xecu, 0x40u,                // sub rsp, 64
       0x48u, 0x89u, 0xe5u,                       // mov rbp, rsp
+      0xf3u, 0x44u, 0x0fu, 0x7fu, 0x64u, 0x24u, 0x20u,  // movdqu [rsp + 32], xmm12
       0xb8u, 0x2au, 0x00u, 0x00u, 0x00u,         // mov eax, 42
+      0xf3u, 0x44u, 0x0fu, 0x6fu, 0x64u, 0x24u, 0x20u,  // movdqu xmm12, [rsp + 32]
       0x48u, 0x89u, 0xecu,                       // mov rsp, rbp
-      0x48u, 0x83u, 0xc4u, 0x20u,                // add rsp, 32
+      0x48u, 0x83u, 0xc4u, 0x40u,                // add rsp, 64
       0x5du,                                      // pop rbp
       0xc3u,                                      // ret
   };
@@ -70,9 +72,10 @@ int main() {
   WindowsX64UnwindInfoBuilder builder;
   builder.Enable();
   builder.RecordPushNonvolatile(/*RBP=*/ 5u, /*code_offset=*/ 1u);
-  builder.RecordStackAllocation(/*size=*/ 32u, /*code_offset=*/ 5u);
+  builder.RecordStackAllocation(/*size=*/ 64u, /*code_offset=*/ 5u);
   builder.RecordSetFramePointer(/*RBP=*/ 5u, /*scaled_offset=*/ 0u, /*code_offset=*/ 8u);
-  builder.Finalize(/*prologue_size=*/ 8u);
+  builder.RecordSaveXmm128(/*XMM12=*/ 12u, /*stack_offset=*/ 32u, /*code_offset=*/ 15u);
+  builder.Finalize(/*prologue_size=*/ 15u);
   Expect(builder.IsValid(), "probe unwind descriptor is valid");
   Expect(!builder.GetData().empty(), "probe unwind descriptor is nonempty");
   if (!builder.IsValid() || builder.GetData().empty()) {
@@ -121,14 +124,21 @@ int main() {
       (reinterpret_cast<uintptr_t>(stack + sizeof(stack) - 32u) & ~uintptr_t{15u}) + 8u;
   constexpr uint64_t kSavedRbp = UINT64_C(0x1122334455667788);
   constexpr uint64_t kReturnAddress = UINT64_C(0x123456789abcdef0);
+  constexpr uint64_t kSavedXmm12Low = UINT64_C(0x0123456789abcdef);
+  constexpr int64_t kSavedXmm12High = static_cast<int64_t>(UINT64_C(0xfedcba9876543210));
   *reinterpret_cast<uint64_t*>(entry_rsp - 8u) = kSavedRbp;
   *reinterpret_cast<uint64_t*>(entry_rsp) = kReturnAddress;
+  M128A* saved_xmm12 = reinterpret_cast<M128A*>(entry_rsp - 72u + 32u);
+  saved_xmm12->Low = kSavedXmm12Low;
+  saved_xmm12->High = kSavedXmm12High;
 
   CONTEXT context = {};
-  context.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
-  context.Rip = reinterpret_cast<DWORD64>(code + 8u);
-  context.Rsp = entry_rsp - 40u;
+  context.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER | CONTEXT_FLOATING_POINT;
+  context.Rip = reinterpret_cast<DWORD64>(code + 15u);
+  context.Rsp = entry_rsp - 72u;
   context.Rbp = context.Rsp;
+  context.Xmm12.Low = 0u;
+  context.Xmm12.High = 0;
   PVOID handler_data = nullptr;
   DWORD64 establisher_frame = 0u;
   if (function != nullptr) {
@@ -143,6 +153,8 @@ int main() {
     Expect(context.Rip == kReturnAddress, "virtual unwind restores the return address");
     Expect(context.Rsp == entry_rsp + 8u, "virtual unwind pops the return address");
     Expect(context.Rbp == kSavedRbp, "virtual unwind restores caller RBP");
+    Expect(context.Xmm12.Low == kSavedXmm12Low && context.Xmm12.High == kSavedXmm12High,
+           "virtual unwind restores caller XMM12");
   }
 
   Expect(registry.Unregister(code), "runtime-function deletion succeeds");

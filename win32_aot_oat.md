@@ -14,10 +14,19 @@ loading, and passes validation-only plus executable boot loading on the
 authoritative native host. Steps 4, 5, and 8 are complete. Steps 2 and 9 remain
 partial: the seven negative identities are still launcher-level pre-spawn
 checks rather than ART diagnostics, and normal product selection plus
-successful imageless fallback are not integrated. W-030 deliberately uses
-`-Xint`; it proves boot-image/OAT loading, not execution from boot-OAT RX code.
-The supported Windows product therefore remains imageless nterp/JIT while
-this experimental track is incomplete. Progress and evidence are tracked in
+successful imageless fallback are not integrated. W-031 implements the
+Windows x64 boot-AOT unwind writer, section-local checksum, dynamic anchors,
+validation-only parser, executable registration, and managed/JNI/trampoline
+lookup plus synthetic unwind gate. Step 6 is consequently partial rather than
+complete: corruption/fallback injection, exception/fatal stack walking, and
+stronger XMM-bearing AOT-frame execution remain. W-031 also locates underlying
+managed/JNI bodies and passes corresponding runtime calls with JIT disabled,
+but startup replaces many current dispatch entrypoints with nterp. The gate obtains the compiled
+body through `ArtMethod::GetOatMethodQuickCode()`; it does not yet prove that
+representative normal dispatch PCs execute inside the boot-OAT RX mapping.
+Step 10 therefore remains partial. CFG is still unimplemented. The supported
+Windows product remains imageless nterp/JIT while this experimental track is
+incomplete. Progress and evidence are tracked in
 [`win32_aot_oat_tracker.md`](win32_aot_oat_tracker.md). The
 accepted native result is
 [`docs/history/windows_x64_w028_result.md`](docs/history/windows_x64_w028_result.md).
@@ -25,6 +34,8 @@ The accepted W-029 preflight is
 [`docs/history/windows_x64_w029_result.md`](docs/history/windows_x64_w029_result.md).
 The W-030 private-copy and boot-loading result is
 [`docs/history/windows_x64_w030_result.md`](docs/history/windows_x64_w030_result.md).
+The W-031 unwind result is
+[`docs/history/windows_x64_w031_result.md`](docs/history/windows_x64_w031_result.md).
 The authoritative implementation gate is Windows Server 2025 Datacenter
 Evaluation, x64 build 26100. Linux and Wine remain development and structural
 gates; the former Windows 10 lab host is unavailable.
@@ -193,6 +204,15 @@ The current `ElfBuilder` constructs these conceptual regions:
 | `.dex` / `oatdex*` | NOBITS virtual range populated from the companion VDEX when present |
 | `.dynstr`, `.dynsym`, `.hash`, `.dynamic` | Small lookup structure for the OAT anchors |
 | Debug sections | Build ID and optional DWARF/minidebug data; never mapping authority |
+
+At runtime `OatFile::Begin()` is the address of `oatdata`.
+`OatFile::End()` is not the address stored in the `oatlastword` symbol: after
+dynamic-symbol lookup, `ComputeFields()` adds four bytes, so `End()` is the
+one-past upper bound of that final word. The executable range used by the
+implemented Windows unwind transport is therefore
+`Begin() + OatHeader::GetExecutableOffset()` through `End()`. The complete
+nonempty range must be backed by file bytes in one `PT_LOAD` whose flags are
+exactly `PF_R | PF_X`.
 
 The Windows x64 product adds one required read-only loadable section,
 `.oat_unwind.windows`, holding the AOT `RUNTIME_FUNCTION` equivalents and their
@@ -1309,7 +1329,10 @@ Design points, each chosen against a rejected alternative:
   field as zero. The loader repeats exactly that operation before following
   offsets or parsing any `UNWIND_INFO`. Adler-32 reuses ART's existing checksum
   convention and provides an accidental-corruption gate; it is not a security
-  or authenticity mechanism.
+  or authenticity mechanism. Concretely, the finalized writer buffer already
+  contains zero at byte offset 44, Adler-32 consumes the entire buffer, and the
+  resulting value is then stored at offset 44. The loader consumes the prefix,
+  four zero bytes, and the suffix as one Adler-32 stream before comparison.
 - **The table is one registration, not one per method.** The JIT uses one
   one-entry table per allocation because allocations come and go. Boot OAT is
   process-lifetime state, so one multi-entry registration per OAT component is
@@ -1515,23 +1538,35 @@ four bytes rather than
 one-past-the-end. That `+4` convention is why the writer gives
 `oatunwindwindowslastword` size 4 at `address + size - 4`.
 
+The implemented loader additionally requires that this complete anchor-derived
+range is backed by file bytes in one `PT_LOAD` with flags exactly `PF_R`. It
+does not infer section bounds from an ELF section table. Likewise, it derives
+the executable bounds from `Begin() + GetExecutableOffset()` and the one-past
+`End()`, then requires that complete range in one exact file-backed
+`PF_R | PF_X` `PT_LOAD`. These checks run for validation-only and executable
+opens before the section is parsed; only the executable open registers the
+result.
+
 Registration then must, in order:
 
 1. recompute the section-local Adler-32 with the checksum field treated as
    zero, compare it with the header, then validate magic, independent section
    version, fixed header/entry sizes, target machine, and every declared
    subrange;
-2. validate `code_begin`/`code_end` against the mapped `oatexec` range
-   resolved from the dynamic anchors;
+2. validate `code_begin`/`code_end` against the mapped range from
+   `Begin() + OatHeader::GetExecutableOffset()` through exclusive `End()`;
 3. validate each entry: `begin_offset < end_offset`, both inside the code
    range, entries sorted and non-overlapping, and `unwind_info_offset`
    4-byte aligned and inside the declared unwind-blob subrange after checked
    `oatdata`-relative address conversion;
-4. validate each referenced `UNWIND_INFO`: version 1, no unsupported flags,
-   a code count that fits the declared bytes, prologue size within 255,
-   frame register and scaled offset within range, `UWOP_*` codes recognized,
-   descending prologue offsets, correct 2-byte tail padding, and a chained or
-   handler record only where it is itself in range and acyclic;
+4. validate each referenced `UNWIND_INFO`. The current section version accepts
+   only `UNWIND_INFO` version 1 with flags exactly zero; handler and chained
+   records are not accepted. It recognizes nonvolatile GPR push/save,
+   `UWOP_ALLOC_SMALL`, both `UWOP_ALLOC_LARGE` forms, frame-pointer setup,
+   `UWOP_SAVE_XMM128`, `UWOP_SAVE_XMM128_FAR`, and
+   `UWOP_PUSH_MACHFRAME`. It also checks the declared slot count, descending
+   nonzero prologue offsets, register classes, frame-register consistency,
+   two-byte slot padding, and zero trailing alignment bytes;
 5. allocate the SDK `RUNTIME_FUNCTION` array in stable native storage, copy
    the three fields per entry with checked arithmetic, and keep the exact
    pointer for later deletion;
@@ -1907,11 +1942,12 @@ evidence before transport and image integration.
    load-bias, gap, and protection logic.
 5. Add the VDEX private-copy handoff and validate exact aperture size,
    ownership, and `ComputeFields -> LoadVdex -> Setup` ordering.
-6. Implement the specified AOT unwind transport in order: the
-   `EmitWindowsX64UnwindInfo()` predicate, the `CompiledMethod` array and its
-   dedup, the `OatWriter` entry collection and `.oat_unwind.windows` emission
-   with the two new anchors and its section-local version/checksum, then
-   `WindowsAotUnwindRegistry`.
+6. Implement the specified AOT unwind transport in order: the compiler
+   predicate, `CompiledMethod` storage, dedup-safe `OatWriter` entry collection,
+   `.oat_unwind.windows` emission with two anchors and its section-local
+   version/checksum, then `WindowsAotUnwindRegistry`. W-031 implements this
+   core path; corruption/fallback injection, exception/fatal stack walking,
+   and stronger XMM-bearing AOT-frame execution remain before completion.
 7. Implement `.oat_cfg.windows` collection, independent serialization,
    conditional ELF layout/anchors, and runtime validation. Keep observation
    mode as the default; run the explicit-target allocation feasibility probe
@@ -2166,9 +2202,13 @@ narrower than a new segment loader: only Windows private-copy replacement of
 file-backed segment operations is new. W-030 has now proven native
 `ImageWriter` output, canonical LZ4 image startup, private-copy ELF/VDEX
 ownership and protections, and rejection of silent imageless fallback on
-Server 2025. Residual risk remains medium/high because the accepted startup
-runs in `-Xint`, and unwind, real boot-OAT execution, CFG observation, product
-selection/fallback, and measurements remain open. Explicit CFG additionally
+Server 2025. W-031 now proves the core unwind transport, registered
+managed/JNI/seven-trampoline metadata, synthetic virtual unwind, underlying
+managed/JNI body lookup, and corresponding JIT-disabled runtime calls. Residual risk
+remains medium/high because representative ordinary dispatch inside boot-OAT
+RX ranges, unwind corruption/fallback and exception/fatal walking, CFG
+observation, product selection/fallback, and full measurements remain open.
+Explicit CFG additionally
 depends on an unresolved invalid-by-default allocation sequence. CFG explicit
 enforcement, teardown recovery from a failed function-table deletion,
 security hardening,
@@ -2271,6 +2311,15 @@ runtime, JNI, deoptimization, managed exception, translated NPE/SOE, and fatal
 frames. Failure before publication unregisters the table; a successful boot
 keeps it registered for process lifetime.
 
+Windows x64 managed quick frames use 16-byte spill slots for nonvolatile XMM
+registers whenever Windows unwind emission is enabled (JIT, boot image, or boot
+image extension). Prologues and epilogues use full-width unaligned `movdqu`
+stores/loads, and the serializer emits `UWOP_SAVE_XMM128` or its far form.
+Linux and Windows compilation without this unwind mode retain the existing
+8-byte `movsd` spill width. W-025 proves full 128-bit XMM restoration through
+`RtlVirtualUnwind`; W-031 still needs stronger coverage of an actual
+XMM-bearing boot-AOT managed frame.
+
 CFG uses the architecture-neutral `.oat_cfg.windows` format and two modes
 specified above. Observation mode records process policy and executes real
 indirect quick/JNI/trampoline/method targets without changing target state; it
@@ -2326,7 +2375,7 @@ tool policy are deferred.
 | Native `dex2oat.exe` operation regresses | Medium | Keep the accepted W-028 real single-JAR no-image `.oat`/`.vdex` compile as a native Server 2025 regression gate; `--version` is not supported and is not a substitute |
 | Boot class path / dex location strings disagree between generation and load | High | W-029 pins logical `/system/framework/boot.jar`; W-030 makes generation, manifest, staging, and startup consume it and rejects launcher drift without normalization; ART-level intentional-mismatch diagnostics remain required |
 | Path-sensitive cache artifacts are mixed across generations | High | Treat each generated ART/OAT/VDEX set as one unit, record its intentional logical locations and per-run sizes/hashes, validate the manifest before staging, and never require or infer cross-generation byte identity |
-| Image loads but boot OAT code is never executed | High | W-030 proves canonical image/OAT/VDEX loading under `-Xint`; require entrypoints within the boot-OAT RX range and representative execution with JIT disabled before step 10 completes |
+| Image loads but normal dispatch never uses boot-OAT code | High | W-031 locates underlying managed/JNI AOT bodies and passes corresponding runtime calls with JIT disabled, but startup upgrades many current entrypoints to nterp; require representative ordinary dispatch PCs within the boot-OAT RX range before step 10 completes |
 | Boot reservation commit dominates the measured cost | Medium operational | Windows `MemMap` commits whole spans, so the image+OAT reservation, not the 64-KiB padding, is the term to report and later optimize |
 | Unwind predicate narrows the existing Windows condition | Medium | Preserve the semantic union of Windows-host and Windows-target compilation; test both even if a shared constexpr replaces the current preprocessor spelling |
 | `kDynamicSymbolCount` grows implicitly with the enum | Medium | It derives from `DynamicSymbol::kLast`; append Windows-only values after `kLast`, `static_assert` the base count, reserve from writer mode at `Start()`, and test Linux byte identity |
@@ -2425,10 +2474,13 @@ semantics; Wine is structural only.
    allocation owner. Extend rollback fault injection when the product-level
    selection/fallback transaction is implemented; no boot-only step-5 exit
    condition remains.
-6. Implement the specified AOT unwind transport: the Windows-and-x86-64
-   emission predicate replacing the `IsJitCompiler()` gate, the
-   `CompiledMethod` unwind array, dedup-safe `OatWriter` entries, the
-   `.oat_unwind.windows` section and anchors, and `WindowsAotUnwindRegistry`.
+6. Retain the implemented Windows x64 boot-AOT unwind transport: managed and
+   JNI emission, `CompiledMethod` storage, dedup-safe `OatWriter` entries,
+   seven trampoline entries, the `.oat_unwind.windows` section and anchors,
+   section-local checksum, validation-only parsing, executable registration,
+   lookup verification, and fatal unregister invariant. Complete the remaining
+   corruption/fallback injection, managed exception/fatal stack walking, and
+   stronger XMM-bearing boot-AOT frame gates.
 7. Implement the specified `.oat_cfg.windows` target collection, checksum,
    conditional anchors/layout, parser, and observation mode. Separately prove
    whether explicit-target mode can establish invalid-by-default CFG state in
@@ -2442,8 +2494,12 @@ semantics; Wine is structural only.
    and exercise successful whole-transaction imageless fallback for expected
    missing, stale, wrong-target, and cross-artifact cases before trusted-layout
    image/heap invariants.
-10. Prove real boot-OAT entrypoints, image relocation, JNI, faults, GC/roots,
-    and unwind/stack-walk behavior on Server 2025.
+10. Extend W-031's JIT-disabled managed/JNI runtime calls into proof that
+    representative ordinary dispatch PCs lie in boot-OAT RX ranges. Then cover
+    image relocation, faults, GC/roots, exceptions, and fatal stack walking on
+    Server 2025. Do not treat the underlying OAT body returned by
+    `GetOatMethodQuickCode()` as proof that startup dispatch retained that body;
+    current startup upgrades many eligible entrypoints to nterp.
 11. Pass CFG observation-mode characterization and measure OAT-1 startup,
     reservation, commit, padding, and working-set cost. Defer explicit CFG,
     application OAT, unloading, OAT-2, cache security, hostile-input

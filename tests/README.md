@@ -102,7 +102,7 @@ Each case owns its native and managed source plus an adjacent `RESULT.md`. The
 stage analysis links the case-specific results without physically grouping the
 source by stage. The XMM sentinel remains explicitly x86-64-only; moving it did
 not broaden its selector to AArch64 or ARM64EC.
-The source-ownership slices moved all 33 catalog-owned native probe declarations
+The source-ownership slices moved all 35 catalog-owned native probe declarations
 into logical cases. The registry now has zero
 source references into `tools/verify`; every case containing catalog native
 source has an adjacent target-status result. Shared stack-fault assembly has
@@ -115,8 +115,8 @@ parses both ELF dependency tables, then runs that executable natively or under
 the declared target runner to load both DSOs with immediate symbol resolution.
 A command gate owns no dummy target binary; its virtual target depends on the
 exact product artifacts that must exist before CTest runs it.
-The managed-source slice moved all 48 retained Java probe sources into logical
-cases. The catalog now declares 47 managed JAR artifacts (the paired
+The managed-source slice moved all 49 retained Java probe sources into logical
+cases. The catalog now declares 48 managed JAR artifacts (the paired
 CriticalNative sources intentionally share one JAR), built by
 `support/managed_artifact.py` through CMake/Ninja. The same helper builds the
 target-local boot JAR first, including the shared libcore/ICU classes,
@@ -243,9 +243,9 @@ suffix-`A` family. The active 1,441-source graph has zero ANSI calls, source
 files, or API families. The Linux-hosted Windows-cross stage passes. Native
 Windows Server 2025 now passes W-027 as part of the complete 77/77 catalog;
 the fresh run completed in 13.38 seconds and the no-op repeat in 13.21 seconds.
-The complete 97-declaration catalog contains 75 target-runnable items, nine
-host reviewers, and 13 compile-only artifacts. The Windows product subset has
-94 applicable declarations: 72 target-runnable, nine host-review, and 13
+The complete 99-declaration catalog contains 76 target-runnable items, nine
+host reviewers, and 14 compile-only artifacts. The Windows product subset has
+96 applicable declarations: 73 target-runnable, nine host-review, and 14
 compile-only. The complete pre-AOT native baseline passes 77/77 twice; the second
 `art-tests` build is a Ninja no-op. Both product and FS-1 Windows-cross W-014
 reviewers also pass with Ninja no-op repeats. The separate experimental W-030

@@ -73,6 +73,19 @@ R/RX/RW protections, no-access gaps, zero fill, source privacy, executable
 cache flushing, validation-only opens, executable opens, and `oatdex` reuse.
 Linux retains its original fixed file-mapping path.
 
+Step 6 is `PARTIAL`. The Windows x64 boot compiler now emits managed, JNI, and
+seven trampoline entries into `.oat_unwind.windows`; identical descriptors are
+deduplicated. The writer finalizes the section-local Adler-32 checksum and two
+dynamic anchors without changing the shared OAT version or Linux output. Both
+open modes validate the exact anchor-derived R segment, RX code bounds,
+checksum, header, entries, and supported version-1 `UNWIND_INFO`; executable
+opens additionally register one stable `RUNTIME_FUNCTION` array, verify sample
+lookups, and delete it before releasing memory. Native W-031 proves managed,
+JNI, and all seven trampoline lookups plus synthetic `RtlVirtualUnwind`, while
+the managed launcher passes managed and JNI runtime calls with JIT disabled.
+Corruption/fallback injection, exception/fatal stack walking, and stronger
+XMM-bearing boot-AOT frame coverage remain.
+
 Step 8 is `COMPLETE`, and step 9 is `PARTIAL`. Windows now generates and stages
 an LZ4 `boot.art`, ordinary ELF `boot.oat`, and VDEX, then launches with exact
 `-Ximage:runtime/boot-image/boot.art` and rejects silent imageless fallback.
@@ -82,6 +95,13 @@ not required. Repeated-generation variation, including in three `-j1` trials,
 is retained only as characterization. The gate is experimental rather than
 normal product selection and does not exercise successful fallback. It also
 uses `-Xint`, so it proves loading rather than real boot-OAT execution.
+
+Step 10 is `PARTIAL`. W-031 proves that the boot OAT contains locatable managed
+and JNI bodies and that corresponding runtime calls pass while JIT is disabled. It
+does not yet prove normal representative dispatch through boot-OAT RX PCs:
+startup upgrades many eligible current entrypoints to nterp, and the probe
+intentionally obtains the underlying compiled address with
+`ArtMethod::GetOatMethodQuickCode()`.
 
 The earlier `runtime/oat/oat_file_test.cc` additions are a pre-dispatch loader
 characterization suite. They support sequence step 3 and do not constitute
@@ -96,11 +116,11 @@ numbered step 1 or executable Windows OAT loading.
 | 3. Pre-dispatch characterization and trampoline regression | `PARTIAL` | Characterization tests exist in `oat_file_test.cc` and the shared trampoline lowering has been source-reviewed | Close H-005 by running the focused tests; add Linux-`GS`/Windows-`R15` disassembly and resolution/quick-to-interpreter execution gates |
 | 4. Windows private-copy `ElfOatFile` mapping | `COMPLETE` | Windows `ElfFileImpl::Load()` privately copies every file-backed `PT_LOAD` into the existing ART-owned private allocation; W-030 covers validation-only and executable opens, rejected foreign/section/unaligned/range inputs, exact address, R/RX/RW, no-access gaps, zero fill, owner sharing, source privacy, and cache flush | Retain W-030; no boot-only step-4 exit condition remains |
 | 5. VDEX aperture and ownership | `COMPLETE` | Windows reused VDEX mappings use the same checked private-copy primitive for the exact `oatdex` bytes, return an owner-sharing slice, and pass canonical boot startup through `ComputeFields -> LoadVdex -> Setup` | Retain the native end-to-end gate; add broader rollback injection with product-level fallback work |
-| 6. `.oat_unwind.windows` | `NOT STARTED` | Writer format, machine value, checksum, anchors, validation, and registration lifetime are specified | Implement emission through `WindowsAotUnwindRegistry`; pass structural, lookup, virtual-unwind, exception, and stack-walk gates |
+| 6. `.oat_unwind.windows` | `PARTIAL` | Managed/JNI/seven-trampoline emission, deduplication, checksum, anchors, validation-only parsing, executable registration/lifetime, sample lookup, synthetic `RtlVirtualUnwind`, and JIT-disabled managed/JNI runtime calls pass W-031 | Add corruption/fallback injection, managed exception/fatal stack walking, and stronger XMM-bearing boot-AOT frame execution |
 | 7. `.oat_cfg.windows` | `NOT STARTED` | Independent format and observation/explicit mode split are specified | Implement collection/serialization/parser; pass observation mode; keep explicit mode gated on the separate committed-allocation feasibility proof |
 | 8. Boot ART/OAT/VDEX generation and staging | `COMPLETE` | W-030 exercises native `ImageWriter`, emits Windows LZ4 `boot.art` plus matching OAT/VDEX, binds the path-sensitive set with one manifest, validates hashes/identity, stages the exact single-component topology, and passes canonical startup | Retain per-generation set integrity; cross-generation byte identity is intentionally not required |
 | 9. Experimental selection and fallback | `PARTIAL` | W-030 explicitly selects the staged set, runs from package root, rejects seven launcher mismatches, and fails if ART silently enters imageless startup | Integrate a reviewed product option and exercise successful missing/stale/wrong-target/cross-artifact whole-transaction fallback |
-| 10. Real boot-OAT execution | `NOT STARTED` | Required entrypoint, relocation, JNI, fault, GC, and unwind evidence is specified | Prove representative methods execute from boot-OAT RX ranges without JIT on Server 2025 |
+| 10. Real boot-OAT execution | `PARTIAL` | W-031 locates underlying managed and JNI boot-OAT bodies, validates their registered unwind entries, and passes corresponding JIT-disabled runtime calls | Prove representative ordinary dispatch PCs execute inside boot-OAT RX ranges, then cover relocation, faults, GC/roots, exceptions, and fatal stack walking on Server 2025 |
 | 11. CFG observation and OAT-1 measurements | `NOT STARTED` | Required policy, call-path, reservation, commit, padding, startup, and working-set observations are specified | Pass the native observation gate and record the measurements; explicit CFG, OAT-2, application OAT, unloading, and security remain deferred |
 
 ## Step 1 implementation record
@@ -301,6 +321,60 @@ experimental gate rather than normal product selection, and it detects but
 does not exercise successful imageless fallback. Its `-Xint` launcher proves
 loading, not execution from boot-OAT RX code.
 
+## W-031 implementation record
+
+The compiler's existing SDK-independent Windows x64 unwind builder now applies
+to JIT, boot image, and boot image extension compilation. `CompiledMethod`
+retains the emitted byte array, and `OatWriter` records one sorted entry per
+final code range, rejects inconsistent deduplication, adds the seven primary
+boot trampolines, interns identical descriptors, and writes the Windows-only
+section after `.data.img.rel.ro`. The shared OAT version and Linux writer
+layout remain unchanged.
+
+The checksum field is byte offset 44. The writer leaves it zero while hashing
+the complete finalized section, then stores the Adler-32 result. The loader
+recomputes the same stream as prefix, four zero bytes, and suffix. Dynamic
+anchors supply section bounds, which must be file-backed by one exact `PF_R`
+`PT_LOAD`. Runtime code bounds are
+`Begin() + OatHeader::GetExecutableOffset()` through `End()` (exclusive) and must
+be file-backed by one exact `PF_R | PF_X` `PT_LOAD`. `Begin()` is `oatdata`;
+`End()` is one-past the word addressed by `oatlastword`.
+
+The version-1 parser accepts flags-zero x64 `UNWIND_INFO` only. It supports
+nonvolatile GPR pushes/saves, small and large allocation operations, frame
+pointer setup, near/far XMM128 saves, and machine frames. Handler/chained
+records are not accepted. Executable opens copy checked entries into one
+stable native `RUNTIME_FUNCTION` array, call `RtlAddFunctionTable()`, and prove
+sample lookup results. Validation-only opens perform the same parsing without
+registration. `RtlDeleteFunctionTable()` failure remains fatal.
+
+Windows unwind-enabled managed frames use 16-byte nonvolatile-XMM slots and
+full-width `movdqu` spills/restores. W-025's native gate proves 128-bit XMM
+restoration. W-031 proves one managed entry, one JNI entry, all seven
+trampoline entries, and synthetic virtual unwind, followed by successful
+managed/JNI runtime calls with JIT disabled:
+
+```text
+W031_AOT_UNWIND_PASS managed_candidates=1 jni_candidates=1 trampolines=7 virtual_unwind=pass
+W031AotUnwindProbe PASS managed_call=pass jni_call=pass
+```
+
+The accepted boot OAT measured:
+
+| Quantity | Value |
+|---|---:|
+| `.oat_unwind.windows` bytes | 515,736 |
+| Function entries | 42,663 |
+| Unique `UNWIND_INFO` blobs | 163 |
+| Serialized code begin/end | 3,602,760 / 18,602,077 |
+| Section checksum | `f34e9e18` |
+| PE/COFF machine | `0x8664` (`IMAGE_FILE_MACHINE_AMD64`) |
+
+These measurements supersede the pre-XMM characterization. They are one
+accepted path-sensitive cache generation, not a byte-reproducibility baseline.
+The sanitized native record is
+[`docs/history/windows_x64_w031_result.md`](docs/history/windows_x64_w031_result.md).
+
 ## Evidence log
 
 | Date | Environment | Result | Interpretation |
@@ -317,6 +391,8 @@ loading, not execution from boot-OAT RX code.
 | 2026-08-06 | Windows Server 2025 build 26100 | W-030 generates the LZ4 boot set and canonical startup passes in 1.13 s; both W-030 gates pass 2/2, ART exits 0 with all required markers, no forbidden fallback marker, and seven launcher mismatches rejected | **Authoritative boot-only loading acceptance**; step 8 complete, step 9 partial, and step 10 open; see [`docs/history/windows_x64_w030_result.md`](docs/history/windows_x64_w030_result.md) |
 | 2026-08-06 | Windows Server 2025 build 26100 repeated-generation characterization with the superseded forced-determinism request | Normal parallel and three `-j1` generations all start successfully; VDEX remains stable while `boot.art` and OAT `.text` size/hash change | Non-blocking path-sensitive cache variation; per-generation manifest integrity, not cross-generation byte identity, is the contract |
 | 2026-08-07 | Windows Server 2025 build 26100, no forced byte determinism | W-030 private-copy probe passes in 0.07 s; canonical LZ4 boot startup passes in 1.13 s, and W-028/W-029 pass in 0.64/0.12 s | **Authoritative correction acceptance**; steps 4/5/8 complete, step 9 partial, and step 10 open |
+| 2026-08-07 | Fresh agent01 Linux and Linux-hosted Windows builds | Full Linux graph and 15/15 catalog gates pass; the full Windows cross graph builds; focused Python harness tests pass 21/21 | Shared compiler/writer/runtime changes compile on both targets and retain the Linux runtime baseline |
+| 2026-08-07 | Windows Server 2025 build 26100 | W-025 passes 9/9, W-030 passes 2/2, and W-031 passes 1/1; W-031 reports managed/JNI runtime calls plus 42,663 registered entries, seven trampolines, and synthetic virtual unwind | **Authoritative unwind implementation evidence**; step 6 and step 10 are partial; CFG remains unimplemented |
 
 The two accepted native runs and the post-correction Wine diagnostic have
 SHA-256
@@ -330,13 +406,15 @@ diagnostic evidence; native Server 2025 is the acceptance authority.
 
 ## Immediate work queue
 
-1. Implement `.oat_unwind.windows` emission, validation, registration, and
-   native managed/JNI/trampoline unwind gates without changing Linux OAT.
-2. Implement `.oat_cfg.windows` serialization/parser and the native CFG
+1. Add `.oat_unwind.windows` corruption/fallback injection, managed
+   exception/fatal stack walking, and an actual XMM-bearing boot-AOT frame
+   execution gate.
+2. Prove representative ordinary dispatch PCs execute inside boot-OAT RX
+   ranges despite the current startup nterp upgrade, then extend coverage to
+   relocation, faults, and GC/roots.
+3. Implement `.oat_cfg.windows` serialization/parser and the native CFG
    observation gate; keep explicit-target mode behind its separate allocation
    feasibility proof.
-3. Prove representative methods actually execute from boot-OAT RX ranges with
-   JIT disabled, then exercise relocation, JNI, faults, GC/roots, and unwind.
 4. Integrate reviewed product selection plus successful whole-transaction
    imageless fallback and ART-level negative identity diagnostics.
 5. Promote the cross-target 16-/64-KiB artifact comparison into an automated

@@ -16,8 +16,10 @@ import sys
 import tempfile
 
 if __package__:
+    from . import run_dex2oat_no_image
     from . import windows_aot_identity
 else:
+    import run_dex2oat_no_image  # type: ignore[no-redef]
     import windows_aot_identity  # type: ignore[no-redef]
 
 
@@ -186,6 +188,14 @@ def build_boot_image(args: argparse.Namespace) -> Path:
             _regular_file(path)
             if path.stat().st_size == 0:
                 raise BootImageError(f"dex2oat produced an empty artifact: {path.name}")
+        windows_unwind: dict[str, object] | None = None
+        if windows_identity is not None:
+            try:
+                windows_unwind = run_dex2oat_no_image.validate_windows_oat_unwind(
+                    image_dir / "boot.oat"
+                )
+            except run_dex2oat_no_image.Dex2OatProbeError as exc:
+                raise BootImageError(str(exc)) from exc
         _reject_embedded_machine_paths(
             expected,
             (
@@ -227,6 +237,7 @@ def build_boot_image(args: argparse.Namespace) -> Path:
         if windows_identity is not None:
             manifest["generation_options"] = list(generation_options)
             manifest["windows_aot_identity"] = windows_identity
+            manifest["windows_oat_unwind"] = windows_unwind
         (image_root / "manifest.json").write_text(
             json.dumps(manifest, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",

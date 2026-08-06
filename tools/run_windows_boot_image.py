@@ -33,6 +33,14 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--icu-data", type=Path, required=True)
     parser.add_argument("--work-root", type=Path, required=True)
     parser.add_argument("--library-dir", type=Path, action="append", default=[])
+    parser.add_argument("--main-class", default="Hello")
+    parser.add_argument(
+        "--execution-mode", choices=("interpreter", "aot"), default="interpreter"
+    )
+    parser.add_argument("--probe", type=Path)
+    parser.add_argument("--probe-name")
+    parser.add_argument("--expect", action="append", default=[])
+    parser.add_argument("--forbid", action="append", default=[])
     parser.add_argument("--timeout", type=int, default=180)
     return parser
 
@@ -71,6 +79,20 @@ def run_gate(args: argparse.Namespace) -> Path:
         library_dirs.insert(0, dalvikvm.parent)
 
     manifest = _validate_image_manifest(image_root, boot_jar, args.target_id)
+    main_class = getattr(args, "main_class", "Hello")
+    execution_mode = getattr(args, "execution_mode", "interpreter")
+    probe_arg = getattr(args, "probe", None)
+    probe_name = getattr(args, "probe_name", None)
+    if not main_class or any(character.isspace() for character in main_class):
+        raise WindowsBootImageError("main class must be one nonempty token")
+    if execution_mode not in ("interpreter", "aot"):
+        raise WindowsBootImageError(f"unsupported execution mode: {execution_mode!r}")
+    if (probe_arg is None) != (probe_name is None):
+        raise WindowsBootImageError("--probe and --probe-name must be supplied together")
+    if probe_name is not None and (
+        not probe_name or not all(character.isalnum() or character == "_" for character in probe_name)
+    ):
+        raise WindowsBootImageError("probe name must contain only letters, digits, or underscore")
     work_root = _prepare_output_root(args.work_root)
     package_root = work_root / "package"
     runtime_root = package_root / "runtime"
@@ -85,6 +107,10 @@ def run_gate(args: argparse.Namespace) -> Path:
 
     shutil.copyfile(boot_jar, runtime_root / "boot.jar")
     shutil.copyfile(app_jar, runtime_root / "hello.jar")
+    if probe_arg is not None:
+        probe = _regular_file(probe_arg)
+        for filename in (f"lib{probe_name}.dll", f"{probe_name}.dll"):
+            shutil.copyfile(probe, package_root / filename)
     shutil.copyfile(icu_data, runtime_root / "icu" / icu_data.name)
     artifact_records: list[dict[str, object]] = []
     for record in manifest["artifacts"]:
@@ -109,7 +135,13 @@ def run_gate(args: argparse.Namespace) -> Path:
         windows_aot_identity.intentional_startup_mismatches()
     ):
         try:
-            _startup_command(dalvikvm, startup)
+            _startup_command(
+                dalvikvm,
+                startup,
+                main_class=main_class,
+                execution_mode=execution_mode,
+                probe_name=probe_name,
+            )
         except windows_aot_identity.WindowsAotIdentityError as exc:
             if exc.field != expected_field:
                 raise WindowsBootImageError(
@@ -122,7 +154,13 @@ def run_gate(args: argparse.Namespace) -> Path:
         else:
             raise WindowsBootImageError(f"launcher accepted intentional mismatch {name}")
 
-    command = _startup_command(dalvikvm, generation_identity)
+    command = _startup_command(
+        dalvikvm,
+        generation_identity,
+        main_class=main_class,
+        execution_mode=execution_mode,
+        probe_name=probe_name,
+    )
     environment = dict(os.environ)
     environment.update(
         {
@@ -158,11 +196,15 @@ def run_gate(args: argparse.Namespace) -> Path:
     (work_root / "stdout.txt").write_text(result.stdout, encoding="utf-8")
     (work_root / "stderr.txt").write_text(result.stderr, encoding="utf-8")
     combined = result.stdout + "\n" + result.stderr
-    required = ("Hello from dalvikvm!", "main end exception=0")
+    required = tuple(getattr(args, "expect", ())) or (
+        "Hello from dalvikvm!",
+        "main end exception=0",
+    )
     forbidden = (
         "Attempting to fall back to imageless running",
         "InitWithoutImage",
         "Failed to load oat file",
+        *tuple(getattr(args, "forbid", ())),
     )
     missing = [marker for marker in required if marker not in combined]
     present = [marker for marker in forbidden if marker in combined]
@@ -172,6 +214,8 @@ def run_gate(args: argparse.Namespace) -> Path:
         "target_id": args.target_id,
         "windows_aot_identity": windows_aot_identity.contract_record(),
         "startup_options": list(windows_aot_identity.startup_options()),
+        "main_class": main_class,
+        "execution_mode": execution_mode,
         "working_directory": "package",
         "actual_exit": result.returncode,
         "missing_markers": missing,
@@ -197,13 +241,18 @@ def run_gate(args: argparse.Namespace) -> Path:
 
 
 def _startup_command(
-    dalvikvm: Path, startup: windows_aot_identity.IdentityUse
+    dalvikvm: Path,
+    startup: windows_aot_identity.IdentityUse,
+    *,
+    main_class: str = "Hello",
+    execution_mode: str = "interpreter",
+    probe_name: str | None = None,
 ) -> list[str]:
     windows_aot_identity.validate_generation_startup(
         windows_aot_identity.CANONICAL_IDENTITY, startup
     )
     boot_locations = ":".join(startup.boot_class_path_locations)
-    return [
+    command = [
         str(dalvikvm),
         "-Xbootclasspath:runtime/boot.jar",
         f"-Xbootclasspath-locations:{boot_locations}",
@@ -211,11 +260,12 @@ def _startup_command(
         "-XjdwpProvider:none",
         "-Xms64m",
         "-Xmx512m",
-        "-Xint",
-        "-cp",
-        "runtime/hello.jar",
-        "Hello",
     ]
+    command.append("-Xint" if execution_mode == "interpreter" else "-Xusejit:false")
+    if probe_name is not None:
+        command.append("-Djava.library.path=.")
+    command.extend(("-cp", "runtime/hello.jar", main_class))
+    return command
 
 
 def _validate_image_manifest(

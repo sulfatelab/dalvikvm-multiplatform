@@ -15,6 +15,7 @@ import struct
 import subprocess
 import sys
 import time
+import zlib
 
 if __package__:
     from .windows_aot_identity import (
@@ -324,6 +325,278 @@ def validate_oat_elf(path: Path, *, expected_alignment: int) -> dict[str, object
         "segment_alignment": expected_alignment,
         "oat_version": oat_version.rstrip(b"\0").decode("ascii"),
     }
+
+
+def validate_windows_oat_unwind(path: Path) -> dict[str, object]:
+    """Validate the boot-only .oat_unwind.windows transport and its anchors."""
+    data = _regular_file(path).read_bytes()
+    header_format = "<16sHHIQQQIHHHHHH"
+    header_size = struct.calcsize(header_format)
+    if len(data) < header_size:
+        raise Dex2OatProbeError("boot.oat has a truncated ELF header")
+    header = struct.unpack_from(header_format, data)
+    ident = header[0]
+    if ident[:4] != b"\x7fELF" or ident[4:7] != bytes((2, 1, 1)):
+        raise Dex2OatProbeError("boot.oat is not ELF64 little-endian version 1")
+    if ident[7:9] != bytes((3, 0)):
+        raise Dex2OatProbeError("boot.oat changed the Linux ELF identity")
+    if header[1:5] != (3, 62, 1, 0) or header[7] != 0:
+        raise Dex2OatProbeError("boot.oat has an unexpected ELF header")
+    program_offset = header[5]
+    program_entry_size = header[9]
+    program_count = header[10]
+    section_offset = header[6]
+    section_entry_size = header[11]
+    section_count = header[12]
+    section_names_index = header[13]
+    program_format = "<IIQQQQQQ"
+    if (
+        program_entry_size != struct.calcsize(program_format)
+        or not 1 <= program_count <= 64
+        or program_offset + program_count * program_entry_size > len(data)
+    ):
+        raise Dex2OatProbeError("boot.oat has invalid program-header dimensions")
+    load_segments = []
+    for index in range(program_count):
+        segment = struct.unpack_from(
+            program_format, data, program_offset + index * program_entry_size
+        )
+        segment_type, segment_flags = segment[:2]
+        file_offset, virtual_address = segment[2:4]
+        file_size, memory_size, alignment = segment[5:8]
+        if file_size > memory_size or file_offset + file_size > len(data):
+            raise Dex2OatProbeError(f"boot.oat has invalid program header {index}")
+        if segment_type == 1:  # PT_LOAD
+            if alignment != WINDOWS_X64_ELF_ALIGNMENT:
+                raise Dex2OatProbeError(
+                    f"boot.oat PT_LOAD {index} has invalid Windows alignment"
+                )
+            if file_offset % alignment != virtual_address % alignment:
+                raise Dex2OatProbeError(
+                    f"boot.oat PT_LOAD {index} violates ELF congruence"
+                )
+            if segment_flags & 3 == 3:
+                raise Dex2OatProbeError(f"boot.oat PT_LOAD {index} is writable/executable")
+            load_segments.append(segment)
+    if not load_segments:
+        raise Dex2OatProbeError("boot.oat has no loadable segments")
+    section_format = "<IIQQQQIIQQ"
+    if (
+        section_entry_size != struct.calcsize(section_format)
+        or not 1 <= section_count <= 256
+        or section_names_index >= section_count
+        or section_offset + section_count * section_entry_size > len(data)
+    ):
+        raise Dex2OatProbeError("boot.oat has invalid section-header dimensions")
+    raw_sections = [
+        struct.unpack_from(section_format, data, section_offset + i * section_entry_size)
+        for i in range(section_count)
+    ]
+    names_header = raw_sections[section_names_index]
+    names_offset, names_size = names_header[4:6]
+    if names_offset + names_size > len(data):
+        raise Dex2OatProbeError("boot.oat has an invalid section-name table")
+    names = data[names_offset : names_offset + names_size]
+    sections: dict[str, tuple[int, tuple[int, ...]]] = {}
+    for index, section in enumerate(raw_sections):
+        name_offset = section[0]
+        if name_offset >= len(names):
+            raise Dex2OatProbeError(f"boot.oat has an invalid section name {index}")
+        name_end = names.find(b"\0", name_offset)
+        if name_end < 0:
+            raise Dex2OatProbeError(f"boot.oat has an unterminated section name {index}")
+        name = names[name_offset:name_end].decode("ascii", errors="strict")
+        if name in sections:
+            raise Dex2OatProbeError(f"boot.oat repeats section {name!r}")
+        sections[name] = (index, section)
+
+    required = (".rodata", ".text", ".oat_unwind.windows", ".dynsym", ".dynstr")
+    missing = [name for name in required if name not in sections]
+    if missing:
+        raise Dex2OatProbeError(f"boot.oat is missing Windows unwind sections: {missing}")
+    unwind_index, unwind_section = sections[".oat_unwind.windows"]
+    _, rodata_section = sections[".rodata"]
+    _, text_section = sections[".text"]
+    unwind_type, unwind_flags = unwind_section[1:3]
+    unwind_address, unwind_file_offset, unwind_section_size = unwind_section[3:6]
+    unwind_alignment = unwind_section[8]
+    if (
+        unwind_type != 1
+        or unwind_flags != 2
+        or unwind_alignment != WINDOWS_X64_ELF_ALIGNMENT
+        or unwind_section_size < 48
+        or unwind_file_offset + unwind_section_size > len(data)
+    ):
+        raise Dex2OatProbeError("boot.oat has an invalid .oat_unwind.windows section")
+    if ".bss" in sections and unwind_index >= sections[".bss"][0]:
+        raise Dex2OatProbeError(".oat_unwind.windows does not precede .bss")
+    if ".data.img.rel.ro" in sections and sections[".data.img.rel.ro"][0] >= unwind_index:
+        raise Dex2OatProbeError(".oat_unwind.windows does not follow .data.img.rel.ro")
+    if not any(
+        segment[1] == 4
+        and segment[2] <= unwind_file_offset
+        and unwind_file_offset + unwind_section_size <= segment[2] + segment[5]
+        and segment[3] <= unwind_address
+        and unwind_address + unwind_section_size <= segment[3] + segment[6]
+        for segment in load_segments
+    ):
+        raise Dex2OatProbeError(
+            ".oat_unwind.windows is not contained by one read-only PT_LOAD"
+        )
+
+    payload = data[unwind_file_offset : unwind_file_offset + unwind_section_size]
+    fields = struct.unpack_from("<4s11I", payload)
+    (
+        magic,
+        format_version,
+        serialized_header_size,
+        target_machine,
+        entry_size,
+        entry_count,
+        entries_offset,
+        unwind_offset,
+        unwind_size,
+        code_begin,
+        code_end,
+        stored_checksum,
+    ) = fields
+    if (
+        magic != b"ouw\n"
+        or format_version != 1
+        or serialized_header_size != 48
+        or target_machine != 0x8664
+        or entry_size != 12
+        or entry_count < 7
+        or entries_offset != 48
+        or (entries_offset + entry_count * entry_size + 3) & ~3 != unwind_offset
+        or unwind_offset % 4
+        or unwind_offset + unwind_size != len(payload)
+    ):
+        raise Dex2OatProbeError("boot.oat has an invalid Windows unwind header")
+    checksum_payload = bytearray(payload)
+    checksum_payload[44:48] = b"\0\0\0\0"
+    computed_checksum = zlib.adler32(checksum_payload) & 0xFFFFFFFF
+    if stored_checksum != computed_checksum:
+        raise Dex2OatProbeError(
+            "boot.oat Windows unwind checksum mismatch: "
+            f"stored={stored_checksum:#x}, computed={computed_checksum:#x}"
+        )
+
+    rodata_address = rodata_section[3]
+    text_address, text_size = text_section[3], text_section[5]
+    expected_code_begin = text_address - rodata_address
+    expected_code_end = expected_code_begin + text_size
+    if (code_begin, code_end) != (expected_code_begin, expected_code_end):
+        raise Dex2OatProbeError("boot.oat Windows unwind code bounds do not match .text")
+    section_oat_offset = unwind_address - rodata_address
+    previous_end = code_begin
+    unique_unwind_offsets: set[int] = set()
+    for index in range(entry_count):
+        entry_offset = entries_offset + index * entry_size
+        begin_offset, end_offset, unwind_info_offset = struct.unpack_from(
+            "<III", payload, entry_offset
+        )
+        if (
+            begin_offset < code_begin
+            or begin_offset < previous_end
+            or end_offset <= begin_offset
+            or end_offset > code_end
+            or unwind_info_offset % 4
+            or unwind_info_offset < section_oat_offset + unwind_offset
+            or unwind_info_offset >= section_oat_offset + len(payload)
+        ):
+            raise Dex2OatProbeError(f"boot.oat has an invalid Windows unwind entry {index}")
+        previous_end = end_offset
+        unique_unwind_offsets.add(unwind_info_offset)
+
+    for unwind_info_offset in unique_unwind_offsets:
+        local_offset = unwind_info_offset - section_oat_offset
+        if local_offset + 4 > len(payload):
+            raise Dex2OatProbeError("boot.oat has truncated x64 UNWIND_INFO")
+        version_and_flags, _prologue_size, slot_count, _frame = struct.unpack_from(
+            "<4B", payload, local_offset
+        )
+        if version_and_flags != 1:
+            raise Dex2OatProbeError("boot.oat has unsupported x64 UNWIND_INFO flags/version")
+        descriptor_size = 4 + ((slot_count + 1) & ~1) * 2
+        if local_offset + descriptor_size > len(payload):
+            raise Dex2OatProbeError("boot.oat has truncated x64 unwind slots")
+
+    _validate_dynamic_symbol(
+        data,
+        raw_sections,
+        sections,
+        "oatunwindwindows",
+        unwind_index,
+        unwind_address,
+        unwind_section_size,
+    )
+    _validate_dynamic_symbol(
+        data,
+        raw_sections,
+        sections,
+        "oatunwindwindowslastword",
+        unwind_index,
+        unwind_address + unwind_section_size - 4,
+        4,
+    )
+    return {
+        "section": ".oat_unwind.windows",
+        "format_version": format_version,
+        "target_machine": target_machine,
+        "entry_count": entry_count,
+        "unique_unwind_info_count": len(unique_unwind_offsets),
+        "checksum": f"{stored_checksum:08x}",
+        "code_begin": code_begin,
+        "code_end": code_end,
+        "size": unwind_section_size,
+    }
+
+
+def _validate_dynamic_symbol(
+    data: bytes,
+    raw_sections: list[tuple[int, ...]],
+    sections: dict[str, tuple[int, tuple[int, ...]]],
+    name: str,
+    expected_section_index: int,
+    expected_value: int,
+    expected_size: int,
+) -> None:
+    _, dynsym = sections[".dynsym"]
+    dynsym_offset, dynsym_size, dynstr_index, dynsym_entry_size = (
+        dynsym[4],
+        dynsym[5],
+        dynsym[6],
+        dynsym[9],
+    )
+    if dynstr_index >= len(raw_sections) or dynsym_entry_size != 24:
+        raise Dex2OatProbeError("boot.oat has invalid dynamic-symbol metadata")
+    dynstr = raw_sections[dynstr_index]
+    dynstr_offset, dynstr_size = dynstr[4:6]
+    if dynsym_offset + dynsym_size > len(data) or dynstr_offset + dynstr_size > len(data):
+        raise Dex2OatProbeError("boot.oat has out-of-range dynamic-symbol metadata")
+    if dynsym_size % dynsym_entry_size:
+        raise Dex2OatProbeError("boot.oat has a partial dynamic-symbol entry")
+    strings = data[dynstr_offset : dynstr_offset + dynstr_size]
+    symbol_format = "<IBBHQQ"
+    for offset in range(dynsym_offset, dynsym_offset + dynsym_size, dynsym_entry_size):
+        name_offset, _info, _other, section_index, value, size = struct.unpack_from(
+            symbol_format, data, offset
+        )
+        if name_offset >= len(strings):
+            raise Dex2OatProbeError("boot.oat has an invalid dynamic-symbol name")
+        name_end = strings.find(b"\0", name_offset)
+        if name_end < 0:
+            raise Dex2OatProbeError("boot.oat has an unterminated dynamic-symbol name")
+        if strings[name_offset:name_end].decode("ascii", errors="strict") == name:
+            if (section_index, value, size) != (
+                expected_section_index,
+                expected_value,
+                expected_size,
+            ):
+                raise Dex2OatProbeError(f"boot.oat has an invalid {name} anchor")
+            return
+    raise Dex2OatProbeError(f"boot.oat is missing dynamic anchor {name}")
 
 
 def _read_elf_sections(

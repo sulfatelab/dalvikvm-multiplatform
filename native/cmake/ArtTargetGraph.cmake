@@ -86,6 +86,7 @@ if(ART_TARGET_PLATFORM STREQUAL "windows")
             "${_art_windows_runtime}/stack_windows.cc"
             "${_art_windows_runtime}/cet_compat.cc"
             "${_art_windows_runtime}/jit_unwind_windows.cc"
+            "${_art_windows_runtime}/aot_unwind_windows.cc"
             "${_art_windows_runtime}/runtime_windows.cc"
             "${_art_windows_runtime}/monitor_windows.cc"
             "${_art_windows_openjdk}/openjdkjvm_memory_windows.cc")

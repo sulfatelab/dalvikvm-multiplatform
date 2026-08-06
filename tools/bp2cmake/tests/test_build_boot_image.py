@@ -104,6 +104,15 @@ def test_windows_boot_image_serializes_shared_identity(tmp_path, monkeypatch):
         return subprocess.CompletedProcess(command, 0, stdout="built\n", stderr="")
 
     monkeypatch.setattr(build_boot_image.subprocess, "run", run)
+    monkeypatch.setattr(
+        build_boot_image.run_dex2oat_no_image,
+        "validate_windows_oat_unwind",
+        lambda path: {
+            "section": ".oat_unwind.windows",
+            "target_machine": 0x8664,
+            "entry_count": 7,
+        },
+    )
     output = build_boot_image.build_boot_image(args)
 
     assert "--dex-location=/system/framework/boot.jar" in calls[0]
@@ -119,6 +128,7 @@ def test_windows_boot_image_serializes_shared_identity(tmp_path, monkeypatch):
     assert manifest["windows_aot_identity"] == (
         build_boot_image.windows_aot_identity.contract_record()
     )
+    assert manifest["windows_oat_unwind"]["section"] == ".oat_unwind.windows"
 
 
 def test_windows_boot_image_rejects_identity_isa_mismatch(tmp_path):

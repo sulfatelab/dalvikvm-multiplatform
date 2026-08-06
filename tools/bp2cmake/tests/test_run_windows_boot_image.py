@@ -162,3 +162,39 @@ def test_launcher_fails_if_art_falls_back_to_imageless(tmp_path, monkeypatch):
         match="forbidden=.*imageless",
     ):
         run_windows_boot_image.run_gate(args)
+
+
+def test_launcher_stages_native_probe_and_selects_aot_mode(tmp_path, monkeypatch):
+    args = _args(tmp_path)
+    probe = tmp_path / "inputs" / "w031probe.dll"
+    probe.write_bytes(b"probe")
+    args.main_class = "W031Probe"
+    args.execution_mode = "aot"
+    args.probe = probe
+    args.probe_name = "w031probe"
+    args.expect = ["W031 PASS", "main end exception=0"]
+    args.forbid = ["W031 FAIL"]
+    calls = []
+
+    def run(command, **options):
+        calls.append((command, options))
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout="W031 PASS\nmain end exception=0\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr(run_windows_boot_image.subprocess, "run", run)
+    output = run_windows_boot_image.run_gate(args)
+
+    command, _ = calls[0]
+    assert "-Xusejit:false" in command
+    assert "-Xint" not in command
+    assert "-Djava.library.path=." in command
+    assert command[-1] == "W031Probe"
+    assert (output / "package" / "libw031probe.dll").read_bytes() == b"probe"
+    assert (output / "package" / "w031probe.dll").read_bytes() == b"probe"
+    record = json.loads((output / "result.json").read_text(encoding="utf-8"))
+    assert record["main_class"] == "W031Probe"
+    assert record["execution_mode"] == "aot"

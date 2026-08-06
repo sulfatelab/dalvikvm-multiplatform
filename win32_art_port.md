@@ -105,8 +105,13 @@ nterp, managed-JIT, and native-JIT entrypoints are correct and default-on;
 Windows `dex2oat` trivial no-image generation passes the W-028 native operation
 gate twice with structurally valid artifacts. W-030 now generates and stages an
 LZ4 boot set and passes validation-only plus executable private-copy ELF/VDEX
-loading under an experimental `-Xint` startup. Real boot-OAT code execution,
-unwind/CFG, and product integration remain pending. Step 8 is complete because
+loading under an experimental `-Xint` startup. W-031 implements the core
+`.oat_unwind.windows` writer/parser/registration path, locates underlying
+managed/JNI AOT bodies, and passes corresponding JIT-disabled runtime calls,
+but ordinary dispatch
+inside boot-OAT RX ranges remains unproven because startup upgrades many
+current entrypoints to nterp. Deeper unwind, CFG, and product integration remain
+pending. Step 8 is complete because
 one manifest binds and validates each matching path-sensitive cache set;
 cross-generation byte identity is not required.
 
@@ -800,14 +805,17 @@ all product paths. Windows NIO.2 remains a non-goal.
   helper serves validation-only opens at an arbitrary private address and
   executable opens in the exact already committed ART reservation, preserves
   the `oatdex`/VDEX contract, applies final protections, flushes code, and
-  will register Windows x64 AOT unwind data after `Setup()`. Whole-span commit
+  registers checked Windows x64 AOT unwind data after `Setup()`. Whole-span commit
   is selected for the initial OAT-1 path to match current Windows `MemMap`
   semantics. The private-copy ELF/VDEX part is implemented and W-030 proves
   validation-only and executable opens, R/RX/RW protections, no-access gaps,
   zero fill, owner sharing, cache flush, and `oatdex` reuse. The initial
   Windows `boot.art` is LZ4 so ART uses anonymous decompression instead of an
   unrepresentable exact file view in the committed reservation; Linux remains
-  uncompressed.
+  uncompressed. W-031 proves the core unwind transport, managed/JNI and seven
+  trampoline lookups, synthetic virtual unwind, and JIT-disabled managed/JNI
+  runtime calls. Corruption/fallback injection, exception/fatal stack walking, stronger
+  XMM-bearing AOT-frame execution, and normal RX dispatch proof remain.
 - An alternate PE-form OAT, `LoadLibraryExW`, `SEC_IMAGE`, a general
   Bionic-linker port, application OAT, unloading, and shared-view/OAT-2 work
   are outside the initial milestone. Security hardening is deferred. CFG uses one
