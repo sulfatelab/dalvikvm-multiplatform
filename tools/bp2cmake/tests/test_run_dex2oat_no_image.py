@@ -114,7 +114,7 @@ def test_no_image_probe_runs_shell_free_and_validates_outputs(tmp_path, monkeypa
 
     command, options = calls[0]
     assert options["shell"] is False
-    assert "--force-determinism" in command
+    assert "--force-determinism" not in command
     assert "--avoid-storing-invocation" in command
     assert "--swap-dex-size-threshold=0" in command
     assert not any(value == "--no-watch-dog" for value in command)

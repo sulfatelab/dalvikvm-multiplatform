@@ -136,7 +136,6 @@ def build_boot_image(args: argparse.Namespace) -> Path:
         "--runtime-arg",
         "-Xmx512m",
         "--avoid-storing-invocation",
-        "--force-determinism",
         f"-j{args.parallel}",
     ]
     environment = dict(os.environ)

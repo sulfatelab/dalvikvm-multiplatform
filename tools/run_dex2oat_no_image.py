@@ -125,7 +125,6 @@ def run_probe(args: argparse.Namespace) -> Path:
         "--swap-dex-size-threshold=0",
         "--swap-dex-count-threshold=0",
         "--avoid-storing-invocation",
-        "--force-determinism",
         f"-j{args.parallel}",
     ]
 

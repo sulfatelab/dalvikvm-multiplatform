@@ -47,7 +47,7 @@ def test_boot_image_builder_is_shell_free_relocatable_and_atomic(
 
     command, options = calls[0]
     assert options["shell"] is False
-    assert "--force-determinism" in command
+    assert "--force-determinism" not in command
     assert "--avoid-storing-invocation" in command
     assert "-Xmx512m" in command
     assert "-j32" in command
