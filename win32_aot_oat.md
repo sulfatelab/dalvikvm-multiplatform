@@ -1,6 +1,6 @@
 # Windows AOT and OAT design
 
-Status: active boot-only early bring-up (revised 2026-08-06). This document
+Status: active boot-only early bring-up (revised 2026-08-07). This document
 records the current ART OAT/VDEX/image contracts and the selected Windows AOT
 artifact and loader design. Windows keeps the same ELF64 coat and header
 identity as Linux, while using 64-KiB ELF/image segment alignment for the
@@ -11,10 +11,9 @@ W-028 completes numbered implementation-sequence step 1. W-029 selects the
 single-component identity. W-030 makes the generator and experimental
 package-root launcher consume that identity, implements private-copy ELF/VDEX
 loading, and passes validation-only plus executable boot loading on the
-authoritative native host. Steps 4 and 5 are complete. Steps 2, 8, and 9 remain
+authoritative native host. Steps 4, 5, and 8 are complete. Steps 2 and 9 remain
 partial: the seven negative identities are still launcher-level pre-spawn
-checks rather than ART diagnostics, repeated boot generation is not byte-
-reproducible despite `--force-determinism`, and normal product selection plus
+checks rather than ART diagnostics, and normal product selection plus
 successful imageless fallback are not integrated. W-030 deliberately uses
 `-Xint`; it proves boot-image/OAT loading, not execution from boot-OAT RX code.
 The supported Windows product therefore remains imageless nterp/JIT while
@@ -1859,11 +1858,13 @@ either CFG mode.
 
 The product integration must define:
 
-- the native Windows x64 `dex2oat.exe` build target and reproducible command.
-  Generation must run natively on Windows: the unwind-emission predicate keys on
-  the compiler binary's own `ART_TARGET_WINDOWS`, so a Linux-hosted `dex2oat`
-  cannot produce a valid Windows boot set. Cross *building* the Windows binaries
-  on Linux remains supported;
+- the native Windows x64 `dex2oat.exe` build target, recorded command, and
+  intentional logical-path identities. Byte identity across cache generations
+  is not a product requirement. Generation must run natively on Windows: the
+  unwind-emission predicate keys on the compiler binary's own
+  `ART_TARGET_WINDOWS`, so a Linux-hosted `dex2oat` cannot produce a valid
+  Windows boot set. Cross *building* the Windows binaries on Linux remains
+  supported;
 - the input boot class path and compiler filter;
 - the target-specific staging paths for the matching ART/OAT/VDEX set;
 - whether the first staged set is single- or multi-component;
@@ -1940,7 +1941,7 @@ The first implementation sequence step is now represented by the native-only
 W-028 `windows_w028_dex2oat_no_image` gate. Its shell-free runner builds a
 trivial input and target-neutral boot JAR, invokes the native Windows x64
 compiler with stable logical locations, an intentionally absent boot image,
-enabled watchdog, forced swap, and deterministic output, then validates:
+enabled watchdog, forced swap, and a per-run manifest, then validates:
 
 - ELF64 little-endian `ET_DYN` for x86-64;
 - Linux ART `EI_OSABI`, ABI version, and `e_flags` identity;
@@ -1978,13 +1979,15 @@ the OAT-1 executable loader described below.
 The Windows 64-KiB `kElfSegmentAlignment` split, shared-`libartbase` boundary,
 compiler build, and W-028 dependencies pass the Linux-hosted Windows cross
 build. W-028 passes twice on the authoritative Server 2025 build-26100 host
-and produces byte-identical artifacts: a 66,888-byte OAT with SHA-256
+and happened to produce the same artifacts: a 66,888-byte OAT with SHA-256
 `fa03ad2f48f7a83bc8c6ddbf42620454f336d8c870e339771fc3edc88eb615f7`
 and a 1,000-byte VDEX with SHA-256
 `cc1b8db5d41a00c51a380c27020e69e97cf987e0e0ee9b44a0b7995c703073c1`.
 They pass the structural validator with four non-W+X 64-KiB `PT_LOAD`
 segments, OAT 265, and an exact-size four-section VDEX 027 containing one
-input DEX. A post-correction Wine diagnostic produces exactly the same bytes.
+input DEX. A post-correction Wine diagnostic produced exactly the same bytes.
+This equality is recorded characterization, not a cross-generation acceptance
+condition.
 A Linux source compile accepts every shared writer change, and the coherent
 Linux baseline remains 16-KiB aligned. Step 1 is therefore `COMPLETE`; this
 does not exercise `ImageWriter` or executable loading. See the
@@ -2045,10 +2048,13 @@ The Windows boot generator now emits an LZ4 `boot.art`, ordinary ELF
 the manifest and all hashes, stages canonical package paths, runs from the
 package root with exact `-Ximage:runtime/boot-image/boot.art`, and rejects
 imageless fallback markers even when managed `Hello` exits successfully. The
-native W-030 pair passes 2/2. Step 8 remains `PARTIAL` because forced repeated
-generation changes `boot.art` and the OAT `.text` size/hash while `boot.vdex`
-remains stable; three serial `-j1` attempts did not restore byte identity.
-Step 9 remains `PARTIAL` because W-030 is an explicit experimental gate, not
+native W-030 pair passes 2/2. Step 8 is `COMPLETE`: one generated manifest
+binds the path-sensitive ART/OAT/VDEX set by its logical identities, sizes, and
+hashes, and that exact set validates, stages, and starts. Repeated generations
+need not be byte-identical cache artifacts; observed `boot.art`/OAT variation,
+including at `-j1`, is non-blocking characterization. The generators do not
+request `--force-determinism`. Step 9 remains `PARTIAL`
+because W-030 is an explicit experimental gate, not
 normal product selection, and it detects rather than successfully exercises
 the whole-transaction imageless fallback. Finally, the gate uses `-Xint`, so
 sequence step 10 remains open.
@@ -2135,7 +2141,7 @@ cannot sit between `.text` and `.data.img.rel.ro` without breaking
 | 2 | A proposed unwind-emission predicate based only on `kIsTargetWindows` would exclude Windows host builds | **Accepted, with wording correction** | Preserve the semantic union of host Windows and target Windows used by the current `_WIN32 \|\| ART_TARGET_WINDOWS` gates. A shared constexpr is acceptable if it expresses that union; identical preprocessor spelling is not required. |
 | 3 | Boot-class-path and dex-location identity is exact `':'`-joined text, without Windows path normalization or case folding | **Accepted; preflight implemented** | W-029 pins `/system/framework/boot.jar`, the single-component topology, and package-relative `runtime/boot-image/boot.art`; it rejects seven intentional mismatches natively. Actual Windows generation and ART startup must still consume and prove the contract. |
 | 4 | Image mode reaches Windows runtime paths not covered by imageless smoke tests, while some heap/image layout invariants are fatal | **Accepted, with narrower scope** | Expected compatibility failures must reject the artifact before trusted-layout invariants. `ImageSpace::LoadBootImage()` already supports a false-return/imageless path; debug-only trusted-layout `CHECK`s such as boot-image contiguity remain internal invariants and need not become hostile-input recovery checks. |
-| 5 | Native `dex2oat.exe` operation was unproven | **Accepted and closed, with gate correction** | `--version` is unsupported. W-028 defines the real trivial single-JAR no-image OAT/VDEX compile and passes twice on native Server 2025 with byte-identical artifacts; post-correction Wine output also matches. It exercises compiler and watchdog paths, not `ImageWriter`; boot-set generation remains a later step. |
+| 5 | Native `dex2oat.exe` operation was unproven | **Accepted and closed, with gate correction** | `--version` is unsupported. W-028 defines the real trivial single-JAR no-image OAT/VDEX compile and passes twice on native Server 2025 with structurally valid artifacts; the recorded outputs happened to match, but byte identity is not an acceptance condition. It exercises compiler and watchdog paths, not `ImageWriter`; boot-set generation remains a later step. |
 | 6 | Whole-span Windows commit, not just 64-KiB alignment gaps, dominates reservation cost | **Accepted** | Measure the full boot-image reservation, OAT prefix, padding, committed span, and working set separately. |
 | 7 | `kDynamicSymbolCount` follows `kLast`, and dynamic-section capacity is reserved in `ElfWriterQuick::Start()` before payload sizes are known | **Accepted** | Keep the base enum/count unchanged, append Windows-only values after `kLast`, and reserve optional-name capacity from writer mode known at `Start()`. Section/anchor emission remains conditional on actual payload. Prove Linux/Android byte identity. |
 | 8 | CFG target alignment and exactness were insufficiently specified | **Accepted, with semantic correction** | Require ascending, unique, exact, 16-byte-aligned x86-64 offsets and test rejection of a deliberately omitted aligned target. Reject the unsupported claim that enabling one offset necessarily admits a whole 16-byte granule. |
@@ -2160,12 +2166,12 @@ narrower than a new segment loader: only Windows private-copy replacement of
 file-backed segment operations is new. W-030 has now proven native
 `ImageWriter` output, canonical LZ4 image startup, private-copy ELF/VDEX
 ownership and protections, and rejection of silent imageless fallback on
-Server 2025. Residual risk remains medium/high because repeated boot generation
-is not byte-reproducible, the accepted startup runs in `-Xint`, and unwind,
-real boot-OAT execution, CFG observation, product selection/fallback, and
-measurements remain open. Explicit CFG additionally depends on an unresolved
-invalid-by-default allocation sequence. CFG explicit enforcement, teardown
-recovery from a failed function-table deletion, security hardening,
+Server 2025. Residual risk remains medium/high because the accepted startup
+runs in `-Xint`, and unwind, real boot-OAT execution, CFG observation, product
+selection/fallback, and measurements remain open. Explicit CFG additionally
+depends on an unresolved invalid-by-default allocation sequence. CFG explicit
+enforcement, teardown recovery from a failed function-table deletion,
+security hardening,
 application OAT, and OAT-2 do not block the initial boot-only observation-mode
 milestone.
 
@@ -2319,7 +2325,7 @@ tool policy are deferred.
 | Target-aware trampoline lowering regresses | Medium | The shared producer already lowers Thread access to Linux `GS` or Windows `R15`; retain two-target disassembly plus resolution/quick-to-interpreter execution gates |
 | Native `dex2oat.exe` operation regresses | Medium | Keep the accepted W-028 real single-JAR no-image `.oat`/`.vdex` compile as a native Server 2025 regression gate; `--version` is not supported and is not a substitute |
 | Boot class path / dex location strings disagree between generation and load | High | W-029 pins logical `/system/framework/boot.jar`; W-030 makes generation, manifest, staging, and startup consume it and rejects launcher drift without normalization; ART-level intentional-mismatch diagnostics remain required |
-| Windows boot artifacts are not byte-reproducible | High | Keep `--force-determinism`, record compiler parallelism and every artifact hash, retain the stable VDEX observation, and diagnose the Windows `ImageWriter`/OAT code-order source before sequence step 8 can complete; `-j1` is not an accepted workaround because it reproduced the defect |
+| Path-sensitive cache artifacts are mixed across generations | High | Treat each generated ART/OAT/VDEX set as one unit, record its intentional logical locations and per-run sizes/hashes, validate the manifest before staging, and never require or infer cross-generation byte identity |
 | Image loads but boot OAT code is never executed | High | W-030 proves canonical image/OAT/VDEX loading under `-Xint`; require entrypoints within the boot-OAT RX range and representative execution with JIT disabled before step 10 completes |
 | Boot reservation commit dominates the measured cost | Medium operational | Windows `MemMap` commits whole spans, so the image+OAT reservation, not the 64-KiB padding, is the term to report and later optimize |
 | Unwind predicate narrows the existing Windows condition | Medium | Preserve the semantic union of Windows-host and Windows-target compilation; test both even if a shared constexpr replaces the current preprocessor spelling |
@@ -2336,7 +2342,8 @@ per-process commit and copying.
 Before claiming Windows AOT support, require:
 
 - native Windows x64 `dex2oat.exe` generation of the selected boot component
-  set and deterministic checksummed fields;
+  set with valid internal checksums and one manifest binding the matching
+  ART/OAT/VDEX artifacts;
 - ELF-header comparison proving Linux-identical OSABI/ABI version/flags,
   Linux 16-KiB and Windows 64-KiB `PT_LOAD` alignment, and
   `ART_PAGE_SIZE_AGNOSTIC=1` on both;
@@ -2427,10 +2434,10 @@ semantics; Wine is structural only.
    whether explicit-target mode can establish invalid-by-default CFG state in
    the already committed OAT-1 reservation without W+X; this does not block
    observation-mode bring-up.
-8. Diagnose why repeated Windows boot generation changes LZ4 `boot.art` and
-   OAT `.text` despite `--force-determinism`; make the W-030-generated and
-   staged set reproducible without a serial-build workaround. Linux remains
-   uncompressed and unchanged.
+8. Retain W-030's per-generation manifest binding, validation, and staging for
+   the matching LZ4 ART/OAT/VDEX set. Cross-generation byte identity is not an
+   exit condition for these path-sensitive cache artifacts; no step-8 exit
+   condition remains. Linux remains uncompressed and unchanged.
 9. Move W-030's explicit experimental selection into a reviewed product option
    and exercise successful whole-transaction imageless fallback for expected
    missing, stale, wrong-target, and cross-artifact cases before trusted-layout

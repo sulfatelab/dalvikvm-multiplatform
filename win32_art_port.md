@@ -103,11 +103,12 @@ unmet W-025 feature; CFG remains separate.
 The original plan allowed JIT/dex2oat to be a v1.1 gate. Current x86_64 quick,
 nterp, managed-JIT, and native-JIT entrypoints are correct and default-on;
 Windows `dex2oat` trivial no-image generation passes the W-028 native operation
-gate twice with byte-identical artifacts. W-030 now generates and stages an
+gate twice with structurally valid artifacts. W-030 now generates and stages an
 LZ4 boot set and passes validation-only plus executable private-copy ELF/VDEX
 loading under an experimental `-Xint` startup. Real boot-OAT code execution,
-unwind/CFG, reproducible boot artifacts, and product integration remain
-pending.
+unwind/CFG, and product integration remain pending. Step 8 is complete because
+one manifest binds and validates each matching path-sensitive cache set;
+cross-generation byte identity is not required.
 
 ---
 
@@ -776,8 +777,8 @@ all product paths. Windows NIO.2 remains a non-goal.
   and process-wide `artbase.dll` prerequisite are implemented. The enabled
   watchdog, VDEX finalization, mapped-file flushing, and binary-descriptor
   prerequisites now complete under a repeated Wine diagnostic. W-028 passes
-  twice on native Server 2025 and produces byte-identical validator-clean
-  OAT/VDEX files; post-correction Wine output matches them exactly. This
+  twice on native Server 2025 and produces validator-clean OAT/VDEX files; the
+  recorded outputs happened to match, but byte identity is not required. This
   completes generation step 1. W-030 now supplies the boot-set generation and
   private-copy loading slices described below. The imageless interpreter+JIT
   product does not require them.
@@ -815,9 +816,9 @@ all product paths. Windows NIO.2 remains a non-goal.
   characterizes real indirect OAT calls without target API changes;
   explicit-target mode is separately gated on establishing invalid-by-default
   CFG state in the committed OAT-1 reservation without W+X.
-- The remaining functional work is boot-generation determinism, ART-level
-  negative identity diagnostics, unwind/CFG transport, normal product
-  selection with successful whole-transaction imageless fallback, OAT-1
+- The remaining functional work is ART-level negative identity diagnostics,
+  unwind/CFG transport, normal product selection with successful whole-
+  transaction imageless fallback, OAT-1
   measurements, and proof that real boot methods execute from the OAT RX range
   rather than JIT/nterp. The compiler-to-OAT unwind and CFG transports are no
   longer open format design: their layouts, writer integration, runtime

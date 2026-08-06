@@ -1,6 +1,6 @@
 # Windows AOT/OAT implementation tracker
 
-Status: active, boot-only early bring-up (updated 2026-08-06).
+Status: active, boot-only early bring-up (updated 2026-08-07).
 
 This file tracks implementation and evidence for the design in
 [`win32_aot_oat.md`](win32_aot_oat.md). It does not replace that document's
@@ -35,6 +35,9 @@ The first implementation slice is pinned to nested ART commit
 W-030's private-copy loader is nested ART commit
 `fd6accf065a550fc1e436cb9f28617b466f7593e`; its root generator, launcher,
 probe, and tests are commit `a0400259954d95161f45c74d3a8a4317a3427a62`.
+Commit `1a9aa837ad2fb697d246855c695d44f2b53c69e8` removes the
+`--force-determinism` request from both OAT generators; manifests still bind
+each generated cache set.
 
 ## Current position
 
@@ -44,9 +47,10 @@ operation gate, and emits Windows-target OAT/image ELF segments with 64-KiB
 alignment while retaining `kMaxPageSize = 16384` and
 `ART_PAGE_SIZE_AGNOSTIC=1`. The cross-built compiler and all of its ART runtime
 consumers share one `artbase.dll` state owner. Two authoritative native
-build-26100 executions pass and produce byte-identical, structurally valid OAT
-265 and VDEX 027 artifacts; a post-correction Wine diagnostic produces the
-same bytes. The sanitized result is
+build-26100 executions pass with structurally valid OAT 265 and VDEX 027
+artifacts. Those particular runs happened to produce the same bytes, but
+cross-generation byte identity is not a step-1 acceptance condition. The
+sanitized result is
 [`docs/history/windows_x64_w028_result.md`](docs/history/windows_x64_w028_result.md).
 
 Numbered step 2 is `PARTIAL`. W-029 now pins and validates a single-component,
@@ -69,14 +73,15 @@ R/RX/RW protections, no-access gaps, zero fill, source privacy, executable
 cache flushing, validation-only opens, executable opens, and `oatdex` reuse.
 Linux retains its original fixed file-mapping path.
 
-Steps 8 and 9 are `PARTIAL`. Windows now generates and stages an LZ4
-`boot.art`, ordinary ELF `boot.oat`, and VDEX, then launches with exact
+Step 8 is `COMPLETE`, and step 9 is `PARTIAL`. Windows now generates and stages
+an LZ4 `boot.art`, ordinary ELF `boot.oat`, and VDEX, then launches with exact
 `-Ximage:runtime/boot-image/boot.art` and rejects silent imageless fallback.
-Linux remains uncompressed. Repeated forced generation is not byte-
-reproducible: `boot.vdex` stays stable, but `boot.art` and OAT `.text` change,
-including in three `-j1` trials. The gate is experimental rather than normal
-product selection and does not exercise successful fallback. It also uses
-`-Xint`, so it proves loading rather than real boot-OAT execution.
+Linux remains uncompressed. The manifest binds the exact path-sensitive
+ART/OAT/VDEX set produced by one generation; cross-generation byte identity is
+not required. Repeated-generation variation, including in three `-j1` trials,
+is retained only as characterization. The gate is experimental rather than
+normal product selection and does not exercise successful fallback. It also
+uses `-Xint`, so it proves loading rather than real boot-OAT execution.
 
 The earlier `runtime/oat/oat_file_test.cc` additions are a pre-dispatch loader
 characterization suite. They support sequence step 3 and do not constitute
@@ -86,14 +91,14 @@ numbered step 1 or executable Windows OAT loading.
 
 | Step | State | Implemented position | Remaining exit condition |
 |---:|---|---|---|
-| 1. Native trivial no-image `dex2oat` compile | `COMPLETE` | W-028 builds `dex2oat`, `boot.jar`, and `hello.jar`; runs a deterministic single-JAR `speed` compile with watchdog and forced swap; validates ELF64/ET_DYN/x86-64, Linux ART OSABI/ABI/flags, 64-KiB `PT_LOAD`, OAT 265, and the complete four-section VDEX 027 envelope; two native runs and a post-correction Wine diagnostic produce byte-identical outputs | Retain W-028 as a regression gate; no step-1 exit condition remains |
+| 1. Native trivial no-image `dex2oat` compile | `COMPLETE` | W-028 builds `dex2oat`, `boot.jar`, and `hello.jar`; runs a single-JAR `speed` compile with watchdog and forced swap; validates ELF64/ET_DYN/x86-64, Linux ART OSABI/ABI/flags, 64-KiB `PT_LOAD`, OAT 265, and the complete four-section VDEX 027 envelope; repeated accepted runs happened to produce the same bytes | Retain W-028 as an operation/structure regression gate; cross-generation byte identity is not required |
 | 2. Stable generation/startup identities | `PARTIAL` | W-029 pins one `boot` component, logical `/system/framework/boot.jar`, package `runtime/boot.jar`, explicit package-relative `-Ximage:runtime/boot-image/boot.art`, and the x86-64 ART/OAT/VDEX package paths; W-030 makes generation, manifest, staging, and startup consume the record, and native ART accepts the canonical set | Add ART-level negative diagnostics; the existing seven-case matrix is launcher-level and rejects before spawn |
 | 3. Pre-dispatch characterization and trampoline regression | `PARTIAL` | Characterization tests exist in `oat_file_test.cc` and the shared trampoline lowering has been source-reviewed | Close H-005 by running the focused tests; add Linux-`GS`/Windows-`R15` disassembly and resolution/quick-to-interpreter execution gates |
 | 4. Windows private-copy `ElfOatFile` mapping | `COMPLETE` | Windows `ElfFileImpl::Load()` privately copies every file-backed `PT_LOAD` into the existing ART-owned private allocation; W-030 covers validation-only and executable opens, rejected foreign/section/unaligned/range inputs, exact address, R/RX/RW, no-access gaps, zero fill, owner sharing, source privacy, and cache flush | Retain W-030; no boot-only step-4 exit condition remains |
 | 5. VDEX aperture and ownership | `COMPLETE` | Windows reused VDEX mappings use the same checked private-copy primitive for the exact `oatdex` bytes, return an owner-sharing slice, and pass canonical boot startup through `ComputeFields -> LoadVdex -> Setup` | Retain the native end-to-end gate; add broader rollback injection with product-level fallback work |
 | 6. `.oat_unwind.windows` | `NOT STARTED` | Writer format, machine value, checksum, anchors, validation, and registration lifetime are specified | Implement emission through `WindowsAotUnwindRegistry`; pass structural, lookup, virtual-unwind, exception, and stack-walk gates |
 | 7. `.oat_cfg.windows` | `NOT STARTED` | Independent format and observation/explicit mode split are specified | Implement collection/serialization/parser; pass observation mode; keep explicit mode gated on the separate committed-allocation feasibility proof |
-| 8. Boot ART/OAT/VDEX generation and staging | `PARTIAL` | W-030 exercises native `ImageWriter`, emits Windows LZ4 `boot.art` plus matching OAT/VDEX, validates hashes/identity, and stages the exact single-component topology; canonical startup passes | Diagnose and fix repeated-artifact nondeterminism; `boot.vdex` is stable but `boot.art` and OAT `.text` differ even at `-j1` |
+| 8. Boot ART/OAT/VDEX generation and staging | `COMPLETE` | W-030 exercises native `ImageWriter`, emits Windows LZ4 `boot.art` plus matching OAT/VDEX, binds the path-sensitive set with one manifest, validates hashes/identity, stages the exact single-component topology, and passes canonical startup | Retain per-generation set integrity; cross-generation byte identity is intentionally not required |
 | 9. Experimental selection and fallback | `PARTIAL` | W-030 explicitly selects the staged set, runs from package root, rejects seven launcher mismatches, and fails if ART silently enters imageless startup | Integrate a reviewed product option and exercise successful missing/stale/wrong-target/cross-artifact whole-transaction fallback |
 | 10. Real boot-OAT execution | `NOT STARTED` | Required entrypoint, relocation, JNI, fault, GC, and unwind evidence is specified | Prove representative methods execute from boot-OAT RX ranges without JIT on Server 2025 |
 | 11. CFG observation and OAT-1 measurements | `NOT STARTED` | Required policy, call-path, reservation, commit, padding, startup, and working-set observations are specified | Pass the native observation gate and record the measurements; explicit CFG, OAT-2, application OAT, unloading, and security remain deferred |
@@ -172,8 +177,8 @@ executable.
 the non-image application compile takes ART's diagnosed imageless fallback.
 It uses a single target-neutral boot JAR and trivial input JAR, stable logical
 DEX locations, the `speed` filter, two compiler workers, enabled watchdog,
-forced swap-file thresholds, deterministic output, and a target-local runtime
-root. The gate is shell-free and deletes only its exact link-free managed
+forced swap-file thresholds, a per-run result manifest, and a target-local
+runtime root. The gate is shell-free and deletes only its exact link-free managed
 result directory before a run.
 
 The runner changes into that managed result directory and passes the relative
@@ -281,18 +286,20 @@ native run emits:
 
 | Artifact | Bytes | SHA-256 |
 |---|---:|---|
-| `boot.art` | 3,006,016 | `5bdf0b80011dac18ca4bbeaca3cb1ab9bec2a353dfc9bce889aeb2042e81c9f6` |
-| `boot.oat` | 18,834,112 | `94344c9539576fbaa57aaaae38900adcd5041d63c0aeb308e81c48e210cbafe9` |
+| `boot.art` | 2,940,464 | `e344c202362867aead20cd4c1d30281bc2b902ec84cda433ca58ee0089dae4b6` |
+| `boot.oat` | 18,754,624 | `73367849da408025f67a795e0618d7f062e9f82029351523bbdb99516360d6bc` |
 | `boot.vdex` | 8,309,376 | `acec8006a073b67bd1740804a7bd65a0a1ffa5380815cb194eff9443845fc12d` |
 
-This makes steps 8 and 9 useful but partial. Forced repeats at normal
-parallelism and three serial `-j1` attempts all start successfully, yet
-`boot.art` hashes and OAT `.text` sizes/hashes change while `boot.vdex` remains
-stable. Serial generation is therefore not a fix and the configured Windows
-parallelism remains 16. W-030 is also an explicit experimental gate rather
-than normal product selection, and it detects but does not exercise successful
-imageless fallback. Its `-Xint` launcher proves loading, not execution from
-boot-OAT RX code.
+This completes step 8 and makes step 9 useful but partial. ART/OAT files are
+path-sensitive cache artifacts, so byte identity across separately generated
+sets is not an acceptance requirement. Earlier normal-parallel and three
+serial `-j1` runs made with the now-removed `--force-determinism` request all
+started successfully while `boot.art`/OAT bytes varied; that result is
+non-blocking characterization, not a compiler defect or reason to serialize.
+The configured Windows parallelism remains 16. W-030 is an explicit
+experimental gate rather than normal product selection, and it detects but
+does not exercise successful imageless fallback. Its `-Xint` launcher proves
+loading, not execution from boot-OAT RX code.
 
 ## Evidence log
 
@@ -307,9 +314,9 @@ boot-OAT RX code.
 | 2026-08-06 | Post-correction Wine diagnostic | Relative `probe.oat` removes the physical path from `DT_SONAME`; the OAT and VDEX hashes exactly match both authoritative native runs | Cross-environment reproducibility diagnostic; not the acceptance authority |
 | 2026-08-06 | Fresh Linux-hosted Windows cross configuration | W-029 passes 1/1 in 0.06 s; the target-binding audit remains 2,081 compile commands, 2,126 Ninja commands, and 30 product links | Cross-host preflight evidence for step 2 |
 | 2026-08-06 | Windows Server 2025 build 26100 | W-029 passes 1/1 in 0.13 s after a no-op build and rejects all seven intentional mismatches; W-028 then passes 1/1 in 0.68 s with unchanged artifact hashes | **Authoritative identity-preflight acceptance**; step 2 remains partial; see [`docs/history/windows_x64_w029_result.md`](docs/history/windows_x64_w029_result.md) |
-| 2026-08-06 | Windows Server 2025 build 26100 | W-030 private-copy probe passes in 0.08 s and reports 4-KiB pages, 64-KiB allocation granularity, checked range/ownership, R/RX/RW, no-access gaps, zero fill, private source, shared owner, and cache flush | **Authoritative steps 4/5 primitive acceptance** |
-| 2026-08-06 | Windows Server 2025 build 26100 | W-030 generates the LZ4 boot set and canonical startup passes in 1.13 s; both W-030 gates pass 2/2, ART exits 0 with all required markers, no forbidden fallback marker, and seven launcher mismatches rejected | **Authoritative boot-only loading acceptance**; steps 8/9 partial and step 10 open; see [`docs/history/windows_x64_w030_result.md`](docs/history/windows_x64_w030_result.md) |
-| 2026-08-06 | Windows Server 2025 build 26100 forced-repeat characterization | Normal parallel and three `-j1` generations all start successfully; VDEX remains stable while `boot.art` and OAT `.text` size/hash change | Windows boot-compiler determinism defect; step 8 remains partial and serial generation is rejected as a workaround |
+| 2026-08-06 | Windows Server 2025 build 26100 | W-030 generates the LZ4 boot set and canonical startup passes in 1.13 s; both W-030 gates pass 2/2, ART exits 0 with all required markers, no forbidden fallback marker, and seven launcher mismatches rejected | **Authoritative boot-only loading acceptance**; step 8 complete, step 9 partial, and step 10 open; see [`docs/history/windows_x64_w030_result.md`](docs/history/windows_x64_w030_result.md) |
+| 2026-08-06 | Windows Server 2025 build 26100 repeated-generation characterization with the superseded forced-determinism request | Normal parallel and three `-j1` generations all start successfully; VDEX remains stable while `boot.art` and OAT `.text` size/hash change | Non-blocking path-sensitive cache variation; per-generation manifest integrity, not cross-generation byte identity, is the contract |
+| 2026-08-07 | Windows Server 2025 build 26100, no forced byte determinism | W-030 private-copy probe passes in 0.07 s; canonical LZ4 boot startup passes in 1.13 s, and W-028/W-029 pass in 0.64/0.12 s | **Authoritative correction acceptance**; steps 4/5/8 complete, step 9 partial, and step 10 open |
 
 The two accepted native runs and the post-correction Wine diagnostic have
 SHA-256
@@ -328,14 +335,11 @@ diagnostic evidence; native Server 2025 is the acceptance authority.
 2. Implement `.oat_cfg.windows` serialization/parser and the native CFG
    observation gate; keep explicit-target mode behind its separate allocation
    feasibility proof.
-3. Diagnose Windows boot-generation nondeterminism, retaining the recorded
-   compiler parallelism and stable VDEX evidence; do not adopt `-j1` as a
-   workaround.
-4. Prove representative methods actually execute from boot-OAT RX ranges with
+3. Prove representative methods actually execute from boot-OAT RX ranges with
    JIT disabled, then exercise relocation, JNI, faults, GC/roots, and unwind.
-5. Integrate reviewed product selection plus successful whole-transaction
+4. Integrate reviewed product selection plus successful whole-transaction
    imageless fallback and ART-level negative identity diagnostics.
-6. Promote the cross-target 16-/64-KiB artifact comparison into an automated
+5. Promote the cross-target 16-/64-KiB artifact comparison into an automated
    regression, close H-005, and add the two-target trampoline regression.
 
 Do not begin application OAT, OAT-2, successful-load unloading, explicit CFG

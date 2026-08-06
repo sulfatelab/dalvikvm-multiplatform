@@ -7,11 +7,11 @@ mapping path.
 
 | Build | Runtime | Last checked |
 |---|---|---|
-| verified | verified on Windows Server 2025 build 26100 | 2026-08-06 |
+| verified | verified on Windows Server 2025 build 26100 | 2026-08-07 |
 
 The Linux-hosted Windows cross build compiled and linked
 `windows_w030_private_copy_probe.exe`. On the authoritative native host the
-probe passed in 0.08 seconds and reported:
+probe passed again in 0.07 seconds on 2026-08-07 and reported:
 
 ```text
 W030_PRIVATE_COPY_PASS page=4096 allocation_granularity=65536 range=checked protections=R_RX_RW gaps=noaccess zero_fill=verified ownership=shared source=private cache=flushed

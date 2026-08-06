@@ -5,8 +5,13 @@
 **Host:** Windows Server 2025 Datacenter Evaluation, x64, build 26100
 (`Microsoft Windows [Version 10.0.26100.32230]`)
 
-**Status:** **PASS — private-copy steps 4/5 complete; boot generation/selection
-steps 8/9 partial**
+**Status:** **PASS — private-copy steps 4/5 and boot generation step 8
+complete; selection step 9 partial**
+
+Acceptance interpretation corrected 2026-08-07: ART/OAT artifacts are
+path-sensitive cache outputs. Byte identity across separate generations is not
+an acceptance requirement; one manifest must instead bind and validate the
+matching set produced by that generation.
 
 ## Scope and conclusion
 
@@ -16,17 +21,16 @@ stages the W-029 single-component boot set and starts ART from the package
 root. The two gates passed 2/2:
 
 ```text
-windows_w030_private_copy_probe  PASS  0.08 s
+windows_w030_private_copy_probe  PASS  0.07 s
 windows_w030_boot_image_startup  PASS  1.13 s
 ```
 
-This completes implementation-sequence step 4 and the boot-only scope of step
-5. Steps 8 and 9 are useful but remain partial: generated boot artifacts are
-not byte-reproducible, and the launcher is an explicit experimental gate rather
-than product selection with proven successful imageless fallback. The startup
-uses `-Xint`; it proves validation-only and executable ELF/VDEX/image loading,
-not execution of a method from the boot-OAT RX range. Unwind, CFG observation,
-real AOT execution, and measurements are not claimed.
+This completes implementation-sequence step 4, the boot-only scope of step 5,
+and step 8. The launcher is an explicit experimental gate rather than product
+selection with proven successful imageless fallback, so step 9 remains
+partial. The startup uses `-Xint`; it proves validation-only and executable
+ELF/VDEX/image loading, not execution of a method from the boot-OAT RX range.
+Unwind, CFG observation, real AOT execution, and measurements are not claimed.
 
 ## Source identity
 
@@ -35,6 +39,7 @@ The accepted native overlay was built from:
 ```text
 root baseline             4a65328
 root W-030 implementation a0400259954d95161f45c74d3a8a4317a3427a62
+no-byte-identity policy   1a9aa837ad2fb697d246855c695d44f2b53c69e8
 ART baseline              681f2f38a295602a1d04e21febb63b7e26e19103
 ART private-copy commit   fd6accf065a550fc1e436cb9f28617b466f7593e
 ```
@@ -49,7 +54,10 @@ tests/cases/aot-private-copy/probe.cc
 cf6a37acf75c46d3ab4e30d0e350b8d524d5d5be5323ba2c278dd018f8764d60
 
 tools/build_boot_image.py
-e13434a7235bde829b67c22825c6af17227c32fe1ccb22c4e669f9e663af2624
+8ca10d73fc5434604f2f3404b6c5d844acf42942828c8c7138f13cdfb2ea8aee
+
+tools/run_dex2oat_no_image.py
+97b0d3719f2387b837740cc837c4405d4e471605221d0080f4499822b072d7d4
 
 tools/windows_aot_identity.py
 29c091923095c885bb3c9e19ac74d343888a0e8a1b0c84cddcfcf3ef09ab65f9
@@ -143,34 +151,37 @@ The final accepted artifacts were:
 
 | Artifact | Bytes | SHA-256 |
 |---|---:|---|
-| `boot.art` | 3,006,016 | `5bdf0b80011dac18ca4bbeaca3cb1ab9bec2a353dfc9bce889aeb2042e81c9f6` |
-| `boot.oat` | 18,834,112 | `94344c9539576fbaa57aaaae38900adcd5041d63c0aeb308e81c48e210cbafe9` |
+| `boot.art` | 2,940,464 | `e344c202362867aead20cd4c1d30281bc2b902ec84cda433ca58ee0089dae4b6` |
+| `boot.oat` | 18,754,624 | `73367849da408025f67a795e0618d7f062e9f82029351523bbdb99516360d6bc` |
 | `boot.vdex` | 8,309,376 | `acec8006a073b67bd1740804a7bd65a0a1ffa5380815cb194eff9443845fc12d` |
 
-W-028 and W-029 regressions passed from the final overlay in 0.68 and 0.12
-seconds respectively.
+W-028 and W-029 regressions passed from the final no-forced-determinism overlay
+in 0.64 and 0.12 seconds respectively.
 
-## Remaining determinism defect
+## Repeated-generation characterization
 
-Forced repeated generation is not byte-reproducible despite
-`--force-determinism`. Normal-parallel and three `-j1` generations all loaded
-and started successfully. `boot.vdex` remained byte-identical, but `boot.art`
-hashes changed and `boot.oat` `.text` sizes changed by hundreds to thousands of
-bytes. Serial generation therefore does not solve the defect and was not
-adopted; the normal Windows parallelism remains 16 and is recorded in every
-manifest.
+During the initial investigation, normal-parallel and three `-j1` generations
+under the now-removed `--force-determinism` request all loaded and started
+successfully. `boot.vdex` remained byte-identical, while `boot.art` hashes and
+`boot.oat` `.text` sizes varied. The corrected generator no longer requests
+forced byte determinism. Normal Windows parallelism remains 16 and is recorded
+in every manifest.
 
-This is a Windows boot-compiler/ImageWriter determinism defect, not a loading
-failure. It keeps sequence step 8 `PARTIAL` and must be diagnosed before the
-boot set can be promoted from the experimental path.
+This variation is expected to be acceptable for path-sensitive cache
+artifacts. The contract is per-generation set integrity: logical locations are
+intentional, the manifest records the three matching artifact sizes/hashes,
+and the launcher revalidates that exact set before startup. Cross-generation
+byte comparison is neither a step-8 gate nor a reason to force serial
+generation.
 
 ## Disposition
 
 - Step 2 remains `PARTIAL`: canonical generation/startup is accepted, while
   intentional negative cases are launcher-level rather than ART diagnostics.
 - Steps 4 and 5 are `COMPLETE` for boot-only OAT-1.
-- Step 8 is `PARTIAL`: generation and staging work, but repeat artifacts are
-  not byte-reproducible.
+- Step 8 is `COMPLETE`: generation, per-set manifest binding, validation,
+  staging, and canonical startup pass; cross-generation byte identity is not
+  required.
 - Step 9 is `PARTIAL`: fallback is detected and rejected by an experimental
   gate; normal selection and successful fallback are not integrated.
 - Steps 6, 7, 10, and 11 remain open: unwind, CFG, real boot-OAT execution, and

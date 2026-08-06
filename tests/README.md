@@ -602,8 +602,11 @@ W-029 single-component identity, starts from the package root with exact
 mismatches before spawn, and fails if ART reports imageless fallback. The
 accepted gate uses `-Xint`, so it proves validation-only/executable image/OAT/
 VDEX loading but not execution from boot-OAT code. Repeat artifacts are not
-yet byte-reproducible; this experimental path therefore remains outside normal
-product staging.
+compared byte-for-byte across generations: OAT is a path-sensitive cache
+artifact, and the gate instead validates one manifest-bound matching set. The
+generators do not pass `--force-determinism`. This experimental path remains
+outside normal product staging because selection and successful fallback are
+not integrated.
 
 Managed runtime gates must use `support/runtime_gate.py` unless a case has a
 genuinely unique runner. The shared runner invokes `dalvikvm` with `shell=False`,

@@ -4,6 +4,11 @@
 **Host:** Windows Server 2025 Datacenter Evaluation, x64, build 26100
 **Status:** **PASS — Windows AOT/OAT implementation-sequence step 1 complete**
 
+Interpretation corrected 2026-08-07: the equal hashes below are historical
+characterization, not an acceptance requirement for path-sensitive OAT cache
+artifacts. Current generators no longer request `--force-determinism` as of
+root commit `1a9aa837ad2fb697d246855c695d44f2b53c69e8`.
+
 ## Scope
 
 W-028 is the native trivial no-image `dex2oat` operation gate. It compiles one
