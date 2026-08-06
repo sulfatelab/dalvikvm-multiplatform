@@ -35,15 +35,16 @@ The first implementation slice is pinned to nested ART commit
 
 ## Current position
 
-Numbered implementation-sequence step 1 is `PARTIAL`. The tree now builds a
+Numbered implementation-sequence step 1 is `COMPLETE`. The tree builds a
 native Windows x64 `dex2oat.exe`, registers the shell-free W-028 no-image
 operation gate, and emits Windows-target OAT/image ELF segments with 64-KiB
 alignment while retaining `kMaxPageSize = 16384` and
 `ART_PAGE_SIZE_AGNOSTIC=1`. The cross-built compiler and all of its ART runtime
-consumers share one `artbase.dll` state owner. A repeated Wine diagnostic now
-completes compilation and produces byte-identical, structurally valid OAT 265
-and VDEX 027 artifacts. A native build-26100 execution and accepted result
-record are still required.
+consumers share one `artbase.dll` state owner. Two authoritative native
+build-26100 executions pass and produce byte-identical, structurally valid OAT
+265 and VDEX 027 artifacts; a post-correction Wine diagnostic produces the
+same bytes. The sanitized result is
+[`docs/history/windows_x64_w028_result.md`](docs/history/windows_x64_w028_result.md).
 
 The earlier `runtime/oat/oat_file_test.cc` additions are a pre-dispatch loader
 characterization suite. They support sequence step 3 and do not constitute
@@ -53,8 +54,8 @@ numbered step 1 or executable Windows OAT loading.
 
 | Step | State | Implemented position | Remaining exit condition |
 |---:|---|---|---|
-| 1. Native trivial no-image `dex2oat` compile | `PARTIAL` | W-028 builds `dex2oat`, `boot.jar`, and `hello.jar`; runs a deterministic single-JAR `speed` compile with watchdog and forced swap; validates ELF64/ET_DYN/x86-64, Linux ART OSABI/ABI/flags, 64-KiB `PT_LOAD`, OAT 265, and the complete four-section VDEX 027 envelope; a repeated Wine diagnostic produces byte-identical outputs | Run and accept W-028 on native Server 2025 build 26100; preserve the resulting hashes and manifest |
-| 2. Stable generation/startup identities | `PARTIAL` | W-028 uses candidate logical identities `/system/framework/boot.jar` and `/data/local/tmp/win32-oat-probe.jar` independently of physical package paths | Select boot-image/component topology and `-Ximage:` identity; prove byte-identical generation/startup strings and intentional mismatch diagnostics |
+| 1. Native trivial no-image `dex2oat` compile | `COMPLETE` | W-028 builds `dex2oat`, `boot.jar`, and `hello.jar`; runs a deterministic single-JAR `speed` compile with watchdog and forced swap; validates ELF64/ET_DYN/x86-64, Linux ART OSABI/ABI/flags, 64-KiB `PT_LOAD`, OAT 265, and the complete four-section VDEX 027 envelope; two native runs and a post-correction Wine diagnostic produce byte-identical outputs | Retain W-028 as a regression gate; no step-1 exit condition remains |
+| 2. Stable generation/startup identities | `PARTIAL` | W-028 uses candidate logical identities `/system/framework/boot.jar` and `/data/local/tmp/win32-oat-probe.jar` independently of physical package paths and uses relative `probe.oat` so ELF `DT_SONAME` does not inherit a host path | Select boot-image/component topology and `-Ximage:` identity; prove byte-identical generation/startup strings and intentional mismatch diagnostics |
 | 3. Pre-dispatch characterization and trampoline regression | `PARTIAL` | Characterization tests exist in `oat_file_test.cc` and the shared trampoline lowering has been source-reviewed | Close H-005 by running the focused tests; add Linux-`GS`/Windows-`R15` disassembly and resolution/quick-to-interpreter execution gates |
 | 4. Windows private-copy `ElfOatFile` mapping | `NOT STARTED` | Design limits the new operation to the file-backed segment copy | Implement and test validation-only allocation and executable exact-reservation opens, gaps, zero-fill, final protections, and cache flush |
 | 5. VDEX aperture and ownership | `NOT STARTED` | Owner-sharing slice and transaction ordering are specified | Implement exact private copy into `oatdex`, validation, protection, owner lifetime, and rollback |
@@ -143,6 +144,11 @@ forced swap-file thresholds, deterministic output, and a target-local runtime
 root. The gate is shell-free and deletes only its exact link-free managed
 result directory before a run.
 
+The runner changes into that managed result directory and passes the relative
+`--oat-file=probe.oat`. ART's ELF writer uses that logical name for
+`DT_SONAME`, so the OAT identity does not depend on a native or Wine physical
+output path.
+
 On success it writes `stdout.txt`, `stderr.txt`, `probe.oat`, `probe.vdex`, and
 `result.json`. The manifest records elapsed time, artifact sizes/hashes, ELF
 identity and alignment, load-segment count, OAT/VDEX versions, VDEX section
@@ -162,28 +168,29 @@ CTest execution.
 | 2026-08-06 | agent01 Linux-hosted `windows-x86_64-msvc` cross-build | `dex2oat` and W-028 dependencies build; target-binding audit accepts 2,081 compile commands, 2,126 Ninja commands, and 30 product links | Target compile/link and graph evidence only |
 | 2026-08-06 | PE inspection of the cross-build | `dex2oat.exe`, `art-dex2oat.dll`, and `art.dll` import `artbase.dll`; the DLL exports the required logging, flags, allocator, and `MemMap` data | Confirms removal of duplicate process state at the PE boundary |
 | 2026-08-06 | Wine 10 development run | The shared-base fix clears `MemMap::IsInitialized()`; one-time watchdog-mutex initialization clears the next hang; `MemMap::Sync()` and the anonymous VDEX working-copy/final-publish path clear the live-mapping resize failure; binary `FdFile` mode clears CRT newline corruption | Useful causal diagnostic evidence, never native acceptance |
-| 2026-08-06 | Repeated Wine 10 compiler diagnostic | Two identical invocations complete in about 0.54 s each and produce byte-identical 66,888-byte OAT and 1,000-byte VDEX files; validation reports ELF64/ET_DYN/x86-64, Linux OSABI 3/ABI 0/flags 0, four non-W+X 64-KiB `PT_LOAD` segments, OAT 265, and a four-section/one-DEX VDEX 027 | Step-1 development evidence; native W-028 remains mandatory |
+| 2026-08-06 | Repeated Wine 10 compiler diagnostic before the stable-OAT-name correction | Two identical invocations complete in about 0.54 s each and produce byte-identical 66,888-byte OAT and 1,000-byte VDEX files; validation reports ELF64/ET_DYN/x86-64, Linux OSABI 3/ABI 0/flags 0, four non-W+X 64-KiB `PT_LOAD` segments, OAT 265, and a four-section/one-DEX VDEX 027 | Proved the operation but exposed a physical output path in ELF `DT_SONAME`; diagnostic only |
 | 2026-08-06 | Fresh Linux current-source compile plus coherent Linux baseline generation | The affected `mem_map.cc`, `fd_file.cc`, and `oat_writer.cc` paths compile for `linux-x86_64-gnu`; the Linux no-image baseline remains four non-W+X 16-KiB `PT_LOAD` segments with the same ELF identity, OAT 265, and VDEX 027 | Confirms the new branches are Windows-scoped and retains the Linux layout baseline |
-| Pending | Windows Server 2025 build 26100 | Run W-028 from a fresh coherent native build | Required to complete step 1 |
+| 2026-08-06 | Windows Server 2025 build 26100 | A fresh coherent native build and target-binding audit pass; W-028 passes twice in 0.64/0.61 s and emits the same 66,888-byte OAT and 1,000-byte VDEX on both runs | **Authoritative step-1 acceptance**; see [`docs/history/windows_x64_w028_result.md`](docs/history/windows_x64_w028_result.md) |
+| 2026-08-06 | Post-correction Wine diagnostic | Relative `probe.oat` removes the physical path from `DT_SONAME`; the OAT and VDEX hashes exactly match both authoritative native runs | Cross-environment reproducibility diagnostic; not the acceptance authority |
 
-The repeated Wine artifacts have SHA-256
-`2ca0204f5b3da51e748eeb143430d604e55c1bfb9134b1c91b9f77bc82e64c11`
+The two accepted native runs and the post-correction Wine diagnostic have
+SHA-256
+`fa03ad2f48f7a83bc8c6ddbf42620454f336d8c870e339771fc3edc88eb615f7`
 for OAT and
 `cc1b8db5d41a00c51a380c27020e69e97cf987e0e0ee9b44a0b7995c703073c1`
 for VDEX. The coherent Linux baseline has OAT SHA-256
 `255c99f89dc3c131bdb2f19d1c5c209a4e37ddeda0be435830f0c36f9e331a4e`
-and the same VDEX hash. These are diagnostic baselines, not accepted native
-Windows results.
+and the same VDEX hash. The Linux and Wine roles remain regression and
+diagnostic evidence; native Server 2025 is the acceptance authority.
 
 ## Immediate work queue
 
-1. Run W-028 on the authoritative native host and archive a sanitized accepted
-   result with artifact hashes.
+1. Select and gate the boot component/location identity contract, including
+   the startup `-Ximage:` identity.
 2. Promote the cross-target 16-/64-KiB artifact comparison into a repeatable
    automated regression rather than relying on the recorded development run.
-3. Select and gate the boot component/location identity contract.
-4. Close H-005 and add the two-target trampoline regression.
-5. Begin the narrow Windows private-copy file-segment operation for both
+3. Close H-005 and add the two-target trampoline regression.
+4. Begin the narrow Windows private-copy file-segment operation for both
    validation-only and executable `ElfOatFile` opens.
 
 Do not begin application OAT, OAT-2, successful-load unloading, explicit CFG

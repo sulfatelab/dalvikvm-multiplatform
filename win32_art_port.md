@@ -102,9 +102,9 @@ unmet W-025 feature; CFG remains separate.
 
 The original plan allowed JIT/dex2oat to be a v1.1 gate. Current x86_64 quick,
 nterp, managed-JIT, and native-JIT entrypoints are correct and default-on;
-Windows `dex2oat` trivial no-image generation is under the W-028 native
-operation gate. Boot-set production and executable boot-OAT loading remain
-pending.
+Windows `dex2oat` trivial no-image generation passes the W-028 native operation
+gate twice with byte-identical artifacts. Boot-set production and executable
+boot-OAT loading remain pending.
 
 ---
 
@@ -754,7 +754,7 @@ all product paths. Windows NIO.2 remains a non-goal.
   Phase-4 host rerun remains H-001.
 - See `docs/history/windows_x64_phase4_result.md`.
 
-### Phase 5 — JIT / oat — **JIT COMPLETE FOR X86_64; AOT STEP 1 PARTIAL**
+### Phase 5 — JIT / oat — **JIT COMPLETE FOR X86_64; AOT STEP 1 COMPLETE**
 
 > **Implemented x86_64 design and cross-ISA record:** TLS / managed ABI / quick
 > entrypoints / nterp / JIT:
@@ -772,10 +772,11 @@ all product paths. Windows NIO.2 remains a non-goal.
   `dex2oat.exe` and its trivial no-image operation gate; the target alignment
   and process-wide `artbase.dll` prerequisite are implemented. The enabled
   watchdog, VDEX finalization, mapped-file flushing, and binary-descriptor
-  prerequisites now complete under a repeated Wine diagnostic and produce
-  byte-identical validator-clean OAT/VDEX files. Native Server 2025 execution,
-  boot-set generation, and executable loading remain pending. The imageless
-  interpreter+JIT product does not require them.
+  prerequisites now complete under a repeated Wine diagnostic. W-028 passes
+  twice on native Server 2025 and produces byte-identical validator-clean
+  OAT/VDEX files; post-correction Wine output matches them exactly. This
+  completes generation step 1. Boot-set generation and executable loading
+  remain pending. The imageless interpreter+JIT product does not require them.
 - Windows boot AOT keeps the current Linux ART ELF64 header identity:
   `ART_PAGE_SIZE_AGNOSTIC=1` remains enabled and Linux `EI_OSABI`/ABI
   version/e_flags behavior is retained. Linux stays at 16-KiB `PT_LOAD`
