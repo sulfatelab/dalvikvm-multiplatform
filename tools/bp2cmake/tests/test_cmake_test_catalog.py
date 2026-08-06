@@ -69,9 +69,9 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         (binary / "art-tests" / "art_test_catalog.json").read_text(encoding="utf-8")
     )
     assert catalog["target_id"] == "windows-x86_64-msvc"
-    assert len(catalog["probes"]) == 95
-    assert sum(probe["applicable"] for probe in catalog["probes"]) == 92
-    assert sum(bool(probe["target_ids"]) for probe in catalog["probes"]) == 41
+    assert len(catalog["probes"]) == 97
+    assert sum(probe["applicable"] for probe in catalog["probes"]) == 94
+    assert sum(bool(probe["target_ids"]) for probe in catalog["probes"]) == 43
     assert sum(not probe["target_ids"] for probe in catalog["probes"]) == 54
     w002_attach = next(
         probe for probe in catalog["probes"] if probe["name"] == "managed_w002_attach"
@@ -210,7 +210,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     assert async_close["ctest_registered"] is False
     assert sum(
         probe["execution"] == "target-runnable" for probe in catalog["probes"]
-    ) == 73
+    ) == 75
     assert all(
         probe["type"] != "SHARED"
         for probe in catalog["probes"]
@@ -291,6 +291,8 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "windows_w025_policy_launcher": 1200,
         "windows_w025_jit_runtime_controls": 1800,
         "windows_w028_dex2oat_no_image": 900,
+        "windows_w030_private_copy_probe": 60,
+        "windows_w030_boot_image_startup": 1800,
     }
     assert [
         probe["name"] for probe in catalog["probes"] if probe["ctest_registered"]
@@ -333,6 +335,14 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     assert w029[0]["execution"] == "host-review"
     assert w029[0]["ctest_registered"] is True
     assert w029[0]["target_ids"] == ["windows-x86_64-msvc"]
+    w030 = [probe for probe in catalog["probes"] if probe["stage"] == "w030"]
+    assert [probe["name"] for probe in w030] == [
+        "windows_w030_private_copy_probe",
+        "windows_w030_boot_image_startup",
+    ]
+    assert all(probe["execution"] == "target-runnable" for probe in w030)
+    assert all(probe["ctest_registered"] is False for probe in w030)
+    assert all(probe["target_ids"] == ["windows-x86_64-msvc"] for probe in w030)
 
     variant_binary = tmp_path / "variant-build"
     (source / "CMakeLists.txt").write_text(
@@ -452,7 +462,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         (binary / "art-tests" / "art_test_catalog.json").read_text(encoding="utf-8")
     )
     applicable = [probe for probe in catalog["probes"] if probe["applicable"]]
-    assert len(catalog["probes"]) == 95
+    assert len(catalog["probes"]) == 97
     assert [probe["name"] for probe in applicable] == [
         "criticalnativeprobe",
         "nativeabiprobe",

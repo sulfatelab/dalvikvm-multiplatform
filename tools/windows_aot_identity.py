@@ -82,6 +82,31 @@ def startup_options() -> tuple[str, ...]:
     )
 
 
+def identity_from_contract_record(record: object) -> IdentityUse:
+    """Validate and decode the exact serialized Windows identity contract."""
+    expected = contract_record()
+    if not isinstance(record, dict):
+        raise WindowsAotIdentityError(
+            "manifest-contract", "Windows AOT manifest contract is not an object"
+        )
+    if record != expected:
+        keys = sorted(set(record) | set(expected))
+        field = next(
+            (key for key in keys if record.get(key) != expected.get(key)),
+            "manifest-contract",
+        )
+        raise WindowsAotIdentityError(
+            field,
+            "Windows AOT manifest contract mismatch for "
+            f"{field}: generated={record.get(field)!r}, expected={expected.get(field)!r}",
+        )
+    return IdentityUse(
+        boot_class_path_locations=tuple(expected["boot_class_path_locations"]),
+        image_location=str(expected["startup_image_location"]),
+        components=tuple(expected["components"]),
+    )
+
+
 def validate_generation_startup(
     generation: IdentityUse,
     startup: IdentityUse,
@@ -109,15 +134,9 @@ def validate_generation_startup(
         )
 
 
-def run_gate(target_id: str, result_path: Path) -> Path:
-    """Exercise the canonical pair and a matrix of intentional mismatches."""
-    if target_id != TARGET_ID:
-        raise WindowsAotIdentityError(
-            "target-id", f"identity contract accepts only {TARGET_ID}, got {target_id!r}"
-        )
-
-    validate_generation_startup(CANONICAL_IDENTITY, CANONICAL_IDENTITY)
-    mismatch_cases = (
+def intentional_startup_mismatches() -> tuple[tuple[str, IdentityUse, str], ...]:
+    """Return the byte-exact negative matrix shared by preflight and launcher."""
+    return (
         (
             "boot-location-case",
             replace(
@@ -166,8 +185,18 @@ def run_gate(target_id: str, result_path: Path) -> Path:
             "component-topology",
         ),
     )
+
+
+def run_gate(target_id: str, result_path: Path) -> Path:
+    """Exercise the canonical pair and a matrix of intentional mismatches."""
+    if target_id != TARGET_ID:
+        raise WindowsAotIdentityError(
+            "target-id", f"identity contract accepts only {TARGET_ID}, got {target_id!r}"
+        )
+
+    validate_generation_startup(CANONICAL_IDENTITY, CANONICAL_IDENTITY)
     rejected: list[dict[str, str]] = []
-    for name, startup, expected_field in mismatch_cases:
+    for name, startup, expected_field in intentional_startup_mismatches():
         try:
             validate_generation_startup(CANONICAL_IDENTITY, startup)
         except WindowsAotIdentityError as exc:

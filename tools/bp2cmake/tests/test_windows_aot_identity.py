@@ -93,3 +93,28 @@ def test_gate_rejects_another_target(tmp_path):
         windows_aot_identity.run_gate(
             "windows-aarch64-msvc", tmp_path / "result.json"
         )
+
+
+def test_serialized_contract_round_trips_without_normalization():
+    assert (
+        windows_aot_identity.identity_from_contract_record(
+            windows_aot_identity.contract_record()
+        )
+        == windows_aot_identity.CANONICAL_IDENTITY
+    )
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("boot_class_path_locations", [r"\system\framework\boot.jar"]),
+        ("startup_image_location", "Runtime/boot-image/boot.art"),
+        ("components", ["boot", "boot-framework"]),
+    ],
+)
+def test_serialized_contract_rejects_identity_drift(field, value):
+    record = windows_aot_identity.contract_record()
+    record[field] = value
+    with pytest.raises(windows_aot_identity.WindowsAotIdentityError) as caught:
+        windows_aot_identity.identity_from_contract_record(record)
+    assert caught.value.field == field

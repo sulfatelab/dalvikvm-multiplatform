@@ -12,6 +12,8 @@ set(_art_boot_image_builder
     "${_art_test_repo_root}/tools/build_boot_image.py")
 set(_art_windows_aot_identity
     "${_art_test_repo_root}/tools/windows_aot_identity.py")
+set(_art_windows_boot_image_runner
+    "${_art_test_repo_root}/tools/run_windows_boot_image.py")
 set(_art_conscrypt_constants_builder
     "${CMAKE_CURRENT_LIST_DIR}/support/generate_conscrypt_constants.py")
 set(_art_managed_root "${CMAKE_CURRENT_BINARY_DIR}/managed")
@@ -274,11 +276,21 @@ set(_art_boot_image_root "${CMAKE_BINARY_DIR}/runtime/boot-image")
 set(_art_boot_image_dir
     "${_art_boot_image_root}/${ART_TARGET_AOSP_ARCH}")
 list(FIND ART_TARGET_CAPABILITIES "boot_image" _art_boot_image_capability)
-if(_art_boot_image_capability GREATER -1)
+set(_art_experimental_windows_boot_image FALSE)
+if(ART_TARGET_ID STREQUAL "windows-x86_64-msvc")
+    set(_art_experimental_windows_boot_image TRUE)
+endif()
+if(_art_boot_image_capability GREATER -1 OR _art_experimental_windows_boot_image)
     if(ART_ENABLE_TARGET_RUNTIME_TESTS)
         if(NOT TARGET dex2oat)
             message(FATAL_ERROR
-                "Target ${ART_TARGET_ID} declares boot_image without dex2oat")
+                "Target ${ART_TARGET_ID} enables boot-image generation without dex2oat")
+        endif()
+        set(_art_boot_image_library_args
+            --library-dir "$<TARGET_FILE_DIR:dex2oat>")
+        if(_art_experimental_windows_boot_image)
+            list(APPEND _art_boot_image_library_args
+                --library-dir "${ART_TARGET_BUNDLE_ROOT}/lib/libcxx/bin")
         endif()
         add_custom_command(
             OUTPUT
@@ -294,11 +306,12 @@ if(_art_boot_image_capability GREATER -1)
                 --output-root "${_art_boot_image_root}"
                 --instruction-set "${ART_TARGET_AOSP_ARCH}"
                 --parallel "${ART_BOOT_IMAGE_PARALLEL}"
-                --library-dir "$<TARGET_FILE_DIR:dex2oat>"
+                ${_art_boot_image_library_args}
             DEPENDS
                 dex2oat
                 art-managed-boot-jar
                 "${_art_boot_image_builder}"
+                "${_art_windows_aot_identity}"
                 "${_art_boot_jar}"
             COMMENT "Building relocatable ${ART_TARGET_ID} ART boot image"
             VERBATIM)
@@ -308,7 +321,9 @@ if(_art_boot_image_capability GREATER -1)
                 "${_art_boot_image_dir}/boot.oat"
                 "${_art_boot_image_dir}/boot.vdex"
                 "${_art_boot_image_root}/manifest.json")
-        add_dependencies(art-runtime-package-inputs art-runtime-boot-image)
+        if(_art_boot_image_capability GREATER -1)
+            add_dependencies(art-runtime-package-inputs art-runtime-boot-image)
+        endif()
     else()
         # Cross hosts cannot execute target dex2oat. Keep the target name valid
         # for catalog ownership without pretending that an image was built.
@@ -665,7 +680,7 @@ endfunction()
 
 add_custom_target(art-tests)
 add_custom_target(art-managed-tests)
-foreach(stage w002 w003 w004 w010 w013 w014 w025 w027 w028 w029)
+foreach(stage w002 w003 w004 w010 w013 w014 w025 w027 w028 w029 w030)
     art_define_test_stage("${stage}")
 endforeach()
 
@@ -2091,6 +2106,45 @@ art_add_target_probe(
         --target-id "${ART_TARGET_ID}"
         --result
             "${CMAKE_CURRENT_BINARY_DIR}/results/w029-aot-identity/result.json")
+
+# W-030 first verifies the private-copy primitive independently of the loader.
+art_add_target_probe(
+    NAME windows_w030_private_copy_probe STAGE w030 TYPE EXECUTABLE
+    EXECUTION target-runnable TIMEOUT 60
+    ${_art_windows_x86_64_msvc_selector}
+    SOURCES "${_art_test_cases_root}/aot-private-copy/probe.cc"
+    INCLUDE_DIRS "${_art_test_repo_root}/vendor/art/libartbase"
+    LINK_LIBRARIES artbase base log
+    CONTRACTS aot elf-loader private-copy virtual-memory)
+# It then generates the first boot-only Windows image, stages the accepted
+# W-029 package topology, and starts ART from the package root with the exact
+# relative -Ximage value. The runner rejects identity drift before process
+# creation and fails if ART silently falls back to its imageless path.
+art_add_target_probe(
+    NAME windows_w030_boot_image_startup STAGE w030 TYPE GATE
+    EXECUTION target-runnable TIMEOUT 1800
+    ${_art_windows_x86_64_msvc_selector}
+    DEPENDS
+        art-runtime-boot-image
+        managed_imageless_hello
+        dalvikvm
+        icu_jni
+        javacore
+        openjdk
+    CONTRACTS aot boot-image identity packaging runtime-load elf-loader
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_windows_boot_image_runner}"
+        --target-id "${ART_TARGET_ID}"
+        --dalvikvm "$<TARGET_FILE:dalvikvm>"
+        --boot-jar "${_art_boot_jar}"
+        --app-jar "${_art_managed_root}/hello.jar"
+        --boot-image-dir "${_art_boot_image_root}"
+        --icu-data "${_art_icu_data}"
+        --work-root
+            "${CMAKE_CURRENT_BINARY_DIR}/results/w030-boot-image-startup"
+        ${_art_managed_runtime_library_args}
+        --timeout 600)
 
 get_property(_art_test_catalog_records GLOBAL PROPERTY ART_TEST_CATALOG_RECORDS)
 string(JOIN ",\n" _art_test_catalog_body ${_art_test_catalog_records})

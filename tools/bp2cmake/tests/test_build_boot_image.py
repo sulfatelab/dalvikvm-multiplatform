@@ -56,6 +56,8 @@ def test_boot_image_builder_is_shell_free_relocatable_and_atomic(
     manifest = json.loads(manifest_text)
     assert manifest["target_id"] == "linux-x86_64-gnu"
     assert manifest["logical_boot_jar"] == "/system/framework/boot.jar"
+    assert manifest["image_format"] == "uncompressed"
+    assert manifest["compiler_parallelism"] == 32
     assert {entry["path"] for entry in manifest["artifacts"]} == {
         "x86_64/boot.art",
         "x86_64/boot.oat",
@@ -80,4 +82,48 @@ def test_boot_image_builder_rejects_unbounded_parallelism(tmp_path):
     args = _args(tmp_path)
     args.parallel = 65
     with pytest.raises(build_boot_image.BootImageError, match="between 1 and 64"):
+        build_boot_image.build_boot_image(args)
+
+
+def test_windows_boot_image_serializes_shared_identity(tmp_path, monkeypatch):
+    args = _args(tmp_path)
+    args.target_id = "windows-x86_64-msvc"
+    calls = []
+
+    def run(command, **options):
+        calls.append(command)
+        image = Path(
+            next(value.split("=", 1)[1] for value in command if value.startswith("--image="))
+        )
+        oat = Path(
+            next(value.split("=", 1)[1] for value in command if value.startswith("--oat-file="))
+        )
+        image.write_bytes(b"ART-image")
+        oat.write_bytes(b"ELF-oat")
+        oat.with_suffix(".vdex").write_bytes(b"VDEX-data")
+        return subprocess.CompletedProcess(command, 0, stdout="built\n", stderr="")
+
+    monkeypatch.setattr(build_boot_image.subprocess, "run", run)
+    output = build_boot_image.build_boot_image(args)
+
+    assert "--dex-location=/system/framework/boot.jar" in calls[0]
+    assert "-Xbootclasspath-locations:/system/framework/boot.jar" in calls[0]
+    assert "--image-format=lz4" in calls[0]
+    manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["image_format"] == "lz4"
+    assert manifest["compiler_parallelism"] == 32
+    assert manifest["generation_options"] == [
+        "--dex-location=/system/framework/boot.jar",
+        "-Xbootclasspath-locations:/system/framework/boot.jar",
+    ]
+    assert manifest["windows_aot_identity"] == (
+        build_boot_image.windows_aot_identity.contract_record()
+    )
+
+
+def test_windows_boot_image_rejects_identity_isa_mismatch(tmp_path):
+    args = _args(tmp_path)
+    args.target_id = "windows-x86_64-msvc"
+    args.instruction_set = "arm64"
+    with pytest.raises(build_boot_image.BootImageError, match="requires instruction set"):
         build_boot_image.build_boot_image(args)

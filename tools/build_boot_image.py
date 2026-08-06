@@ -15,6 +15,11 @@ import subprocess
 import sys
 import tempfile
 
+if __package__:
+    from . import windows_aot_identity
+else:
+    import windows_aot_identity  # type: ignore[no-redef]
+
 
 LOGICAL_BOOT_JAR = "/system/framework/boot.jar"
 IMAGE_BASE = "0x70000000"
@@ -61,6 +66,26 @@ def build_boot_image(args: argparse.Namespace) -> Path:
     if args.timeout < 1:
         raise BootImageError("timeout must be positive")
 
+    windows_identity: dict[str, object] | None = None
+    image_format = "uncompressed"
+    generation_options = (
+        f"--dex-location={LOGICAL_BOOT_JAR}",
+        f"-Xbootclasspath-locations:{LOGICAL_BOOT_JAR}",
+    )
+    if args.target_id == windows_aot_identity.TARGET_ID:
+        if args.instruction_set != windows_aot_identity.INSTRUCTION_SET:
+            raise BootImageError(
+                "Windows AOT identity requires instruction set "
+                f"{windows_aot_identity.INSTRUCTION_SET!r}, got "
+                f"{args.instruction_set!r}"
+            )
+        generation_options = windows_aot_identity.generation_options()
+        windows_identity = windows_aot_identity.contract_record()
+        # Windows cannot replace the already committed boot reservation with
+        # an exact file view. A compressed image takes ART's existing
+        # anonymous-decompression path and leaves Linux behavior unchanged.
+        image_format = "lz4"
+
     dex2oat = _regular_file(args.dex2oat)
     boot_jar = _regular_file(args.boot_jar)
     library_dirs = [_directory(path) for path in args.library_dir]
@@ -93,19 +118,19 @@ def build_boot_image(args: argparse.Namespace) -> Path:
 
     command = [
         str(dex2oat),
-        f"--dex-file={boot_jar}",
-        f"--dex-location={LOGICAL_BOOT_JAR}",
-        f"--image={image_dir / 'boot.art'}",
-        f"--oat-file={image_dir / 'boot.oat'}",
+        f"--dex-file={_dex2oat_path(boot_jar)}",
+        generation_options[0],
+        f"--image={_dex2oat_path(image_dir / 'boot.art')}",
+        f"--oat-file={_dex2oat_path(image_dir / 'boot.oat')}",
         f"--base={IMAGE_BASE}",
         f"--instruction-set={args.instruction_set}",
-        "--image-format=uncompressed",
+        f"--image-format={image_format}",
         "--compiler-filter=speed",
         "--no-watch-dog",
         "--runtime-arg",
-        f"-Xbootclasspath:{boot_jar}",
+        f"-Xbootclasspath:{_dex2oat_path(boot_jar)}",
         "--runtime-arg",
-        f"-Xbootclasspath-locations:{LOGICAL_BOOT_JAR}",
+        generation_options[1],
         "--runtime-arg",
         "-Xms64m",
         "--runtime-arg",
@@ -187,7 +212,9 @@ def build_boot_image(args: argparse.Namespace) -> Path:
             "logical_boot_jar": LOGICAL_BOOT_JAR,
             "boot_jar_sha256": _sha256(boot_jar),
             "image_base": IMAGE_BASE,
+            "image_format": image_format,
             "compiler_filter": "speed",
+            "compiler_parallelism": args.parallel,
             "runtime_heap": {"initial": "64m", "maximum": "512m"},
             "artifacts": [
                 {
@@ -198,6 +225,9 @@ def build_boot_image(args: argparse.Namespace) -> Path:
                 for path in expected
             ],
         }
+        if windows_identity is not None:
+            manifest["generation_options"] = list(generation_options)
+            manifest["windows_aot_identity"] = windows_identity
         (image_root / "manifest.json").write_text(
             json.dumps(manifest, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
@@ -219,6 +249,11 @@ def build_boot_image(args: argparse.Namespace) -> Path:
         )
     )
     return output_root
+
+
+def _dex2oat_path(path: Path) -> str:
+    """Use a slash-bearing Win32 spelling accepted by dex2oat ImageWriter."""
+    return path.as_posix() if os.name == "nt" else str(path)
 
 
 def _replace_output_tree(staged: Path, destination: Path) -> None:
