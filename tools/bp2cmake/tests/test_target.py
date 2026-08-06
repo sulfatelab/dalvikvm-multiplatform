@@ -13,7 +13,7 @@ from bp2cmake.target import (
 
 
 def test_identity_enums_are_closed_and_complete():
-    assert TARGET_PLATFORMS == ("linux", "windows", "wasi")
+    assert TARGET_PLATFORMS == ("linux", "windows", "wasm", "uefi")
     assert TARGET_ARCHES == (
         "x86",
         "x86_64",
@@ -24,31 +24,29 @@ def test_identity_enums_are_closed_and_complete():
         "wasm32",
         "wasm64",
     )
-    assert TARGET_ABIS == ("gnu", "msvc", "wasi")
+    assert TARGET_ABIS == ("gnu", "msvc", "posixshim")
 
 
-def test_registry_contains_all_seventeen_canonical_ids():
+def test_registry_contains_all_fifteen_canonical_ids():
     expected = {
         "linux-x86-gnu",
         "linux-x86_64-gnu",
         "linux-armv7-gnu",
         "linux-aarch64-gnu",
         "linux-riscv64-gnu",
-        "windows-x86-gnu",
         "windows-x86-msvc",
-        "windows-x86_64-gnu",
         "windows-x86_64-msvc",
-        "windows-armv7-gnu",
         "windows-armv7-msvc",
-        "windows-aarch64-gnu",
         "windows-aarch64-msvc",
-        "windows-arm64ec-gnu",
         "windows-arm64ec-msvc",
-        "wasi-wasm32-wasi",
-        "wasi-wasm64-wasi",
+        "wasm-wasm32-posixshim",
+        "wasm-wasm64-posixshim",
+        "uefi-x86_64-posixshim",
+        "uefi-aarch64-posixshim",
+        "uefi-riscv64-posixshim",
     }
     assert set(TARGET_PROFILES) == expected
-    assert len(TARGET_PROFILES) == 17
+    assert len(TARGET_PROFILES) == 15
 
 
 def test_registry_owns_exact_llvm_file_identities():
@@ -58,18 +56,16 @@ def test_registry_owns_exact_llvm_file_identities():
         "linux-armv7-gnu": ("elf32-littlearm", "arm", 32),
         "linux-aarch64-gnu": ("elf64-littleaarch64", "aarch64", 64),
         "linux-riscv64-gnu": ("elf64-littleriscv", "riscv64", 64),
-        "windows-x86-gnu": ("COFF-i386", "i386", 32),
         "windows-x86-msvc": ("COFF-i386", "i386", 32),
-        "windows-x86_64-gnu": ("COFF-x86-64", "x86_64", 64),
         "windows-x86_64-msvc": ("COFF-x86-64", "x86_64", 64),
-        "windows-armv7-gnu": ("COFF-ARM", "thumb", 32),
         "windows-armv7-msvc": ("COFF-ARM", "thumb", 32),
-        "windows-aarch64-gnu": ("COFF-ARM64", "aarch64", 64),
         "windows-aarch64-msvc": ("COFF-ARM64", "aarch64", 64),
-        "windows-arm64ec-gnu": ("COFF-ARM64EC", "aarch64", 64),
         "windows-arm64ec-msvc": ("COFF-ARM64EC", "aarch64", 64),
-        "wasi-wasm32-wasi": ("WASM", "wasm32", 32),
-        "wasi-wasm64-wasi": ("WASM", "wasm64", 64),
+        "wasm-wasm32-posixshim": ("WASM", "wasm32", 32),
+        "wasm-wasm64-posixshim": ("WASM", "wasm64", 64),
+        "uefi-x86_64-posixshim": ("COFF-x86-64", "x86_64", 64),
+        "uefi-aarch64-posixshim": ("COFF-ARM64", "aarch64", 64),
+        "uefi-riscv64-posixshim": ("elf64-littleriscv", "riscv64", 64),
     }
     assert {
         target_id: (
@@ -89,7 +85,8 @@ def test_registry_owns_exact_llvm_file_identities():
         ("linux-arm", "linux-armv7-gnu"),
         ("windows-x86_64", "windows-x86_64-msvc"),
         ("windows-aarch64-arm64ec", "windows-arm64ec-msvc"),
-        ("wasm64-wasi", "wasi-wasm64-wasi"),
+        ("wasm64-posixshim", "wasm-wasm64-posixshim"),
+        ("uefi-riscv64", "uefi-riscv64-posixshim"),
     ],
 )
 def test_noncanonical_ids_are_rejected_with_hint(bad, replacement):
@@ -97,11 +94,9 @@ def test_noncanonical_ids_are_rejected_with_hint(bad, replacement):
         resolve_target(bad)
 
 
-def test_ambiguous_suffixless_id_lists_both_abis():
-    with pytest.raises(UnknownTargetError) as error:
+def test_suffixless_windows_arm64ec_has_only_msvc_replacement():
+    with pytest.raises(UnknownTargetError, match="windows-arm64ec-msvc"):
         resolve_target("windows-arm64ec")
-    assert "windows-arm64ec-gnu" in str(error.value)
-    assert "windows-arm64ec-msvc" in str(error.value)
 
 
 def test_aosp_arch_is_distinct_from_canonical_target_arch():
@@ -118,9 +113,8 @@ def test_aosp_arch_is_distinct_from_canonical_target_arch():
     assert config.bitness == 64
 
 
-@pytest.mark.parametrize("target_id", ["windows-arm64ec-gnu", "windows-arm64ec-msvc"])
-def test_arm64ec_is_a_distinct_target_arch_with_aarch64_base_isa(target_id):
-    target = resolve_target(target_id)
+def test_arm64ec_is_a_distinct_target_arch_with_aarch64_base_isa():
+    target = resolve_target("windows-arm64ec-msvc")
     assert target.target_arch == "arm64ec"
     assert target.base_isa == "aarch64"
     assert target.aosp_arch == "arm64"
@@ -140,10 +134,9 @@ def test_planned_target_fails_before_generation():
 
 
 @pytest.mark.parametrize(
-    "target_id", [
-        "windows-x86-gnu",
+    "target_id",
+    [
         "windows-x86-msvc",
-        "windows-armv7-gnu",
         "windows-armv7-msvc",
     ],
 )
@@ -154,10 +147,46 @@ def test_windows_x86_and_armv7_are_valid_but_unavailable_placeholders(target_id)
         target.require_generation()
 
 
-def test_windows_gnu_target_is_valid_but_blocked_by_toolchain_contract():
-    target = resolve_target("windows-aarch64-gnu")
-    with pytest.raises(TargetUnavailableError, match="forbids MinGW"):
+@pytest.mark.parametrize(
+    "target_id",
+    [
+        "windows-x86-gnu",
+        "windows-x86_64-gnu",
+        "windows-armv7-gnu",
+        "windows-aarch64-gnu",
+        "windows-arm64ec-gnu",
+    ],
+)
+def test_windows_gnu_targets_are_not_registered(target_id):
+    with pytest.raises(UnknownTargetError):
+        resolve_target(target_id)
+
+
+@pytest.mark.parametrize(
+    "target_id",
+    [
+        "wasm-wasm32-posixshim",
+        "wasm-wasm64-posixshim",
+        "uefi-x86_64-posixshim",
+        "uefi-aarch64-posixshim",
+        "uefi-riscv64-posixshim",
+    ],
+)
+def test_posixshim_targets_remain_impossible_under_current_art_contract(
+    target_id,
+):
+    target = resolve_target(target_id)
+    assert target.target_abi == "posixshim"
+    assert target.support_status == "impossible_under_current_art_contract"
+    with pytest.raises(TargetUnavailableError):
         target.require_generation()
+
+
+def test_uefi_riscv64_records_independent_coff_blocker():
+    target = resolve_target("uefi-riscv64-posixshim")
+    assert target.object_format == "pe32+"
+    assert target.llvm_file_format == "elf64-littleriscv"
+    assert "cannot currently emit RISC-V64 COFF" in target.unavailable_reason
 
 
 def test_supported_and_experimental_targets_are_admitted():

@@ -51,7 +51,7 @@ items are closed.
 | POSIX-free Windows build host | COMPLETE for the accepted native baseline; PARTIAL end to end | Server 2025 uses configured official JDK 21, Python, CMake, Ninja, and plain Clang drivers; all 77 accepted native tests, provider/security packaging, and product/test no-op gates pass without POSIX tooling | migrate every retained behavioral gate; keep Windows AOT/OAT capability work separate |
 | Legacy build removal | COMPLETE | the checked-in Linux snapshot/generator, split overlays, Linux miniature graphs, Windows Phase-0/Phase-1 and libcore/ICU graphs, product package scripts, and final POSIX-only boot-image entry points are retired; historical records remain documentation only | prevent alternative product paths from returning |
 | CI/acceptance automation | IMPLEMENTED / activation pending | checked-in shell-free Python driver and GitHub workflow define host, fresh Linux, Windows-cross, and native Windows cells; machine paths enter only through an external CI TOML binding | register/provision the two self-hosted runner labels and obtain accepted workflow runs |
-| Additional architectures | PARTIAL / Linux AArch64 experimental | all 17 canonical identities are registered; `linux-aarch64-gnu` now generates, builds, stages, and passes exact CriticalNative and normal/FastNative JNI/JIT/tracing, Math CriticalNative, compiler-DSO topology/loading, show-version, imageless-Hello, GC-stress, HandleLeak, PerfSmoke, ThreadHeavy, libcore CoreProbe, InterruptProbe, and RtMem, and 128 MiB non-moving-heap gates through an explicit QEMU user-mode binding; Windows AArch64/ARM64EC remain planned and unstarted while their design is incomplete, Windows x86/ARMv7 remain unstarted and outside current scope, and the other profiles remain capability-gated | keep the current implementation focused on the unified build system; admit another target only after its design and target-specific evidence are complete |
+| Additional architectures | PARTIAL / Linux AArch64 experimental | all 15 identities in the revised closed registry are registered; `linux-aarch64-gnu` now generates, builds, stages, and passes exact CriticalNative and normal/FastNative JNI/JIT/tracing, Math CriticalNative, compiler-DSO topology/loading, show-version, imageless-Hello, GC-stress, HandleLeak, PerfSmoke, ThreadHeavy, libcore CoreProbe, InterruptProbe, and RtMem, and 128 MiB non-moving-heap gates through an explicit QEMU user-mode binding; Windows AArch64/ARM64EC remain planned and unstarted while their design is incomplete, Windows x86/ARMv7 remain unstarted and outside current scope, and all PosixShim profiles remain capability-gated | admit another target only after its design and target-specific evidence are complete |
 | Windows AOT/OAT | PARTIAL / separate track | Windows 64-KiB artifact alignment, shared-`libartbase` compiler topology, and W-028 trivial no-image OAT/VDEX generation gate are implemented; watchdog, VDEX publication, mapped-file flush, and binary-descriptor blockers are fixed; W-028 passes twice on native Server 2025 with byte-identical artifacts, and corrected Wine output matches | continue with stable boot identities, boot-set generation, and executable loading in `win32_aot_oat_tracker.md` |
 
 ### Latest verification baseline (2026-08-06)
@@ -1596,7 +1596,7 @@ A stage is only a virtual grouping. Tests in one stage may have different
 platform, target-architecture, capability, and execution requirements.
 
 For this build, ARM64EC is modeled as the distinct target-architecture token
-`arm64ec`, not as ordinary `aarch64` plus a GNU/MSVC-level switch. This is a
+`arm64ec`, not as ordinary `aarch64` plus an ABI-level switch. This is a
 deliberate build-system distinction: ARM64EC changes compiler predefined
 macros, source and assembly eligibility, calling conventions, PE imports and
 exports, unwind data, and the tests that are meaningful. A separate derived
@@ -1609,9 +1609,9 @@ change:
 
 | Field | Complete enum |
 |---|---|
-| `target_platform` | `linux`, `windows`, `wasi` |
+| `target_platform` | `linux`, `windows`, `wasm`, `uefi` |
 | `target_arch` | `x86`, `x86_64`, `armv7`, `aarch64`, `riscv64`, `arm64ec`, `wasm32`, `wasm64` |
-| `target_abi` | `gnu`, `msvc`, `wasi` |
+| `target_abi` | `gnu`, `msvc`, `posixshim` |
 
 `base_isa` is derived metadata, not a fourth user-selectable identity enum. It
 equals `target_arch` except that `arm64ec` derives `aarch64`; consumers must
@@ -1623,30 +1623,30 @@ The theoretical target platform/architecture/ABI sets are:
 
 | Target platform | Target architectures | Target ABIs | Explicitly absent |
 |---|---|---|---|
-| `windows` | `x86`, `x86_64`, `armv7`, `aarch64`, `arm64ec` | `gnu`, `msvc` | RISC-V64 is not currently planned for Windows |
+| `windows` | `x86`, `x86_64`, `armv7`, `aarch64`, `arm64ec` | `msvc` | RISC-V64 is not currently planned for Windows |
 | `linux` | `x86`, `x86_64`, `armv7`, `aarch64`, `riscv64` | `gnu` | ARM64EC is Windows-only |
-| `wasi` | `wasm32`, `wasm64` | `wasi` | native ART contracts are capability-blocked |
+| `wasm` | `wasm32`, `wasm64` | `posixshim` | native ART contracts are capability-blocked |
+| `uefi` | `x86_64`, `aarch64`, `riscv64` | `posixshim` | native ART contracts are capability-blocked; Clang cannot currently emit RISC-V64 COFF |
 | All | no additional architecture values | no additional ABI values | no MIPS platform/architecture/ABI profile exists |
 
-This yields exactly 17 theoretical identity triples: five Linux GNU, ten
-Windows GNU/MSVC, and two WASI. These are all possible target choices in this
-design. A known identity may remain planned or capability-blocked; identity
-enumeration is not a support claim. Every other Cartesian-product combination
-is invalid and must be rejected before graph generation.
+This yields exactly 15 theoretical identity triples: five Linux GNU, five
+Windows MSVC, two WebAssembly PosixShim, and three UEFI PosixShim profiles.
+These are all possible target choices in this design. A known identity may
+remain planned or capability-blocked; identity enumeration is not a support
+claim. Every other Cartesian-product combination is invalid and must be
+rejected before graph generation.
 
-`target_abi` is the canonical name for the `gnu`, `msvc`, or `wasi` contract.
-The platform, `target_arch`, and `target_abi` triple identifies the exact
-profile relevant to source and test selection. Details such as the compiler
-target triple, object format, calling convention, and C runtime remain
-immutable profile facts. `target_abi` does not replace `target_arch`:
-`windows-arm64ec-gnu` and `windows-arm64ec-msvc` both remain ARM64EC builds,
-distinct from `windows-aarch64-gnu` and `windows-aarch64-msvc`.
+`target_abi` is the canonical name for the `gnu`, `msvc`, or `posixshim`
+contract. The platform, `target_arch`, and `target_abi` triple identifies the
+exact profile relevant to source and test selection. Details such as the
+compiler target triple, object format, calling convention, C runtime, and
+PosixShim contract version remain immutable profile facts. `target_abi` does
+not replace `target_arch`: `windows-arm64ec-msvc` remains an ARM64EC build,
+distinct from `windows-aarch64-msvc`.
 
-The theoretical Windows GNU profiles are representable but capability-blocked
-under the current product contract, which forbids MinGW and clang-mingw
-toolchains. A future decision to admit such a profile must define its official
-headers, CRT/import libraries, Clang target triple, and runtime gates without
-making MSYS2, Cygwin, or any POSIX environment a build-host prerequisite.
+Windows supports only the MSVC ABI. GNU/MinGW Windows profiles are unsupported,
+are not registry entries or placeholders, and are rejected before graph
+generation.
 
 #### Current probe-by-probe selector audit
 
@@ -1672,9 +1672,9 @@ are not a platform wildcard or an architecture inference.
 
 The eleven Windows-only exact-ID entries inspect or depend on Microsoft x86-64 calling,
 register, stack, PE unwind, or handwritten assembly behavior. They are not
-applicable to `arm64ec` or a Windows GNU profile. The ability of a Windows
-ARM64 or ARM64EC machine to execute an x86-64 program through emulation would
-not turn that program into an ARM64EC ABI test.
+applicable to `arm64ec`. The ability of a Windows ARM64 or ARM64EC machine to
+execute an x86-64 program through emulation would not turn that program into an
+ARM64EC ABI test.
 
 The other nineteen typed entries use Windows APIs or Windows ART contracts but
 are not proven for another Windows architecture or ABI. They remain unreviewed
@@ -1753,15 +1753,12 @@ explicit skip with its failed selector recorded, not a silent disappearance.
 A requested stage with zero applicable tests must report that fact distinctly
 from a stage whose applicable tests were expected but not built or run.
 
-The profile registry now uses the closed `target_platform`, `target_arch`, and
-`target_abi` enums and contains all 17 canonical identities. The ARM64EC family
-uses
-`target_platform=windows, target_arch=arm64ec, base_isa=aarch64` plus an
-independent `target_abi`, yielding exact `windows-arm64ec-gnu` and
-`windows-arm64ec-msvc` profiles. The registry also contains capability-blocked
-Windows ARMv7 GNU/MSVC identities. Transitional unsuffixed target IDs are
-rejected with migration diagnostics and do not enter generated profiles or
-output paths.
+The implementation profile registry uses the revised closed enums and contains
+all 15 canonical identities. The ARM64EC family uses
+`target_platform=windows, target_arch=arm64ec, base_isa=aarch64` plus
+`target_abi=msvc`, yielding the exact `windows-arm64ec-msvc` profile.
+Transitional unsuffixed target IDs are rejected with migration diagnostics and
+do not enter generated profiles or output paths.
 
 ### Test source, artifact, and result ownership
 
@@ -2309,23 +2306,24 @@ differences.
   validate/admit Linux x86, ARMv7, and RISC-V64 separately.
 - [x] Migrate the ARM64EC identity from transitional
   `windows-aarch64-arm64ec/cpu_arch=aarch64` to
-  distinct `windows-arm64ec-gnu` and `windows-arm64ec-msvc` profiles with
+  the distinct `windows-arm64ec-msvc` profile with
   `target_arch=arm64ec/base_isa=aarch64`; rename the profile fields from
   `os_or_runtime`/`cpu_arch`/`abi` to
-  `target_platform`/`target_arch`/`target_abi`; and add the valid but deliberately
-  unavailable Windows ARMv7 GNU/MSVC placeholders.
-- [ ] Keep Windows x86 and ARMv7 GNU/MSVC identities as recognized placeholders
+  `target_platform`/`target_arch`/`target_abi`; and add the valid but
+  deliberately unavailable Windows x86 and ARMv7 MSVC placeholders.
+- [ ] Keep Windows x86 and ARMv7 MSVC identities as recognized placeholders
   that fail capability admission; do not place them on the implementation or
   CI roadmap without an explicit future decision.
 - [ ] Validate the Windows x86-64, AArch64, and ARM64EC MSVC profiles as
   distinct targets; an `arch:any` test annotation alone is not port completion.
-- [ ] Keep every Windows GNU profile capability-blocked under the current
-  no-MinGW/clang-mingw contract unless a future decision explicitly replaces
-  that constraint and supplies an official regular-file target bundle.
 - [ ] Run native Windows ARM64 host tools for the Windows x86-64 cross cell and
   the Windows-to-Linux sysroot cell without x86-64 host-tool emulation.
-- [ ] Keep WASI profiles as explicit capability failures until ART's DSO,
-  executable-memory, fault, threading, and JIT contracts are redesigned.
+- [ ] Keep WebAssembly PosixShim profiles as explicit capability failures until
+  ART's DSO, executable-memory, fault, threading, and JIT contracts are
+  redesigned.
+- [ ] Keep all UEFI PosixShim profiles as explicit capability failures under
+  the same ART contracts; additionally require a real RISC-V64 COFF emission
+  path before admitting `uefi-riscv64-posixshim`.
 
 ### Legacy product-path disposition
 
@@ -2721,8 +2719,10 @@ if(ART_TARGET_PLATFORM STREQUAL "linux")
   include(PlatformLinux)
 elseif(ART_TARGET_PLATFORM STREQUAL "windows")
   include(PlatformWindows)
-elseif(ART_TARGET_PLATFORM STREQUAL "wasi")
-  include(PlatformWasi)
+elseif(ART_TARGET_PLATFORM STREQUAL "uefi")
+  include(PlatformUefi)
+elseif(ART_TARGET_PLATFORM STREQUAL "wasm")
+  include(PlatformWasm)
 else()
   message(FATAL_ERROR "Unsupported ART target: ${ART_TARGET_ID}")
 endif()
@@ -2771,9 +2771,10 @@ capabilities
 support_status
 ```
 
-`target_platform` is the canonical target-system name for `linux`, `windows`,
-and `wasi`. It is not named `target_os` because WASI is a system-interface and
-runtime contract rather than a conventional operating system. It replaces the
+`target_platform` is the canonical target execution-platform name for `linux`,
+`windows`, `wasm`, and `uefi`. It is not named `target_os` because WebAssembly
+is an execution format and host boundary, while UEFI is a firmware execution
+environment; neither is a conventional operating system. It replaces the
 former implementation's awkward `os_or_runtime` field.
 
 `target_arch` is the canonical build-selection name for `x86`, `x86_64`,
@@ -2785,9 +2786,63 @@ and object ABI. The `target_` prefix prevents confusion with the build-host
 architecture.
 
 `target_abi` is the canonical ABI-environment name. Its complete enum is
-`gnu`, `msvc`, and `wasi`. It is separate from `target_arch`: selecting
+`gnu`, `msvc`, and `posixshim`. It is separate from `target_arch`: selecting
 `arm64ec` still controls ARM64EC macros and sources, while selecting `gnu` or
 `msvc` chooses the ABI/CRT/import-library environment for that architecture.
+For WebAssembly and UEFI, `posixshim` selects the project-owned libc,
+compatibility, and host-service contract described below; it does not claim
+that the target is a POSIX operating system.
+
+### PosixShim contract for non-POSIX targets
+
+Every WebAssembly and UEFI target is always built and shipped with PosixShim.
+There is no valid `wasm` or `uefi` profile using `gnu`, `msvc`, `wasi`, or an
+unshimmed ABI. If a deployment provides a real POSIX environment in which
+native ART can run, native ART must be used; compiling or shipping ART-WASM for
+that environment adds no supported product value. The same native-first rule
+applies to supported non-POSIX native operating systems such as Windows.
+
+ART-WASM exists only for environments where physical native execution is not
+available. UEFI is different: it executes physical-ISA code, but it supplies
+firmware services rather than a POSIX or supported native-OS contract, so every
+UEFI ART profile also requires PosixShim.
+
+ART-facing source selection uses `ART_TARGET_WASM` or `ART_TARGET_UEFI`; ART
+code must not branch on browser, web, Worker, WASI, or a particular UEFI
+firmware implementation. `wasm32` and `wasm64` select the WebAssembly address
+width. UEFI selects `x86_64`, `aarch64`, or `riscv64`. In both platform
+families, `posixshim` selects the versioned project runtime ABI.
+
+PosixShim compiles the portable compatibility implementation into the Wasm
+or firmware artifact. It owns virtual file descriptors and filesystem state,
+mapping and memory-management emulation, clocks, entropy, polling,
+synchronization, error translation, and the explicit
+implemented/virtualized/unsupported behavior of the POSIX surface admitted for
+ART and libcore. A Wasm artifact calls a narrow, versioned host-capability
+import interface for operations that cannot be implemented inside Wasm;
+browser JavaScript, a future WASI adapter, or another non-native embedding may
+implement that interface. A UEFI artifact implements the same PosixShim
+contract over admitted UEFI Boot Services, Runtime Services, protocols, and
+project-owned in-memory state. Those backends are below PosixShim rather than
+ART target identities.
+
+`posixshim` is deliberately not named `posix`: POSIX specifies a source API and
+behavioral family, not one WebAssembly or UEFI binary ABI, and this contract
+does not promise transparent POSIX process, signal, socket, mapping, or
+dynamic-loader semantics. It is also not the Emscripten or WASI ABI. A
+toolchain may reuse Emscripten components during bring-up, but the profile is
+`posixshim` only when the project owns the observable libc/system interface,
+the Wasm imports or UEFI service mappings, and unsupported-operation behavior.
+The PosixShim ABI version is immutable target profile metadata and must
+participate in manifests, compatibility checks, and cache fingerprints without
+being embedded in the canonical target ID.
+
+All PosixShim profiles remain capability-blocked. A Wasm host without required
+threads, shared memory, atomics, exception/table features, or address width
+fails capability admission. A UEFI environment likewise lacks current ART's
+required threading, signal/fault, DSO, executable-memory/JIT, and process
+contracts. Neither family may silently substitute a single-threaded or
+reduced-semantics ART profile.
 
 `llvm_file_format` and `llvm_arch` are exact immutable spellings emitted by
 `llvm-readobj --file-header`, not additional user-selectable identity axes.
@@ -2802,21 +2857,21 @@ token because it materially changes compiler macros, sources, assembly
 eligibility, calling conventions, PE metadata, and test applicability. Its
 derived `base_isa=aarch64` records only the instruction-family relationship that
 explicitly reviewed code generators may share. Generic source selection must
-not collapse it into `aarch64` or treat it as merely a GNU/MSVC-level ABI
+not collapse it into `aarch64` or treat it as merely an ABI-level
 switch. Likewise, `wasm32` only describes a WebAssembly address width; it does
-not say whether the runtime contract is WASI, a browser, or a custom embedding.
-A WebAssembly target ID must include that runtime ABI.
+not identify the libc, system-interface, or host-import contract. A WebAssembly
+target ID must include that runtime ABI.
 
 Canonical target IDs use the grammar
 `<target-platform>-<target-arch>-<target-abi>`. They are lowercase ASCII;
 hyphens separate identity dimensions, while an underscore remains part of the
 standard `x86_64` architecture token. The target platform comes first, so
-WASI follows the same ordering as Linux and Windows.
+WebAssembly and UEFI follow the same ordering as Linux and Windows.
 
 The product frontend accepts registered canonical IDs, not informal
 architecture aliases. In particular, use `x86_64`, not `x64`; `aarch64`, not
 `arm64`; and `armv7`, not bare `arm`. This avoids one spelling acquiring
-different meanings on different operating systems. The 17 canonical IDs below
+different meanings on different operating systems. The 15 canonical IDs below
 are the complete theoretical registry; no other platform/architecture/ABI
 combination is implicitly available:
 
@@ -2827,41 +2882,52 @@ combination is implicitly available:
 | `linux-armv7-gnu` | `armv7` | GNU EABI hard-float fixed by this profile | ELF32 | `planned` |
 | `linux-aarch64-gnu` | `aarch64` | GNU | ELF64 | `experimental`; complete product plus exact CriticalNative/normal-FastNative/Math-CriticalNative/compiler-DSO/show-version/imageless-Hello/GC-stress/non-moving-heap runner gates |
 | `linux-riscv64-gnu` | `riscv64` | GNU | ELF64 | `planned` |
-| `windows-x86-gnu` | `x86` | GNU | PE32 | valid but unstarted and outside current scope; also blocked by the no-MinGW contract |
 | `windows-x86-msvc` | `x86` | MSVC | PE32 | valid but unstarted and outside current scope |
-| `windows-x86_64-gnu` | `x86_64` | GNU | PE32+ | capability-blocked by the current no-MinGW contract |
 | `windows-x86_64-msvc` | `x86_64` | MSVC | PE32+ | `experimental` after ID migration |
-| `windows-armv7-gnu` | `armv7` | GNU | PE32 | valid but unstarted and outside current scope; also blocked by the no-MinGW contract |
 | `windows-armv7-msvc` | `armv7` | MSVC | PE32 | valid but unstarted and outside current scope |
-| `windows-aarch64-gnu` | `aarch64` | GNU | PE32+ | planned but unstarted with incomplete design; blocked by the no-MinGW contract |
 | `windows-aarch64-msvc` | `aarch64` | MSVC | PE32+ | planned but unstarted with incomplete design |
-| `windows-arm64ec-gnu` | `arm64ec` (`base_isa=aarch64`) | GNU | PE32+ | planned but unstarted with incomplete design; blocked by the no-MinGW contract |
 | `windows-arm64ec-msvc` | `arm64ec` (`base_isa=aarch64`) | MSVC | PE32+ | planned but unstarted with incomplete design |
-| `wasi-wasm32-wasi` | `wasm32` | WASI | WebAssembly | `impossible_under_current_art_contract` |
-| `wasi-wasm64-wasi` | `wasm64` | WASI/Memory64 | WebAssembly | `impossible_under_current_art_contract` |
+| `wasm-wasm32-posixshim` | `wasm32` | PosixShim | WebAssembly | `impossible_under_current_art_contract` |
+| `wasm-wasm64-posixshim` | `wasm64` | PosixShim | WebAssembly | `impossible_under_current_art_contract` |
+| `uefi-x86_64-posixshim` | `x86_64` | PosixShim | PE32+ | `impossible_under_current_art_contract` |
+| `uefi-aarch64-posixshim` | `aarch64` | PosixShim | PE32+ | `impossible_under_current_art_contract` |
+| `uefi-riscv64-posixshim` | `riscv64` | PosixShim | PE32+ required | `impossible_under_current_art_contract`; Clang cannot currently emit RISC-V64 COFF |
+
+UEFI RISC-V64 has that independent toolchain blocker in addition to the ART
+contract blockers. As verified on 2026-08-06, LLVM's current
+[`CodeGenerator.md`](https://github.com/llvm/llvm-project/blob/main/llvm/docs/CodeGenerator.md)
+lists COFF emission for X86, ARM, and AArch64, but not RISC-V. Clang 21.1.8
+accepted `--target=riscv64-pc-windows-msvc` yet produced
+`elf64-littleriscv`, while the corresponding x86-64 and AArch64 commands
+produced `COFF-x86-64` and `COFF-ARM64`. Therefore the required RISC-V64
+PE/COFF path needs future LLVM support or an explicitly designed conversion or
+alternative-toolchain step; target-triple acceptance alone is not COFF support.
 
 Windows x86-64 MSVC is the first parity target and is promoted to `supported`
 only after the unified graph, DLL topology, and runtime acceptance gates pass.
 
-Both Windows x86 profiles and both Windows ARMv7 profiles are valid canonical
-registry choices, not spelling errors or aliases. They are unstarted, outside
-the current implementation scope, deliberately fail generation through
-capability admission, and carry no implementation expectation for either the
-near or far roadmap. Their purpose is to keep target identity, test
-applicability, and unsupported-target diagnostics complete. They must not
-appear in build/CI matrices unless a future roadmap decision changes their
-status. Windows AArch64 and ARM64EC are also unstarted, but remain planned;
-their design must be completed before implementation or test admission begins.
+The Windows x86 and ARMv7 MSVC profiles are valid canonical registry choices,
+not spelling errors or aliases. They are unstarted, outside the current
+implementation scope, deliberately fail generation through capability
+admission, and carry no implementation expectation for either the near or far
+roadmap. Their purpose is to keep target identity, test applicability, and
+unsupported-target diagnostics complete. They must not appear in build/CI
+matrices unless a future roadmap decision changes their status. Windows
+AArch64 and ARM64EC MSVC are also unstarted, but remain planned; their design
+must be completed before implementation or test admission begins.
 
 Inputs such as `linux-x64`, `linux-arm`, `windows-aarch64-arm64ec`, bare
-`windows-arm64ec`, `wasm64-wasi`, and underscore-separated whole IDs are
-rejected with the canonical replacement in the diagnostic. The former
-`linux-x86_64`, `windows-x86_64`, and `windows-aarch64-arm64ec` IDs now produce
-migration diagnostics to `linux-x86_64-gnu`, `windows-x86_64-msvc`, and the
-explicit `windows-arm64ec-{gnu,msvc}` profiles. Aliases do not enter the profile
-registry, manifests, cache keys, or output paths. If a Linux ARM soft-float ABI
-is ever required, it receives a distinct canonical profile rather than
-changing the meaning of `linux-armv7-gnu`.
+`windows-arm64ec`, abbreviated `wasm64-posixshim` or `uefi-riscv64`, legacy
+`wasi-wasm64-wasi`, unsupported platform/ABI combinations, and
+underscore-separated whole IDs are rejected. Informal or transitional inputs
+identify their canonical replacement in the diagnostic: the former
+`linux-x86_64`, `windows-x86_64`, `windows-aarch64-arm64ec`, and WASI profile
+IDs migrate to
+`linux-x86_64-gnu`, `windows-x86_64-msvc`, `windows-arm64ec-msvc`, and the
+corresponding `wasm-wasm{32,64}-posixshim` profile. Aliases do not enter the
+profile registry, manifests, cache keys, or output paths. If a Linux ARM
+soft-float ABI is ever required, it receives a distinct canonical profile
+rather than changing the meaning of `linux-armv7-gnu`.
 
 `target_arch` uses the canonical external tokens, including distinct `arm64ec`.
 `base_isa` maps `arm64ec` to `aarch64` and otherwise normally equals
@@ -2873,8 +2939,10 @@ back to the ambiguous AOSP or base-ISA token.
 
 The supported native architecture universe is deliberately closed: Linux has
 `x86`, `x86_64`, `armv7`, `aarch64`, and `riscv64`; Windows has `x86`,
-`x86_64`, `armv7`, `aarch64`, and `arm64ec`. MIPS is not supported and must not
-appear as a placeholder profile, fallback branch, or test selector.
+`x86_64`, `armv7`, `aarch64`, and `arm64ec`. The separate, non-OS UEFI family
+has only `x86_64`, `aarch64`, and `riscv64`, all through PosixShim and all
+capability-blocked. MIPS is not supported and must not appear as a placeholder
+profile, fallback branch, or test selector.
 
 Support state is machine-readable:
 
@@ -2888,14 +2956,21 @@ Support state is machine-readable:
   planning, but rejected before graph generation until ART's required runtime
   contracts are redesigned.
 
-WASM profiles initially belong to the last category. Current ART assumes
-threads, native virtual memory and executable mappings/JIT, signal/fault
+The WebAssembly PosixShim profiles remain in the last category. Current ART
+assumes threads, native virtual memory and executable mappings/JIT, signal/fault
 handling, target assembly, dynamic loading, and native DSO semantics. The
 overlay must not quietly turn `SHARED` targets into static libraries or disable
 these contracts until something compiles. It should fail capability validation
-and list the unresolved runtime contracts. A future WASI port can change the
-status only after those semantics and the intended AOT/interpreter/JIT model
-are explicitly designed.
+and list the unresolved runtime contracts. A future PosixShim ART-WASM port can
+change the status only after those semantics and the intended
+AOT/interpreter/JIT model are explicitly designed.
+
+The three UEFI PosixShim profiles also remain
+`impossible_under_current_art_contract`. UEFI supplies firmware services, not
+ART's required process, threading, signal/fault, virtual-memory, dynamic-loader,
+and native DSO environment. The RISC-V64 profile has the additional Clang COFF
+emission blocker recorded above. Neither that toolchain distinction nor UEFI's
+physical-ISA execution weakens the common ART contract failure.
 
 ## Current-state analysis
 
@@ -3147,8 +3222,8 @@ document them:
     disabling runtime contracts silently, or compiling host fallbacks.
 22. canonical target IDs follow
     `<target-platform>-<target-arch>-<target-abi>`;
-    informal aliases such as `x64`, `arm`, and suffix-first WASI IDs are not
-    accepted as profile identities.
+    informal aliases such as `x64`, `arm`, abbreviated WebAssembly/UEFI IDs,
+    and legacy WASI IDs are not accepted as profile identities.
 23. the default binary directory is `out/<target-id>/<build-type>`. Build-host
     identity is a required manifest/cache fingerprint, not a path component;
     a host mismatch rejects cache reuse.
@@ -3173,7 +3248,8 @@ native/
     Dependencies.cmake          target dependency imports
     PlatformLinux.cmake         Linux semantic mappings
     PlatformWindows.cmake       Windows semantic mappings
-    PlatformWasi.cmake          future WASI semantic mappings; gated
+    PlatformUefi.cmake          future PosixShim/UEFI mappings; gated
+    PlatformWasm.cmake          future PosixShim/Wasm semantic mappings; gated
     Packaging.cmake             target-tree staging
     toolchains/
       LLVM.cmake                one target-profile-driven toolchain
@@ -4115,8 +4191,12 @@ unified product targets instead of alternative ways to build those targets.
   selection, exports, object inspection, and runtime gates. ARM64EC uses
   `target_arch=arm64ec` and
   only derives `base_isa=aarch64` for explicitly shared code generation.
-- Retain WASM profiles as explicit capability failures until a runtime/DSO/JIT
-  contract is designed; do not introduce a static-library compatibility mode.
+- Retain WebAssembly PosixShim profiles as explicit capability failures until a
+  runtime/DSO/JIT contract is designed; do not introduce a static-library
+  compatibility mode.
+- Retain UEFI PosixShim profiles as explicit capability failures until the
+  firmware-service, threading, memory, fault, DSO, and execution contracts are
+  designed; keep RISC-V64 additionally blocked on direct COFF emission.
 
 ### Phase 7: optimize after parity
 
@@ -4138,12 +4218,14 @@ unified product targets instead of alternative ways to build those targets.
 - Generating twice produces no diff and identical digests.
 - Linux-host and Windows-host generation of the same target profile produces
   equivalent graph manifests.
-- canonical ID tests recognize all 17 exact IDs enumerated above, including
-  the deliberately unavailable Windows x86/ARMv7 placeholders; capability
-  admission then rejects unavailable profiles with their recorded reason;
+- canonical ID tests recognize all 15 exact IDs enumerated above, including
+  the deliberately unavailable Windows x86/ARMv7 MSVC, WebAssembly PosixShim,
+  and UEFI PosixShim profiles; capability admission then rejects unavailable
+  profiles with their recorded reason;
 - canonical ID tests reject transitional suffix-less IDs,
   `windows-aarch64-arm64ec`, `x64`, bare `arm`, whole-ID underscore variants,
-  suffix-first WASI names, unregistered cross-products, and every MIPS target;
+  unsupported platform/ABI combinations, abbreviated WebAssembly/UEFI names,
+  legacy WASI names, unregistered cross-products, and every MIPS target;
 - default outputs use `out/<target-id>/<build-type>` with no build-host path
   component, and opening that directory from a mismatched build host rejects
   the existing cache;
@@ -4155,6 +4237,9 @@ unified product targets instead of alternative ways to build those targets.
 - every planned or contract-blocked profile fails before CMake with a
   capability-specific diagnostic rather than a substituted source or library
   kind;
+- `uefi-riscv64-posixshim` reports both the common ART contract failure and the
+  independently verified absence of direct Clang RISC-V64 COFF emission; a
+  `.obj` suffix or accepted Windows triple must not count as COFF evidence;
 - checkouts with real Git symlinks and with `core.symlinks=false` link-text
   files produce identical normalized source and graph digests for the product
   closure;

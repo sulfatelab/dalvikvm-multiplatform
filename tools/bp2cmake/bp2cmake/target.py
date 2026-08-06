@@ -21,7 +21,7 @@ class TargetUnavailableError(TargetError):
 
 # Closed identity enums. Adding a value requires an explicit design and registry
 # change; callers must never infer or accept aliases for these fields.
-TARGET_PLATFORMS = ("linux", "windows", "wasi")
+TARGET_PLATFORMS = ("linux", "windows", "wasm", "uefi")
 TARGET_ARCHES = (
     "x86",
     "x86_64",
@@ -32,7 +32,7 @@ TARGET_ARCHES = (
     "wasm32",
     "wasm64",
 )
-TARGET_ABIS = ("gnu", "msvc", "wasi")
+TARGET_ABIS = ("gnu", "msvc", "posixshim")
 
 
 @dataclass(frozen=True)
@@ -127,10 +127,15 @@ _WINDOWS_PLACEHOLDER_REASON = (
     "recognized registry placeholder; implementation is not expected on the "
     "near or far roadmap"
 )
-_WINDOWS_GNU_REASON = (
-    "the current product contract forbids MinGW and clang-mingw; no official "
-    "regular-file GNU-ABI target bundle is defined"
+_POSIXSHIM_ART_REASON = (
+    "ART requires native DSO, executable-memory, signal/fault, threading, "
+    "and JIT contracts"
 )
+_UEFI_ART_REASON = (
+    "UEFI lacks ART's required process, threading, signal/fault, virtual-memory, "
+    "dynamic-loader, and native DSO contracts"
+)
+
 
 # Mterp input directories are not derivable by suffixing the AOSP architecture:
 # RISC-V uses `riscv64`, while the older backends use an `ng` directory. Keep
@@ -161,8 +166,14 @@ _LLVM_FILE_IDENTITIES: Mapping[
         ("windows", "armv7"): ("COFF-ARM", "thumb"),
         ("windows", "aarch64"): ("COFF-ARM64", "aarch64"),
         ("windows", "arm64ec"): ("COFF-ARM64EC", "aarch64"),
-        ("wasi", "wasm32"): ("WASM", "wasm32"),
-        ("wasi", "wasm64"): ("WASM", "wasm64"),
+        ("wasm", "wasm32"): ("WASM", "wasm32"),
+        ("wasm", "wasm64"): ("WASM", "wasm64"),
+        ("uefi", "x86_64"): ("COFF-x86-64", "x86_64"),
+        ("uefi", "aarch64"): ("COFF-ARM64", "aarch64"),
+        # Clang currently accepts a RISC-V64 Windows triple but emits ELF.
+        # Keep the observed identity on this impossible profile so validation
+        # cannot mistake target-triple acceptance for a working COFF path.
+        ("uefi", "riscv64"): ("elf64-littleriscv", "riscv64"),
     }
 )
 
@@ -252,20 +263,10 @@ _PROFILES = {
         "elf64", 64, "riscv64-unknown-linux-gnu", "Linux",
         status="planned", reason="RISC-V dependency and runtime policy are not validated",
     ),
-    "windows-x86-gnu": _profile(
-        "windows-x86-gnu", "windows", "x86", "x86", "x86", "gnu",
-        "pe32", 32, "i686-w64-windows-gnu", "Windows",
-        status="planned", reason=f"{_WINDOWS_PLACEHOLDER_REASON}; {_WINDOWS_GNU_REASON}",
-    ),
     "windows-x86-msvc": _profile(
         "windows-x86-msvc", "windows", "x86", "x86", "x86", "msvc",
         "pe32", 32, "i686-pc-windows-msvc", "Windows",
         status="planned", reason=_WINDOWS_PLACEHOLDER_REASON,
-    ),
-    "windows-x86_64-gnu": _profile(
-        "windows-x86_64-gnu", "windows", "x86_64", "x86_64", "x86_64", "gnu",
-        "pe32+", 64, "x86_64-w64-windows-gnu", "Windows",
-        status="planned", reason=_WINDOWS_GNU_REASON,
     ),
     "windows-x86_64-msvc": _profile(
         "windows-x86_64-msvc", "windows", "x86_64", "x86_64", "x86_64", "msvc",
@@ -273,47 +274,53 @@ _PROFILES = {
         status="experimental",
         capabilities=_NATIVE_CAPABILITIES + ("seh", "jit", "windows_contracts"),
     ),
-    "windows-armv7-gnu": _profile(
-        "windows-armv7-gnu", "windows", "armv7", "armv7", "arm", "gnu",
-        "pe32", 32, "armv7-w64-windows-gnu", "Windows",
-        status="planned", reason=f"{_WINDOWS_PLACEHOLDER_REASON}; {_WINDOWS_GNU_REASON}",
-    ),
     "windows-armv7-msvc": _profile(
         "windows-armv7-msvc", "windows", "armv7", "armv7", "arm", "msvc",
         "pe32", 32, "armv7-pc-windows-msvc", "Windows",
         status="planned", reason=_WINDOWS_PLACEHOLDER_REASON,
-    ),
-    "windows-aarch64-gnu": _profile(
-        "windows-aarch64-gnu", "windows", "aarch64", "aarch64", "arm64", "gnu",
-        "pe32+", 64, "aarch64-w64-windows-gnu", "Windows",
-        status="planned", reason=_WINDOWS_GNU_REASON,
     ),
     "windows-aarch64-msvc": _profile(
         "windows-aarch64-msvc", "windows", "aarch64", "aarch64", "arm64", "msvc",
         "pe32+", 64, "aarch64-pc-windows-msvc", "Windows",
         status="planned", reason="Windows AArch64 sources and ABI gates are not implemented",
     ),
-    "windows-arm64ec-gnu": _profile(
-        "windows-arm64ec-gnu", "windows", "arm64ec", "aarch64", "arm64", "gnu",
-        "pe32+", 64, "arm64ec-w64-windows-gnu", "Windows",
-        status="planned", reason=_WINDOWS_GNU_REASON,
-    ),
     "windows-arm64ec-msvc": _profile(
         "windows-arm64ec-msvc", "windows", "arm64ec", "aarch64", "arm64", "msvc",
         "pe32+", 64, "arm64ec-pc-windows-msvc", "Windows",
         status="planned", reason="ARM64EC source, macro, import/export, and runtime gates are not implemented",
     ),
-    "wasi-wasm32-wasi": _profile(
-        "wasi-wasm32-wasi", "wasi", "wasm32", "wasm32", "wasm32", "wasi",
-        "wasm", 32, "wasm32-wasi", "WASI",
+    "wasm-wasm32-posixshim": _profile(
+        "wasm-wasm32-posixshim", "wasm", "wasm32", "wasm32", "wasm32",
+        "posixshim", "wasm", 32, "wasm32-unknown-unknown", "Generic",
         status="impossible_under_current_art_contract",
-        reason="ART requires native DSO, executable-memory, signal/fault, and JIT contracts",
+        reason=_POSIXSHIM_ART_REASON,
     ),
-    "wasi-wasm64-wasi": _profile(
-        "wasi-wasm64-wasi", "wasi", "wasm64", "wasm64", "wasm64", "wasi",
-        "wasm", 64, "wasm64-wasi", "WASI",
+    "wasm-wasm64-posixshim": _profile(
+        "wasm-wasm64-posixshim", "wasm", "wasm64", "wasm64", "wasm64",
+        "posixshim", "wasm", 64, "wasm64-unknown-unknown", "Generic",
         status="impossible_under_current_art_contract",
-        reason="ART requires native DSO, executable-memory, signal/fault, and JIT contracts",
+        reason=_POSIXSHIM_ART_REASON,
+    ),
+    "uefi-x86_64-posixshim": _profile(
+        "uefi-x86_64-posixshim", "uefi", "x86_64", "x86_64", "x86_64",
+        "posixshim", "pe32+", 64, "x86_64-pc-windows-msvc", "Generic",
+        status="impossible_under_current_art_contract",
+        reason=_UEFI_ART_REASON,
+    ),
+    "uefi-aarch64-posixshim": _profile(
+        "uefi-aarch64-posixshim", "uefi", "aarch64", "aarch64", "arm64",
+        "posixshim", "pe32+", 64, "aarch64-pc-windows-msvc", "Generic",
+        status="impossible_under_current_art_contract",
+        reason=_UEFI_ART_REASON,
+    ),
+    "uefi-riscv64-posixshim": _profile(
+        "uefi-riscv64-posixshim", "uefi", "riscv64", "riscv64", "riscv64",
+        "posixshim", "pe32+", 64, "riscv64-pc-windows-msvc", "Generic",
+        status="impossible_under_current_art_contract",
+        reason=(
+            f"{_UEFI_ART_REASON}; Clang cannot currently emit RISC-V64 COFF "
+            "and emits ELF for the accepted Windows triple"
+        ),
     ),
 }
 
@@ -338,11 +345,14 @@ _NON_CANONICAL_HINTS: Mapping[str, tuple[str, ...]] = MappingProxyType({
     "windows-arm64": ("windows-aarch64-msvc",),
     "windows-aarch64": ("windows-aarch64-msvc",),
     "windows-aarch64-arm64ec": ("windows-arm64ec-msvc",),
-    "windows-arm64ec": ("windows-arm64ec-gnu", "windows-arm64ec-msvc"),
-    "wasi-wasm32": ("wasi-wasm32-wasi",),
-    "wasi-wasm64": ("wasi-wasm64-wasi",),
-    "wasm32-wasi": ("wasi-wasm32-wasi",),
-    "wasm64-wasi": ("wasi-wasm64-wasi",),
+    "windows-arm64ec": ("windows-arm64ec-msvc",),
+    "wasm-wasm32": ("wasm-wasm32-posixshim",),
+    "wasm-wasm64": ("wasm-wasm64-posixshim",),
+    "wasm32-posixshim": ("wasm-wasm32-posixshim",),
+    "wasm64-posixshim": ("wasm-wasm64-posixshim",),
+    "uefi-x86_64": ("uefi-x86_64-posixshim",),
+    "uefi-aarch64": ("uefi-aarch64-posixshim",),
+    "uefi-riscv64": ("uefi-riscv64-posixshim",),
 })
 
 
