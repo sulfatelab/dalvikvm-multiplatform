@@ -103,6 +103,8 @@ def test_no_image_probe_runs_shell_free_and_validates_outputs(tmp_path, monkeypa
     def run(command, **options):
         calls.append((command, options))
         oat = Path(next(value.split("=", 1)[1] for value in command if value.startswith("--oat-file=")))
+        if not oat.is_absolute():
+            oat = Path(options["cwd"]) / oat
         oat.write_bytes(_fake_oat())
         oat.with_suffix(".vdex").write_bytes(_fake_vdex())
         return subprocess.CompletedProcess(command, 0, stdout="compiled\n", stderr="")
@@ -118,9 +120,11 @@ def test_no_image_probe_runs_shell_free_and_validates_outputs(tmp_path, monkeypa
     assert not any(value == "--no-watch-dog" for value in command)
     assert any(value.endswith("missing-boot.art") for value in command)
     assert "-Xbootclasspath-locations:/system/framework/boot.jar" in command
+    assert "--oat-file=probe.oat" in command
     result = json.loads((output / "result.json").read_text(encoding="utf-8"))
     assert result["target_id"] == "windows-x86_64-msvc"
     assert result["image_mode"] == "none"
+    assert result["logical_oat"] == "probe.oat"
     assert result["watchdog"] == "enabled"
     assert result["elf"]["segment_alignment"] == 64 * 1024
     assert result["elf"]["oat_version"] == "265"

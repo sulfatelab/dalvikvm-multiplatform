@@ -19,6 +19,7 @@ import time
 
 LOGICAL_BOOT_JAR = "/system/framework/boot.jar"
 LOGICAL_INPUT_JAR = "/data/local/tmp/win32-oat-probe.jar"
+LOGICAL_OAT = "probe.oat"
 OAT_VERSION = b"265\0"
 VDEX_VERSION = b"027\0"
 WINDOWS_X64_ELF_ALIGNMENT = 64 * 1024
@@ -91,7 +92,7 @@ def run_probe(args: argparse.Namespace) -> Path:
         str(dex2oat),
         f"--dex-file={input_jar}",
         f"--dex-location={LOGICAL_INPUT_JAR}",
-        f"--oat-file={oat}",
+        f"--oat-file={LOGICAL_OAT}",
         f"--instruction-set={args.instruction_set}",
         "--compiler-filter=speed",
         f"--boot-image={missing_image}",
@@ -179,6 +180,7 @@ def run_probe(args: argparse.Namespace) -> Path:
         "instruction_set": args.instruction_set,
         "logical_boot_jar": LOGICAL_BOOT_JAR,
         "logical_input_jar": LOGICAL_INPUT_JAR,
+        "logical_oat": LOGICAL_OAT,
         "compiler_filter": "speed",
         "image_mode": "none",
         "watchdog": "enabled",
