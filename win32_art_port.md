@@ -103,8 +103,11 @@ unmet W-025 feature; CFG remains separate.
 The original plan allowed JIT/dex2oat to be a v1.1 gate. Current x86_64 quick,
 nterp, managed-JIT, and native-JIT entrypoints are correct and default-on;
 Windows `dex2oat` trivial no-image generation passes the W-028 native operation
-gate twice with byte-identical artifacts. Boot-set production and executable
-boot-OAT loading remain pending.
+gate twice with byte-identical artifacts. W-030 now generates and stages an
+LZ4 boot set and passes validation-only plus executable private-copy ELF/VDEX
+loading under an experimental `-Xint` startup. Real boot-OAT code execution,
+unwind/CFG, reproducible boot artifacts, and product integration remain
+pending.
 
 ---
 
@@ -775,14 +778,17 @@ all product paths. Windows NIO.2 remains a non-goal.
   prerequisites now complete under a repeated Wine diagnostic. W-028 passes
   twice on native Server 2025 and produces byte-identical validator-clean
   OAT/VDEX files; post-correction Wine output matches them exactly. This
-  completes generation step 1. Boot-set generation and executable loading
-  remain pending. The imageless interpreter+JIT product does not require them.
+  completes generation step 1. W-030 now supplies the boot-set generation and
+  private-copy loading slices described below. The imageless interpreter+JIT
+  product does not require them.
 - W-029 starts sequence step 2 by pinning one `boot` component, logical
   `/system/framework/boot.jar`, package `runtime/boot.jar`, and explicit
   package-relative `-Ximage:runtime/boot-image/boot.art`. Its native preflight
   passes and diagnoses seven deliberate spelling/path/topology mismatches.
-  Step 2 remains partial until Windows `ImageWriter` and native ART startup
-  consume that contract.
+  W-030 makes Windows `ImageWriter`, the manifest, staging, and native ART
+  startup consume that contract. Step 2 remains partial because the seven
+  negative cases are launcher-level pre-spawn checks rather than ART-level
+  mismatch diagnostics.
 - Windows boot AOT keeps the current Linux ART ELF64 header identity:
   `ART_PAGE_SIZE_AGNOSTIC=1` remains enabled and Linux `EI_OSABI`/ABI
   version/e_flags behavior is retained. Linux stays at 16-KiB `PT_LOAD`
@@ -793,9 +799,14 @@ all product paths. Windows NIO.2 remains a non-goal.
   helper serves validation-only opens at an arbitrary private address and
   executable opens in the exact already committed ART reservation, preserves
   the `oatdex`/VDEX contract, applies final protections, flushes code, and
-  registers Windows x64 AOT unwind data after `Setup()`. Whole-span commit is
-  selected for the initial OAT-1 path to match current Windows `MemMap`
-  semantics.
+  will register Windows x64 AOT unwind data after `Setup()`. Whole-span commit
+  is selected for the initial OAT-1 path to match current Windows `MemMap`
+  semantics. The private-copy ELF/VDEX part is implemented and W-030 proves
+  validation-only and executable opens, R/RX/RW protections, no-access gaps,
+  zero fill, owner sharing, cache flush, and `oatdex` reuse. The initial
+  Windows `boot.art` is LZ4 so ART uses anonymous decompression instead of an
+  unrepresentable exact file view in the committed reservation; Linux remains
+  uncompressed.
 - An alternate PE-form OAT, `LoadLibraryExW`, `SEC_IMAGE`, a general
   Bionic-linker port, application OAT, unloading, and shared-view/OAT-2 work
   are outside the initial milestone. Security hardening is deferred. CFG uses one
@@ -804,13 +815,14 @@ all product paths. Windows NIO.2 remains a non-goal.
   characterizes real indirect OAT calls without target API changes;
   explicit-target mode is separately gated on establishing invalid-by-default
   CFG state in the committed OAT-1 reservation without W+X.
-- The remaining functional design work is native Windows `dex2oat` boot-set
-  generation/staging, boot-component topology, exact image-reservation and
-  VDEX ownership, experimental startup selection with imageless fallback, and
-  proof that real boot methods execute from the OAT RX range rather than
-  JIT/nterp. The compiler-to-OAT unwind and CFG transports are no longer open
-  format design: their layouts, writer integration, runtime validation, and
-  mode boundaries are specified and now await implementation and native gates.
+- The remaining functional work is boot-generation determinism, ART-level
+  negative identity diagnostics, unwind/CFG transport, normal product
+  selection with successful whole-transaction imageless fallback, OAT-1
+  measurements, and proof that real boot methods execute from the OAT RX range
+  rather than JIT/nterp. The compiler-to-OAT unwind and CFG transports are no
+  longer open format design: their layouts, writer integration, runtime
+  validation, and mode boundaries are specified and now await implementation
+  and native gates.
 - The format analysis, Bionic reuse boundary, mapping design, risk register,
   correctness invariants, and Server 2025 proof gates are in
   [win32_aot_oat.md](win32_aot_oat.md); live progress is in

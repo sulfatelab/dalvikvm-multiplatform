@@ -4,23 +4,28 @@ Status: active boot-only early bring-up (revised 2026-08-06). This document
 records the current ART OAT/VDEX/image contracts and the selected Windows AOT
 artifact and loader design. Windows keeps the same ELF64 coat and header
 identity as Linux, while using 64-KiB ELF/image segment alignment for the
-Windows allocation granularity. An ART-owned, OAT-only private-copy path will
-load it.
+Windows allocation granularity. An ART-owned, OAT-only private-copy path now
+loads the ELF and VDEX bytes into the existing private reservation.
 
-Numbered implementation-sequence step 1 is complete: the target alignment,
-native `dex2oat.exe` build path, and W-028 trivial no-image operation gate are
-implemented, and W-028 passes twice on the authoritative native host with
-byte-identical output. Step 2 now has an accepted W-029 identity preflight,
-but actual boot-image generation/startup identity is not proven. Boot-image
-generation and executable OAT loading are not implemented. The earlier
-pre-dispatch characterization suite is also in the tree; it does not enable
-Windows AOT. The supported Windows product remains imageless nterp/JIT while
+W-028 completes numbered implementation-sequence step 1. W-029 selects the
+single-component identity. W-030 makes the generator and experimental
+package-root launcher consume that identity, implements private-copy ELF/VDEX
+loading, and passes validation-only plus executable boot loading on the
+authoritative native host. Steps 4 and 5 are complete. Steps 2, 8, and 9 remain
+partial: the seven negative identities are still launcher-level pre-spawn
+checks rather than ART diagnostics, repeated boot generation is not byte-
+reproducible despite `--force-determinism`, and normal product selection plus
+successful imageless fallback are not integrated. W-030 deliberately uses
+`-Xint`; it proves boot-image/OAT loading, not execution from boot-OAT RX code.
+The supported Windows product therefore remains imageless nterp/JIT while
 this experimental track is incomplete. Progress and evidence are tracked in
 [`win32_aot_oat_tracker.md`](win32_aot_oat_tracker.md). The
 accepted native result is
 [`docs/history/windows_x64_w028_result.md`](docs/history/windows_x64_w028_result.md).
 The accepted W-029 preflight is
 [`docs/history/windows_x64_w029_result.md`](docs/history/windows_x64_w029_result.md).
+The W-030 private-copy and boot-loading result is
+[`docs/history/windows_x64_w030_result.md`](docs/history/windows_x64_w030_result.md).
 The authoritative implementation gate is Windows Server 2025 Datacenter
 Evaluation, x64 build 26100. Linux and Wine remain development and structural
 gates; the former Windows 10 lab host is unavailable.
@@ -34,8 +39,9 @@ assembler already turns the same source expression into an `R15`-relative
 jump on Windows. The current verdict for every finding is recorded under
 "Design review findings".
 
-The source snapshot is `vendor/art` at
-`android-16.0.0_r4-93-g681f2f38a2`. The design was originally written against
+The implemented source snapshot is `vendor/art` at
+`fd6accf065a550fc1e436cb9f28617b466f7593e`; W-030's private-copy slice is
+based on `android-16.0.0_r4-93-g681f2f38a2`. The design was originally written against
 `android-16.0.0_r4-76-g4eab6e7423`; the 16 commits through
 `android-16.0.0_r4-92-gffbfe48fd1` are W-027 Unicode and build-prelude
 cleanups, and the next commit is the first implementation slice recorded here.
@@ -71,7 +77,11 @@ See "Design review findings".
    current Windows `MemMap` whole-span `MEM_RESERVE | MEM_COMMIT` semantics,
    privately copies `PT_LOAD` bytes, zeroes BSS, leaves gaps `PAGE_NOACCESS`,
    applies final R/RX/RW protections, registers Windows x64 unwind data, and
-   publishes entrypoints last.
+   publishes entrypoints last. The initial Windows `boot.art` uses ART's LZ4
+   image format so image bytes follow the existing anonymous-decompression
+   path; an uncompressed image cannot replace the already committed Windows
+   boot reservation with a file view. Linux boot generation remains
+   uncompressed.
 6. AOT unwind is required for usable Windows stack walking. CFG has two
    deliberately separate modes. Early bring-up defaults to observation mode,
    which records policy and proves real indirect OAT calls without changing
@@ -736,9 +746,13 @@ VDEX `MemMap` must be a slice that shares the OAT reservation owner, validate
 the exact aperture size, and apply final read-only protection after copying.
 This avoids both an adjacency refactor and the Windows exact-view problem.
 
-Compressed ART images remain anonymous/decompressed. Uncompressed data and
-bitmap pages may use exact data views where their relocation/protection
-contract is satisfied.
+The initial Windows boot image is LZ4-compressed and remains anonymous after
+decompression. This is required by the current whole-span committed
+reservation: the Windows file-view backend cannot replace an arbitrary
+4-KiB-aligned subrange of that reservation with the uncompressed image file.
+Linux generation remains uncompressed. A future Windows uncompressed mode may
+use exact data views only if its relocation, allocation-granularity, and
+protection contract is independently proven; it is not part of OAT-1.
 
 ## Windows generation lifecycle
 
@@ -1998,11 +2012,46 @@ component. It neither calls Windows path normalization nor assumes that equal
 Win32 file identities make the ART strings equal.
 
 The gate passes in a fresh Linux-hosted Windows cross configuration and on the
-authoritative Server 2025 host. W-028 now imports the same boot/probe identity
+authoritative Server 2025 host. W-028 imports the same boot/probe identity
 source and records the selected contract; its native OAT/VDEX bytes remain
-unchanged. Step 2 remains `PARTIAL` because no generated Windows image or
-startup launcher consumes the record yet. See the
-[accepted preflight](docs/history/windows_x64_w029_result.md).
+unchanged. W-030 now makes the Windows generator, manifest, staging step, and
+package-root launcher consume this record, and native ART accepts the canonical
+set. Step 2 remains `PARTIAL` only because the seven deliberate mismatches are
+rejected by the launcher before process creation; ART-level negative
+diagnostics are not yet proven. See the
+[accepted preflight](docs/history/windows_x64_w029_result.md) and
+[W-030 result](docs/history/windows_x64_w030_result.md).
+
+### Numbered sequence steps 4, 5, 8, and 9 implementation status
+
+W-030 adds `MemMap::MapFileAtAddressPrivateCopy()` only on Windows. It rejects
+foreign allocations, section views, unaligned/overflowing destinations, and
+out-of-file ranges; copies through temporary RW/NX pages; restores the exact
+R, RX, or RW/NX protection selected by the ELF/VDEX loader; flushes executable
+ranges; and returns a slice sharing the original private-allocation owner.
+`ElfFileImpl::Load()` selects it for every Windows file-backed `PT_LOAD`, so
+validation-only and executable `ElfOatFile` opens use the same narrow path.
+`VdexFile::OpenAtAddress()` selects it only for Windows reuse into the
+`oatdex` aperture. Linux retains its original fixed private mapping calls.
+
+The direct native probe covers the primitive's rejection, range, exact-address,
+protection, gap, zero-fill, ownership, source-privacy, and cache-flush
+contracts. The boot gate then exercises both validation-only and executable
+ELF/VDEX loading end to end. Steps 4 and 5 are therefore `COMPLETE` for the
+boot-only OAT-1 scope.
+
+The Windows boot generator now emits an LZ4 `boot.art`, ordinary ELF
+`boot.oat`, and VDEX into the selected x86-64 topology. The launcher validates
+the manifest and all hashes, stages canonical package paths, runs from the
+package root with exact `-Ximage:runtime/boot-image/boot.art`, and rejects
+imageless fallback markers even when managed `Hello` exits successfully. The
+native W-030 pair passes 2/2. Step 8 remains `PARTIAL` because forced repeated
+generation changes `boot.art` and the OAT `.text` size/hash while `boot.vdex`
+remains stable; three serial `-j1` attempts did not restore byte identity.
+Step 9 remains `PARTIAL` because W-030 is an explicit experimental gate, not
+normal product selection, and it detects rather than successfully exercises
+the whole-transaction imageless fallback. Finally, the gate uses `-Xint`, so
+sequence step 10 remains open.
 
 ### Pre-dispatch characterization record
 
@@ -2108,15 +2157,17 @@ OAT-1 replaces one operation, not a segment mapper. This is recorded under
 
 The review found no critical trampoline defect. OAT-1's mapping delta is also
 narrower than a new segment loader: only Windows private-copy replacement of
-file-backed segment operations is new. Those conclusions reduce code-change
-risk, but they do not make residual risk low. Native `dex2oat.exe` compilation,
-boot `ImageWriter` output, image-mode execution, VDEX ownership, unwind
-registration, and the OAT-1 protection sequence remain unproven on Server
-2025. Explicit CFG additionally depends on an unresolved invalid-by-default
-allocation sequence. The aggregate status therefore remains medium/high until
-the operational gates pass. CFG explicit enforcement, teardown recovery from
-a failed function-table deletion, security hardening, application OAT, and
-OAT-2 do not block the initial boot-only observation-mode milestone.
+file-backed segment operations is new. W-030 has now proven native
+`ImageWriter` output, canonical LZ4 image startup, private-copy ELF/VDEX
+ownership and protections, and rejection of silent imageless fallback on
+Server 2025. Residual risk remains medium/high because repeated boot generation
+is not byte-reproducible, the accepted startup runs in `-Xint`, and unwind,
+real boot-OAT execution, CFG observation, product selection/fallback, and
+measurements remain open. Explicit CFG additionally depends on an unresolved
+invalid-by-default allocation sequence. CFG explicit enforcement, teardown
+recovery from a failed function-table deletion, security hardening,
+application OAT, and OAT-2 do not block the initial boot-only observation-mode
+milestone.
 
 ## Publication, rollback, and lifetime
 
@@ -2267,8 +2318,9 @@ tool policy are deferred.
 | Boot topology mismatch | High | Enforce W-029's selected single `boot` component in generation, the staged manifest, image-header validation, and startup; reject an unexpected extension component |
 | Target-aware trampoline lowering regresses | Medium | The shared producer already lowers Thread access to Linux `GS` or Windows `R15`; retain two-target disassembly plus resolution/quick-to-interpreter execution gates |
 | Native `dex2oat.exe` operation regresses | Medium | Keep the accepted W-028 real single-JAR no-image `.oat`/`.vdex` compile as a native Server 2025 regression gate; `--version` is not supported and is not a substitute |
-| Boot class path / dex location strings disagree between generation and load | High | W-029 pins logical `/system/framework/boot.jar` and rejects preflight mismatches without normalization; wire the same record into native generation/startup and require ART-level intentional-mismatch diagnostics |
-| Image-mode runtime paths have never executed on Windows | High | Every accepted gate to date is imageless; reject expected compatibility failures before trusted-layout invariants and treat successful image loading/execution as a distinct milestone |
+| Boot class path / dex location strings disagree between generation and load | High | W-029 pins logical `/system/framework/boot.jar`; W-030 makes generation, manifest, staging, and startup consume it and rejects launcher drift without normalization; ART-level intentional-mismatch diagnostics remain required |
+| Windows boot artifacts are not byte-reproducible | High | Keep `--force-determinism`, record compiler parallelism and every artifact hash, retain the stable VDEX observation, and diagnose the Windows `ImageWriter`/OAT code-order source before sequence step 8 can complete; `-j1` is not an accepted workaround because it reproduced the defect |
+| Image loads but boot OAT code is never executed | High | W-030 proves canonical image/OAT/VDEX loading under `-Xint`; require entrypoints within the boot-OAT RX range and representative execution with JIT disabled before step 10 completes |
 | Boot reservation commit dominates the measured cost | Medium operational | Windows `MemMap` commits whole spans, so the image+OAT reservation, not the 64-KiB padding, is the term to report and later optimize |
 | Unwind predicate narrows the existing Windows condition | Medium | Preserve the semantic union of Windows-host and Windows-target compilation; test both even if a shared constexpr replaces the current preprocessor spelling |
 | `kDynamicSymbolCount` grows implicitly with the enum | Medium | It derives from `DynamicSymbol::kLast`; append Windows-only values after `kLast`, `static_assert` the base count, reserve from writer mode at `Start()`, and test Linux byte identity |
@@ -2348,23 +2400,24 @@ reservation/protection maps, unwind and CFG observations, actual AOT
 entrypoints, fallback results, and archive hash. Linux protects shared
 semantics; Wine is structural only.
 
-## Open implementation items
+## Implementation status and remaining items
 
 1. Promote the existing cross-target comparison into a repeatable gate proving
    Linux retains 16-KiB output and `kMaxPageSize = 16384` while Windows retains
    the Linux ELF identity and uses 64-KiB `kElfSegmentAlignment`.
-2. Wire W-029's selected single-component identity into the Windows boot-image
-   generator, staged manifest, and experimental package-root launcher. Prove
-   native ART startup accepts it and diagnoses the intentional mismatch matrix.
+2. Retain W-030's canonical generator/manifest/staging/startup identity and add
+   ART-level negative diagnostics for the intentional mismatch matrix. The
+   launcher-level pre-spawn matrix is already accepted.
 3. Close H-005 and prove the existing loader characterization contracts. Add
    the two-target trampoline disassembly/execution regression gate; no
    trampoline producer change is currently required.
-4. Add the narrow Windows private-copy replacement for file-backed
-   `MapFileAtAddress(..., reuse=true)` for both validation-only and executable
-   opens under the existing `ElfOatFile`/`ElfFile` flow. Preserve the current
-   anonymous whole-span reservation and zero-fill reuse paths.
-5. Preserve `oatdex` semantics with a VDEX copy and shared allocation owner,
-   including exact aperture sizing and rollback.
+4. Retain the accepted W-030 Windows private-copy `ElfOatFile` path for both
+   validation-only and executable opens, including its direct primitive and
+   native boot-loading regressions. No step-4 exit condition remains.
+5. Retain the accepted boot-only VDEX private copy into `oatdex` and its shared
+   allocation owner. Extend rollback fault injection when the product-level
+   selection/fallback transaction is implemented; no boot-only step-5 exit
+   condition remains.
 6. Implement the specified AOT unwind transport: the Windows-and-x86-64
    emission predicate replacing the `IsJitCompiler()` gate, the
    `CompiledMethod` unwind array, dedup-safe `OatWriter` entries, the
@@ -2374,12 +2427,14 @@ semantics; Wine is structural only.
    whether explicit-target mode can establish invalid-by-default CFG state in
    the already committed OAT-1 reservation without W+X; this does not block
    observation-mode bring-up.
-8. Define the native boot-generation command, exercise `ImageWriter`, stage the
-   target-specific `boot.art`/`.oat`/`.vdex` set, and select the initial boot-
-   component topology.
-9. Add experimental boot selection and whole-transaction imageless fallback.
-    Reject expected missing, stale, wrong-target, and cross-artifact mismatch
-    cases before trusted-layout image/heap invariants.
+8. Diagnose why repeated Windows boot generation changes LZ4 `boot.art` and
+   OAT `.text` despite `--force-determinism`; make the W-030-generated and
+   staged set reproducible without a serial-build workaround. Linux remains
+   uncompressed and unchanged.
+9. Move W-030's explicit experimental selection into a reviewed product option
+   and exercise successful whole-transaction imageless fallback for expected
+   missing, stale, wrong-target, and cross-artifact cases before trusted-layout
+   image/heap invariants.
 10. Prove real boot-OAT entrypoints, image relocation, JNI, faults, GC/roots,
     and unwind/stack-walk behavior on Server 2025.
 11. Pass CFG observation-mode characterization and measure OAT-1 startup,

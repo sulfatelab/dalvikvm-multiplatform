@@ -243,12 +243,13 @@ suffix-`A` family. The active 1,441-source graph has zero ANSI calls, source
 files, or API families. The Linux-hosted Windows-cross stage passes. Native
 Windows Server 2025 now passes W-027 as part of the complete 77/77 catalog;
 the fresh run completed in 13.38 seconds and the no-op repeat in 13.21 seconds.
-The complete 95-declaration catalog contains 73 target-runnable items, nine
+The complete 97-declaration catalog contains 75 target-runnable items, nine
 host reviewers, and 13 compile-only artifacts. The Windows product subset has
-92 applicable declarations: 70 target-runnable, nine host-review, and 13
+94 applicable declarations: 72 target-runnable, nine host-review, and 13
 compile-only. The complete pre-AOT native baseline passes 77/77 twice; the second
 `art-tests` build is a Ninja no-op. Both product and FS-1 Windows-cross W-014
-reviewers also pass with Ninja no-op repeats.
+reviewers also pass with Ninja no-op repeats. The separate experimental W-030
+stage adds two native Windows AOT loading gates and passes 2/2 on Server 2025.
 The former legacy shell runners and per-probe CMake entry points have been
 replaced by the unified Python/CMake/Ninja path, and `tools/verify` is removed.
 W-003 removed its four standalone CMake graphs, shell runners, and package producer;
@@ -584,14 +585,25 @@ fatal trace while returning zero, and it replaces the output tree atomically.
 The diagnostic `dex2oat.log` remains only in the ignored build tree and is not
 staged.
 
-`linux-x86_64-gnu` is currently the only admitted `boot_image` identity. A
-cross host cannot execute target `dex2oat`, so it owns a valid no-op CMake
-target and staging records `not-built-cross-host`. A target without the
-capability records `unsupported`. In particular, Windows does not inherit AOT/
-OAT support from `art-compiler.dll`; that remains a separate blocked porting
-track. A native capable product is incomplete if its declared image is absent.
+`linux-x86_64-gnu` remains the only product identity with the `boot_image`
+capability. It emits an uncompressed image. A cross host cannot execute target
+`dex2oat`, so it owns a valid no-op CMake target and staging records
+`not-built-cross-host`. A target without the capability records `unsupported`.
+A native capable product is incomplete if its declared image is absent.
 Product staging revalidates the image manifest against the exact boot JAR and
 copies the three artifacts plus manifest as regular files, never links.
+
+Windows x86-64 has a separate exact-target experimental W-030 path; it does
+not acquire the product capability from `art-compiler.dll`. On a native host,
+`art-runtime-boot-image` generates an LZ4 image so ART decompresses into the
+already committed private boot reservation. W-030 validates and stages the
+W-029 single-component identity, starts from the package root with exact
+`-Ximage:runtime/boot-image/boot.art`, rejects seven launcher identity
+mismatches before spawn, and fails if ART reports imageless fallback. The
+accepted gate uses `-Xint`, so it proves validation-only/executable image/OAT/
+VDEX loading but not execution from boot-OAT code. Repeat artifacts are not
+yet byte-reproducible; this experimental path therefore remains outside normal
+product staging.
 
 Managed runtime gates must use `support/runtime_gate.py` unless a case has a
 genuinely unique runner. The shared runner invokes `dalvikvm` with `shell=False`,
