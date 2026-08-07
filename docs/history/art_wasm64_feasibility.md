@@ -1,8 +1,10 @@
-# Browser ART WebAssembly switch-interpreter, AOT, and POSIX feasibility analysis
+# Browser ART WebAssembly switch-interpreter, AOT, and PosixShim feasibility analysis
 
 Status: feasibility reassessment
 
 Date: 2026-08-01
+
+Target-model update: 2026-08-07
 
 ## Executive conclusion
 
@@ -18,20 +20,24 @@ substantial fork with a new compiled-method contract:
 - offline DEX-to-Wasm AOT for a packaging-time closed world;
 - imageless DEX boot;
 - ART, libcore JNI implementations, ICU/OpenJDK C/C++, libc compatibility, and
-  POSIX simulation all cross-compiled into Wasm;
+  PosixShim all cross-compiled into Wasm;
 - explicit fault checks;
 - custom linear-memory allocation; and
-- initially single-threaded or tied to a specific browser/engine threading
-  model.
+- a single-thread-only bring-up harness, followed by a mandatory, explicitly
+  selected browser/engine threading model before target admission.
 
-The repository's existing classification of `wasi-wasm64` as
-`impossible_under_current_art_contract` is accurate. The important
-qualification is `current_art_contract`: an offline compiler that emits normal
-Wasm functions, a function-table-based method entrypoint, and a new artifact
-format avoids ART JIT memory, but it is not current `dex2oat` or OAT.
-`wasi-wasm64` is not the proposed product target; the product is a browser
-profile with JavaScript capability imports and a Wasm-resident POSIX
-simulation.
+That restricted runtime and its single-thread bring-up harness are a research
+fork, not an admissible current-ART product profile. Current ART's thread and
+synchronization contracts must not be silently removed merely because a Wasm
+embedding lacks threads.
+
+The repository's classifications of `wasm-wasm32-posixshim` and
+`wasm-wasm64-posixshim` as `impossible_under_current_art_contract` are
+accurate. The important qualification is `current_art_contract`: an offline
+compiler that emits normal Wasm functions, a function-table-based method
+entrypoint, and a new artifact format avoids ART JIT memory, but it is not
+current `dex2oat` or OAT. The former WASI profile names are legacy invalid
+identities, not product targets.
 
 The deployed runtime is Wasm-only: there is no physical-CPU `native` layer in
 the deployed ART/application architecture. No ART, libcore, ICU/OpenJDK,
@@ -40,6 +46,35 @@ library fallback. JavaScript is limited to browser capability imports, and any
 machine code generated internally by the browser's Wasm engine is inaccessible
 to ART. The offline packaging compiler is a build tool and is not part of the
 deployed runtime.
+
+### Target identity and PosixShim boundary
+
+The canonical IDs follow
+`<target-platform>-<target-arch>-<target-abi>`, hence
+`wasm-wasm32-posixshim` and `wasm-wasm64-posixshim`. `wasm` names the execution
+format and host boundary, `wasm32` or `wasm64` names the address width, and
+`posixshim` names the project-owned libc, compatibility, and host-service ABI.
+Browser, web, Worker, Emscripten, and WASI are not ART target-identity axes.
+ART-facing source selection uses `ART_TARGET_WASM`, not an embedding-specific
+browser or Worker macro.
+
+Every ART-WASM target is always built and shipped with PosixShim; there is no
+supported unshimmed, Emscripten-ABI, or WASI-ABI ART-WASM profile. If real POSIX
+or another supported native environment can run native ART, native ART must be
+used, because ART-WASM exists only where physical native execution is not
+available. The final Wasm artifact links all required Wasm-resident PosixShim
+pieces together, including the ART-facing libc/POSIX wrappers and project-owned
+virtual state, and exposes only the selected narrow host-capability imports.
+
+The browser implementation considered here is one backend below PosixShim.
+Emscripten components may help implement that backend, and a future WASI
+adapter could implement the same host-capability interface, without changing
+the canonical target ID or the ART-facing ABI. Likewise, a Cloudflare Worker or
+another Worker-style service accepting a Wasm module does not become a distinct
+ART target. If a browser embedding lacks `SharedArrayBuffer`, or any embedding
+lacks required threads, shared linear memory, atomics, exception/table
+features, or the selected address width, capability admission fails; accepting
+Wasm alone is insufficient to run current ART.
 
 The resulting feasibility judgment is:
 
@@ -52,7 +87,8 @@ The resulting feasibility judgment is:
 | Treat raw `&func` as both callable code and a linear-memory pointer | No-go; it is a function-table slot, not a code address |
 | Use a bounded synthetic code-address view with explicit slot translation | Feasible as a compatibility layer, not as executable memory |
 | Depend on a sparse or overcommitted 1-TiB browser Memory64 | No-go; browser Wasm exposes contiguous memory and currently limits runtime size to 16 GiB |
-| Curated browser POSIX simulation for ART/libcore | Conditional go with an explicit supported API contract |
+| Curated PosixShim implementation for ART/libcore over browser capabilities | Conditional go with an explicit supported API contract |
+| Outbound virtual TCP and UDP sockets over standard Trojan-over-WSS | Conditional go; connected TCP and connected or unconnected UDP are implementable without a project-defined network protocol |
 | Transparent Linux/POSIX process, raw-socket, signal, and VM compatibility | No-go in an ordinary browser |
 | Preserve full Android runtime, JNI, threading, JVMTI, and GC behavior | Research-scale redesign |
 
@@ -91,8 +127,8 @@ authoritative DEX representation for the switch interpreter.
 
 | Area | Finding |
 |---|---|
-| Toolchain | LLVM recognizes `wasm64` and Emscripten exposes browser Memory64, but the usable combination of C/C++ ABI, browser engine, function tables, exceptions, Workers, shared memory, and required compatibility libraries must be validated. WASI SDK limitations are not the deployment contract because the target is the browser. |
-| Build frontend | [`native/CMakeLists.txt`](../../native/CMakeLists.txt) rejects anything except Linux or Windows. The registered Wasm profiles deliberately fail before graph generation in [`target.py`](../../tools/bp2cmake/bp2cmake/target.py). |
+| Toolchain | LLVM recognizes `wasm64` and Emscripten exposes browser Memory64, but the usable combination of C/C++ ABI, browser engine, function tables, exceptions, Workers, shared memory, and required compatibility libraries must be validated. Emscripten and WASI may supply backend components, but neither is the canonical ART-WASM ABI. |
+| Build frontend | [`native/CMakeLists.txt`](../../native/CMakeLists.txt) rejects anything except Linux or Windows. The registered `wasm-wasm32-posixshim` and `wasm-wasm64-posixshim` profiles deliberately fail before graph generation in [`target.py`](../../tools/bp2cmake/bp2cmake/target.py). |
 | ART architecture | [`instruction_set.h`](../../vendor/art/libartbase/arch/instruction_set.h) knows only ARM, ARM64, RISC-V64, x86, and x86-64. Under wasm64, `kRuntimeISA` becomes `kNone`. The current tree contains 276 ISA switch cases across 23 runtime/compiler files. |
 | Interpreter | The portable C++ switch interpreter exists, which is encouraging, but even it enters through an architecture-specific assembly/CFI wrapper in [`interpreter_switch_impl.h`](../../vendor/art/runtime/interpreter/interpreter_switch_impl.h). There is no Wasm quick-invoke, JNI, context, frame, TLS, or long-jump implementation. |
 | Compiler | [`code_generator.cc`](../../vendor/art/compiler/optimizing/code_generator.cc) has no WebAssembly backend. HGraph construction is also currently entered only after creating a physical-ISA code generator. JNI calling conventions, trampolines, register allocation, unwind metadata, and runtime entrypoints are similarly ISA-specific. |
@@ -103,7 +139,7 @@ authoritative DEX representation for the switch interpreter.
 | OAT/AOT | Current OAT loading is ELF/physical-ISA-code-oriented. A WebAssembly module cannot be copied from an OAT mapping into linear memory and called like physical-ISA instructions. Some metadata concepts can be reused, but supporting AOT requires a new artifact, linker, metadata, entrypoint, and stack-walking model. |
 | AOT GC roots | Managed references held only in Wasm locals are invisible to ART's collector. Every allocation, suspend point, monitor operation, or runtime call that can trigger GC must spill live references into an ART-visible shadow frame or explicit root stack. |
 | JNI/DSOs | Startup dynamically loads `libicu_jni`, `libjavacore`, and `libopenjdk` in [`runtime.cc`](../../vendor/art/runtime/runtime.cc). In this design their C/C++ implementations are cross-compiled into Wasm and registered statically; no physical-CPU DSO or physical-ISA JNI fallback is permitted. |
-| POSIX surface | ART, libcore, ICU, and OpenJDK expect files, descriptors, memory maps, threads, futexes, clocks, sockets, polling, signals, process identity, and dynamic loading. These APIs need a Wasm-resident compatibility layer over narrow browser capabilities, with explicit unsupported semantics where faithful simulation is impossible. |
+| POSIX surface | ART, libcore, ICU, and OpenJDK expect files, descriptors, memory maps, threads, futexes, clocks, sockets, polling, signals, process identity, and dynamic loading. PosixShim must provide the admitted surface over narrow browser capabilities, with explicit unsupported semantics where faithful simulation is impossible. |
 | Heap references | Managed references remain raw 32-bit compressed pointers even in a 64-bit ART build; see [`object_reference.h`](../../vendor/art/runtime/mirror/object_reference.h). Therefore the managed heap still has to reside below 4 GiB. wasm64 does not automatically give ART a larger Java heap. |
 
 The repository already records essentially the same architectural boundary in
@@ -150,7 +186,7 @@ the Wasm guest:
 - ICU and OpenJDK C/C++ support code;
 - allocator and libc compatibility code;
 - the virtual file-descriptor, filesystem, socket, polling, clock, entropy,
-  Worker/thread, and other POSIX simulation state; and
+  Worker/thread, and other PosixShim state; and
 - all application JNI implementations admitted by the product.
 
 Every item above is compiled to Wasm and shares the same linear-memory object
@@ -720,28 +756,64 @@ generated registry that maps Java JNI declarations to Wasm functions.
 The Java `native` keyword does not authorize a physical-CPU implementation.
 There is no browser path for loading a platform DSO, calling arbitrary
 physical-CPU addresses, or substituting a Java method with JavaScript.
-JavaScript imports
-provide only narrow browser capabilities beneath the Wasm-resident libc/POSIX
-simulation.
+JavaScript imports provide only narrow browser capabilities beneath the
+Wasm-resident PosixShim implementation.
 
 ### Threads
 
-Core Wasm threads provide shared memory and atomics, not thread creation or a
-complete TLS contract. Browser threads additionally depend on Web Workers,
-`SharedArrayBuffer`, and cross-origin isolation.
+Threads are a mandatory target capability, not an optional optimization.
+Current ART starts Java daemon threads during
+[`Runtime::Start`](../../vendor/art/runtime/runtime.cc), creates internal
+workers with `pthread_create()` in
+[`thread_pool.cc`](../../vendor/art/runtime/thread_pool.cc), and relies on a
+shared process address space for its heap, thread list, locks, GC coordination,
+JNI state, and class/runtime metadata. There is no supported current-ART
+configuration for an embedding that cannot create threads over the same linear
+memory.
 
-Start with one managed thread. Add threads only after the same engine supports
-the required combination of shared memory, atomics, pointer width, TLS,
-function tables, `Atomics.wait`/`notify` behavior, and Worker creation.
+Core Wasm threads provide shared linear memory and atomics, not thread creation
+or a complete TLS contract. In the web embedding, a shared
+`WebAssembly.Memory` is backed by `SharedArrayBuffer`; browser threads also
+depend on Web Workers and, for ordinary web pages, the security policy that
+makes `SharedArrayBuffer` available. Consequently, lack of
+`SharedArrayBuffer` is a hard capability failure for browser ART-WASM. There is
+no non-SAB product variant or automatic single-thread fallback.
 
-## Browser POSIX API simulation
+For a research proof only, start with one managed thread. Add threads only after
+the same engine supports the required combination of shared memory, atomics,
+pointer width, TLS, function tables, `Atomics.wait`/`notify` behavior, and
+Worker creation. This staging convenience does not admit the canonical target:
+current ART remains capability-blocked until its complete required threading
+contract works.
 
-The browser has no POSIX kernel. The product therefore needs a Wasm-resident
-compatibility contract, not a set of physical-CPU POSIX libraries. ART and
-libcore call libc/JNI code compiled into `runtime.wasm`. Calls such as `open`,
-`read`, `mmap`, `pthread_mutex_lock`, `poll`, and `clock_gettime` are then
-implemented by Wasm code, Emscripten JavaScript syscall shims, or a combination
-of both over browser APIs. None resolves to a physical-CPU library.
+#### Shared linear memory versus Shared-Everything Threads
+
+The minimum implementable browser model uses today's Wasm threads: separate
+Worker-side module instances coordinate through one shared linear memory and
+atomics, while PosixShim supplies thread creation, TLS, lifecycle, and any
+required coordination for instance-local globals and tables.
+
+The preferred long-term model is the WebAssembly Shared-Everything Threads
+proposal. Sharing functions, tables, globals, and other module fields in
+addition to memory better matches ART's process-wide runtime state, AOT
+function tables, dynamic-linking needs, and TLS/thread-lifecycle contract. This
+is a design preference, not an available dependency: as verified on 2026-08-07,
+Shared-Everything Threads is a Phase 1 proposal under active development, and
+the official WebAssembly feature matrix reports no browser implementation.
+The port must therefore work from the existing shared-linear-memory baseline
+or remain blocked; it must not claim current browser support for
+shared-everything.
+
+## Browser backend for PosixShim
+
+The browser has no POSIX kernel. PosixShim therefore supplies a Wasm-resident,
+project-owned compatibility contract, not a set of physical-CPU POSIX
+libraries. ART and libcore call libc/JNI code compiled into `runtime.wasm`.
+Calls such as `open`, `read`, `mmap`, `pthread_mutex_lock`, `poll`, and
+`clock_gettime` are then implemented by Wasm code plus the selected narrow
+browser adapter. The implementation may reuse Emscripten JavaScript syscall
+components, but none of these calls resolves to a physical-CPU library or
+changes the target ABI from `posixshim`.
 
 ```text
 Java and DEX methods
@@ -750,11 +822,11 @@ libcore JNI + ICU/OpenJDK C/C++            all compiled to Wasm
         |
 libc entrypoints + ART OS abstractions    compiled to Wasm
         |
-virtual POSIX state                        Wasm-owned where correctness needs it
+PosixShim virtual POSIX state              Wasm-owned where correctness needs it
         |
-browser syscall/capability imports         JavaScript/Web APIs only
+versioned host-capability imports          JavaScript/Web APIs only
         |
-Browser: Workers, OPFS/IndexedDB, Fetch/WebSocket, clocks, crypto
+Browser: Workers, OPFS/IndexedDB, Fetch/WSS, clocks, crypto
 ```
 
 The JavaScript boundary is below ART and libcore. In the project-owned form,
@@ -765,10 +837,10 @@ narrow JavaScript capability using an opaque handle. An Emscripten-first
 implementation may keep more descriptor/syscall state in JavaScript, but
 JavaScript still does not implement `java.io`, ART, or JNI dispatch.
 
-### Simulation contract
+### PosixShim behavior contract
 
-The compatibility layer needs a versioned browser POSIX ABI with three explicit
-classes of behavior:
+PosixShim needs a versioned ART-facing ABI with three explicit classes of
+behavior:
 
 | Class | Meaning |
 |---|---|
@@ -786,7 +858,8 @@ rewritten with explicit metadata/checks or disabled.
 Emscripten is a useful browser toolchain and provides musl-derived libc,
 filesystem adapters, pthread support, and JavaScript syscall libraries. Those
 are simulations over browser APIs, not physical-CPU libraries, so using them
-does not violate the all-ART-in-Wasm boundary.
+does not violate the all-ART-in-Wasm boundary. They are implementation
+components beneath PosixShim, not an `emscripten` target ABI.
 
 However, Emscripten compatibility is not automatically Linux compatibility.
 Its filesystem may live partly in JavaScript, blocking operations may be
@@ -802,9 +875,11 @@ Two implementation shapes are possible:
 
 The second gives ART more deterministic ownership and testing. The first is
 faster for bring-up. A practical progression is to start with Emscripten, place
-all calls behind a versioned `BrowserPosixAbi`, then move correctness-sensitive
-state into Wasm as required. Do not mix independent Emscripten and project
-descriptor namespaces without one explicit ownership/translation layer.
+all calls behind the versioned `PosixShimAbi`, then move correctness-sensitive
+state into Wasm as required. A future WASI host adapter belongs below that same
+boundary; it does not create a WASI ART profile. Do not mix independent
+Emscripten and project descriptor namespaces without one explicit
+ownership/translation layer.
 
 ### API-area feasibility
 
@@ -817,11 +892,11 @@ descriptor namespaces without one explicit ownership/translation layer.
 | Filesystem metadata | `stat`, `fstat`, `lstat`, `mkdir`, `rename`, directory iteration | Virtual filesystem with packaged read-only assets plus optional OPFS/IndexedDB persistence; synthesize ownership/mode fields | Feasible with documented differences |
 | Clocks and sleeping | `clock_gettime`, `gettimeofday`, `nanosleep`, timers | `performance.now` for monotonic time, `Date.now` for wall time, Worker timers and wait queues | Feasible; resolution and scheduling differ |
 | Entropy | `getrandom`, `/dev/urandom` | Fill guest buffers through `crypto.getRandomValues` | Feasible |
-| Mutexes, condition variables, futexes | `pthread_mutex_*`, `pthread_cond_*`, futex wait/wake | Wasm atomics and linear-memory synchronization; `Atomics.wait`/`notify` in Workers when shared memory is enabled | Conditional on browser threads; single-thread subset first |
-| TLS and thread lifecycle | `pthread_create`, `pthread_join`, `pthread_key_*` | Web Workers, shared memory, Wasm TLS/runtime records, and a Wasm-owned thread registry | High complexity and requires cross-origin isolation |
+| Mutexes, condition variables, futexes | `pthread_mutex_*`, `pthread_cond_*`, futex wait/wake | Wasm atomics and linear-memory synchronization; `Atomics.wait`/`notify` in Workers over `SharedArrayBuffer` | Mandatory for target admission; a single-thread subset is only a research stage |
+| TLS and thread lifecycle | `pthread_create`, `pthread_join`, `pthread_key_*` | Web Workers, shared linear memory, Wasm TLS/runtime records, and a Wasm-owned thread registry | Mandatory, high complexity, and requires `SharedArrayBuffer` plus the applicable browser isolation policy |
 | Signals and fault contexts | `sigaction`, `pthread_kill`, `SIGSEGV`/`SIGBUS` recovery | Internal cooperative events may simulate cancellation/interrupt flags; browser traps cannot provide resumable POSIX signal contexts | Fault-based ART mechanisms are unavailable |
 | Polling and readiness | `poll`, `select`, `epoll`, pipes/eventfd-like waits | Wasm readiness table plus browser event delivery from another Worker; wake waiters with shared-memory atomics | Feasible for virtual handles, not arbitrary OS descriptors |
-| DNS and networking | `getaddrinfo`, `socket`, `connect`, `accept`, `send`, `recv` | Curated adapters over Fetch, WebSocket, or WebTransport; Wasm socket objects hold state and buffers | Raw TCP/UDP and full POSIX socket semantics are unavailable in ordinary browsers |
+| DNS and networking | `getaddrinfo`, `socket`, `connect`, `send`, `recv`, `sendto`, `recvfrom` | PosixShim maps outbound stream and datagram sockets to standard Trojan-over-WSS connections; Wasm owns socket state, framing, buffers, and DNS messages | Outbound TCP and connected or unconnected UDP are feasible with the virtualized contract below; inbound, raw, multicast, and full kernel socket semantics remain unavailable |
 | Process model | `fork`, `execve`, `waitpid`, `kill`, process groups | One virtual process; optionally synthesize PID/UID/GID. No address-space clone or arbitrary executable launch | `fork`/`exec` are unsupported |
 | System identity/configuration | `uname`, `sysconf`, `getpid`, `getuid`, passwd/group lookup, environment | Deterministic browser-runtime values stored by the Wasm compatibility layer | Feasible as synthetic data |
 | Dynamic loading | `dlopen`, `dlsym`, JNI library loading | Generated link-time registry of Wasm functions and data; fixed module set at packaging time | Arbitrary dynamic loading is unsupported |
@@ -829,6 +904,79 @@ descriptor namespaces without one explicit ownership/translation layer.
 The first runtime does not need every row. It needs the transitive subset used
 by imageless ART boot, DEX/JAR access, the selected collector, libcore startup,
 console output, clocks, entropy, and the initial test program.
+
+### Outbound virtual socket contract
+
+The selected network protocol is the standard Trojan protocol over secure
+WebSocket. The reference relay is sing-box 1.13.16 with a Trojan inbound and
+the V2Ray WebSocket transport, placed behind a standard WebSocket reverse
+proxy when an edge TLS or response-header policy is required. This choice is
+deliberately narrow:
+
+- it uses Trojan `CONNECT` (`0x01`) for outbound TCP;
+- it uses Trojan `UDP ASSOCIATE` (`0x03`) for outbound UDP;
+- every Trojan UDP datagram carries its own SOCKS address, big-endian 16-bit
+  payload length, CRLF delimiter, and payload, so one association supports
+  both connected UDP and multi-destination `sendto()`/`recvfrom()`;
+- it requires no project-defined network protocol, multiplexing format, XUDP,
+  packetaddr, or UDP-over-TCP extension; and
+- it works through the browser's standard `WebSocket` API on an HTTPS page by
+  using `wss://`.
+
+The Trojan authentication header, address encoding, TCP request, and UDP frame
+encoding are implemented in Wasm-resident PosixShim code. The password key is
+the standard lowercase hexadecimal SHA-224 digest. JavaScript does not parse
+Trojan or own POSIX socket state. Its capability surface only opens an approved
+WSS URL, sends binary bytes, receives binary bytes into shared queues, reports
+open/error/close events, and closes an opaque WebSocket handle. PosixShim treats
+the sequence of WebSocket binary messages as one ordered byte stream and parses
+Trojan boundaries itself.
+
+The descriptor mapping is:
+
+| PosixShim operation | Selected behavior |
+|---|---|
+| `socket(AF_INET/AF_INET6, SOCK_STREAM, ...)` plus `connect()` | Allocate one WSS connection for that fd and send one Trojan TCP `CONNECT` request for the requested IPv4, IPv6, or domain destination |
+| TCP `read()`/`write()`, `send()`/`recv()` | Read and write the Trojan byte stream after the request header; Java TLS such as `SSLSocket` remains end-to-end inside that stream and is independent of WSS transport TLS |
+| `socket(AF_INET/AF_INET6, SOCK_DGRAM, ...)` | Allocate one WSS connection and one Trojan UDP association for that fd, lazily on first use if desired |
+| UDP `sendto()`/`recvfrom()` | Encode the destination on every outgoing Trojan UDP frame and return the source carried by every incoming frame |
+| UDP `connect()`/`disconnect()` | Maintain the connected peer and source filtering in the Wasm socket object while retaining the same Trojan UDP association |
+| `getaddrinfo()` | Generate and parse standard DNS messages in Wasm and send them through the selected UDP association to a configured DNS resolver, with TCP DNS fallback where required |
+| nonblocking I/O, timeouts, `poll()`/`select()` | Use Wasm-owned receive/send queues, error state, deadlines, and readiness bits; the capability Worker wakes waiters through shared-memory atomics |
+| `close()` and `shutdown(SHUT_RDWR)` | Close the complete Trojan/WSS connection and wake all waiters |
+
+The implementation intentionally uses one WSS connection per connected TCP fd
+and one WSS/Trojan UDP association per datagram fd. It must not add a private
+socket-multiplexing layer. This costs more browser and relay connections but
+keeps fd lifetime, cancellation, errors, and UDP association state explicit.
+
+The supported socket personality is outbound only. `listen()`, `accept()`,
+inbound UDP, raw sockets, Unix-domain sockets, multicast, broadcast, ICMP error
+delivery, urgent data, and arbitrary IP-level socket options return documented
+errors such as `EOPNOTSUPP`. `bind()` may record a virtual wildcard address and
+local port for fd identity, but it cannot control the relay's real source
+address or NAT port. WebSocket has no TCP half-close, so
+`shutdown(SHUT_WR)` cannot silently claim POSIX equivalence; it returns
+`EOPNOTSUPP` unless a later standard transport supplies a tested half-close.
+
+UDP datagram boundaries and addresses are preserved, but transport behavior is
+not native UDP: WSS runs over TCP and therefore introduces reliable delivery,
+retransmission, and head-of-line blocking. PosixShim should initially reject
+payloads above a documented limit and use 1,200 to 1,400 bytes as the normal
+interoperable payload range.
+
+The WSS endpoint must accept the configured browser `Origin`. If the deployment
+also requires `Access-Control-Allow-Origin: *` on the `101 Switching Protocols`
+response, the reference deployment terminates WSS at a standard reverse proxy
+that adds that response header and forwards RFC 6455 WebSocket traffic to the
+sing-box listener on a private interface. This edge proxy does not parse or
+change Trojan and is not a new network protocol. Do not rely on sing-box
+1.13.16's WebSocket `headers` option for this requirement: its server currently
+constructs a configured upgrader but calls the package-level upgrade path
+instead. In any case, the CORS response header is not what authorizes a browser
+WebSocket connection; Origin handling and `wss://` deployment are separate
+acceptance tests. The relay must require Trojan authentication and apply an
+explicit destination and rate-limit policy.
 
 ### Virtual filesystem and descriptors
 
@@ -842,7 +990,7 @@ capability handle. Candidate resource kinds include:
 - OPFS-backed persistent files;
 - console streams;
 - pipes/event objects used only inside the Wasm runtime;
-- WebSocket/WebTransport-backed virtual sockets; and
+- outbound Trojan-over-WSS TCP and UDP virtual sockets; and
 - directory iterators and timer/event handles.
 
 Browser objects and JavaScript references must not be embedded as ART pointers.
@@ -866,8 +1014,10 @@ The credible browser strategies are:
 1. Run ART in a dedicated Worker. Preload all boot-critical assets, and satisfy
    boot/runtime reads from Wasm memory.
 2. For operations that must block, send a request to a separate capability
-   Worker and wait on a `SharedArrayBuffer` word with `Atomics.wait`. The
-   capability Worker performs the async browser operation, writes the result,
+   Worker and wait on a `SharedArrayBuffer` word with `Atomics.wait`. For
+   networking, that Worker owns only opaque browser WebSocket handles and byte
+   queues; Wasm-resident PosixShim owns Trojan framing, virtual fds, socket
+   state, readiness, deadlines, and POSIX errors. The Worker writes the result
    and wakes ART.
 3. Use OPFS synchronous access handles where available in dedicated Workers.
 4. Keep naturally asynchronous facilities behind Java asynchronous APIs rather
@@ -877,15 +1027,51 @@ Asyncify, JSPI, or future stack-switching could suspend Wasm through async
 imports, but this interacts with ART shadow frames, GC roots, exception state,
 locks, and stack walking. It should not be the initial POSIX foundation.
 
-The Worker/SAB bridge requires cross-origin isolation. Without it, the product
-must stay single-threaded and restrict itself to preloaded/in-memory synchronous
-resources plus nonblocking browser-facing APIs.
+The Worker/SAB bridge requires cross-origin isolation. Without it, a research
+runtime must stay single-threaded and restrict itself to preloaded/in-memory
+synchronous resources plus nonblocking browser-facing APIs; that reduced
+runtime cannot satisfy the current ART product contract.
 
 ### Memory API rules
 
 ART `MemMap` must become a Wasm region allocator. It should reserve logical
 regions inside linear memory and implement anonymous mapping, alignment,
 splitting, merging, and unmapping as metadata operations.
+
+#### Wasm pages versus ART logical pages
+
+The two uses of *page* are independent. The current standard WebAssembly page
+is 65,536 bytes (64 KiB) and is the unit used to size and grow ordinary linear
+memory. ART's page-size-agnostic build instead defines a 4-KiB minimum and a
+16-KiB maximum in [`globals.h`](../../vendor/art/libartbase/base/globals.h),
+and its current non-Linux fallback selects 4 KiB. A Wasm port should retain a
+4-KiB logical ART page initially, or explicitly select and validate 16 KiB; it
+must not report the 64-KiB Wasm growth unit as `gPageSize`, because current ART
+rejects page sizes above 16 KiB.
+
+PosixShim can safely subdivide each 64-KiB Wasm page into sixteen 4-KiB or four
+16-KiB logical ART pages for allocator, alignment, bitmap, region, and mapping
+metadata. Outer linear-memory reservation and `memory.grow` still round to
+64 KiB. This subdivision is sound for bookkeeping because ordinary Wasm linear
+memory is a contiguous, uniformly readable/writable byte array; there is no
+smaller host protection boundary for ART to contradict.
+
+This does not emulate protection semantics. A logical 4-KiB or 16-KiB
+`mprotect`, guard page, `munmap`, or file mapping cannot change permissions or
+produce a recoverable page fault in today's browser Wasm. PosixShim may track
+such regions as metadata and enforce checks on rewritten access paths, but any
+current ART feature that requires hardware-enforced protection, aliasing, or
+fault recovery remains unavailable.
+
+WebAssembly Memory Control is only a Phase 1 draft. Its experimental `virtual`
+mode proposes `memory.map`, `memory.unmap`, and `memory.protect`; these are the
+proposal's names, rather than Wasm versions of the POSIX `mmap()` and
+`mprotect()` functions. As verified on 2026-08-07, the official WebAssembly
+feature matrix reports no browser implementation of Memory Control, so the ART
+design must not depend on it. The Phase 3 Custom Page Sizes proposal likewise
+does not change the current 64-KiB browser baseline. Future implementation of
+either proposal would require a new capability review and would not by itself
+restore ART's signal/fault contract.
 
 The following contracts need explicit treatment:
 
@@ -918,15 +1104,24 @@ Acceptance requires:
 - no physical-CPU DSO imports or physical-CPU function-address escape;
 - conformance tests for values, side effects, `errno`, blocking, interruption,
   and descriptor lifetime;
+- conformance tests for Trojan-over-WSS TCP streams, connected and unconnected
+  UDP, per-datagram destinations and sources, DNS, nonblocking operation,
+  timeouts, cancellation, `poll()`/`select()`, and connection teardown;
+- an end-to-end browser test proving that the edge accepts the configured
+  `Origin`, uses a valid `wss://` certificate, returns the required
+  `Access-Control-Allow-Origin: *` upgrade-response header, and transports
+  unmodified Trojan bytes to sing-box;
 - explicit negative tests for `fork`, `exec`, signals, executable mappings,
-  dynamic loading, and raw sockets;
+  dynamic loading, `listen()`/`accept()`, raw sockets, multicast, broadcast,
+  source-address control, and TCP half-close;
 - identical behavior when called from the switch interpreter or an AOT method;
   and
 - startup failure when a required browser capability is absent, rather than a
   misleading partial boot.
 
-The feasibility boundary is therefore a curated browser POSIX personality,
-which is achievable, not transparent Linux compatibility, which is not.
+The feasibility boundary is therefore a curated PosixShim personality over
+browser capabilities, which is achievable, not transparent Linux
+compatibility, which is not.
 
 ## wasm32 before wasm64
 
@@ -946,8 +1141,9 @@ proof target is wasm32:
 
 The recommended progression is:
 
-1. `browser-wasm32-emscripten`, single-threaded, imageless, and running in a
-   dedicated Worker;
+1. `wasm-wasm32-posixshim`, using Emscripten components where useful,
+   single-threaded, imageless, and running in a dedicated Worker as a research
+   proof rather than an admitted current-ART profile;
 2. wasm32 switch interpreter plus selective Waffle-based AOT;
 3. precise root spilling, exceptions, virtual dispatch, and JNI implementations
    compiled to Wasm;
@@ -955,7 +1151,8 @@ The recommended progression is:
    method table remains a separate table32 table;
 5. validate the complete LLVM C++ table64 ABI, including virtual calls, against
    one explicitly named browser engine/configuration; and
-6. consider shared memory and threads last.
+6. implement shared linear memory, atomics, TLS, and the required thread model
+   as a later research stage but a mandatory target-admission gate.
 
 For wasm64, managed objects must still remain in a reserved low-4-GiB arena
 unless ART's compressed-reference representation is separately redesigned.
@@ -976,7 +1173,7 @@ compact integer indexes.
   permitted `memory.grow` operations.
 - Inventory the exact POSIX symbols and source calls in the selected ART,
   libcore, ICU/OpenJDK, libc, and application-JNI closure; freeze the initial
-  versioned `BrowserPosixAbi` and its implemented/virtualized/unsupported
+  versioned `PosixShimAbi` and its implemented/virtualized/unsupported
   classifications.
 - Preload the boot JAR/DEX set into a synchronous packaged-asset VFS, and
   implement the descriptor operations needed to read it.
@@ -1047,14 +1244,18 @@ this stage.
 - Give every Worker a disjoint linear-memory C stack and initialized TLS block,
   and use one thread-safe allocator and one shared static-data initialization
   protocol across all module instances.
-- Add the Wasm-owned readiness table and only the polling and Fetch,
-  WebSocket, or WebTransport adapters required by supported Java APIs; do not
-  claim raw-socket compatibility.
+- Implement the outbound socket personality with Wasm-resident Trojan framing,
+  one WSS connection per TCP fd, one WSS/Trojan association per UDP fd,
+  standard DNS over the relay, the capability-Worker byte bridge, and the
+  Wasm-owned readiness table. Do not add a private multiplexing protocol or
+  claim inbound or raw-socket compatibility.
 - Measure code size, startup, execution time, and browser download cost.
 - Extend to memory64 only after the wasm32 correctness gates pass. Add
-  pthreads, TLS, futex-like waits, and multiple managed threads last, after
-  shared-memory operation and the required cross-origin isolation are proven
-  for the selected browsers.
+  pthreads, TLS, futex-like waits, and multiple managed threads after the
+  single-thread research stages, once shared-memory operation and the required
+  `SharedArrayBuffer` isolation policy are proven for the selected browsers.
+  Do not admit even the wasm32 target until this mandatory threading gate
+  passes.
 
 Acceptance must prove that ART itself never creates executable memory or
 compiles code at runtime. Browser-engine compilation of the already validated
@@ -1076,8 +1277,8 @@ The following remain rough orders of magnitude:
 - baseline mixed switch/AOT invocation, artifact validation, exceptions, and
   precise root spilling after the switch runtime works: another 6-12
   engineer-months;
-- persistent OPFS, a tested synchronous Worker bridge, virtual polling, and a
-  curated browser-networking subset: another 6-18 engineer-months;
+- persistent OPFS, a tested synchronous Worker bridge, virtual polling, and
+  outbound Trojan-over-WSS TCP/UDP sockets: another 6-18 engineer-months;
 - pthread/TLS/futex integration and multiple ART threads: another 6-18
   engineer-months plus browser deployment work for cross-origin isolation;
 - a useful browser runtime with GC, persistent files, curated networking,
@@ -1088,20 +1289,31 @@ The following remain rough orders of magnitude:
 
 The ranges overlap and are not a staffing schedule. Waffle removes much of the
 generic CFG structuring and stackification work, but it does not reduce the ART
-runtime, GC, exception, ABI, POSIX-simulation, or browser-integration effort.
+runtime, GC, exception, ABI, PosixShim, or browser-integration effort.
 
 ## Final recommendation
 
-Proceed only under a deliberately new contract:
+Proceed only under a deliberately new contract. This recommendation does not
+change either canonical Wasm profile from
+`impossible_under_current_art_contract`:
 
-- make the browser the only deployment target; use Wasmtime only for offline
-  validation and differential tests;
+- use native ART whenever a supported native environment is available; use
+  ART-WASM only where native execution is unavailable;
+- use `wasm-wasm32-posixshim` or `wasm-wasm64-posixshim` as the target identity,
+  with the browser as a host backend rather than an ABI axis, and use Wasmtime
+  only for offline validation and differential tests;
+- always build and ship the complete project-owned PosixShim with ART-WASM;
+  keep Emscripten components and any future WASI adapter below that boundary;
+- require ordinary Wasm shared linear memory, atomics, Workers, and
+  `SharedArrayBuffer` as the minimum browser threading substrate; prefer
+  Shared-Everything Threads when it is standardized and implemented, but do
+  not depend on that Phase 1 draft today;
 - compile the whole deployed ART, switch interpreter, libcore JNI
   implementations, ICU/OpenJDK C/C++, libc/POSIX layer, and admitted
   application JNI implementations to Wasm, with no physical-ISA method, DSO,
   or JavaScript method-implementation fallback;
 - expose only narrow JavaScript browser capabilities beneath the Wasm-owned
-  runtime and virtual POSIX state;
+  runtime and PosixShim virtual state;
 - use one coordinated linear-memory layout for C/C++ stacks, TLS, static data,
   allocator storage, managed heap, and explicit managed frames; keep Java
   objects in a dedicated low-4-GiB arena;
@@ -1115,9 +1327,13 @@ Proceed only under a deliberately new contract:
 - use a new Wasm AOT artifact and function-table method model rather than OAT;
 - keep nterp, mterp, JIT, OSR, deoptimization, executable OAT, and compiled-code
   JVMTI features disabled;
-- implement a curated, versioned browser POSIX personality rather than claim
-  transparent Linux compatibility; and
-- treat wasm64 and threads as later platform expansions.
+- implement a curated, versioned PosixShim personality over browser
+  capabilities rather than claim transparent Linux compatibility;
+- implement only the standard outbound Trojan-over-WSS socket contract, with
+  no project-defined network framing or private multiplexing layer; and
+- treat wasm64 as a later platform expansion, and threading as a later research
+  stage that is nevertheless mandatory before either Wasm profile can be
+  admitted.
 
 DEX-to-class-to-Wasm is a valid standalone experiment, but it is not the
 recommended ART implementation path. Current OAT and `dex2oat` should not be
@@ -1132,6 +1348,8 @@ Bytecode Alliance source was checked on 2026-08-01 at Wasmtime commit
 LLVM/LLD and V8 sources were checked at LLVM commit
 `c27bee245fc0cbc1881632c1546a946fd96d305e` and V8 commit
 `1d17afafffbb434e04b2ee4bec7ca09989626341`.
+WebAssembly proposal phases and browser feature reports were checked on
+2026-08-07.
 
 - [Waffle architecture and status](https://github.com/bytecodealliance/waffle/blob/c0ce14354e1b86f53fcca4d90e3c80507f23df7f/README.md)
 - [Waffle wasm32/non-shared emitter settings](https://github.com/bytecodealliance/waffle/blob/c0ce14354e1b86f53fcca4d90e3c80507f23df7f/src/backend/mod.rs)
@@ -1143,6 +1361,15 @@ LLVM/LLD and V8 sources were checked at LLVM commit
 - [dex2jar](https://github.com/pxb1988/dex2jar)
 - [Enjarify](https://github.com/google/enjarify)
 - [WASI SDK notable limitations](https://github.com/WebAssembly/wasi-sdk#notable-limitations)
+- [WebAssembly proposal phases](https://github.com/WebAssembly/proposals)
+- [WebAssembly implementation feature matrix](https://webassembly.org/features/)
+- [WebAssembly threads proposal](https://github.com/WebAssembly/threads/blob/main/proposals/threads/Overview.md)
+- [WebAssembly JavaScript shared-memory API](https://webassembly.github.io/threads/js-api/#memories)
+- [Shared-Everything Threads proposal](https://github.com/WebAssembly/shared-everything-threads/blob/main/proposals/shared-everything-threads/Overview.md)
+- [WebAssembly 64-KiB page definition](https://webassembly.github.io/spec/core/exec/runtime.html#memory-instances)
+- [WebAssembly Memory Control proposal](https://github.com/WebAssembly/memory-control/blob/main/proposals/memory-control/Overview.md)
+- [Memory Control `virtual` mode](https://github.com/WebAssembly/memory-control/blob/main/proposals/memory-control/virtual.md)
+- [WebAssembly Custom Page Sizes proposal](https://github.com/WebAssembly/custom-page-sizes/blob/main/proposals/custom-page-sizes/Overview.md)
 - [Memory64 and table64 proposal](https://github.com/WebAssembly/spec/blob/main/proposals/memory64/Overview.md)
 - [WebAssembly JavaScript API implementation-defined limits](https://webassembly.github.io/spec/js-api/index.html#limits)
 - [LLD Wasm `--table-base` definition](https://github.com/llvm/llvm-project/blob/c27bee245fc0cbc1881632c1546a946fd96d305e/lld/wasm/Options.td)
@@ -1151,6 +1378,10 @@ LLVM/LLD and V8 sources were checked at LLVM commit
 - [Emscripten Memory64 setting](https://emscripten.org/docs/tools_reference/settings_reference.html#memory64)
 - [Emscripten filesystem API](https://emscripten.org/docs/api_reference/Filesystem-API.html)
 - [Emscripten browser networking limitations](https://emscripten.org/docs/porting/networking.html)
+- [Trojan protocol specification](https://trojan-gfw.github.io/trojan/protocol)
+- [sing-box 1.13.16 Trojan protocol implementation](https://github.com/SagerNet/sing-box/blob/v1.13.16/transport/trojan/protocol.go)
+- [sing-box 1.13.16 WebSocket server transport](https://github.com/SagerNet/sing-box/blob/v1.13.16/transport/v2raywebsocket/server.go)
+- [NGINX WebSocket proxying](https://nginx.org/en/docs/http/websocket.html)
 - [Emscripten pthread and signal limitations](https://emscripten.org/docs/porting/pthreads.html)
 - [OPFS synchronous access handles in Workers](https://developer.mozilla.org/en-US/docs/Web/API/FileSystemFileHandle/createSyncAccessHandle)
 - [`SharedArrayBuffer` security and cross-origin-isolation requirements](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/SharedArrayBuffer#security_requirements)
