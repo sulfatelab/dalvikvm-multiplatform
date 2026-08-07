@@ -69,6 +69,22 @@ def test_generation_delegates_product_roots_to_overlay(tmp_path, monkeypatch):
     assert "--root-module" not in commands[0]
 
 
+@pytest.mark.parametrize(
+    ("target_id", "expected"),
+    [
+        ("linux-x86_64-gnu", "oatdump"),
+        ("windows-x86_64-msvc", "oatdump.exe"),
+    ],
+)
+def test_oatdump_is_classified_as_a_product_executable(tmp_path, target_id, expected):
+    target = build_art.resolve_target(target_id)
+
+    candidates = build_art._artifact_candidates(tmp_path, target, "oatdump")
+
+    assert tmp_path / expected in candidates
+    assert all(path.suffix.lower() not in (".dll", ".so") for path in candidates)
+
+
 def test_product_graph_manifest_requires_overlay_owned_roots(tmp_path):
     target = build_art.resolve_target("linux-x86_64-gnu")
     manifest = tmp_path / "graph_manifest.json"

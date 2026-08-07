@@ -1854,13 +1854,16 @@ def _approved_system_dependency(target: TargetProfile, name: str) -> bool:
     ) is not None
 
 
+_PRODUCT_EXECUTABLES = frozenset({"dalvikvm", "dex2oat", "oatdump"})
+
+
 def _artifact_candidates(binary_dir: Path, target: TargetProfile, name: str) -> list[Path]:
     if target.target_platform == "windows":
-        suffixes = (".exe",) if name in ("dalvikvm", "dex2oat") else (".dll", ".lib")
+        suffixes = (".exe",) if name in _PRODUCT_EXECUTABLES else (".dll", ".lib")
         prefixes = ("", "lib")
     else:
-        suffixes = ("",) if name in ("dalvikvm", "dex2oat") else (".so",)
-        prefixes = ("", "lib") if name in ("dalvikvm", "dex2oat") else ("lib", "")
+        suffixes = ("",) if name in _PRODUCT_EXECUTABLES else (".so",)
+        prefixes = ("", "lib") if name in _PRODUCT_EXECUTABLES else ("lib", "")
     return [binary_dir / f"{prefix}{name}{suffix}" for prefix in prefixes for suffix in suffixes]
 
 

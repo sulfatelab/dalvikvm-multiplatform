@@ -181,11 +181,12 @@ def test_unified_overlay_factory_selects_current_target_policy():
     assert not (repo / "overlay" / "port_policy_windows.py").exists()
     linux = load_overlay_factory(str(factory), resolve_target("linux-x86_64-gnu"))
     windows = load_overlay_factory(str(factory), resolve_target("windows-x86_64-msvc"))
-    assert len(linux.modules) == 41
-    assert len(windows.modules) == 35
+    assert len(linux.modules) == 42
+    assert len(windows.modules) == 36
     assert linux.product_root_modules == windows.product_root_modules == (
         "dalvikvm",
         "dex2oat",
+        "oatdump",
         "libart-compiler",
         "libjavacrypto",
         "libjavacore",
@@ -251,6 +252,23 @@ def test_unified_overlay_factory_selects_current_target_policy():
     assert "MDVM_WINDOWS_DEX2OAT_COMPAT" in art_dex2oat.add_defines
     assert "ART_CONSUMING_LIBART" in art_dex2oat.add_defines
     assert "ART_CONSUMING_LIBART" in dex2oat.add_defines
+    oatdump = windows.policy_for("oatdump")
+    assert oatdump.kind == "executable"
+    assert oatdump.absorb_whole_static is False
+    assert oatdump.remove_static_libs == ["liboatdump_static"]
+    assert {
+        "libart",
+        "libart-disassembler",
+        "libartbase",
+        "libbase",
+        "libdexfile",
+        "libprofile",
+        "libelffile",
+    }.issubset(oatdump.add_shared_libs)
+    assert "ART_CONSUMING_LIBART" in oatdump.add_defines
+    linux_oatdump = linux.policy_for("oatdump")
+    assert linux_oatdump.add_cflags == ["-fPIC"]
+    assert linux_oatdump.add_ldflags == ["-pie"]
     icu = windows.policy_for("libicu")
     assert icu.kind == "shared"
     assert "U_SHOW_CPLUSPLUS_API=0" in icu.add_defines
@@ -285,7 +303,7 @@ def test_linux_overlay_policy_is_available_for_pre_admission_graph_audits():
     ):
         target = resolve_target(target_id)
         overlay = load_overlay_factory(str(factory), target)
-        assert len(overlay.modules) == 41
+        assert len(overlay.modules) == 42
         assert overlay.global_policy.add_ldflags == []
         assert overlay.policy_for("libart").add_gensrc_sources == [
             f"art/asm/mterp/{target.mterp_output}"

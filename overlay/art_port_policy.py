@@ -64,6 +64,7 @@ _PRODUCT_BLUEPRINT_SCAN = BlueprintScanPolicy(
 _PRODUCT_ROOT_MODULES = (
     "dalvikvm",
     "dex2oat",
+    "oatdump",
     "libart-compiler",
     "libjavacrypto",
     "libjavacore",
@@ -155,6 +156,24 @@ _COMMON_MODULES: dict[str, dict[str, object]] = {
             "libelffile",
         ],
         remove_static_libs=["libdex2oat_static"],
+    ),
+    # Upstream host oatdump folds a mostly-static ART closure into the
+    # executable.  The multiplatform product instead keeps the same shared ART
+    # process topology as dalvikvm/dex2oat, which is required for one runtime
+    # and MemMap registry across PE module boundaries on Windows.
+    "oatdump": dict(
+        kind="executable",
+        absorb_whole_static=False,
+        add_shared_libs=[
+            "libart",
+            "libart-disassembler",
+            "libartbase",
+            "libbase",
+            "libdexfile",
+            "libprofile",
+            "libelffile",
+        ],
+        remove_static_libs=["liboatdump_static"],
     ),
     "libart": dict(
         kind="shared",
@@ -251,6 +270,7 @@ _LINUX_MODULE_DELTA: dict[str, dict[str, object]] = {
         add_ldflags=["-pie"],
     ),
     "dex2oat": dict(add_cflags=["-fPIC"], add_ldflags=["-pie"]),
+    "oatdump": dict(add_cflags=["-fPIC"], add_ldflags=["-pie"]),
     "libandroidicuinit": dict(kind="static", add_cflags=["-fPIC"]),
     "libandroidio": dict(kind="shared"),
     "libart": dict(
@@ -396,6 +416,11 @@ _WINDOWS_MODULE_DELTA: dict[str, dict[str, object]] = {
             "ART_CONSUMING_LIBART",
             "MDVM_WINDOWS_DEX2OAT_COMPAT",
         ],
+        force_enabled=True,
+    ),
+    "oatdump": dict(
+        add_cflags=_WINDOWS_CFLAGS,
+        add_defines=["_CRT_SECURE_NO_WARNINGS", "ART_CONSUMING_LIBART"],
         force_enabled=True,
     ),
     "libart": dict(

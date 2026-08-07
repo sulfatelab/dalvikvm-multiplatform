@@ -7,7 +7,8 @@
         "libart-compiler",
         "libopenjdkjvmti",
         "libprofile",
-        "libunwindstack"
+        "libunwindstack",
+        "oatdump"
       ],
       "linux": "shared",
       "reason": "Windows keeps the DEX implementation internal to ART and dex2oat until its C++ PE ABI and ownership annotations are reviewed.",
@@ -26,7 +27,8 @@
         "dex2oat",
         "libart",
         "libart-compiler",
-        "libart-dex2oat"
+        "libart-dex2oat",
+        "oatdump"
       ],
       "linux": "shared",
       "reason": "Windows keeps profile implementation internal to ART and dex2oat until a stable PE export/import boundary is defined.",

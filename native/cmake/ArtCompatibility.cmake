@@ -223,13 +223,13 @@ endforeach()
 if(ART_TARGET_PLATFORM STREQUAL "windows")
     # Python stages include-guard-compatible copies of the few ART headers
     # whose cross-DSO data needs explicit dllexport/dllimport on PE. Force the
-    # same declarations into art.dll and its dex2oat consumer without touching
-    # the nested vendor checkout.
+    # same declarations into art.dll and its dex2oat/oatdump consumers without
+    # touching the nested vendor checkout.
     set(_art_windows_pe_headers
         "${MDVM_GENSRC_DIR}/art/windows-pe-headers/art/runtime/base/locks.h"
         "${MDVM_GENSRC_DIR}/art/windows-pe-headers/art/runtime/well_known_classes.h"
         "${MDVM_GENSRC_DIR}/art/windows-pe-headers/art/runtime/oat/oat_quick_method_header.h")
-    foreach(_art_pe_target art art-dex2oat)
+    foreach(_art_pe_target art art-dex2oat oatdump)
         if(TARGET ${_art_pe_target})
             # The generated oat header no longer sits beside stack_map.h, so
             # preserve the original quoted-include lookup explicitly.

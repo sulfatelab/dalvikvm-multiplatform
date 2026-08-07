@@ -56,8 +56,9 @@ def test_linux_aarch64_experimental_graph_uses_selected_architecture(tmp_path):
     assert manifest["target"]["target_id"] == "linux-aarch64-gnu"
     assert manifest["root_module_source"] == "overlay-policy"
     assert manifest["root_modules"] == list(overlay.product_root_modules)
-    assert len(manifest["modules"]) == 38
+    assert len(manifest["modules"]) == 39
     modules = {module["aosp_name"]: module for module in manifest["modules"]}
+    assert modules["oatdump"]["kind"] == "executable"
     assert modules["libvixl"]["kind"] == "static"
     assert "vixl" in modules["libart-disassembler"]["link_dependencies"]
     assert (
