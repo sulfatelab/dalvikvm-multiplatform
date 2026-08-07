@@ -20,11 +20,15 @@ validation-only parser, executable registration, and managed/JNI/trampoline
 lookup plus synthetic unwind gate. Step 6 is consequently partial rather than
 complete: corruption/fallback injection, exception/fatal stack walking, and
 stronger XMM-bearing AOT-frame execution remain. W-031 also locates underlying
-managed/JNI bodies and passes corresponding runtime calls with JIT disabled,
-but startup replaces many current dispatch entrypoints with nterp. The gate
-obtains the compiled body through `ArtMethod::GetOatMethodQuickCode()`; it does
-not yet prove that representative normal dispatch PCs execute inside the
-boot-OAT RX mapping. Step 10 therefore remains partial. W-032 now implements
+managed/JNI bodies and passes corresponding runtime calls with JIT disabled.
+W-036 corrects the Windows post-start nterp visitor so it repairs only methods
+still using the switch-interpreter bridge and preserves published boot-AOT
+entrypoints. Its native Server 2025 gate observes ordinary
+`Integer.parseInt(String)` dispatch at the method's exact current, registered
+boot-OAT RX entry PC through a one-shot hardware execute breakpoint, with JIT
+disabled and without directly invoking the OAT body. Step 10 remains partial
+only for the broader relocation, fault, GC/root, exception, and fatal-walk
+coverage. W-032 now implements
 `.oat_cfg.windows` emission, dynamic anchors, runtime validation and policy
 observation, plus a forced-CFG PE caller that successfully enters quick and
 compiled-JNI boot-OAT code without target-state API calls. Steps 7 and 11 are
@@ -54,6 +58,8 @@ The W-031 unwind result is
 [`docs/history/windows_x64_w031_result.md`](docs/history/windows_x64_w031_result.md).
 The W-032 CFG observation result is
 [`docs/history/windows_x64_w032_result.md`](docs/history/windows_x64_w032_result.md).
+The W-036 ordinary-dispatch result is
+[`docs/history/windows_x64_w036_result.md`](docs/history/windows_x64_w036_result.md).
 The authoritative implementation gate is Windows Server 2025 Datacenter
 Evaluation, x64 build 26100. Linux and Wine remain development and structural
 gates; the former Windows 10 lab host is unavailable.
@@ -68,8 +74,10 @@ jump on Windows. The current verdict for every finding is recorded under
 "Design review findings".
 
 The implemented source snapshot is `vendor/art` at
-`30db175a1240780c23c674e5bf29d281570becfd`
-(`android-16.0.0_r4-96-g30db175a12`); W-030's private-copy slice is
+`03d55ca0174dbf39b54444ce5fdf4a55e5dce331`
+(`android-16.0.0_r4-97-g03d55ca017`); W-036's startup correction is based on
+the W-032 transport snapshot
+`30db175a1240780c23c674e5bf29d281570becfd`. W-030's private-copy slice is
 `fd6accf065a550fc1e436cb9f28617b466f7593e`, based on the first W-028 slice at
 `android-16.0.0_r4-93-g681f2f38a2`. The design was originally written against
 `android-16.0.0_r4-76-g4eab6e7423`; the 16 commits through
@@ -2409,9 +2417,10 @@ W-032 requires:
   into representative quick/JNI OAT code, and structural coverage of every
   trampoline target.
 
-All four transport gates above pass W-032. Real resolution, IMT, interpreter,
-and normal-dispatch execution paths remain broader step-10/step-11 work; they
-do not reopen the completed section transport.
+All four transport gates above pass W-032. W-036 subsequently proves one
+representative ordinary managed-dispatch path. Real resolution, IMT,
+interpreter, fault, and GC/root execution remain broader step-10/step-11 work;
+they do not reopen the completed section transport.
 
 The following gates are separate and do not block W-032:
 
@@ -2630,8 +2639,33 @@ including at `-j1`, is non-blocking characterization. The generators do not
 request `--force-determinism`. Step 9 remains `PARTIAL`
 because W-030 is an explicit experimental gate, not
 normal product selection, and it detects rather than successfully exercises
-the whole-transaction imageless fallback. Finally, the gate uses `-Xint`, so
-sequence step 10 remains open.
+the whole-transaction imageless fallback. The gate uses `-Xint`, so W-030 by
+itself provides loading rather than step-10 execution evidence.
+
+### Numbered sequence step 10 ordinary-dispatch status
+
+W-036 fixes the Windows-only post-start nterp repair visitor. Its documented
+purpose is to update methods left on the switch-interpreter bridge while nterp
+was unavailable during early startup; it must not reinitialize methods whose
+boot-image `ArtMethod` already publishes AOT quick code. The visitor now checks
+the current entrypoint first and skips every non-switch entrypoint. Imageless
+methods still on the bridge retain the existing nterp repair path.
+
+The native W-036 probe selects a reflected core managed method only when its
+current quick entrypoint equals `GetOatMethodQuickCode()` and is the exact
+beginning of a registered boot-OAT `RUNTIME_FUNCTION`. A worker then invokes
+the selected method through ordinary Java bytecode with JIT disabled. A
+one-shot x64 hardware execute breakpoint observes the exact RX entry PC,
+restores the worker's prior debug-register state in the first-priority VEH,
+and resumes without changing the `ArtMethod` entrypoint or directly invoking
+the OAT body. Server 2025 selects `Integer.parseInt(String)` and reports one
+expected hit and zero unrelated single-step exceptions.
+
+This completes the representative ordinary-dispatch condition but not all of
+step 10. Image relocation, managed faults, focused GC/root behavior,
+exceptions, and fatal stack walking through boot-AOT code remain. The accepted
+record is
+[`docs/history/windows_x64_w036_result.md`](docs/history/windows_x64_w036_result.md).
 
 ### Pre-dispatch characterization record
 
@@ -2745,8 +2779,10 @@ managed/JNI/seven-trampoline metadata, synthetic virtual unwind, underlying
 managed/JNI body lookup, and corresponding JIT-disabled runtime calls. W-032
 now proves CFG metadata transport, exhaustive semantic rejection, all eight
 metadata layouts, forced-policy observation, and guarded incoming quick/JNI
-calls without target-state mutation. Residual risk remains medium/high because
-representative ordinary dispatch inside boot-OAT RX ranges, unwind negative
+calls without target-state mutation. W-036 preserves published boot-AOT
+entrypoints across the Windows nterp repair pass and proves one representative
+ordinary managed dispatch at the exact registered boot-OAT RX PC. Residual
+risk remains medium/high because relocation, fault, GC/root, unwind negative
 matrices, exception/fatal walking, product
 selection/fallback, and full measurements remain open. Explicit CFG
 additionally depends on an unresolved invalid-by-default allocation sequence.
@@ -2916,7 +2952,7 @@ tool policy are deferred.
 | Native `dex2oat.exe` operation regresses | Medium | Keep the accepted W-028 real single-JAR no-image `.oat`/`.vdex` compile as a native Server 2025 regression gate; `--version` is not supported and is not a substitute |
 | Boot class path / dex location strings disagree between generation and load | High | W-029 pins logical `/system/framework/boot.jar`; W-030 makes generation, manifest, staging, and startup consume it and rejects launcher drift without normalization; ART-level intentional-mismatch diagnostics remain required |
 | Path-sensitive cache artifacts are mixed across generations | High | Treat each generated ART/OAT/VDEX set as one unit, record its intentional logical locations and per-run sizes/hashes, validate the manifest before staging, and never require or infer cross-generation byte identity |
-| Image loads but normal dispatch never uses boot-OAT code | High | W-031 locates underlying managed/JNI AOT bodies and passes corresponding runtime calls with JIT disabled, but startup upgrades many current entrypoints to nterp; require representative ordinary dispatch PCs within the boot-OAT RX range before step 10 completes |
+| Image loads but normal dispatch never uses boot-OAT code | Mitigated for the representative path | W-036 preserves existing AOT entrypoints during the Windows post-start nterp repair and observes ordinary `Integer.parseInt(String)` dispatch exactly once at its current registered boot-OAT RX PC with JIT disabled; retain the gate and complete step 10's relocation, fault, GC/root, exception, and fatal-walk matrix |
 | Boot reservation commit dominates the measured cost | Medium operational | Windows `MemMap` commits whole spans, so the image+OAT reservation, not the 64-KiB padding, is the term to report and later optimize |
 | Unwind predicate narrows the existing Windows condition | Medium | Preserve the semantic union of Windows-host and Windows-target compilation; test both even if a shared constexpr replaces the current preprocessor spelling |
 | `kDynamicSymbolCount` grows implicitly with the enum | Medium | It derives from `DynamicSymbol::kLast`; append Windows-only values after `kLast`, `static_assert` the base count, reserve from writer mode at `Start()`, and test Linux byte identity |
@@ -2949,7 +2985,8 @@ Before claiming Windows AOT support, require:
   compiled methods, JNI stubs, and trampolines, plus the `.oat_unwind.windows`
   writer/loader/dedup gates listed under "Unwind gates";
 - proof that representative `ArtMethod` entrypoints lie in the boot OAT RX
-  range and execute without JIT compilation;
+  range and execute without JIT compilation; W-036 supplies the first accepted
+  managed case;
 - `.oat_cfg.windows` writer/parser/checksum/anchor/layout tests, with the
   section optional in observation mode and shared OAT version unchanged;
 - real quick/JNI/trampoline/method indirect calls in observation mode while
@@ -3039,12 +3076,11 @@ semantics; Wine is structural only.
    and exercise successful whole-transaction imageless fallback for expected
    missing, stale, wrong-target, and cross-artifact cases before trusted-layout
    image/heap invariants.
-10. Extend W-031's JIT-disabled managed/JNI runtime calls into proof that
-    representative ordinary dispatch PCs lie in boot-OAT RX ranges. Then cover
-    image relocation, faults, GC/roots, exceptions, and fatal stack walking on
-    Server 2025. Do not treat the underlying OAT body returned by
-    `GetOatMethodQuickCode()` as proof that startup dispatch retained that body;
-    current startup upgrades many eligible entrypoints to nterp.
+10. Retain W-036's accepted ordinary managed dispatch at the exact current,
+    registered boot-OAT RX entry PC with JIT disabled. Complete image
+    relocation, faults, GC/roots, exceptions, and fatal stack walking on
+    Server 2025. Continue to distinguish current dispatch from merely locating
+    an underlying OAT body through `GetOatMethodQuickCode()`.
 11. Retain W-032's passing forced-CFG observation through a verified guarded
     PE caller. W-033 compares the private-copy baseline with the placeholder
     candidate and records an explicit architecture decision using startup,

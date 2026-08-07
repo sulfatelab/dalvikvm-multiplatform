@@ -43,6 +43,10 @@ W-032's CFG target writer/parser is nested ART commit
 `30db175a1240780c23c674e5bf29d281570becfd`; its containing root commit owns
 the forced-policy runner, guarded probe, structural gate, accepted record, and
 submodule update.
+W-036's Windows startup correction is nested ART commit
+`03d55ca0174dbf39b54444ce5fdf4a55e5dce331`; its containing root commit owns
+the hardware-breakpoint dispatch probe, catalog entry, accepted record, and
+submodule update.
 Commit `1a9aa837ad2fb697d246855c695d44f2b53c69e8` removes the
 `--force-determinism` request from both OAT generators; manifests still bind
 each generated cache set.
@@ -105,11 +109,15 @@ normal product selection and does not exercise successful fallback. It also
 uses `-Xint`, so it proves loading rather than real boot-OAT execution.
 
 Step 10 is `PARTIAL`. W-031 proves that the boot OAT contains locatable managed
-and JNI bodies and that corresponding runtime calls pass while JIT is disabled. It
-does not yet prove normal representative dispatch through boot-OAT RX PCs:
-startup upgrades many eligible current entrypoints to nterp, and the probe
-intentionally obtains the underlying compiled address with
-`ArtMethod::GetOatMethodQuickCode()`.
+and JNI bodies and that corresponding runtime calls pass while JIT is disabled.
+W-036 narrows the Windows post-start nterp visitor to methods still on the
+switch-interpreter bridge, preserving already-published AOT entrypoints. Its
+native gate observes ordinary `Integer.parseInt(String)` dispatch exactly once
+at the method's current registered boot-OAT RX entry PC, with JIT disabled and
+without directly invoking the OAT body. Relocation, faults, GC/roots,
+exceptions, and fatal stack walking remain before the step is complete. The
+accepted record is
+[`docs/history/windows_x64_w036_result.md`](docs/history/windows_x64_w036_result.md).
 
 Step 7 is now `COMPLETE`; step 11 remains `PARTIAL`. W-032 emits and validates
 `.oat_cfg.windows`, records CFG policy, and uses a PE-audited CFG-instrumented
@@ -154,7 +162,7 @@ numbered step 1 or executable Windows OAT loading.
 | 7. `.oat_cfg.windows` | `COMPLETE` | W-032 independently collects sorted quick/JNI/seven-trampoline targets, merges deduplicated roles, emits the checksum and anchors, parses both open modes, rejects 18 semantic corruptions through validation-only and executable opens, passes all eight metadata/data-img-rel-ro layouts, records policy, and passes forced-CFG guarded quick/JNI calls without target-state API calls | Retain the W-032 transport, corruption, layout, and observation gates; explicit-target allocation is a separate step-11 concern |
 | 8. Boot ART/OAT/VDEX generation and staging | `COMPLETE` | W-030 exercises native `ImageWriter`, emits Windows LZ4 `boot.art` plus matching OAT/VDEX, binds the path-sensitive set with one manifest, validates hashes/identity, stages the exact single-component topology, and passes canonical startup | Retain per-generation set integrity; cross-generation byte identity is intentionally not required |
 | 9. Experimental selection and fallback | `PARTIAL` | W-030 explicitly selects the staged set, runs from package root, rejects seven launcher mismatches, and fails if ART silently enters imageless startup | Integrate a reviewed product option and exercise successful missing/stale/wrong-target/cross-artifact whole-transaction fallback |
-| 10. Real boot-OAT execution | `PARTIAL` | W-031 locates underlying managed and JNI boot-OAT bodies, validates their registered unwind entries, and passes corresponding JIT-disabled runtime calls | Prove representative ordinary dispatch PCs execute inside boot-OAT RX ranges, then cover relocation, faults, GC/roots, exceptions, and fatal stack walking on Server 2025 |
+| 10. Real boot-OAT execution | `PARTIAL` | W-031 locates underlying managed/JNI bodies; W-036 preserves published AOT entrypoints across the Windows nterp repair and observes ordinary `Integer.parseInt(String)` dispatch exactly once at its current registered boot-OAT RX entry PC with JIT disabled | Cover relocation, faults, GC/roots, exceptions, and fatal stack walking on Server 2025 |
 | 11. CFG observation and loader decision | `PARTIAL` | W-032 forces CFG on, verifies the PE guard dispatch, enters exact quick/JNI boot-OAT targets, records policy, and proves current OAT-1 default-valid usability with zero target API calls | Run W-033's private-copy/candidate allocation matrix; record reservation, commit, padding, startup, working set, source/ownership complexity, and Linux semantic impact; then explicitly stop or conditionally authorize W-034. No dual-loader product mode is permitted |
 
 ## Step 1 implementation record
@@ -409,6 +417,38 @@ accepted path-sensitive cache generation, not a byte-reproducibility baseline.
 The sanitized native record is
 [`docs/history/windows_x64_w031_result.md`](docs/history/windows_x64_w031_result.md).
 
+## W-036 implementation record
+
+The Windows x64 post-start nterp visitor exists to repair invokable managed
+methods which remained on the switch-interpreter bridge while nterp was
+unavailable during early startup. W-036 makes that scope explicit: the visitor
+now skips every method whose current entrypoint is not the switch bridge. This
+preserves compiled boot-image entrypoints while leaving the imageless bridge
+repair intact.
+
+The managed gate starts a dedicated worker and selects a core method only when
+its current quick entrypoint equals its underlying OAT quick code and begins an
+exact registered Windows unwind record in the boot OAT. The main thread arms a
+one-shot x64 hardware execute breakpoint on that worker. The worker invokes
+the selected method through an ordinary Java call; a first-priority VEH
+observes the exact PC, restores the prior debug-register state, and resumes.
+The probe never replaces an `ArtMethod` entrypoint and never directly calls the
+OAT code pointer.
+
+Server 2025 passes with JIT disabled:
+
+```text
+W036_BOOT_OAT_DISPATCH_PASS target=int java.lang.Integer.parseInt(java.lang.String) current_entry=oat rx_pc=hardware_breakpoint hits=1 wrong_single_steps=0 jit=disabled
+W036BootOatDispatchProbe PASS dispatch=ordinary rx_pc=observed jit=disabled
+```
+
+This closes the representative ordinary-dispatch condition within step 10.
+The step remains `PARTIAL` for relocation, fault, GC/root, exception, and fatal
+stack-walk coverage. The final regression cache set measured 2,940,464-byte
+`boot.art`, 20,169,448-byte `boot.oat`, and 8,309,376-byte `boot.vdex`; its hashes and
+the complete gate contract are recorded in
+[`docs/history/windows_x64_w036_result.md`](docs/history/windows_x64_w036_result.md).
+
 ## Evidence log
 
 | Date | Environment | Result | Interpretation |
@@ -428,6 +468,8 @@ The sanitized native record is
 | 2026-08-07 | Fresh agent01 Linux and Linux-hosted Windows builds | Full Linux graph and 15/15 catalog gates pass; the full Windows cross graph builds; focused Python harness tests pass 21/21 | Shared compiler/writer/runtime changes compile on both targets and retain the Linux runtime baseline |
 | 2026-08-07 | Windows Server 2025 build 26100 | W-025 passes 9/9, W-030 passes 2/2, and W-031 passes 1/1; W-031 reports managed/JNI runtime calls plus 42,663 registered entries, seven trampolines, and synthetic virtual unwind | **Authoritative unwind implementation evidence**; step 6 and step 10 are partial; this pre-W-032 checkpoint is superseded for CFG status by the next row |
 | 2026-08-07 | Windows Server 2025 build 26100 plus fresh agent01 Linux regression | W-032 passes 3/3 with a CFG-instrumented PE caller, forced policy, 42,649 unique targets, guarded quick/JNI calls, 18 semantic corruptions rejected through 38 real opens, and all eight metadata/relro layouts accepted; the Python suite passes 225/225, full Linux build/boot generation passes, and Linux catalog passes 15/15 | **Authoritative CFG transport and observation evidence**; step 7 complete and step 11 partial; explicit-target allocation/resource characterization remains |
+| 2026-08-07 | Windows Server 2025 build 26100 | W-036 passes 1/1 with JIT disabled; ordinary `Integer.parseInt(String)` dispatch hits its exact current registered boot-OAT RX entry PC once, with zero unrelated single-step exceptions | **Authoritative representative ordinary-dispatch evidence**; step 10 remains partial only for relocation, fault, GC/root, exception, and fatal-walk breadth; see [`docs/history/windows_x64_w036_result.md`](docs/history/windows_x64_w036_result.md) |
+| 2026-08-07 | Windows Server 2025 build 26100 affected-stage regression plus fresh agent01 Linux regression | W-030 passes 2/2, W-031 passes 1/1, W-032 passes 3/3, and W-036 passes 1/1 against a fresh path-sensitive cache set; the Python suite passes 225/225, full Linux build/boot generation passes, and Linux catalog passes 15/15 | **7/7 native regression PASS** after preserving boot-AOT entrypoints; loading, unwind, CFG observation/corruption/layout, ordinary dispatch, and the shared Linux baseline remain compatible |
 
 The two accepted native runs and the post-correction Wine diagnostic have
 SHA-256
@@ -441,9 +483,9 @@ diagnostic evidence; native Server 2025 is the acceptance authority.
 
 ## Immediate work queue
 
-1. Prove representative ordinary dispatch PCs execute inside boot-OAT RX
-   ranges despite the current startup nterp upgrade, then extend coverage to
-   relocation, faults, and GC/roots.
+1. Extend W-036's accepted ordinary boot-OAT dispatch into image-relocation,
+   managed-fault, and focused GC/root coverage, then add exception and fatal
+   stack-walk execution with the W-031 unwind table active.
 2. Add `.oat_unwind.windows` corruption/fallback injection, managed
    exception/fatal stack walking, and an actual XMM-bearing boot-AOT frame
    execution gate.
