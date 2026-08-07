@@ -10,4 +10,4 @@ and JIT-disabled managed/JNI execution.
 The accepted native gate resolves managed, JNI, and all seven trampoline
 records, completes a synthetic `RtlVirtualUnwind`, and successfully calls the
 selected managed and JNI bodies. Full artifact identities and evidence are in
-[`docs/history/windows_x64_w031_result.md`](../../../docs/history/windows_x64_w031_result.md).
+[`docs/evidence/windows_x64_w031_result.md`](../../../docs/evidence/windows_x64_w031_result.md).

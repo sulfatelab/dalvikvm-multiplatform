@@ -141,7 +141,7 @@ link edge), and the
 wasn't converted yet. Without it, libcore `native` methods (e.g.
 `Class.getNameNative`) were unregistered, so the first exception's `toString`
 recurred to a StackOverflow → SIGSEGV. See
-`docs/history/linux_e2e_initial_result.md`.
+`docs/evidence/linux_e2e_initial_result.md`.
 
 That blocker was later resolved: the current Linux product executes the shared
 boot.jar, and the Windows product loads real PE `libjavacore`, `libopenjdk`,

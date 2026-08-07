@@ -11,4 +11,4 @@ The accepted native gate requires a nonzero aligned paired image/OAT
 relocation, recovers one low-address access violation from ordinary registered
 boot-OAT code as `NullPointerException`, and preserves one non-null BSS root
 through eight completed explicit collections. Full evidence is in
-[`docs/history/windows_x64_w037_result.md`](../../../docs/history/windows_x64_w037_result.md).
+[`docs/evidence/windows_x64_w037_result.md`](../../../docs/evidence/windows_x64_w037_result.md).

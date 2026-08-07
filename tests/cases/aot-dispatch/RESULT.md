@@ -10,4 +10,4 @@ currently published, registered boot-OAT entrypoint with JIT disabled.
 The accepted native gate selects `Integer.parseInt(String)` and records exactly
 one hardware execute-breakpoint hit at its current boot-OAT RX entry PC, with
 zero unrelated single-step exceptions. Full evidence is in
-[`docs/history/windows_x64_w036_result.md`](../../../docs/history/windows_x64_w036_result.md).
+[`docs/evidence/windows_x64_w036_result.md`](../../../docs/evidence/windows_x64_w036_result.md).

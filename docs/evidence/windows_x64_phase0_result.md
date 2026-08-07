@@ -32,7 +32,7 @@ All are **PE32+ x86-64** DLLs (`file(1)`).
 
 ### Layer 2
 
-- New: [`overlay/port_policy_windows.py`](../../overlay/port_policy_windows.py)
+- Current successor: [`overlay/art_port_policy.py`](../../overlay/art_port_policy.py)
 
 ### Compat (Windows x64)
 

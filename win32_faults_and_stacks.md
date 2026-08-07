@@ -373,7 +373,7 @@ Wine verifies the baseline/writable/direct stack modes, all four standalone
 UEF modes, and the late chain where ART is the predecessor and writes a valid
 dump. Wine 10.0 itself segfaults in protected recursive stack growth, so that
 case is intentionally native-only. See
-`docs/history/windows_x64_w010_w014_diagnostics.md` for the interpretation
+`docs/evidence/windows_x64_w010_w014_diagnostics.md` for the interpretation
 matrix.
 
 ### 4.2 Third native diagnostic result
@@ -582,7 +582,7 @@ The immutable E9 archive SHA-256 is
 Windows Server 2025 build 26100 returns 30/30 PASS, no handled dumps, and five
 valid fatal dumps. The independent reviewer reports
 `PASS (build=26100, pass_records=30, dumps=5, return=full-package)`. See
-`docs/history/windows_x64_w010_w014_e9_result.md`.
+`docs/evidence/windows_x64_w010_w014_e9_result.md`.
 
 ## 5. Windows contracts and conclusions
 
@@ -646,7 +646,7 @@ tripwire cost. E9 explicit checks stay the product default. The probe artifact
 SHA-256 is
 `bdfec88fa7dc5cbcdd9e6e556ecbd7738a2b8822662bbafc15027ca3f320f7c5`;
 full records and timing are in
-`docs/history/windows_x64_w010_w014_diagnostics.md`.
+`docs/evidence/windows_x64_w010_w014_diagnostics.md`.
 
 ### 5.4 Native stack overflow is not ART's managed event
 
@@ -2379,7 +2379,7 @@ contract.
   cases reject before Java/JIT, while dynamic/reserved fields remain accepted.
   The embedding probe verifies predecessor UEF, foreign VEH/frame-SEH, and
   later-UEF preservation through VM teardown. Native evidence is under
-  `docs/history/windows_x64_fs2_w010_w014_result.md`.
+  `docs/evidence/windows_x64_fs2_w010_w014_result.md`.
 - **Still open:** rollback injection, reservation correlation,
   negative-exception, and debugger-quality dump-stack gates. FS-5 conditionally
   closes the pending-range question because a real native fault would require
@@ -2533,8 +2533,8 @@ and debugger evidence.
 | `runtime/multiplatform/windows/jit_unwind_windows.{h,cc}` and `runtime/jit/jit_code_cache.*` | Implemented stable one-entry dynamic-function registry, publish-after-register rule, exact deletion, unregister-before-free/reuse, and clear-before-teardown ownership |
 | `runtime/jit/jit_memory_region.*` | Implemented overflow-checked aligned xdata tail in each existing data allocation, written through the RW alias and referenced through the primary low-4-GiB view |
 | `tests/cases/jit-lifecycle-stress/probe.cc` and its adjacent `RESULT.md` | Native-accepted JIT-3/FS-3 optimizing/JNI compile-invalidate-collect-reuse stress with concurrent lookup/virtual unwind and independent returned-archive review |
-| `docs/history/windows_x64_w025_jit4_result.md` | Native-accepted JIT-4 default-J-2 final regression, including eight lifecycle cycles and three valid static/JIT/OSR fatal dumps with independent returned-archive review |
-| `docs/history/windows_x64_w025_jit5_result.md` | Native-accepted JIT-5 removal proof: Windows J-1 absent, retired key inert, fail-closed source/binary contract, eight lifecycle cycles, and three valid fatal dumps with independent review |
+| `docs/evidence/windows_x64_w025_jit4_result.md` | Native-accepted JIT-4 default-J-2 final regression, including eight lifecycle cycles and three valid static/JIT/OSR fatal dumps with independent returned-archive review |
+| `docs/evidence/windows_x64_w025_jit5_result.md` | Native-accepted JIT-5 removal proof: Windows J-1 absent, retired key inert, fail-closed source/binary contract, eight lifecycle cycles, and three valid fatal dumps with independent review |
 | `runtime/thread.cc` | Implemented exact current-stack acceptance and attach failure; Windows x64 performs no fixed-page installation and adjusts common bounds by the platform-reported excluded-low sum |
 | `runtime/multiplatform/windows/stack_windows.{h,cc}` | Read-only E9 layout inspection accounts for inaccessible prefix + configured guarantee + moving guard; Stage-B select/protect/restore helpers remain diagnostic-only |
 | `runtime/multiplatform/windows/thread_windows.cc` | Queries, raises/preserves, re-queries, and validates the four-page minimum guarantee, then supplies guarantee-aware layout accounting; no alternate signal stack |
@@ -2612,7 +2612,7 @@ pass and the recursive dump scan reports `NO_DMP_FILES`.
 This is a cross-regression for the already accepted E9 fault/unwind design; it
 does not replace the 30-record E9 fatal/managed-fault archive. The independently
 reviewed identities and result are archived under
-`docs/history/windows_x64_w025_jit1_result.md`.
+`docs/evidence/windows_x64_w025_jit1_result.md`.
 
 ### JIT-2 shared native cross-regression - 2026-07-29
 
@@ -2635,7 +2635,7 @@ The runner returns 14/14 aggregate checks, clean forbidden-log scanning,
 mapping/policy boundary; the separate FS-3 result below adds collection/reuse
 sampling. Neither replaces E9 fatal-origin unwind acceptance. JIT-2's
 independently reviewed identities and conclusion remain in
-`docs/history/windows_x64_w025_jit2_result.md`.
+`docs/evidence/windows_x64_w025_jit2_result.md`.
 
 ### JIT-3 / FS-3 shared native acceptance - 2026-07-29
 
@@ -2663,7 +2663,7 @@ and ART `43f866830eee0ee666b1cf3e9d2b3abffc45180b`. Its SHA-256 is
 the independently accepted returned archive SHA-256 is
 `dcd3062a95a00296ca939062cc52fb7907405cc7c4e08ae72723a318063284fd`.
 The compact acceptance conclusion remains in
-`docs/history/windows_x64_w025_jit3_result.md`. This closes FS-3; it
+`docs/evidence/windows_x64_w025_jit3_result.md`. This closes FS-3; it
 does not replace E9 fatal-origin acceptance or the remaining debugger,
 forced-policy, exception-XMM, pending-range, embedding, reservation-correlation,
 and second-host work.
@@ -2698,7 +2698,7 @@ The issued package records root
 The independently accepted returned archive SHA-256 is
 `843391f11e22225516162b25de0412d790c9ea669d0383a996e739aae8480096`.
 The compact acceptance conclusion remains in
-`docs/history/windows_x64_w025_jit4_result.md`.
+`docs/evidence/windows_x64_w025_jit4_result.md`.
 
 ### JIT-5 post-removal native fatal/unwind cross-regression - 2026-07-29
 
@@ -2729,7 +2729,7 @@ archive SHA-256 is
 the independently accepted returned archive SHA-256 is
 `2bddf51924a7ca6b9719ffde433e859007465babf6bf2ca7a12f417eecd6289f`.
 The compact acceptance conclusion remains in
-`docs/history/windows_x64_w025_jit5_result.md`.
+`docs/evidence/windows_x64_w025_jit5_result.md`.
 
 This closes W-025 and cross-regresses the accepted E9 and FS-3 behavior. It
 does not replace E9's 30-record core archive or close the independent
@@ -2817,7 +2817,7 @@ W-010 managed NPE/SOE Wine gate, full Linux rebuild, Linux object's seven
 unchanged implicit probes, and shared-boot imageless Linux Hello. FS-1 closes
 the handler/throw stack-budget proof point. FS-2 is now accepted on the same
 build-26100 host; compact native evidence is under
-`docs/history/windows_x64_fs2_w010_w014_result.md`.
+`docs/evidence/windows_x64_fs2_w010_w014_result.md`.
 
 ### FS-4 same-host repeat — 2026-07-30
 
@@ -2840,7 +2840,7 @@ stress cases, and rejected an active fiber. The page-state probe passed eight
 selection cases, five layout cases, 16 KiB configured guarantees, 64 committed
 and 64 reserved restorations, and 258 direct faults. Compact raw results and
 the host identity are under
-`docs/history/windows_x64_fs4_same_host_result.md`.
+`docs/evidence/windows_x64_fs4_same_host_result.md`.
 
 Per the acceptance-policy decision, this closes FS-4 on the authoritative
 Windows Server 2025 build-26100 host. A local SSH inventory found no second
@@ -2881,7 +2881,7 @@ debugger-quality follow-ups.
 | FS-1 (done) | Add allocation-free high-water instrumentation around the explicit check, quick throw, temporary stack-end expansion, exception construction, and non-local transfer; run release and debug builds | Accepted 2026-07-30: Wine and native Release/Debug switch, nterp, and JIT have positive margins; native quick Debug retains more than 37 KiB with the 40-KiB Debug-only reserve; four records per mode and no dumps |
 | FS-2 (done) | Extend the combined native package with debugger first-chance/continue, every named forced-incompatible CET policy, foreign VEH/frame-SEH/predecessor-UEF embedding, and XMM6-XMM15 sentinels during exception unwind | Accepted 2026-07-30 on build 26100: NPE continues into Java, explicit SOE remains fault-free, incompatible CET starts reject before Java/JIT with no dump, foreign search handlers coexist, and full-width XMM state survives unwind |
 | FS-3 (done) | With JIT-1 encoding and JIT-2 mapping/policy prerequisites complete, share the JIT closure load test: compile, invalidate, collect, reuse, and re-register many optimizing/JNI allocations while another thread performs lookup and virtual unwind | Accepted 2026-07-29: 52 collections, 1,344 compilations, 1,248 exact reuses, and 696,969 virtual unwinds complete with no missing/stale/failed record; callback tables remain unnecessary |
-| FS-4 (closed by policy) | Run FS-1 through FS-3, E9, parameterized guarantee geometry, fiber/manual-stack rejection, and deep detach/continue/reattach lifecycle on the authoritative host | Closed 2026-07-30 by decision: Windows Server 2025 build 26100 is authoritative; the Windows 10/second-host repetition is skipped. Evidence: `docs/history/windows_x64_fs4_same_host_result.md` |
+| FS-4 (closed by policy) | Run FS-1 through FS-3, E9, parameterized guarantee geometry, fiber/manual-stack rejection, and deep detach/continue/reattach lifecycle on the authoritative host | Closed 2026-07-30 by decision: Windows Server 2025 build 26100 is authoritative; the Windows 10/second-host repetition is skipped. Evidence: `docs/evidence/windows_x64_fs4_same_host_result.md` |
 | FS-5 (closed conditional) | Attempt the brief pending bridge-range exception only if a deterministic probe can enter it without changing product control flow | Closed 2026-07-30: the pending tail is entered only by ART's managed pending-exception branch; structural and synthetic unwind checks pass, while a real native fault would require product fault injection or fabricated direct entry. See `tests/cases/managed-fault-recovery/RESULT.md` |
 
 The history follow-ups—fatal-dump instrumentation with RSP inside the pregrown

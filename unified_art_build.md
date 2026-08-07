@@ -71,7 +71,7 @@ items are closed.
   valid 66,888-byte OAT and 1,000-byte VDEX artifacts; those recorded outputs
   happened to match, but byte identity is not required. Step 1 is complete;
   the later W-030 slice covers boot-image generation and executable loading. See
-  `docs/history/windows_x64_w028_result.md`.
+  `docs/evidence/windows_x64_w028_result.md`.
 
 - [x] Windows AOT/OAT sequence step 2 has an accepted W-029 identity
   preflight. It selects one `boot` component, logical
@@ -82,7 +82,7 @@ items are closed.
   package-root startup consume the contract, and native ART accepts the
   canonical set. Step 2 remains partial because the seven negative cases are
   still launcher-level pre-spawn checks rather than ART diagnostics. See
-  `docs/history/windows_x64_w029_result.md`.
+  `docs/evidence/windows_x64_w029_result.md`.
 
 - [x] W-030 completes boot-only sequence steps 4 and 5 and starts steps 8 and
   9. A Windows-only checked private-copy operation supplies file-backed ELF
@@ -98,7 +98,7 @@ items are closed.
   characterization, but all sets started successfully. The OAT generators no
   longer request `--force-determinism`. The launcher uses `-Xint`, so real OAT
   RX execution remains open. See
-  `docs/history/windows_x64_w030_result.md`.
+  `docs/evidence/windows_x64_w030_result.md`.
 
 - [x] W-031 makes unwind step 6 and execution step 10 partial. The writer emits
   42,663 managed/JNI/trampoline entries with 163 deduplicated descriptors into
@@ -108,7 +108,7 @@ items are closed.
   underlying managed/JNI bodies, and passes corresponding JIT-disabled runtime
   calls. Startup still upgrades
   many current entrypoints to nterp, so ordinary boot-OAT RX dispatch is not
-  claimed. See `docs/history/windows_x64_w031_result.md`.
+  claimed. See `docs/evidence/windows_x64_w031_result.md`.
 
 - [x] Parallelism is now deterministic when callers omit `--parallel`:
   non-Windows build hosts use 32 jobs, Windows build hosts use 16, and Windows
@@ -1068,7 +1068,7 @@ items are closed.
   and raw host/build/checksum/result records were removed; maintained behavior
   remains in the unified W-025 cases and stage.
 - [x] The H-001 scoped Phase-4 native rerun is consolidated into
-  `docs/history/windows_x64_h001_phase4_result.md`. The exact five-case
+  `docs/evidence/windows_x64_h001_phase4_result.md`. The exact five-case
   markers, native-fatal exit, authoritative-host identity, and out-of-scope
   DNS note remain; duplicate host/result files and seven verbose process logs
   were removed after unified W-004/W-010 assumed their live contracts.
@@ -1084,7 +1084,7 @@ items are closed.
   mutation or fabricated state remain beside the live case; the standalone
   legacy result was removed.
 - [x] W-010/W-014 E4–E6 diagnosis is deduplicated in the consolidated
-  `docs/history/windows_x64_w010_w014_diagnostics.md`. Exact issued revisions,
+  `docs/evidence/windows_x64_w010_w014_diagnostics.md`. Exact issued revisions,
   package/result/dump
   identities, live lookup boundaries, repaired records, and rejected
   fixed-page SOE outcome remain; four redundant diagnosis fragments and one
@@ -1095,18 +1095,18 @@ items are closed.
   remain. The two referenced Phase-1 pre-growth logs were already absent, so
   their complete durable metrics remain in the diagnostic record instead.
 - [x] FS-2 native acceptance is consolidated in
-  `docs/history/windows_x64_fs2_w010_w014_result.md`. The package identity,
+  `docs/evidence/windows_x64_fs2_w010_w014_result.md`. The package identity,
   exact debugger/CET/XMM/embedding contracts, final pass, and six intentional
   dump identities remain. Absolute host paths, duplicate structural/result/
   scan records, and ten verbose process logs were removed after unified W-010
   assumed their live behavior.
 - [x] FS-4's authoritative-host repeat is consolidated in
-  `docs/history/windows_x64_fs4_same_host_result.md`. The three package
+  `docs/evidence/windows_x64_fs4_same_host_result.md`. The three package
   identities, repeat FS-1 margins, 16-way guarantee geometry, thread/fiber/
   lifecycle counts, and six dump identities remain. Host/subnet addresses and
   ten copied raw FS-1/FS-2/FS-3 records were removed.
 - [x] E9's configured-guarantee/explicit-stack-check acceptance now lives in
-  `docs/history/windows_x64_w010_w014_e9_result.md`. Its archive identity,
+  `docs/evidence/windows_x64_w010_w014_e9_result.md`. Its archive identity,
   E8 failure identity, 30/30 result, zero-handled/five-fatal-dump contract,
   and exact stack accounting remain. The retired host checklist, package
   checker, returned-result reviewer, and reviewer tests were removed.
@@ -1203,7 +1203,7 @@ items are closed.
   matrix is superseded by W-013 allocator/pressure gates, W-004 managed stress,
   and W-025 JIT controls/lifecycle. Historical per-process memory and pagefile
   measurements remain evidence, not portable pass criteria. The single durable
-  R1/R2 summary moved to `docs/history/windows_x64_w013_result.md`; the obsolete
+  R1/R2 summary moved to `docs/evidence/windows_x64_w013_result.md`; the obsolete
   host checklist and duplicate compact acceptance file were removed.
 - [x] The unreferenced Phase-4 `JitSectionProbe.c` was removed. The canonical
   W-025 section-policy case is its stronger regular-file successor: it owns
@@ -1400,7 +1400,7 @@ items are closed.
   markers, expected-nonzero Java abort, VEH/UEF native fault path, valid
   minidump creation, and GoldenApp pass.
 - [x] The W-024 native tripwire package is consolidated into
-  `docs/history/windows_x64_w024_interpreter_jni_result.md`. Its exact source
+  `docs/evidence/windows_x64_w024_interpreter_jni_result.md`. Its exact source
   revisions, two archive hashes, shared-boot identity, nine-case native result,
   required compilation records, and no-tripwire/no-dump conclusion remain;
   the obsolete host checklist, 169-entry binary manifest, build/dump/host
@@ -3057,7 +3057,7 @@ The historical Windows phase files are no longer a product entry point:
   be automatically extracted, but the repository contained no matching
   extractor. Its CMake file imported Phase-1 artifacts rather than consuming
   targets from one graph. The stable bring-up evidence now lives in
-  [`docs/history/windows_x64_libcore_icu_result.md`](docs/history/windows_x64_libcore_icu_result.md).
+  [`docs/evidence/windows_x64_libcore_icu_result.md`](docs/evidence/windows_x64_libcore_icu_result.md).
 
 The present Windows linker command is nevertheless useful evidence: plain
 `clang++ --target=x86_64-pc-windows-msvc ... -shared -fuse-ld=lld` already

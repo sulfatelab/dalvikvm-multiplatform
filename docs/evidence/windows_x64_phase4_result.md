@@ -536,8 +536,8 @@ The historical rebuilt complete Phase-4 aggregate reported
 `PASS all wine Phase 4 gates`; its runner is now retired.
 Windows x64 `art`/`dalvikvm`, Linux `art`/`dalvikvm`,
 `dalvikvm -showversion`, and shared-boot imageless Hello also pass. Wine is
-development evidence; native Windows Stage E remains required. See
-[`RESULT-w010-managed-faults.md`](RESULT-w010-managed-faults.md).
+development evidence; native Windows Stage E remains required. See the
+[canonical managed-fault result](../../tests/cases/managed-fault-recovery/RESULT.md).
 
 ## W-010 static OSR unwind re-run (2026-07-27)
 

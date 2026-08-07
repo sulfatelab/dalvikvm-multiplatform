@@ -41,6 +41,7 @@ dalvikvm-multiplatform/
   tests/                      # target-aware probes, host checks, records
   overlay/                    # port policies
   docs/
+    evidence/                 # historical test, gate, and acceptance records
     history/                  # completed migration/design records
     windows-port-notes/       # audited Windows bring-up knowledge
   *.md                        # project documentation; see Documentation map

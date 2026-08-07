@@ -29,4 +29,4 @@ boot-OAT RX code.
 
 Full source hashes, boot-artifact identities, and the LZ4 startup/fallback
 boundary are recorded in
-[`docs/history/windows_x64_w030_result.md`](../../../docs/history/windows_x64_w030_result.md).
+[`docs/evidence/windows_x64_w030_result.md`](../../../docs/evidence/windows_x64_w030_result.md).

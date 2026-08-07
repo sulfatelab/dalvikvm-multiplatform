@@ -60,21 +60,21 @@ and mapping complexity. The final product has one executable Windows OAT
 loader, and adoption of OAT-2 requires removal of the superseded OAT-1
 executable path. The
 accepted native result is
-[`docs/history/windows_x64_w028_result.md`](docs/history/windows_x64_w028_result.md).
+[`docs/evidence/windows_x64_w028_result.md`](docs/evidence/windows_x64_w028_result.md).
 The accepted W-029 preflight is
-[`docs/history/windows_x64_w029_result.md`](docs/history/windows_x64_w029_result.md).
+[`docs/evidence/windows_x64_w029_result.md`](docs/evidence/windows_x64_w029_result.md).
 The W-030 private-copy and boot-loading result is
-[`docs/history/windows_x64_w030_result.md`](docs/history/windows_x64_w030_result.md).
+[`docs/evidence/windows_x64_w030_result.md`](docs/evidence/windows_x64_w030_result.md).
 The W-031 unwind result is
-[`docs/history/windows_x64_w031_result.md`](docs/history/windows_x64_w031_result.md).
+[`docs/evidence/windows_x64_w031_result.md`](docs/evidence/windows_x64_w031_result.md).
 The W-032 CFG observation result is
-[`docs/history/windows_x64_w032_result.md`](docs/history/windows_x64_w032_result.md).
+[`docs/evidence/windows_x64_w032_result.md`](docs/evidence/windows_x64_w032_result.md).
 The W-036 ordinary-dispatch result is
-[`docs/history/windows_x64_w036_result.md`](docs/history/windows_x64_w036_result.md).
+[`docs/evidence/windows_x64_w036_result.md`](docs/evidence/windows_x64_w036_result.md).
 The W-037 relocation/fault/GC-root result is
-[`docs/history/windows_x64_w037_result.md`](docs/history/windows_x64_w037_result.md).
+[`docs/evidence/windows_x64_w037_result.md`](docs/evidence/windows_x64_w037_result.md).
 The W-038 managed-exception/fatal-unwind result is
-[`docs/history/windows_x64_w038_result.md`](docs/history/windows_x64_w038_result.md).
+[`docs/evidence/windows_x64_w038_result.md`](docs/evidence/windows_x64_w038_result.md).
 The authoritative implementation gate is Windows Server 2025 Datacenter
 Evaluation, x64 build 26100. Linux and Wine remain development and structural
 gates; the former Windows 10 lab host is unavailable.
@@ -2390,7 +2390,7 @@ separate invalid-by-default allocation/resource experiment is still open.
 4. Add writer/parser/layout/corruption tests, PE guard-policy inspection, a
    forced-CFG managed runner, a guarded quick/JNI bridge, structural checks for
    all seven trampolines, and size/count/policy markers. Record the accepted
-   Server 2025 result in `docs/history/windows_x64_w032_result.md`.
+   Server 2025 result in `docs/evidence/windows_x64_w032_result.md`.
 5. Keep the explicit allocation probe as a separately reported
    characterization. Its result may refine this design, but it cannot silently
    change the W-032 loader mode.
@@ -2409,7 +2409,7 @@ The accepted Server 2025 matrix generation reported 42,649 unique targets,
 thunk candidates, and section checksum `9b1588cd`. CFG was enabled; strict mode
 and export suppression were both disabled; guarded quick/JNI execution passed.
 Full evidence is in
-[`docs/history/windows_x64_w032_result.md`](docs/history/windows_x64_w032_result.md).
+[`docs/evidence/windows_x64_w032_result.md`](docs/evidence/windows_x64_w032_result.md).
 
 Candidate counts are characterization of that path-sensitive cache set, not a
 cross-generation reproducibility baseline. The allocation experiment uses a
@@ -2595,7 +2595,7 @@ condition.
 A Linux source compile accepts every shared writer change, and the coherent
 Linux baseline remains 16-KiB aligned. Step 1 is therefore `COMPLETE`; this
 does not exercise `ImageWriter` or executable loading. See the
-[accepted result](docs/history/windows_x64_w028_result.md) and tracker for the
+[accepted result](docs/evidence/windows_x64_w028_result.md) and tracker for the
 exact evidence and remaining sequence.
 
 ### Numbered sequence step 2 implementation status
@@ -2626,8 +2626,8 @@ package-root launcher consume this record, and native ART accepts the canonical
 set. Step 2 remains `PARTIAL` only because the seven deliberate mismatches are
 rejected by the launcher before process creation; ART-level negative
 diagnostics are not yet proven. See the
-[accepted preflight](docs/history/windows_x64_w029_result.md) and
-[W-030 result](docs/history/windows_x64_w030_result.md).
+[accepted preflight](docs/evidence/windows_x64_w029_result.md) and
+[W-030 result](docs/evidence/windows_x64_w030_result.md).
 
 ### Numbered sequence steps 4, 5, 8, and 9 implementation status
 
@@ -2684,7 +2684,7 @@ expected hit and zero unrelated single-step exceptions.
 
 This completes the representative ordinary-dispatch condition. The accepted
 record is
-[`docs/history/windows_x64_w036_result.md`](docs/history/windows_x64_w036_result.md).
+[`docs/evidence/windows_x64_w036_result.md`](docs/evidence/windows_x64_w036_result.md).
 
 W-037 adds a coherent relocated execution case without changing nested ART.
 It compares the persisted and live image headers, requires a nonzero
@@ -2703,7 +2703,7 @@ still publishes the exact registered boot-OAT entrypoint captured before the
 call. This closes the focused relocation, managed-null-fault, and BSS-root
 case, but not all of step 10: relocation, fault, and root variants outside this
 single case remain. The accepted record is
-[`docs/history/windows_x64_w037_result.md`](docs/history/windows_x64_w037_result.md).
+[`docs/evidence/windows_x64_w037_result.md`](docs/evidence/windows_x64_w037_result.md).
 
 W-038 closes the separately listed managed-exception/fatal-walk contract. Its
 first JIT-disabled child selects a method only while the current entrypoint
@@ -2729,7 +2729,7 @@ sequence, zero prologues, and contiguous ranges; the rebuilt native W-010
 structural stage passes 8/8. W-038 itself passes 1/1, its two child contracts
 complete, and its fatal child produces one 1,207,378-byte minidump. The accepted
 record is
-[`docs/history/windows_x64_w038_result.md`](docs/history/windows_x64_w038_result.md).
+[`docs/evidence/windows_x64_w038_result.md`](docs/evidence/windows_x64_w038_result.md).
 
 ### Pre-dispatch characterization record
 

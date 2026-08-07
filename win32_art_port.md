@@ -692,7 +692,7 @@ Each phase has a kill-or-continue gate. This is the execution roadmap when imple
 - Layer 1: `Config(os="windows")` + `bp2cmake --os windows` selects `target.windows` (e.g. `errors_windows.cpp`, `mem_map_windows.cc`).
 - Layer 2: the Windows delta in `overlay/art_port_policy.py`.
 - Built PE32+ DLLs: `log`, `base`, `nativehelper`, `ziparchive`, `artpalette`, **`artbase`**.
-- **Gate:** `libartbase` links — **PASSED** (`build/windows_x64_phase0/artbase.dll`). See `docs/history/windows_x64_phase0_result.md`.
+- **Gate:** `libartbase` links — **PASSED** (`build/windows_x64_phase0/artbase.dll`). See `docs/evidence/windows_x64_phase0_result.md`.
 
 ### Phase 1 — Skeleton VM (1–2 months) — **DONE (2026-07-16)**
 
@@ -700,7 +700,7 @@ Each phase has a kill-or-continue gate. This is the execution roadmap when imple
 - `thread_windows` / `runtime_windows` / `monitor_windows` / `sigchain` stubs; PE asm + WaitOnAddress futex path.
 - Linked `dalvikvm.exe` + `art.dll` (+ deps); JNI default library is `art.dll` on Windows.
 - **Gate:** `dalvikvm -showversion` (A2) — **PASSED** under `wine64` → `ART version 2.1.0 x86_64`.
-- Historical details: `docs/history/windows_x64_phase1_result.md`.
+- Historical details: `docs/evidence/windows_x64_phase1_result.md`.
 
 ### Phase 2 — Interpreter Hello (2–4 months) — **DONE (2026-07-16, wine64 A3)**
 
@@ -755,13 +755,13 @@ all product paths. Windows NIO.2 remains a non-goal.
 
 ### Phase 4 — Hardening (2–4 months) — **WINE COMPLETE; FOCUSED NATIVE SUBSETS PASS**
 
-- GC stress, multi-thread stress, crash dumps, and resource-leak handles — **PASS** under wine64; see `docs/history/windows_x64_phase4_result.md`.
+- GC stress, multi-thread stress, crash dumps, and resource-leak handles — **PASS** under wine64; see `docs/evidence/windows_x64_phase4_result.md`.
 - Crash path: separate diagnostic VEH plus predecessor-preserving unhandled filter and **MiniDumpWriteDump** to `run/crash/*.dmp` (`runtime_windows.cc`); the W-010 managed VEH/context adapter is product-enabled for exact Windows x64 nterp/JIT implicit null and stack-overflow faults and has focused Wine stress.
 - Performance smoke (arraycopy/string churn) **PASS**.
 - **Gate:** A5–A8 stable under Wine. Focused native Windows W-024 JNI/JVMTI and
   W-013 heap/JIT/handle/repeated-start matrices pass; the broader general
   Phase-4 host rerun remains H-001.
-- See `docs/history/windows_x64_phase4_result.md`.
+- See `docs/evidence/windows_x64_phase4_result.md`.
 
 ### Phase 5 — JIT / oat — **JIT COMPLETE FOR X86_64; AOT STEP 1 COMPLETE**
 
@@ -905,7 +905,7 @@ java.version=0
 exit 0
 ```
 
-See `docs/history/windows_x64_phase2_result.md`; the transient Phase-1 attempt log is not retained.
+See `docs/evidence/windows_x64_phase2_result.md`; the transient Phase-1 attempt log is not retained.
 
 ### Landed (runtime)
 - dlmalloc WIN32 mmap override fixed (MORECORE, low-4g non-moving).
@@ -966,7 +966,7 @@ Native Windows R2 closure stress passes 56/56 records, including pressure,
 large heaps, both JIT memory modes, 20 repeated starts, handle churn, complete
 metrics, and no dumps. W-013 is CLOSED; see
 [win32_heap_memory.md](win32_heap_memory.md) and the accepted evidence under
-`docs/history/windows_x64_w013_result.md`.
+`docs/evidence/windows_x64_w013_result.md`.
 
 ## 10. Conclusion and current position
 
@@ -1009,7 +1009,7 @@ broader JIT-memory hardening remains W-025 and is maintained in
 - `vendor/art/runtime/base/mutex.h` — futex gated on `__linux__`  
 - `vendor/art/build/Android.bp` — runtime disabled on Windows upstream  
 - `vendor/libcore/multiplatform/windows/` — Windows libcore Java/native implementation
-- `docs/history/linux_e2e_initial_result.md` — historical Linux E2E baseline
+- `docs/evidence/linux_e2e_initial_result.md` — historical Linux E2E baseline
   for oracle tests
 - `/home/agent/Projects/windows_x64-dev-env/README.md` — Windows x64 cross-dev environment (clang/lld, xwin SDK, libc++, compiler-rt)
 - `/home/agent/Projects/llvm-runtimes-windows_x64/README.md` — libc++ cross-build notes

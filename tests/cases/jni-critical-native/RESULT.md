@@ -225,7 +225,7 @@ the product-default tripwire-OFF mode and the final Windows x64 binaries were re
 The same packaged tripwire matrix subsequently passed on native Windows 10
 build 19044, authorizing fallback cleanup. Detailed evidence and the cleanup
 sequence are in
-`../../../docs/history/windows_x64_w024_interpreter_jni_result.md`.
+`../../../docs/evidence/windows_x64_w024_interpreter_jni_result.md`.
 
 ## Final W-024 status
 
@@ -235,7 +235,7 @@ Math.ceil/floor and the shared ELF/PE registration table are restored; see
 `../math-critical/RESULT.md`. Registered
 and unresolved CriticalNative calls also pass the JVMTI forced-interpreter
 transition in both memory modes; see
-`../../../docs/history/windows_x64_phase4_jvmti_force_result.md`.
+`../../../docs/evidence/windows_x64_phase4_jvmti_force_result.md`.
 
 ## Regression verification
 

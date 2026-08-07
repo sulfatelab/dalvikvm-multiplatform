@@ -71,7 +71,7 @@ build-26100 executions pass with structurally valid OAT 265 and VDEX 027
 artifacts. Those particular runs happened to produce the same bytes, but
 cross-generation byte identity is not a step-1 acceptance condition. The
 sanitized result is
-[`docs/history/windows_x64_w028_result.md`](docs/history/windows_x64_w028_result.md).
+[`docs/evidence/windows_x64_w028_result.md`](docs/evidence/windows_x64_w028_result.md).
 
 Numbered step 2 is `PARTIAL`. W-029 now pins and validates a single-component,
 package-relative generation/startup identity contract. It passes on the
@@ -81,9 +81,9 @@ manifest, and the experimental package-root launcher consume the contract, and
 native ART accepts the canonical set. The step remains partial only because
 the seven negative cases are launcher-level pre-spawn checks rather than
 ART-level mismatch diagnostics. The accepted preflight is
-[`docs/history/windows_x64_w029_result.md`](docs/history/windows_x64_w029_result.md),
+[`docs/evidence/windows_x64_w029_result.md`](docs/evidence/windows_x64_w029_result.md),
 and the native loading evidence is
-[`docs/history/windows_x64_w030_result.md`](docs/history/windows_x64_w030_result.md).
+[`docs/evidence/windows_x64_w030_result.md`](docs/evidence/windows_x64_w030_result.md).
 
 Steps 4 and 5 are `COMPLETE` for boot-only OAT-1. The Windows-only
 private-copy helper is wired into both validation-only and executable ELF
@@ -135,10 +135,10 @@ managed Java trace names its target; the fatal live Windows walk reaches the
 exact armed OAT record, progresses through it, reaches ART's UEF, and writes one
 valid `MDMP`. Relocation, fault, root, and other explicitly untested execution
 variants remain before the step is complete. The accepted records are
-[`docs/history/windows_x64_w036_result.md`](docs/history/windows_x64_w036_result.md),
-[`docs/history/windows_x64_w037_result.md`](docs/history/windows_x64_w037_result.md),
+[`docs/evidence/windows_x64_w036_result.md`](docs/evidence/windows_x64_w036_result.md),
+[`docs/evidence/windows_x64_w037_result.md`](docs/evidence/windows_x64_w037_result.md),
 and
-[`docs/history/windows_x64_w038_result.md`](docs/history/windows_x64_w038_result.md).
+[`docs/evidence/windows_x64_w038_result.md`](docs/evidence/windows_x64_w038_result.md).
 
 Step 7 is now `COMPLETE`; step 11 remains `PARTIAL`. W-032 emits and validates
 `.oat_cfg.windows`, records CFG policy, and uses a PE-audited CFG-instrumented
@@ -152,7 +152,7 @@ Fine-grained explicit targets are not enabled because the current committed
 RW/NX-to-RX transition has default-valid CFG semantics. CFG metadata does not
 instrument outgoing indirect branches in generated quick code. The accepted
 record is
-[`docs/history/windows_x64_w032_result.md`](docs/history/windows_x64_w032_result.md).
+[`docs/evidence/windows_x64_w032_result.md`](docs/evidence/windows_x64_w032_result.md).
 
 The OAT-2 replacement candidate is `DESIGNED`, not selected or implemented.
 Its design is merged into [`win32_aot_oat.md`](win32_aot_oat.md). It does not
@@ -436,7 +436,7 @@ The accepted boot OAT measured:
 These measurements supersede the pre-XMM characterization. They are one
 accepted path-sensitive cache generation, not a byte-reproducibility baseline.
 The sanitized native record is
-[`docs/history/windows_x64_w031_result.md`](docs/history/windows_x64_w031_result.md).
+[`docs/evidence/windows_x64_w031_result.md`](docs/evidence/windows_x64_w031_result.md).
 
 ## W-036 implementation record
 
@@ -468,7 +468,7 @@ The pre-W-037 boundary remained relocation, fault, GC/root, exception, and
 fatal stack-walk coverage. The final regression cache set measured 2,940,464-byte
 `boot.art`, 20,169,448-byte `boot.oat`, and 8,309,376-byte `boot.vdex`; its hashes and
 the complete gate contract are recorded in
-[`docs/history/windows_x64_w036_result.md`](docs/history/windows_x64_w036_result.md).
+[`docs/evidence/windows_x64_w036_result.md`](docs/evidence/windows_x64_w036_result.md).
 
 ## W-037 implementation record
 
@@ -502,7 +502,7 @@ This closes the focused nonzero-relocation, null-fault recovery, and BSS-root
 survival case. Step 10 remains `PARTIAL`: this one run does not establish every
 relocation sign/topology, implicit-fault form, or root slot/collector
 combination. The complete native record is
-[`docs/history/windows_x64_w037_result.md`](docs/history/windows_x64_w037_result.md).
+[`docs/evidence/windows_x64_w037_result.md`](docs/evidence/windows_x64_w037_result.md).
 
 ## W-038 implementation record
 
@@ -550,7 +550,7 @@ W-038 passes 1/1 in 2.47 seconds, with its two child contracts complete and
 one minidump. This accepts the managed-exception/fatal-walk condition for steps
 6 and 10. The steps remain `PARTIAL` only for their other stated exit
 conditions. The complete native record is
-[`docs/history/windows_x64_w038_result.md`](docs/history/windows_x64_w038_result.md).
+[`docs/evidence/windows_x64_w038_result.md`](docs/evidence/windows_x64_w038_result.md).
 
 ## Evidence log
 
@@ -561,21 +561,21 @@ conditions. The complete native record is
 | 2026-08-06 | Wine 10 development run | The shared-base fix clears `MemMap::IsInitialized()`; one-time watchdog-mutex initialization clears the next hang; `MemMap::Sync()` and the anonymous VDEX working-copy/final-publish path clear the live-mapping resize failure; binary `FdFile` mode clears CRT newline corruption | Useful causal diagnostic evidence, never native acceptance |
 | 2026-08-06 | Repeated Wine 10 compiler diagnostic before the stable-OAT-name correction | Two identical invocations complete in about 0.54 s each and produce byte-identical 66,888-byte OAT and 1,000-byte VDEX files; validation reports ELF64/ET_DYN/x86-64, Linux OSABI 3/ABI 0/flags 0, four non-W+X 64-KiB `PT_LOAD` segments, OAT 265, and a four-section/one-DEX VDEX 027 | Proved the operation but exposed a physical output path in ELF `DT_SONAME`; diagnostic only |
 | 2026-08-06 | Fresh Linux current-source compile plus coherent Linux baseline generation | The affected `mem_map.cc`, `fd_file.cc`, and `oat_writer.cc` paths compile for `linux-x86_64-gnu`; the Linux no-image baseline remains four non-W+X 16-KiB `PT_LOAD` segments with the same ELF identity, OAT 265, and VDEX 027 | Confirms the new branches are Windows-scoped and retains the Linux layout baseline |
-| 2026-08-06 | Windows Server 2025 build 26100 | A fresh coherent native build and target-binding audit pass; W-028 passes twice in 0.64/0.61 s and emits the same 66,888-byte OAT and 1,000-byte VDEX on both runs | **Authoritative step-1 acceptance**; see [`docs/history/windows_x64_w028_result.md`](docs/history/windows_x64_w028_result.md) |
+| 2026-08-06 | Windows Server 2025 build 26100 | A fresh coherent native build and target-binding audit pass; W-028 passes twice in 0.64/0.61 s and emits the same 66,888-byte OAT and 1,000-byte VDEX on both runs | **Authoritative step-1 acceptance**; see [`docs/evidence/windows_x64_w028_result.md`](docs/evidence/windows_x64_w028_result.md) |
 | 2026-08-06 | Post-correction Wine diagnostic | Relative `probe.oat` removes the physical path from `DT_SONAME`; the OAT and VDEX hashes exactly match both authoritative native runs | Cross-environment reproducibility diagnostic; not the acceptance authority |
 | 2026-08-06 | Fresh Linux-hosted Windows cross configuration | W-029 passes 1/1 in 0.06 s; the target-binding audit remains 2,081 compile commands, 2,126 Ninja commands, and 30 product links | Cross-host preflight evidence for step 2 |
-| 2026-08-06 | Windows Server 2025 build 26100 | W-029 passes 1/1 in 0.13 s after a no-op build and rejects all seven intentional mismatches; W-028 then passes 1/1 in 0.68 s with unchanged artifact hashes | **Authoritative identity-preflight acceptance**; step 2 remains partial; see [`docs/history/windows_x64_w029_result.md`](docs/history/windows_x64_w029_result.md) |
-| 2026-08-06 | Windows Server 2025 build 26100 | W-030 generates the LZ4 boot set and canonical startup passes in 1.13 s; both W-030 gates pass 2/2, ART exits 0 with all required markers, no forbidden fallback marker, and seven launcher mismatches rejected | **Authoritative boot-only loading acceptance**; step 8 complete, step 9 partial, and step 10 open; see [`docs/history/windows_x64_w030_result.md`](docs/history/windows_x64_w030_result.md) |
+| 2026-08-06 | Windows Server 2025 build 26100 | W-029 passes 1/1 in 0.13 s after a no-op build and rejects all seven intentional mismatches; W-028 then passes 1/1 in 0.68 s with unchanged artifact hashes | **Authoritative identity-preflight acceptance**; step 2 remains partial; see [`docs/evidence/windows_x64_w029_result.md`](docs/evidence/windows_x64_w029_result.md) |
+| 2026-08-06 | Windows Server 2025 build 26100 | W-030 generates the LZ4 boot set and canonical startup passes in 1.13 s; both W-030 gates pass 2/2, ART exits 0 with all required markers, no forbidden fallback marker, and seven launcher mismatches rejected | **Authoritative boot-only loading acceptance**; step 8 complete, step 9 partial, and step 10 open; see [`docs/evidence/windows_x64_w030_result.md`](docs/evidence/windows_x64_w030_result.md) |
 | 2026-08-06 | Windows Server 2025 build 26100 repeated-generation characterization with the superseded forced-determinism request | Normal parallel and three `-j1` generations all start successfully; VDEX remains stable while `boot.art` and OAT `.text` size/hash change | Non-blocking path-sensitive cache variation; per-generation manifest integrity, not cross-generation byte identity, is the contract |
 | 2026-08-07 | Windows Server 2025 build 26100, no forced byte determinism | W-030 private-copy probe passes in 0.07 s; canonical LZ4 boot startup passes in 1.13 s, and W-028/W-029 pass in 0.64/0.12 s | **Authoritative correction acceptance**; steps 4/5/8 complete, step 9 partial, and step 10 open |
 | 2026-08-07 | Fresh agent01 Linux and Linux-hosted Windows builds | Full Linux graph and 15/15 catalog gates pass; the full Windows cross graph builds; focused Python harness tests pass 21/21 | Shared compiler/writer/runtime changes compile on both targets and retain the Linux runtime baseline |
 | 2026-08-07 | Windows Server 2025 build 26100 | W-025 passes 9/9, W-030 passes 2/2, and W-031 passes 1/1; W-031 reports managed/JNI runtime calls plus 42,663 registered entries, seven trampolines, and synthetic virtual unwind | **Authoritative unwind implementation evidence**; step 6 and step 10 are partial; this pre-W-032 checkpoint is superseded for CFG status by the next row |
 | 2026-08-07 | Windows Server 2025 build 26100 plus fresh agent01 Linux regression | W-032 passes 3/3 with a CFG-instrumented PE caller, forced policy, 42,649 unique targets, guarded quick/JNI calls, 18 semantic corruptions rejected through 38 real opens, and all eight metadata/relro layouts accepted; the Python suite passes 225/225, full Linux build/boot generation passes, and Linux catalog passes 15/15 | **Authoritative CFG transport and observation evidence**; step 7 complete and step 11 partial; explicit-target allocation/resource characterization remains |
-| 2026-08-07 | Windows Server 2025 build 26100 | W-036 passes 1/1 with JIT disabled; ordinary `Integer.parseInt(String)` dispatch hits its exact current registered boot-OAT RX entry PC once, with zero unrelated single-step exceptions | **Authoritative representative ordinary-dispatch evidence**; step 10 remains partial only for relocation, fault, GC/root, exception, and fatal-walk breadth; see [`docs/history/windows_x64_w036_result.md`](docs/history/windows_x64_w036_result.md) |
+| 2026-08-07 | Windows Server 2025 build 26100 | W-036 passes 1/1 with JIT disabled; ordinary `Integer.parseInt(String)` dispatch hits its exact current registered boot-OAT RX entry PC once, with zero unrelated single-step exceptions | **Authoritative representative ordinary-dispatch evidence**; step 10 remains partial only for relocation, fault, GC/root, exception, and fatal-walk breadth; see [`docs/evidence/windows_x64_w036_result.md`](docs/evidence/windows_x64_w036_result.md) |
 | 2026-08-07 | Windows Server 2025 build 26100 affected-stage regression plus fresh agent01 Linux regression | W-030 passes 2/2, W-031 passes 1/1, W-032 passes 3/3, and W-036 passes 1/1 against a fresh path-sensitive cache set; the Python suite passes 225/225, full Linux build/boot generation passes, and Linux catalog passes 15/15 | **7/7 native regression PASS** after preserving boot-AOT entrypoints; loading, unwind, CFG observation/corruption/layout, ordinary dispatch, and the shared Linux baseline remain compatible |
-| 2026-08-07 | Windows Server 2025 build 26100 | W-037 passes 1/1 in 1.29 s; an ordinary null `Arrays.sort(int[])` call under a nonzero 64-KiB-aligned image/OAT relocation produces exactly one registered boot-OAT access violation recovered as `NullPointerException`, and one non-null BSS root remains identical through eight completed explicit collections | **Authoritative focused relocation/fault/root evidence**; at this pre-W-038 checkpoint, step 10 still lacked broader exception/fatal walking and variants outside the focused case; see [`docs/history/windows_x64_w037_result.md`](docs/history/windows_x64_w037_result.md) |
+| 2026-08-07 | Windows Server 2025 build 26100 | W-037 passes 1/1 in 1.29 s; an ordinary null `Arrays.sort(int[])` call under a nonzero 64-KiB-aligned image/OAT relocation produces exactly one registered boot-OAT access violation recovered as `NullPointerException`, and one non-null BSS root remains identical through eight completed explicit collections | **Authoritative focused relocation/fault/root evidence**; at this pre-W-038 checkpoint, step 10 still lacked broader exception/fatal walking and variants outside the focused case; see [`docs/evidence/windows_x64_w037_result.md`](docs/evidence/windows_x64_w037_result.md) |
 | 2026-08-07 | Windows Server 2025 build 26100 affected-stage regression plus fresh agent01 Linux regression | W-030 passes 2/2, W-031 passes 1/1, W-032 passes 3/3, W-036 passes 1/1, and W-037 passes 1/1 in 1.28 s against a fresh cache set; the Python suite passes 227/227, full Linux build/boot generation passes, and Linux catalog passes 15/15 | **8/8 native regression PASS**; the initial and final W-037 generations observe distinct valid relocation deltas and cache bytes while loading, unwind, CFG, dispatch, fault recovery, root survival, and the shared Linux baseline remain compatible |
-| 2026-08-07 | Windows Server 2025 build 26100 | W-038 passes 1/1 in 2.47 s: the explicit managed exception retains its registered boot-OAT entrypoint and names the target in its Java trace; the fatal child unwinds through the exact armed boot-OAT frame, reaches ART's UEF, and creates one valid 1,207,378-byte `MDMP` | **Authoritative managed-exception/fatal-walk evidence**; this closes that listed step-6/step-10 gap while both steps remain partial for their other stated breadth; see [`docs/history/windows_x64_w038_result.md`](docs/history/windows_x64_w038_result.md) |
+| 2026-08-07 | Windows Server 2025 build 26100 | W-038 passes 1/1 in 2.47 s: the explicit managed exception retains its registered boot-OAT entrypoint and names the target in its Java trace; the fatal child unwinds through the exact armed boot-OAT frame, reaches ART's UEF, and creates one valid 1,207,378-byte `MDMP` | **Authoritative managed-exception/fatal-walk evidence**; this closes that listed step-6/step-10 gap while both steps remain partial for their other stated breadth; see [`docs/evidence/windows_x64_w038_result.md`](docs/evidence/windows_x64_w038_result.md) |
 | 2026-08-07 | Windows Server 2025 build 26100 affected-stage regression | W-030 passes 2/2, W-031 passes 1/1, W-032 passes 3/3, W-036 passes 1/1, W-037 passes 1/1, and W-038 passes 1/1; the enhanced W-010 adapter structural audit separately passes 8/8 | **9/9 boot-OAT regression PASS** with all 187 nterp compiled-invoke adapter records audited; loading, unwind, CFG, dispatch, fault/root, managed-exception, and fatal-walk behavior remain compatible |
 | 2026-08-07 | Fresh agent01 Linux regression | Focused Python passes 10/10; the full host/bp2cmake suite passes 320/320; Linux configure audits 2,090 compile commands, 2,174 Ninja commands, and 33 product links; full build/boot generation and the 15/15 Linux catalog pass; x86-64 mterp generation succeeds | Shared nterp/runtime and catalog changes retain the Linux baseline; stale case-inventory counts and missing adjacent AOT result records are corrected |
 
