@@ -36,10 +36,14 @@ This observation result does not claim fine-grained target enforcement or
 outgoing quick-code CFG instrumentation. The supported Windows product remains
 imageless nterp/JIT while this experimental track is incomplete. Progress and
 evidence are tracked in
-[`win32_aot_oat_tracker.md`](win32_aot_oat_tracker.md). The
-separately gated OAT-2 topology is now specified in
-[`win32_aot_oat2.md`](win32_aot_oat2.md); it reuses the current cache formats
-but is not implemented or required by OAT-1 bring-up. The
+[`win32_aot_oat_tracker.md`](win32_aot_oat_tracker.md). The OAT-2 topology
+specified below is an unselected replacement candidate, not a second product
+mode. OAT-1 remains the implemented, low-divergence baseline. W-033 is a
+measurement and architecture-decision gate; W-034/W-035 proceed only if the
+candidate shows a material benefit that justifies its additional ownership
+and mapping complexity. The final product has one executable Windows OAT
+loader, and adoption of OAT-2 requires removal of the superseded OAT-1
+executable path. The
 accepted native result is
 [`docs/history/windows_x64_w028_result.md`](docs/history/windows_x64_w028_result.md).
 The accepted W-029 preflight is
@@ -108,17 +112,17 @@ See "Design review findings".
    path; an uncompressed image cannot replace the already committed Windows
    boot reservation with a file view. Linux boot generation remains
    uncompressed.
-6. AOT unwind is required for usable Windows stack walking. CFG has two
-   deliberately separate modes. Early bring-up defaults to observation mode,
-   which records policy and proves real indirect OAT calls without changing
-   target state. A later explicit-target mode consumes the independently
-   versioned `.oat_cfg.windows` target list. That mode is not an early blocker
-   and cannot be enabled until W-033 proves the selected invalid-by-default
-   OAT-2 paging-section view sequence. OAT-1 remains observation-only.
-7. Application OAT, successful-load unloading, OAT-2 implementation, and
-   cache/adversarial-input security hardening are outside the early OAT-1
-   bring-up scope. Security-sensitive product enablement requires a later
-   review.
+6. AOT unwind is required for usable Windows stack walking. Early CFG bring-up
+   is observation-only: it records policy and proves real indirect OAT calls
+   without changing target state. Fine-grained explicit-target enforcement is
+   later security work, not a current usability blocker. If it is revisited,
+   it consumes the independently versioned `.oat_cfg.windows` target list and
+   requires W-033 to prove an invalid-by-default allocation sequence. OAT-1
+   remains observation-only.
+7. Application OAT, successful-load unloading, evaluation or adoption of the
+   OAT-2 replacement candidate, and cache/adversarial-input security hardening
+   are outside the early OAT-1 bring-up scope. Security-sensitive product
+   enablement requires a later review.
 8. The full Bionic linker, `soinfo`, dependency, relocation, namespace, TLS,
    constructor, and symbol-interposition machinery remain rejected. Reuse the
    existing ART ELF reader first; copy selected Bionic algorithms only if a
@@ -434,10 +438,11 @@ a general ELF DSO loader.
   constructors/destructors, symbol interposition, or namespaces.
 - Application OAT, application images, duplicate-instance/class-unloading
   semantics, and successful boot-OAT unloading in the initial milestone.
-- OAT-2 implementation or direct disk-backed/cross-process cache sharing in
-  the initial OAT-1 milestone.
+- OAT-2 replacement or direct disk-backed/cross-process cache sharing in the
+  initial OAT-1 milestone.
 - Cache threat modeling, hostile-input hardening, Authenticode treatment, and
   debugger/profiler behavior equivalent to a DLL in early bring-up.
+- Antivirus interoperability, behavior characterization, and acceptance gates.
 - `ProhibitDynamicCode`/ACG compatibility or policy bypasses.
 - XFG, CFG export suppression, strict CFG policy, and fine-grained CFG
   enforcement as an early support requirement.
@@ -740,35 +745,361 @@ Costs:
 These costs are accepted for bring-up. Measure startup and memory before
 expanding the scope.
 
-### Designed dual-view OAT-2 work
+### OAT-2 replacement candidate
 
-[`win32_aot_oat2.md`](win32_aot_oat2.md) now specifies OAT-2 in detail. OAT-2
-is a Windows loader/address-space topology, not an on-disk OAT version. It
-retains the current ELF/OAT/VDEX/image formats, Linux ELF identity, Windows
-64-KiB artifact alignment, and Windows metadata sections.
+Status: detailed replacement-candidate design, not selected or implemented
+(2026-08-07).
 
-The selected topology reserves the complete boot image/OAT span as one
-placeholder at one relocation delta, splits exact 64-KiB protection groups,
-and backs the combined span with one unnamed paging section. Exact primary R,
-RW, and RX views replace their placeholders. One temporary full-span RW/NX
-alias populates the backing and is removed before publication; gaps remain
-inaccessible placeholders. Code receives RX plus invalid CFG-target state in
-its initial `MapViewOfFile3()` call and never becomes writable or changes
-protection. Exact serialized targets are activated only after population,
-relocation, validation, cache flush, and alias removal.
+OAT-2 is an evaluation name for a Windows loader/address-space topology, not
+an on-disk OAT version, a public mode, or a second supported implementation.
+It retains the current ELF/OAT/VDEX/image formats, Linux ELF identity, Windows
+64-KiB artifact alignment, shared OAT version, section-local Windows metadata
+versions/checksums, and path-sensitive cache-set contract.
 
-This supersedes the earlier idea of independently mapping disk-backed OAT
-segments. The paging-section design keeps one backing object and one address
-translation while avoiding direct-view/COW/VDEX ownership complexity. It does
-not claim cross-process sharing.
+The product goal is one efficient Windows AOT/OAT path with the smallest
+practical code and semantic divergence from Linux ART. The implemented OAT-1
+private-copy path is the baseline and current candidate because it reuses the
+existing ART reservation and `ElfOatFile` flow. OAT-2 may replace it only if
+native measurements demonstrate a material runtime/resource benefit or a
+required semantic property whose value exceeds the extra placeholder,
+paging-section, alias, owner-ledger, and rollback machinery.
 
-The next W-033 allocation gate must prove the composed
-`MapViewOfFile3(MEM_REPLACE_PLACEHOLDER, PAGE_EXECUTE_READ |
-PAGE_TARGETS_INVALID)` behavior, exact target activation, omitted-target
-failure, no W+X, and complete placeholder rollback on native Windows. W-034
-then builds the synthetic owner/ledger, and W-035 integrates the selected
-single-component boot set. OAT-2 remains optional and cannot complicate or
-silently replace accepted OAT-1 observation behavior.
+Fine-grained invalid-by-default CFG is outside the early bring-up security
+scope and is not, by itself, sufficient reason to adopt OAT-2. The candidate
+currently still copies OAT/VDEX bytes, uses full-span `SEC_COMMIT`, creates an
+additional construction alias, and provides no disk-backed cross-process
+sharing. It therefore has no presumed efficiency advantage over OAT-1.
+
+The final source tree must not retain an OAT-1/OAT-2 runtime selector. If the
+candidate is rejected, keep OAT-1 and archive the experiment. If it is
+accepted, replace the OAT-1 executable topology and delete its superseded
+construction branches and product tests before the Windows boot-OAT work can
+be called complete. A narrow private-copy operation may remain for
+validation-only opens only if it is demonstrably the smallest way to preserve
+ART's non-executable validation contract; it must not be selectable as an
+alternate executable loader.
+
+#### Candidate topology
+
+The candidate retains the current cache set:
+
+```text
+boot.art                         LZ4 ART image
+boot.oat                         ordinary ART ELF64 OAT
+boot.vdex                        ordinary matching VDEX
+.oat_unwind.windows              Windows-only unwind transport
+.oat_cfg.windows                 Windows-only CFG target transport
+```
+
+Its proposed address-space layout is:
+
+```text
+one combined boot placeholder at the selected relocation delta
+  -> split into 64-KiB primary protection groups and inaccessible gaps
+  -> one unnamed pagefile-backed section for the complete combined span
+  -> one temporary, unrestricted-address RW/NX construction alias
+  -> exact primary section views replacing mapped placeholders:
+       image mutable groups       RW, later reduced where required
+       image immutable groups     R
+       OAT read-only groups       R
+       OAT code groups            RX + invalid CFG targets at map creation
+       OAT mutable/VDEX groups    RW, later reduced where required
+       padding/gaps               untouched PAGE_NOACCESS placeholders
+  -> populate and relocate through non-executable writable addresses
+  -> unmap the construction alias
+  -> activate exactly the serialized CFG targets
+  -> register unwind and publish the complete boot set
+```
+
+One paging section keeps the candidate to one backing object and one address
+translation. Exact primary views prevent non-code pages from becoming
+executable. The temporary alias is a construction capability only and must not
+survive publication. OAT-2 copies checked OAT and VDEX bytes into paging-section
+backing; it does not directly map `boot.oat` and does not provide cross-process
+cache sharing.
+
+The bounded evaluation is Windows x64, one boot-image component, the existing
+Windows 10 version-1803-or-later API baseline, and the existing version-1
+Windows CFG/unwind metadata. Application OAT, duplicate logical instances,
+successful-load unload, outgoing quick-code CFG instrumentation, XFG, ACG,
+security certification, and other ISAs remain outside it.
+
+#### Windows API contract
+
+| Operation | Required API and contract |
+|---|---|
+| Reserve combined address space | `VirtualAlloc2(MEM_RESERVE | MEM_RESERVE_PLACEHOLDER, PAGE_NOACCESS)` |
+| Split a placeholder | `VirtualFree(MEM_RELEASE | MEM_PRESERVE_PLACEHOLDER)` at checked 64-KiB boundaries |
+| Create coherent backing | Unnamed `CreateFileMappingW(INVALID_HANDLE_VALUE, PAGE_EXECUTE_READWRITE)` paging section |
+| Create construction alias | `MapViewOfFile3`, section offset zero, full span, `PAGE_READWRITE`, no execute permission |
+| Install primary groups | `MapViewOfFile3(MEM_REPLACE_PLACEHOLDER)` with exact base, placeholder size, aligned section offset, and group protection |
+| Restore a mapped group | `UnmapViewOfFile2(MEM_PRESERVE_PLACEHOLDER)` |
+| Release/merge placeholders | `VirtualFree(MEM_RELEASE)` or `MEM_RELEASE | MEM_COALESCE_PLACEHOLDERS` on exact recorded ranges |
+| Activate CFG entries | `SetProcessValidCallTargets()` with ascending 16-byte-aligned offsets |
+
+Placeholder replacement requires the view base and size to match the
+placeholder exactly. Section offsets remain 64-KiB aligned and view sizes are
+4-KiB page multiples, so each initial protection group begins at a 64-KiB
+boundary and extends to a nonoverlapping placeholder boundary.
+
+The candidate code protection is:
+
+```cpp
+PAGE_EXECUTE_READ | PAGE_TARGETS_INVALID
+```
+
+`PAGE_TARGETS_INVALID` is not passed to `CreateFileMappingW` and is not used
+with `VirtualProtect()`. `MapViewOfFile3` accepts a desired page protection but
+does not explicitly enumerate this modifier. W-033 must therefore prove the
+exact composition on the supported SDK and native OS. Failure rejects this
+candidate sequence; it does not authorize `PAGE_TARGETS_NO_UPDATE`, W+X, or a
+second product loader.
+
+#### Layout preflight and placement
+
+OAT-2 adds no on-disk mode bit. A read-only preflight reuses the existing
+ELF/OAT/VDEX/image parsers and constructs one immutable
+`WindowsBootViewPlan` before address-space mutation. It requires:
+
+1. one selected boot component and relocation delta for image and OAT;
+2. the current Windows ELF profile, 64-KiB `PT_LOAD` alignment, and
+   file/virtual congruence;
+3. sorted, nonoverlapping R, RX, and RW ranges with no W+X or conflicting
+   shared 4-KiB page;
+4. checked image, OAT, VDEX, BSS, `oatdex`, relro, unwind, and CFG ranges;
+5. 64-KiB primary-group starts, section offsets, and placeholder splits;
+6. page-rounded mapped sizes that do not overlap the next group;
+7. explicit gaps rather than permissions inherited from a neighboring view;
+8. a complete `.oat_cfg.windows` table when evaluating explicit targets; and
+9. checked signed/unsigned offsets and relocation representability.
+
+Adjacent ranges may be coalesced only when construction protection, final
+protection, ownership role, and CFG role all match. RX is never coalesced with
+image data, metadata, a gap, or writable data. Program headers and the ART
+image layout remain mapping authority; section headers do not gain that role.
+
+The current writers should remain unchanged. If a real boundary is not
+representable, only Windows-only padding behind the existing artifact-alignment
+guard may be considered, with unchanged shared versions and a Linux byte-layout
+regression.
+
+OAT-2 would replace the ordinary combined boot reservation, so the source-level
+architecture decision occurs before `ImageSpace` reserves the boot span. A
+relocatable load uses one checked placeholder span and existing low/high bounds;
+an exact load additionally requires the requested and returned bases to match.
+All placeholder replacement calls use exact recorded addresses, never hints.
+
+#### Mapping and population transaction
+
+The proposed sequence is:
+
+```cpp
+plan = PreflightBootSet(image, oat, vdex, cfg_policy);
+placeholder = ReservePlaceholder(plan.base_policy, plan.span);
+SplitPlaceholder(placeholder, plan.boundaries);
+
+section = CreatePagefileSection(plan.span, PAGE_EXECUTE_READWRITE);
+alias = MapWholeSection(section, PAGE_READWRITE);
+
+for (group : plan.primary_groups) {
+  DWORD protection = group.is_code
+      ? PAGE_EXECUTE_READ | PAGE_TARGETS_INVALID
+      : group.initial_protection;
+  group.primary = ReplaceExactPlaceholder(
+      section, plan.base + group.offset, group.offset, group.size, protection);
+}
+
+PopulateImage(alias, plan);
+PopulateElfLoadSegments(alias, plan);
+PopulateVdex(alias, plan);
+RelocateAndValidateImageAndOat(plan);
+ReduceMutablePrimaryProtections(plan);
+FlushInstructionCache(plan.code_groups);
+VerifyVirtualLayout(plan);
+
+UnmapConstructionAlias(alias);
+CloseHandle(section);
+ActivateCfgTargets(plan);
+RegisterAndVerifyUnwind(plan);
+PublishBootSet(plan);
+```
+
+Mandatory invariants are:
+
+- primary code is RX and invalid-by-default in its first mapping operation;
+- primary code is never writable and never receives `VirtualProtect()`;
+- the construction alias is always RW/NX and is the only code-copy address;
+- immutable primary pages are populated through the alias;
+- mutable image/relro pages may only lose permissions;
+- padding and section tails remain zero or inaccessible as planned;
+- no code/root/entrypoint is published while the alias remains mapped; and
+- alias removal is required before CFG activation.
+
+The initial candidate uses `SEC_COMMIT` for the complete combined span. The
+views share backing, but full-span commit, alias page tables, and working-set
+costs remain real. `SEC_RESERVE` and demand commit require a separate design
+and are not assumed optimizations.
+
+The existing program-header walk remains authoritative for load bias, file
+ranges, zero-fill tails, segment order, symbols, and OAT fields. It writes
+checked bytes through:
+
+```text
+alias_address = alias_base + (primary_address - primary_base)
+```
+
+`ComputeFields -> LoadVdex -> Setup` remains unchanged logically. VDEX is
+copied into the translated `oatdex` aperture and returned as a non-owning
+primary-address slice of the combined owner. The first trial may retain current
+image relocation writes on RW/NX primary image pages; no executable primary
+page may be writable.
+
+#### Integration boundary
+
+If the replacement trial is authorized, keep Windows-specific ownership in one
+boot-only helper rather than generalizing `MemMap`:
+
+| Surface | Candidate responsibility |
+|---|---|
+| `ImageSpace::Loader` / boot layout | Invoke the selected single architecture before reservation and publish only a complete transaction |
+| Windows boot mapping helper | Own placeholder splitting, section/alias/views, translation, protection checks, ledger, and rollback |
+| `ElfFileImpl::Load()` Windows branch | Reuse the program-header walk and direct checked bytes to the owner's writable translation |
+| `OatFileBase` / `ElfOatFile` | Preserve `ComputeFields -> LoadVdex -> Setup` and hold non-owning combined-owner slices |
+| VDEX Windows helper | Populate translated `oatdex` and preserve the primary-address contract |
+| Windows CFG/unwind code | Reuse the existing version-1 parsers and unwind owner; do not fork formats or validators |
+| OAT/image writers | No initial change; only measured Windows alignment padding may be considered |
+
+The helper exposes semantic operations such as `ReserveAndMap`,
+`WritableAliasFor`, `PrimarySlice`, `RemoveConstructionAlias`,
+`ActivateCfg`, `RegisterUnwind`, `Publish`, and `Rollback`, not raw handles.
+Construction runs before mutators, compilers, roots, code ranges, or
+entrypoints can observe it.
+
+#### CFG, unwind, and publication
+
+For the candidate, exact CFG targets are grouped by containing RX view and
+translated from checked `oatdata`-relative offsets to view-relative offsets.
+Each batch is ascending, unique, aligned as required by the target ISA, and
+contains only `CFG_CALL_TARGET_VALID`. No image, metadata, padding,
+trampoline-internal, or construction-alias address is submitted. A guarded PE
+caller must pass for selected quick/JNI targets while an omitted aligned target
+fails in a disposable child.
+
+This affects only CFG-instrumented indirect call sites. It does not instrument
+outgoing generated-code calls and does not imply XFG, ACG, strict-CFG, or
+security-hardening support.
+
+Publication order is:
+
+```text
+cache files pinned and preflight complete
+  -> placeholder and primary views complete
+  -> image/OAT/VDEX populated and cross-validated
+  -> relocation and final non-code protections complete
+  -> code flushed and construction alias removed
+  -> exact CFG targets activated
+  -> unwind table registered and sampled
+  -> roots, code ranges, and entrypoints published
+```
+
+The accepted boot set remains mapped for process lifetime. Successful-load
+unload is out of scope. An unexpected `RtlDeleteFunctionTable()` failure remains
+a runtime invariant failure but does not block early implementation work.
+
+#### Ownership and rollback
+
+A candidate `WindowsBootSectionOwner` records the combined range, relocation
+delta, section handle, construction alias, ordered primary views, remaining
+placeholders, per-view protection/CFG state, unwind owner, and publication
+state. Every successful acquisition appends one record; cleanup reverses only
+recorded facts.
+
+Unpublished rollback unregisters unwind, removes the alias, unmaps primary
+views in reverse order, releases exact remaining placeholders, closes the
+section, and discards all non-owning ART slices. It never calls `VirtualFree`
+on a section view, unmaps an interior slice, infers ownership from
+`VirtualQuery`, or attempts the superseded executable loader in the same
+process. If a mapped group cannot be unmapped by either the preserve-placeholder
+or ordinary operation, the process has a fatal mapping invariant rather than a
+reusable range.
+
+Fault injection covers every split, alias/view map, population range,
+protection change, cache flush, CFG batch, unwind registration, and
+prepublication validation. Every child must finish without a published
+entrypoint, owned live view/handle, stale CFG target, or contaminated reusable
+address.
+
+Expected missing, stale, wrong-target, and cross-artifact preflight failures
+select the reviewed whole-transaction imageless fallback before mutation. A
+later construction failure may select imageless startup only after complete
+rollback. Product selection remains boot AOT versus imageless startup, never
+OAT-1 versus OAT-2.
+
+#### Measurements and architecture decision
+
+W-033 is a decision gate, not an automatic commitment to W-034/W-035. Compare
+the candidate with the current OAT-1 baseline and imageless startup using the
+same cache generation and workload:
+
+| Quantity | Required breakdown |
+|---|---|
+| ART divergence | Changed common/Windows lines, branches, helper types, owners, tests, and altered Linux control flow |
+| Reserved address space | Primary span, mapped bytes, gap placeholders, alias span |
+| Commit charge | Before section creation; after creation, both views, population, and alias removal |
+| Working set | Private/shared image, OAT, VDEX, page tables, and validation-only peak |
+| Startup | Preflight, split/map, copy/decompression, relocation, CFG, unwind, and total |
+| Layout/resources | Payload/padding bytes, group/view/handle count, success and failure lifetime |
+| Semantics | Parser/transaction reuse, fallback behavior, publication order, and Linux observable changes |
+
+The decision presumption favors OAT-1 because it is implemented and closer to
+Linux ART's ownership/control flow. W-033 may authorize W-034 only if the API
+works and measurements identify a plausible material efficiency benefit or a
+required semantic benefit. Fine-grained CFG alone does not meet that bar for
+early bring-up. W-034 may authorize W-035 only if its code-size and rollback
+complexity remain proportionate. W-035 makes the final comparison:
+
+- if OAT-2 is rejected, remove trial integration and retain OAT-1;
+- if OAT-2 is selected, remove the OAT-1 executable construction path and all
+  product selection between them; and
+- in either result, preserve the common ELF/OAT/VDEX parsers and transaction
+  flow and leave Linux format and behavior unchanged.
+
+#### Conditional gates
+
+**W-033: allocation semantics and decision evidence**
+
+- prove or reject placeholder-replacing `MapViewOfFile3` with RX-invalid code;
+- prove exact replacement, alias coherence, target activation, omitted-target
+  failure, no W+X, and complete disposable-child rollback;
+- compare `SEC_COMMIT` reservation, commit, page-table, view, and startup costs
+  with the existing private-reservation and JIT evidence; and
+- record an explicit stop/proceed decision against the single-loader,
+  low-divergence goal.
+
+**W-034: synthetic candidate owner, only after a proceed decision**
+
+- implement the owner/view plan behind Windows-only guards;
+- construct R/RW/RX/gap views and one alias from one section;
+- populate a synthetic plan, remove the alias, activate targets, register
+  unwind, and publish only after all steps;
+- fault-inject every acquisition and record source/test divergence; and
+- stop before ART integration unless the candidate still justifies replacement.
+
+**W-035: replacement trial, only after W-034 acceptance**
+
+- integrate one component while reusing existing parsers/checksums;
+- pass the real LZ4 boot image, quick/JNI, target omission, unwind,
+  mismatch/relocation, and rollback gates;
+- compare OAT-1, candidate, and imageless runtime/resource measurements; and
+- select one architecture, then remove the losing executable path before
+  completion.
+
+Candidate adoption remains blocked until the Windows API composition, 64-KiB
+group representability, `ImageSpace` ownership, rollback, material benefit,
+and acceptable source/semantic divergence are all proven. Debugger presentation
+and startup variance are measured risks. Application OAT, unloading, outgoing
+quick-code CFG instrumentation, and security hardening do not block the current
+boot-only baseline or the W-033 decision.
 
 ### Boot placement and lifetime
 
@@ -1695,8 +2026,9 @@ The first implementation is deliberately split as follows:
 2. **Explicit-target feasibility:** separately characterize whether a
    documented invalid-by-default, no-W+X allocation sequence can compose with
    the boot reservation. This experiment cannot enable a product mode.
-3. **Explicit-target product mode:** only after the feasibility result and a
-   new review, use the serialized list to restrict incoming guarded calls.
+3. **Deferred explicit-target enforcement:** only if later security scope
+   requires it, and only after feasibility and architecture review, use the
+   serialized list to restrict incoming guarded calls.
 
 This boundary keeps observation useful for early bring-up without describing
 default-valid executable pages as fine-grained enforcement.
@@ -1977,15 +2309,15 @@ potential CFG violation in a disposable child process:
 | Current OAT-1 RW/NX population then ordinary RX | Confirm the documented default-valid behavior and current usability | Observation only |
 | RW/NX population then RX plus `PAGE_TARGETS_NO_UPDATE` | Characterize native behavior without assuming that non-executable pages own a useful invalid bitmap | No enablement from an empirical pass alone |
 | Allocate/commit RX plus `PAGE_TARGETS_INVALID` | Prove exact target activation and omitted-target fast-fail independently of artifact loading | Does not solve how code is populated without W+X |
-| Placeholder-replacing paging-section RX view created with `PAGE_TARGETS_INVALID` plus one RW/NX construction alias | Prove the selected OAT-2 exact-view composition and activate only serialized targets | W-033 gate for the detailed OAT-2 design, never an OAT-1 patch |
+| Placeholder-replacing paging-section RX view created with `PAGE_TARGETS_INVALID` plus one RW/NX construction alias | Prove the candidate OAT-2 exact-view composition and activate only serialized targets | W-033 characterization and architecture-decision evidence, never an OAT-1 patch |
 
 An explicit-mode decision also has to occur before allocation/population;
 `PostSetup()` and a late CFG parser cannot retroactively establish
 the required page state. Unless the probe finds a documented OAT-1-compatible
-sequence, explicit enforcement requires the separately reviewed OAT-2
-dual-view/placeholder design. Until then, do not enable explicit-target mode
-or claim that OAT-1 enforces the serialized allow-list. Observation remains
-usable and non-blocking.
+sequence, explicit enforcement requires the OAT-2 replacement-candidate
+dual-view/placeholder design above. Until then, do not enable explicit-target
+mode or claim that OAT-1 enforces the serialized allow-list. Observation
+remains usable and non-blocking.
 
 CFG has no table-registration handle and no unregister operation analogous to
 `RtlDeleteFunctionTable()`. Target state belongs to the virtual-memory
@@ -2168,9 +2500,10 @@ evidence before transport and image integration.
     boot OAT RX range and execute without JIT compilation; exercise VDEX,
     image relocation, JNI, faults, stack walking, and unwind lookup.
 11. Pass the native forced-CFG observation-mode gate and record OAT-1 startup/
-    commit measurements. Keep explicit-target CFG, outgoing quick-code
-    call-site instrumentation, OAT-2, and security work from blocking the
-    initial milestone.
+    commit measurements. Use W-033 only to characterize and decide whether the
+    OAT-2 replacement candidate justifies further work. Keep explicit-target
+    CFG, outgoing quick-code call-site instrumentation, candidate replacement,
+    and security work from blocking the initial milestone.
 
 Review each upstream ART update against two invariants: Linux/Android ELF
 generation and loading remain unchanged, and all Windows-specific mapping and
@@ -2420,8 +2753,8 @@ additionally depends on an unresolved invalid-by-default allocation sequence.
 CFG explicit
 enforcement, teardown recovery from a failed function-table deletion,
 security hardening,
-application OAT, and OAT-2 do not block the initial boot-only observation-mode
-milestone.
+application OAT, and the OAT-2 replacement study do not block the initial
+boot-only observation-mode milestone.
 
 ## Publication, rollback, and lifetime
 
@@ -2588,6 +2921,7 @@ tool policy are deferred.
 | Unwind predicate narrows the existing Windows condition | Medium | Preserve the semantic union of Windows-host and Windows-target compilation; test both even if a shared constexpr replaces the current preprocessor spelling |
 | `kDynamicSymbolCount` grows implicitly with the enum | Medium | It derives from `DynamicSymbol::kLast`; append Windows-only values after `kLast`, `static_assert` the base count, reserve from writer mode at `Start()`, and test Linux byte identity |
 | Upstream divergence | High | Reuse `ElfOatFile`, `ElfFile`, and `OatFileBase`; conditionally gate target alignment, unwind, and CFG additions so Linux output is unchanged |
+| Permanent dual Windows executable loaders | Critical | Reject runtime OAT-1/OAT-2 selection; retain OAT-1 if the candidate is not materially better, or remove the OAT-1 executable construction path if OAT-2 replaces it |
 
 The aggregate early-bring-up risk is medium/high. Reusing ART's writer,
 offsets, reservation, load bias, BSS, anchors, and companion artifacts limits
@@ -2712,12 +3046,14 @@ semantics; Wine is structural only.
     `GetOatMethodQuickCode()` as proof that startup dispatch retained that body;
     current startup upgrades many eligible entrypoints to nterp.
 11. Retain W-032's passing forced-CFG observation through a verified guarded
-    PE caller. Run the separate explicit-target allocation characterization
-    and measure OAT-1 startup, reservation, commit, padding, and working-set
-    cost. Keep explicit CFG and the designed W-033/W-034/W-035 OAT-2 packages
-    separate from the initial milestone. Defer outgoing quick-code call-site
-    instrumentation, application OAT, unloading, cache security,
-    hostile-input hardening, and rich tooling integration.
+    PE caller. W-033 compares the private-copy baseline with the placeholder
+    candidate and records an explicit architecture decision using startup,
+    reservation, commit, working set, source size, ownership, rollback, and
+    Linux-divergence evidence. Do not proceed automatically to W-034/W-035.
+    Any final integration must contain one executable loader and remove the
+    losing path. Defer outgoing quick-code call-site instrumentation,
+    application OAT, unloading, cache security, hostile-input hardening, and
+    rich tooling integration.
 
 ## Primary references
 
@@ -2776,7 +3112,6 @@ Bionic baseline:
 
 Windows APIs:
 
-- [Detailed OAT-2 mapping design](win32_aot_oat2.md)
 - [PE/COFF machine types](https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#machine-types)
 - [CreateFileMappingW](https://learn.microsoft.com/windows/win32/api/memoryapi/nf-memoryapi-createfilemappingw)
 - [MapViewOfFile](https://learn.microsoft.com/windows/win32/api/memoryapi/nf-memoryapi-mapviewoffile)

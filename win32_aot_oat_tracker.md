@@ -125,17 +125,17 @@ instrument outgoing indirect branches in generated quick code. The accepted
 record is
 [`docs/history/windows_x64_w032_result.md`](docs/history/windows_x64_w032_result.md).
 
-OAT-2 is now `DESIGNED`, not implemented. The detailed design is
-[`win32_aot_oat2.md`](win32_aot_oat2.md). It does not change the shared OAT
-version or Windows cache bytes. It replaces the executable boot transaction's
-ordinary combined reservation with one placeholder-partitioned,
+The OAT-2 replacement candidate is `DESIGNED`, not selected or implemented.
+Its design is merged into [`win32_aot_oat.md`](win32_aot_oat.md). It does not
+change the shared OAT version or Windows cache bytes. It would replace the
+executable boot transaction with one placeholder-partitioned,
 pagefile-section-backed image/OAT span, exact R/RW/RX primary views, and one
-temporary RW/NX construction alias. Code is created RX plus invalid CFG
-targets and never becomes writable; exact serialized targets are activated
-only after the alias is removed. W-033 must first prove the composed Windows
-API semantics. W-034 owns the synthetic mapping/rollback ledger, and W-035 is
-the first real single-component boot integration. None of those packages
-reopens completed OAT-1 or CFG-transport steps.
+temporary RW/NX construction alias. W-033 is now an allocation, efficiency,
+and divergence decision gate. W-034/W-035 are conditional, not automatic next
+steps. The product will not retain an OAT-1/OAT-2 selector: retain OAT-1 if the
+candidate is not materially better, or remove the OAT-1 executable path if the
+candidate is ultimately selected. Explicit CFG alone does not justify the
+additional loader topology during early bring-up.
 
 The earlier `runtime/oat/oat_file_test.cc` additions are a pre-dispatch loader
 characterization suite. They support sequence step 3 and do not constitute
@@ -155,7 +155,7 @@ numbered step 1 or executable Windows OAT loading.
 | 8. Boot ART/OAT/VDEX generation and staging | `COMPLETE` | W-030 exercises native `ImageWriter`, emits Windows LZ4 `boot.art` plus matching OAT/VDEX, binds the path-sensitive set with one manifest, validates hashes/identity, stages the exact single-component topology, and passes canonical startup | Retain per-generation set integrity; cross-generation byte identity is intentionally not required |
 | 9. Experimental selection and fallback | `PARTIAL` | W-030 explicitly selects the staged set, runs from package root, rejects seven launcher mismatches, and fails if ART silently enters imageless startup | Integrate a reviewed product option and exercise successful missing/stale/wrong-target/cross-artifact whole-transaction fallback |
 | 10. Real boot-OAT execution | `PARTIAL` | W-031 locates underlying managed and JNI boot-OAT bodies, validates their registered unwind entries, and passes corresponding JIT-disabled runtime calls | Prove representative ordinary dispatch PCs execute inside boot-OAT RX ranges, then cover relocation, faults, GC/roots, exceptions, and fatal stack walking on Server 2025 |
-| 11. CFG observation and OAT-1 measurements | `PARTIAL` | W-032 forces CFG on, verifies the PE guard dispatch, enters exact quick/JNI boot-OAT targets, records policy, and proves current OAT-1 default-valid usability with zero target API calls | Run W-033's invalid-by-default OAT-1/OAT-2 allocation matrix and record reservation, commit, padding, startup, and working-set measurements; W-034/W-035 OAT-2 integration, outgoing quick-code instrumentation, application OAT, unloading, and security remain separate |
+| 11. CFG observation and loader decision | `PARTIAL` | W-032 forces CFG on, verifies the PE guard dispatch, enters exact quick/JNI boot-OAT targets, records policy, and proves current OAT-1 default-valid usability with zero target API calls | Run W-033's private-copy/candidate allocation matrix; record reservation, commit, padding, startup, working set, source/ownership complexity, and Linux semantic impact; then explicitly stop or conditionally authorize W-034. No dual-loader product mode is permitted |
 
 ## Step 1 implementation record
 
@@ -441,26 +441,34 @@ diagnostic evidence; native Server 2025 is the acceptance authority.
 
 ## Immediate work queue
 
-1. Implement W-033's allocation/protection characterization. Prove or reject
-   exact placeholder replacement with `MapViewOfFile3`, an RX-invalid primary
-   paging-section view, one RW/NX alias, exact target activation,
-   omitted-target failure, and complete rollback. Do not infer OAT-1 support
-   from `PAGE_TARGETS_NO_UPDATE` or from the existing JIT gate.
-2. If W-033 passes, implement W-034's synthetic combined-view owner, mapping
-   plan, acquisition ledger, and fault-injected rollback. Do not enter real
-   `ImageSpace`/OAT integration before that owner closes cleanly.
-3. Add `.oat_unwind.windows` corruption/fallback injection, managed
-   exception/fatal stack walking, and an actual XMM-bearing boot-AOT frame
-   execution gate.
-4. Prove representative ordinary dispatch PCs execute inside boot-OAT RX
+1. Prove representative ordinary dispatch PCs execute inside boot-OAT RX
    ranges despite the current startup nterp upgrade, then extend coverage to
    relocation, faults, and GC/roots.
-5. Integrate reviewed product selection plus successful whole-transaction
-   imageless fallback and ART-level negative identity diagnostics.
-6. Promote the cross-target 16-/64-KiB artifact comparison into an automated
-   regression, close H-005, and add the two-target trampoline regression.
+2. Add `.oat_unwind.windows` corruption/fallback injection, managed
+   exception/fatal stack walking, and an actual XMM-bearing boot-AOT frame
+   execution gate.
+3. Integrate reviewed product boot-AOT selection plus successful
+   whole-transaction imageless fallback and ART-level negative identity
+   diagnostics.
+4. Measure the implemented private-copy baseline: startup stages, reservation,
+   commit, working set, padding, mapping count, and current Windows/shared ART
+   source delta. Promote the cross-target 16-/64-KiB artifact comparison into
+   an automated regression, close H-005, and add the two-target trampoline
+   regression.
+5. Only after the baseline is usable and measured, run W-033 as an isolated
+   allocation/protection and architecture-decision characterization. Prove or
+   reject exact placeholder replacement, RX-invalid primary views, RW/NX alias
+   coherence, target activation, omitted-target failure, and rollback. Compare
+   resource costs and projected code/semantic divergence with OAT-1; do not
+   infer support from `PAGE_TARGETS_NO_UPDATE` or the JIT gate.
+6. Record a stop/proceed decision after W-033. Keep OAT-1 unless the candidate
+   shows a material efficiency or required semantic benefit that justifies the
+   extra topology. Explicit CFG alone is insufficient during early bring-up.
+   Only a reviewed proceed decision authorizes W-034.
 
-Do not begin W-035 real boot integration before W-033 and W-034 pass. Do not
+Do not begin W-035 real boot integration before W-033 records a proceed
+decision and W-034 passes. A W-035 review must select one executable loader and
+remove the losing path; it must not add a runtime OAT-1/OAT-2 selector. Do not
 begin application OAT, successful-load unloading, outgoing quick-code CFG
 instrumentation, or security hardening merely to close an early boot-only
 step.
