@@ -680,7 +680,7 @@ endfunction()
 
 add_custom_target(art-tests)
 add_custom_target(art-managed-tests)
-foreach(stage w002 w003 w004 w010 w013 w014 w025 w027 w028 w029 w030 w031 w032 w036)
+foreach(stage w002 w003 w004 w010 w013 w014 w025 w027 w028 w029 w030 w031 w032 w036 w037)
     art_define_test_stage("${stage}")
 endforeach()
 
@@ -2353,6 +2353,62 @@ art_add_target_probe(
         --expect "W036BootOatDispatchProbe PASS dispatch=ordinary rx_pc=observed jit=disabled"
         --expect "main end exception=0"
         --forbid "W036_BOOT_OAT_DISPATCH_FAIL"
+        --forbid AssertionError
+        ${_art_managed_runtime_library_args}
+        --timeout 600)
+
+# W-037 directly covers the next step-10 breadth: a nonzero boot image/OAT
+# relocation delta, an implicit null fault observed inside registered boot-OAT
+# RX code and recovered as a managed exception, and an OAT BSS GC root retained
+# across forced collections.
+art_add_target_probe(
+    NAME w037aotexecutionprobe STAGE w037 TYPE SHARED EXECUTION compile-only
+    ${_art_windows_x86_64_msvc_selector}
+    SOURCES "${_art_test_cases_root}/aot-relocation-fault-gc/probe.cc"
+    LINK_LIBRARIES art
+    COMPILE_OPTIONS
+        -fno-rtti -Wno-thread-safety -Wno-unused-command-line-argument
+        -Wno-microsoft-cast -Wno-invalid-offsetof
+    COMPILE_DEFINITIONS ART_CONSUMING_LIBART
+    CONTRACTS aot boot-image relocation fault gc roots veh
+    PREFIX lib OUTPUT_NAME w037aotexecutionprobe WINDOWS_EXPORT_ALL_SYMBOLS PRODUCT_POLICY)
+art_add_target_probe(
+    NAME managed_w037_aot_execution STAGE w037 TYPE MANAGED
+    EXECUTION target-runnable TIMEOUT 1800
+    ${_art_windows_x86_64_msvc_selector}
+    SOURCES
+        "${_art_test_cases_root}/aot-relocation-fault-gc/W037BootOatRelocationFaultGcProbe.java"
+    DEPENDS
+        art-runtime-boot-image
+        w037aotexecutionprobe
+        dalvikvm
+        icu_jni
+        javacore
+        openjdk
+    CONTRACTS aot boot-image relocation fault gc roots veh runtime-load
+    OUTPUT_NAME w037aotexecutionprobe
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_windows_boot_image_runner}"
+        --target-id "${ART_TARGET_ID}"
+        --dalvikvm "$<TARGET_FILE:dalvikvm>"
+        --boot-jar "${_art_boot_jar}"
+        --app-jar "${_art_managed_root}/w037aotexecutionprobe.jar"
+        --boot-image-dir "${_art_boot_image_root}"
+        --icu-data "${_art_icu_data}"
+        --work-root "${CMAKE_CURRENT_BINARY_DIR}/results/w037-aot-execution"
+        --probe "$<TARGET_FILE:w037aotexecutionprobe>"
+        --probe-name w037aotexecutionprobe
+        --main-class W037BootOatRelocationFaultGcProbe
+        --execution-mode aot
+        --expect "W037_BOOT_OAT_EXECUTION_PASS"
+        --expect "relocation=nonzero_aligned"
+        --expect "oat=paired fault=managed_oat hits=1"
+        --expect "gc_rounds=8"
+        --expect "root_same=1 jit=disabled"
+        --expect "W037BootOatRelocationFaultGcProbe PASS relocation=observed fault=recovered gc_roots=survived jit=disabled"
+        --expect "main end exception=0"
+        --forbid "W037_BOOT_OAT_EXECUTION_FAIL"
         --forbid AssertionError
         ${_art_managed_runtime_library_args}
         --timeout 600)
