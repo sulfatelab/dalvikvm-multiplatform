@@ -708,6 +708,113 @@ def validate_windows_oat_cfg(path: Path) -> dict[str, object]:
     }
 
 
+def build_windows_oat_cfg_corruption_corpus(
+    oat_path: Path, vdex_path: Path, output_root: Path
+) -> dict[str, object]:
+    """Create semantic CFG corruptions for both ART ElfOatFile open modes."""
+    oat_path = _regular_file(oat_path)
+    vdex_path = _regular_file(vdex_path)
+    output_root = Path(os.path.abspath(output_root))
+    if output_root.is_symlink():
+        raise Dex2OatProbeError(
+            f"refusing symbolic-link CFG corruption root: {output_root}"
+        )
+    if output_root.exists():
+        if not output_root.is_dir():
+            raise Dex2OatProbeError(
+                f"CFG corruption root is not a directory: {output_root}"
+            )
+        shutil.rmtree(output_root)
+    output_root.mkdir(parents=True)
+
+    original = oat_path.read_bytes()
+    _data, _loads, _raw_sections, sections = _read_windows_boot_oat_layout(oat_path)
+    if ".oat_cfg.windows" not in sections:
+        raise Dex2OatProbeError("boot.oat is missing .oat_cfg.windows")
+    _, cfg_section = sections[".oat_cfg.windows"]
+    cfg_offset, cfg_size = cfg_section[4], cfg_section[5]
+    if cfg_size < 64 or cfg_offset + cfg_size > len(original):
+        raise Dex2OatProbeError("boot.oat has an unusable CFG mutation section")
+    header = struct.unpack_from("<4s11I", original, cfg_offset)
+    target_count = header[6]
+    targets_offset = header[7]
+    code_begin = header[8]
+    code_end = header[9]
+    if target_count < 2 or targets_offset + target_count * 8 != cfg_size:
+        raise Dex2OatProbeError("boot.oat CFG target array cannot support mutation")
+
+    def rewrite_checksum(data: bytearray) -> None:
+        struct.pack_into("<I", data, cfg_offset + 40, 0)
+        checksum = zlib.adler32(data[cfg_offset : cfg_offset + cfg_size]) & 0xFFFFFFFF
+        struct.pack_into("<I", data, cfg_offset + 40, checksum)
+
+    mutations: list[tuple[str, int, int, bool]] = [
+        ("magic", 0, original[cfg_offset] ^ 0x01, True),
+        ("version", 4, 2, True),
+        ("header-size", 8, 52, True),
+        ("target-machine", 12, 0xAA64, True),
+        ("table-flags", 16, 3, True),
+        ("target-size", 20, 12, True),
+        ("target-count", 24, 0, True),
+        ("targets-offset", 28, 52, True),
+        ("code-begin", 32, code_begin + 1, True),
+        ("code-end", 36, code_end - 1, True),
+        ("checksum", 40, header[10] ^ 0x01, False),
+        ("reserved", 44, 1, True),
+    ]
+    cases: list[str] = []
+
+    def link_vdex(name: str) -> None:
+        destination = output_root / f"{name}.vdex"
+        try:
+            os.link(vdex_path, destination)
+        except OSError:
+            shutil.copyfile(vdex_path, destination)
+
+    (output_root / "canonical.oat").write_bytes(original)
+    link_vdex("canonical")
+    for name, relative_offset, value, update_checksum in mutations:
+        data = bytearray(original)
+        if name == "magic":
+            data[cfg_offset + relative_offset] = value
+        else:
+            struct.pack_into("<I", data, cfg_offset + relative_offset, value)
+        if update_checksum:
+            rewrite_checksum(data)
+        (output_root / f"{name}.oat").write_bytes(data)
+        link_vdex(name)
+        cases.append(name)
+
+    first_entry = cfg_offset + targets_offset
+    second_entry = first_entry + 8
+    last_entry = first_entry + (target_count - 1) * 8
+    first_code_offset, first_kind = struct.unpack_from("<II", original, first_entry)
+    entry_mutations = (
+        ("entry-before-code", first_entry, code_begin - 1, first_kind),
+        ("entry-at-code-end", last_entry, code_end, 4),
+        ("entry-misaligned", first_entry, first_code_offset + 1, first_kind),
+        ("entry-duplicate", second_entry, first_code_offset, 1),
+        ("entry-zero-kind", first_entry, first_code_offset, 0),
+        ("entry-unknown-kind", first_entry, first_code_offset, 0x10),
+    )
+    for name, offset, code_offset, kind_flags in entry_mutations:
+        data = bytearray(original)
+        struct.pack_into("<II", data, offset, code_offset, kind_flags)
+        rewrite_checksum(data)
+        (output_root / f"{name}.oat").write_bytes(data)
+        link_vdex(name)
+        cases.append(name)
+
+    (output_root / "cases.txt").write_text("\n".join(cases) + "\n", encoding="ascii")
+    return {
+        "case_count": len(cases),
+        "cases": cases,
+        "canonical_open_count": 2,
+        "rejection_open_count": len(cases) * 2,
+        "total_open_count": (len(cases) + 1) * 2,
+    }
+
+
 def _validate_dynamic_symbol(
     data: bytes,
     raw_sections: list[tuple[int, ...]],

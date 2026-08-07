@@ -2219,6 +2219,19 @@ art_add_target_probe(
     CONTRACTS aot cfg runtime-load
     PREFIX lib OUTPUT_NAME w032aotcfgprobe WINDOWS_EXPORT_ALL_SYMBOLS PRODUCT_POLICY)
 art_add_target_probe(
+    NAME w032cfglayoutprobe STAGE w032 TYPE EXECUTABLE EXECUTION compile-only
+    ${_art_windows_x86_64_msvc_selector}
+    SOURCES "${_art_test_cases_root}/aot-cfg/layout_probe.cc"
+    INCLUDE_DIRS "${_art_test_repo_root}/vendor/art/runtime"
+    LINK_LIBRARIES elffile
+    COMPILE_OPTIONS
+        -fno-rtti -Wno-thread-safety -Wno-unused-command-line-argument
+        -Wno-microsoft-cast -Wno-invalid-offsetof
+    COMPILE_DEFINITIONS
+        ART_PAGE_SIZE_AGNOSTIC=1 ART_TARGET ART_TARGET_WINDOWS __LP64__=1
+    CONTRACTS aot cfg elf-layout
+    PRODUCT_POLICY)
+art_add_target_probe(
     NAME windows_w032_cfg_structure STAGE w032 TYPE GATE
     EXECUTION host-review
     ${_art_windows_x86_64_msvc_selector}
@@ -2232,6 +2245,23 @@ art_add_target_probe(
         --llvm-readobj "${ART_LLVM_READOBJ}"
         --result
             "${CMAKE_CURRENT_BINARY_DIR}/results/w032-cfg-structure/result.json")
+art_add_target_probe(
+    NAME windows_w032_cfg_layout STAGE w032 TYPE GATE
+    EXECUTION target-runnable TIMEOUT 180
+    ${_art_windows_x86_64_msvc_selector}
+    DEPENDS w032cfglayoutprobe
+    CONTRACTS aot cfg elf-layout
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_test_repo_root}/tests/support/windows/check_w032_cfg_layout.py"
+        --repo "${_art_test_repo_root}"
+        --probe "$<TARGET_FILE:w032cfglayoutprobe>"
+        --work-root
+            "${CMAKE_CURRENT_BINARY_DIR}/results/w032-cfg-layout/layouts"
+        --result
+            "${CMAKE_CURRENT_BINARY_DIR}/results/w032-cfg-layout/result.json"
+        --library-dir "${CMAKE_BINARY_DIR}"
+        --library-dir "${_art_bundle_lib}/libcxx/bin")
 art_add_target_probe(
     NAME managed_w032_aot_cfg STAGE w032 TYPE MANAGED
     EXECUTION target-runnable TIMEOUT 1800
@@ -2260,11 +2290,13 @@ art_add_target_probe(
         --probe "$<TARGET_FILE:w032aotcfgprobe>"
         --probe-name w032aotcfgprobe
         --policy-launcher "$<TARGET_FILE:windows_w025_policy_launcher>"
+        --cfg-corruption-matrix
         --main-class W032AotCfgProbe
         --execution-mode aot
         --expect "W032_CFG_TABLE_PASS machine=0x8664"
         --expect "W032_CFG_OBSERVATION_PASS cfg_enabled=1"
         --expect "guard_dispatch=verified guarded_quick=pass guarded_jni=pass target_api_calls=0"
+        --expect "W032_CFG_CORRUPTION_PASS cases=18 opens=38 validation_only=19 executable=19"
         --expect "W032AotCfgProbe PASS"
         --expect "W025_POLICY_LAUNCHER_PASS policy=cfg child_exit=0 expected=zero"
         --expect "main end exception=0"

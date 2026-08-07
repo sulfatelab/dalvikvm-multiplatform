@@ -42,6 +42,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--probe", type=Path)
     parser.add_argument("--probe-name")
     parser.add_argument("--policy-launcher", type=Path)
+    parser.add_argument("--cfg-corruption-matrix", action="store_true")
     parser.add_argument("--expect", action="append", default=[])
     parser.add_argument("--forbid", action="append", default=[])
     parser.add_argument("--timeout", type=int, default=180)
@@ -83,6 +84,13 @@ def run_gate(args: argparse.Namespace) -> Path:
 
     manifest = _validate_image_manifest(image_root, boot_jar, args.target_id)
     policy_launcher_arg = getattr(args, "policy_launcher", None)
+    cfg_corruption_requested = bool(
+        getattr(args, "cfg_corruption_matrix", False)
+    )
+    if cfg_corruption_requested and policy_launcher_arg is None:
+        raise WindowsBootImageError(
+            "--cfg-corruption-matrix requires --policy-launcher"
+        )
     windows_cfg: dict[str, object] | None = None
     cfg_marker: str | None = None
     if policy_launcher_arg is not None:
@@ -153,6 +161,22 @@ def run_gate(args: argparse.Namespace) -> Path:
             }
         )
     shutil.copyfile(image_root / "manifest.json", image_destination / "manifest.json")
+    cfg_corruption: dict[str, object] | None = None
+    if cfg_corruption_requested:
+        try:
+            cfg_corruption = (
+                run_dex2oat_no_image.build_windows_oat_cfg_corruption_corpus(
+                    image_destination
+                    / windows_aot_identity.INSTRUCTION_SET
+                    / "boot.oat",
+                    image_destination
+                    / windows_aot_identity.INSTRUCTION_SET
+                    / "boot.vdex",
+                    package_root / "cfg-corruption",
+                )
+            )
+        except run_dex2oat_no_image.Dex2OatProbeError as exc:
+            raise WindowsBootImageError(str(exc)) from exc
 
     generation_identity = windows_aot_identity.identity_from_contract_record(
         manifest["windows_aot_identity"]
@@ -203,6 +227,10 @@ def run_gate(args: argparse.Namespace) -> Path:
             "TMPDIR": str(runtime_root / "tmp"),
         }
     )
+    if cfg_corruption is not None:
+        environment["W032_CFG_CORRUPTION_ROOT"] = str(
+            package_root / "cfg-corruption"
+        )
     if os.name == "nt":
         system_root = environment.get("SystemRoot", r"C:\Windows")
         environment["PATH"] = os.pathsep.join(
@@ -249,6 +277,7 @@ def run_gate(args: argparse.Namespace) -> Path:
         "execution_mode": execution_mode,
         "cfg_policy_forced": policy_launcher is not None,
         "windows_oat_cfg": windows_cfg,
+        "windows_oat_cfg_corruption": cfg_corruption,
         "working_directory": "package",
         "actual_exit": result.returncode,
         "missing_markers": missing,

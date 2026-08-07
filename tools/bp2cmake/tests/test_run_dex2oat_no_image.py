@@ -481,6 +481,31 @@ def test_windows_cfg_validator_accepts_canonical_transport(tmp_path):
     assert result["trampoline_candidate_count"] == 7
 
 
+def test_windows_cfg_corruption_corpus_rejects_all_semantic_mutations(tmp_path):
+    oat = tmp_path / "boot.oat"
+    vdex = tmp_path / "boot.vdex"
+    output = tmp_path / "cfg-corruption"
+    oat.write_bytes(_fake_windows_boot_oat())
+    vdex.write_bytes(_fake_vdex())
+
+    record = run_dex2oat_no_image.build_windows_oat_cfg_corruption_corpus(
+        oat, vdex, output
+    )
+
+    assert record["case_count"] == 18
+    assert record["canonical_open_count"] == 2
+    assert record["rejection_open_count"] == 36
+    assert record["total_open_count"] == 38
+    assert run_dex2oat_no_image.validate_windows_oat_cfg(output / "canonical.oat")
+    cases = (output / "cases.txt").read_text(encoding="ascii").splitlines()
+    assert cases == record["cases"]
+    assert len(set(cases)) == 18
+    for name in cases:
+        assert (output / f"{name}.vdex").is_file()
+        with pytest.raises(run_dex2oat_no_image.Dex2OatProbeError):
+            run_dex2oat_no_image.validate_windows_oat_cfg(output / f"{name}.oat")
+
+
 def test_windows_cfg_validator_rejects_checksum_corruption(tmp_path):
     oat = tmp_path / "boot.oat"
     data = bytearray(_fake_windows_boot_oat())

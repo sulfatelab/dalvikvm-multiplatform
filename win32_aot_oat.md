@@ -28,8 +28,10 @@ boot-OAT RX mapping. Step 10 therefore remains partial. W-032 now implements
 `.oat_cfg.windows` emission, dynamic anchors, runtime validation and policy
 observation, plus a forced-CFG PE caller that successfully enters quick and
 compiled-JNI boot-OAT code without target-state API calls. Steps 7 and 11 are
-partial: the exhaustive two-open-mode corruption and eight-case layout
-matrices, plus the separate OAT-1 allocation/resource characterization, remain.
+now `COMPLETE` and `PARTIAL`, respectively: the 18-case corruption corpus
+passes through both real open modes and all eight production-`ElfBuilder`
+layouts pass, while the separate OAT-1 allocation/resource characterization
+remains.
 This observation result does not claim fine-grained target enforcement or
 outgoing quick-code CFG instrumentation. The supported Windows product remains
 imageless nterp/JIT while this experimental track is incomplete. Progress and
@@ -1995,8 +1997,9 @@ W-032 is the implemented bounded observation package. It does not call
 `SetProcessValidCallTargets` and cannot enable explicit-target mode. Its
 writer, transport, parser, PE policy check, forced-CFG runner, and guarded
 quick/JNI calls pass on the authoritative native host. The exhaustive
-two-open-mode corruption and eight-case layout matrices listed below remain,
-so numbered steps 7 and 11 stay partial.
+two-open-mode corruption and eight-case layout matrices listed below also pass.
+Numbered step 7 is therefore complete; step 11 remains partial because the
+separate invalid-by-default allocation/resource experiment is still open.
 
 1. Add `ShouldEmitWindowsCfg()` with the same Windows x86-64 boot-image and
    boot-image-extension predicate as unwind. Collect adjusted method targets
@@ -2027,12 +2030,14 @@ The accepted gate emits machine-readable markers with per-generation values:
 ```text
 W032_CFG_TABLE_PASS machine=0x8664 targets=<unique> quick_candidates=<n> jni_candidates=<n> trampoline_candidates=7 checksum=<hex>
 W032_CFG_OBSERVATION_PASS cfg_enabled=1 cfg_strict=<0|1> cfg_export_suppression=<0|1> guard_dispatch=verified guarded_quick=pass guarded_jni=pass target_api_calls=0
+W032_CFG_CORRUPTION_PASS cases=18 opens=38 validation_only=19 executable=19
+W032_CFG_LAYOUT_PASS cases=8 relro_cases=4 metadata_segment_cases=6 shared_metadata_segment_cases=2
 ```
 
-The accepted Server 2025 generation reported 42,657 unique targets, 42,375
-quick candidates, 280 JNI candidates, seven trampoline candidates, no thunk
-candidates, and section checksum `8a4f8dc2`. CFG was enabled, strict mode and
-export suppression were both disabled, and guarded quick/JNI execution passed.
+The accepted Server 2025 matrix generation reported 42,649 unique targets,
+42,367 quick candidates, 280 JNI candidates, seven trampoline candidates, no
+thunk candidates, and section checksum `9b1588cd`. CFG was enabled; strict mode
+and export suppression were both disabled; guarded quick/JNI execution passed.
 Full evidence is in
 [`docs/history/windows_x64_w032_result.md`](docs/history/windows_x64_w032_result.md).
 
@@ -2056,8 +2061,12 @@ W-032 requires:
   Linux/Android output;
 - a native observation-mode gate with process CFG forced on, policy recorded,
   no target API calls, a PE-audited CFG-instrumented caller, a guarded entry
-  into representative quick/JNI OAT code, real managed resolution/JNI/IMT/
-  interpreter paths, and structural coverage of every trampoline target.
+  into representative quick/JNI OAT code, and structural coverage of every
+  trampoline target.
+
+All four transport gates above pass W-032. Real resolution, IMT, interpreter,
+and normal-dispatch execution paths remain broader step-10/step-11 work; they
+do not reopen the completed section transport.
 
 The following gates are separate and do not block W-032:
 
@@ -2388,10 +2397,11 @@ ownership and protections, and rejection of silent imageless fallback on
 Server 2025. W-031 now proves the core unwind transport, registered
 managed/JNI/seven-trampoline metadata, synthetic virtual unwind, underlying
 managed/JNI body lookup, and corresponding JIT-disabled runtime calls. W-032
-now proves CFG metadata transport, forced-policy observation, and guarded
-incoming quick/JNI calls without target-state mutation. Residual risk remains
-medium/high because representative ordinary dispatch inside boot-OAT RX
-ranges, unwind/CFG negative matrices, exception/fatal walking, product
+now proves CFG metadata transport, exhaustive semantic rejection, all eight
+metadata layouts, forced-policy observation, and guarded incoming quick/JNI
+calls without target-state mutation. Residual risk remains medium/high because
+representative ordinary dispatch inside boot-OAT RX ranges, unwind negative
+matrices, exception/fatal walking, product
 selection/fallback, and full measurements remain open. Explicit CFG
 additionally depends on an unresolved invalid-by-default allocation sequence.
 CFG explicit
@@ -2668,11 +2678,12 @@ semantics; Wine is structural only.
    stronger XMM-bearing boot-AOT frame gates.
 7. Retain W-032's implemented `.oat_cfg.windows` target collection, checksum,
    conditional anchors/layout, parser, policy snapshot, and forced-CFG
-   observation gate. Complete the exhaustive two-open-mode corruption matrix
-   and eight-case metadata/data-img-rel-ro layout matrix. Separately prove
-   whether explicit-target mode can establish invalid-by-default CFG state in
-   the already committed OAT-1 reservation without W+X; this does not block
-   observation-mode bring-up.
+   observation gate, including the passing exhaustive two-open-mode corruption
+   matrix and eight-case metadata/data-img-rel-ro layout matrix. This completes
+   step 7. Separately prove whether explicit-target mode can establish
+   invalid-by-default CFG state in the already committed OAT-1 reservation
+   without W+X; this remains step-11 work and does not block observation-mode
+   bring-up.
 8. Retain W-030's per-generation manifest binding, validation, and staging for
    the matching LZ4 ART/OAT/VDEX set. Cross-generation byte identity is not an
    exit condition for these path-sensitive cache artifacts; no step-8 exit

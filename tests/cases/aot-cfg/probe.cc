@@ -3,9 +3,17 @@
 #include <jni.h>
 
 #include <cstdint>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <memory>
+#include <string>
+#include <unordered_set>
+#include <vector>
 
 #include "art_method-inl.h"
+#include "oat/oat_file.h"
 #include "scoped_thread_state_change-inl.h"
 #include "stack.h"
 
@@ -16,13 +24,27 @@ extern "C" uint64_t w032_guarded_invoke_static(art::ArtMethod *method,
 
 namespace {
 
-jboolean Fail(JNIEnv *env, const char *message) {
+jboolean Fail(JNIEnv *env, const std::string &message) {
   std::cerr << "W032_CFG_OBSERVATION_FAIL: " << message << '\n';
   jclass exception = env->FindClass("java/lang/AssertionError");
   if (exception != nullptr) {
-    env->ThrowNew(exception, message);
+    env->ThrowNew(exception, message.c_str());
   }
   return JNI_FALSE;
+}
+
+bool HasCfgDiagnostic(const std::string &message) {
+  return message.find("Windows OAT CFG") != std::string::npos ||
+         message.find(".oat_cfg.windows") != std::string::npos ||
+         message.find("oatcfgwindows") != std::string::npos;
+}
+
+bool OpenOat(const std::filesystem::path &path, bool executable,
+             std::string *error_message) {
+  std::unique_ptr<art::OatFile> oat_file(art::OatFile::Open(
+      /*zip_fd=*/-1, path.string(), path.string(), executable,
+      /*low_4gb=*/false, error_message));
+  return oat_file != nullptr;
 }
 
 bool IsRegisteredOatTarget(const void *entry, DWORD64 *image_base) {
@@ -44,6 +66,62 @@ uint64_t GuardedInvoke(art::Thread *self, art::ArtMethod *method,
 }
 
 } // namespace
+
+extern "C" __declspec(dllexport) jboolean JNICALL
+Java_W032AotCfgProbe_nativeAuditCorruption(JNIEnv *env, jclass) {
+  const char *root_value = std::getenv("W032_CFG_CORRUPTION_ROOT");
+  if (root_value == nullptr || root_value[0] == '\0') {
+    return Fail(env, "W032_CFG_CORRUPTION_ROOT is missing");
+  }
+  const std::filesystem::path root(root_value);
+  std::ifstream case_stream(root / "cases.txt");
+  if (!case_stream) {
+    return Fail(env, "cannot read the CFG corruption case list");
+  }
+
+  std::vector<std::string> cases;
+  std::unordered_set<std::string> unique_cases;
+  std::string name;
+  while (std::getline(case_stream, name)) {
+    if (!name.empty() && name.back() == '\r') {
+      name.pop_back();
+    }
+    if (name.empty() ||
+        name.find_first_not_of("abcdefghijklmnopqrstuvwxyz-") !=
+            std::string::npos ||
+        !unique_cases.insert(name).second) {
+      return Fail(env, "CFG corruption case list is malformed");
+    }
+    cases.push_back(name);
+  }
+  if (!case_stream.eof() || cases.size() != 18u) {
+    return Fail(env, "CFG corruption case list must contain 18 cases");
+  }
+
+  for (bool executable : {false, true}) {
+    std::string error_message;
+    if (!OpenOat(root / "canonical.oat", executable, &error_message)) {
+      return Fail(env, std::string("canonical CFG OAT open failed: ") +
+                           error_message);
+    }
+  }
+  for (const std::string &case_name : cases) {
+    for (bool executable : {false, true}) {
+      std::string error_message;
+      if (OpenOat(root / (case_name + ".oat"), executable, &error_message)) {
+        return Fail(env, "corrupt CFG OAT was accepted: " + case_name);
+      }
+      if (!HasCfgDiagnostic(error_message)) {
+        return Fail(env, "corrupt CFG OAT has an unrelated diagnostic: " +
+                             case_name + ": " + error_message);
+      }
+    }
+  }
+
+  std::cout << "W032_CFG_CORRUPTION_PASS cases=18 opens=38 "
+               "validation_only=19 executable=19\n";
+  return JNI_TRUE;
+}
 
 extern "C" __declspec(dllexport) jboolean JNICALL
 Java_W032AotCfgProbe_nativeAudit(JNIEnv *env, jclass, jobject reflected_quick,

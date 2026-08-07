@@ -4,8 +4,8 @@
 
 **Host:** Windows Server 2025 Datacenter Evaluation, x64, build 26100
 
-**Status:** **PASS — CFG metadata and forced-policy observation work; numbered
-steps 7 and 11 remain partial**
+**Status:** **PASS — CFG transport is complete; forced-policy observation
+works; numbered step 11 remains partial**
 
 ## Scope and conclusion
 
@@ -15,23 +15,25 @@ validates the target manifest on both OAT open paths, and a CFG-instrumented PE
 caller enters representative quick and compiled-JNI boot-OAT bodies while the
 launcher forces CFG on. The observation path never calls
 `SetProcessValidCallTargets()` and therefore does not claim fine-grained target
-enforcement.
+enforcement. The follow-up gate also rejects 18 semantic corruptions through
+real validation-only and executable `OatFile::Open()` calls and validates all
+eight production-`ElfBuilder` metadata/relro layouts.
 
 The authoritative markers were:
 
 ```text
-W032_CFG_STRUCTURE_PASS cfg_flags=2 guard_dispatch=present dynamic_anchors=2 target_api_calls=0
-W032_CFG_TABLE_PASS machine=0x8664 targets=42657 quick_candidates=42375 jni_candidates=280 trampoline_candidates=7 checksum=8a4f8dc2
+W032_CFG_STRUCTURE_PASS cfg_flags=2 guard_dispatch=present dynamic_anchors=2 runtime_open_modes=2 corruption_cases=18 target_api_calls=0
+W032_CFG_LAYOUT_PASS cases=8 relro_cases=4 metadata_segment_cases=6 shared_metadata_segment_cases=2
+W032_CFG_TABLE_PASS machine=0x8664 targets=42649 quick_candidates=42367 jni_candidates=280 trampoline_candidates=7 checksum=9b1588cd
 W032_CFG_OBSERVATION_PASS cfg_enabled=1 cfg_strict=0 cfg_export_suppression=0 guard_dispatch=verified guarded_quick=pass guarded_jni=pass target_api_calls=0
+W032_CFG_CORRUPTION_PASS cases=18 opens=38 validation_only=19 executable=19
 W032AotCfgProbe PASS
 ```
 
-The implemented transport and live observation make both numbered steps
-useful, but not complete. The exhaustive header/entry mutation matrix through
-both ART open modes and the eight-combination ELF layout matrix remain to be
-automated for step 7. The separate invalid-by-default allocation experiment,
-commit/padding/startup measurements, and any explicit-target decision remain
-for step 11.
+The implemented transport, exhaustive negative matrix, production layout
+matrix, and live observation complete numbered step 7. The separate
+invalid-by-default allocation experiment, commit/padding/startup measurements,
+and any explicit-target decision remain for step 11.
 
 ## Source identity
 
@@ -42,12 +44,11 @@ source  C:\mdvm-w028-8d3037c\src
 output  C:\mdvm-w028-8d3037c\out
 ```
 
-Its checked-in baselines were root
-`62a9783905c9ff03b7fcc6ac9e4dbe50907bf51c` and nested ART
-`ba16ea923a9156ef5cbaebfabbc1dceba069889f`. The final nested W-032
-implementation is
-`30db175a1240780c23c674e5bf29d281570becfd`; the containing root commit owns
-the runner, probe, tests, documentation, and submodule update.
+The follow-up matrix work was deployed from root baseline
+`f1aff872725a98f514a29dcd5bc0bf0c30a08003`. The final nested W-032
+implementation remains
+`30db175a1240780c23c674e5bf29d281570becfd`; this record's containing root
+commit owns the expanded runner, probes, tests, and documentation.
 
 Selected final overlay files had SHA-256:
 
@@ -56,16 +57,25 @@ vendor/art/runtime/multiplatform/windows/aot_cfg_windows.cc
 a8e5eab0423b64e4e444e1e79dce0131193c0372c9cc4d0042e1a383b4c4a608
 
 tests/cases/aot-cfg/probe.cc
-45624c38701d0f83d3528dc27a978b48c79c52e480e08f113da069477e4bf83a
+279d7355b2f990ef4736abff72297070aa98832a11329e486d52475c103325e8
+
+tests/cases/aot-cfg/layout_probe.cc
+dcc00817efd739b69a13236b851c3f6ec7826e9802a248e65269f13722459d0d
 
 tests/cases/aot-cfg/guarded_invoke_x86_64.S
 e54efc2ec8565f4dfcf53a0a6b2473a1921afe7507b7c70e7bc8a5a75fa5c705
 
 tools/run_windows_boot_image.py
-06fd27a0f66e266a6d3101befb646816a33269f5ffc66433fcf1e8dc776c0347
+44292c6d1d282330d2402df01867cabfa351ea8a48e9caf1e2b4e2df3f6f1219
+
+tools/run_dex2oat_no_image.py
+043d9dad2d071f27595132eb203b05f1c693a176a9b2ec13cefe151626e0d909
 
 tests/support/windows/check_w032_cfg_contract.py
-a8355af55fff9541bf3b338a9735641a4ea39a13a73a736844dbac199f70174f
+b9c46b017415e2411322c0c21f6bc6dffe6d82b817ca5ba454668479c4a2cf54
+
+tests/support/windows/check_w032_cfg_layout.py
+7f1c7fd338336d2b8d75b95e66cb374bb683bd8abc18463ad934ae4b2b5f2698
 ```
 
 ## Native commands and result
@@ -78,9 +88,9 @@ cmake.exe --build C:\mdvm-w028-8d3037c\out\windows-x86_64-msvc\RelWithDebInfo \
 ```
 
 The existing Ninja dependency log emitted its known `premature end of file;
-recovering` warning. The 45-action rebuild completed successfully and produced
-a fresh path-sensitive boot cache set. The authoritative tests were then run
-verbosely:
+recovering` warning. Recovery and the stage rebuild completed successfully and
+produced a fresh path-sensitive boot cache set. The authoritative tests were
+then run together:
 
 ```text
 ctest.exe \
@@ -91,15 +101,16 @@ ctest.exe \
 Result:
 
 ```text
-art.w032.windows_w032_cfg_structure  PASS  0.20 s
-art.w032.managed_w032_aot_cfg        PASS  1.39 s
-2/2 PASS
+art.w032.windows_w032_cfg_structure  PASS  0.16 s
+art.w032.windows_w032_cfg_layout     PASS  0.26 s
+art.w032.managed_w032_aot_cfg        PASS  3.21 s
+3/3 PASS
 ```
 
 Fresh agent01 regression evidence also passed:
 
 ```text
-Python bp2cmake/tool suite                         224/224 PASS
+Python bp2cmake/tool suite                         225/225 PASS
 linux-x86_64-gnu configure and target audit       PASS
   2,089 compile commands; 2,172 Ninja commands; 32 product links
 full linux-x86_64-gnu build and boot generation   PASS
@@ -128,6 +139,20 @@ targets, known roles, and final mapped-address alignment. It records CFG,
 strict-mode, and export-suppression policy bits but owns no OS registration
 handle and has no rollback action.
 
+The negative gate preserves a canonical OAT/VDEX pair and creates 18 mutations
+covering every serialized header field plus entry bounds, alignment, ordering,
+and role bits. The canonical file opens once in each mode; each corrupt file is
+rejected once with `executable=false` and once with `executable=true`, for 38
+real opens total. Every rejection must carry a CFG-specific diagnostic.
+
+The layout gate directly instantiates the production header-only `ElfBuilder`
+under the Windows target definitions and emits neither, unwind-only, CFG-only,
+and combined metadata, each with and without `.data.img.rel.ro`. All eight
+layouts retain 64-KiB `PT_LOAD` alignment/congruence, non-W+X protections,
+unchanged `oatlastword`, conditional anchors, and exactly one read-only
+metadata segment whenever metadata exists. The two combined cases share that
+segment between unwind and CFG.
+
 An important implementation correction came from native generation. An
 `oatdata`-relative `code_offset` need not itself be a multiple of 16 because
 `oatdata` can have nonzero low address bits. The writer now checks the
@@ -148,8 +173,8 @@ The accepted path-sensitive cache set was:
 
 | Artifact | Bytes | SHA-256 |
 |---|---:|---|
-| `boot.art` | 2,940,464 | `657d778fb3fb645e7fa6c19ca4cdd7c7ca2a72414824b0e5f773008c2836dc2c` |
-| `boot.oat` | 20,169,416 | `62fd1ed085ff65d0c1aca14e64196137131e5af08c8ae9c580308fb9dd6aa788` |
+| `boot.art` | 2,940,464 | `4a2d25732c1cc8a5c79a05269e95eb3b1b5b9f02da884ed02c0a0f061ee4ce22` |
+| `boot.oat` | 20,169,352 | `0a7a6e5fdf129efd9b36975b3b95f807f8ed163fb939ff19cff8cbd6e9028eb8` |
 | `boot.vdex` | 8,309,376 | `acec8006a073b67bd1740804a7bd65a0a1ffa5380815cb194eff9443845fc12d` |
 
 The manifest's validated CFG measurements were:
@@ -158,28 +183,30 @@ The manifest's validated CFG measurements were:
 |---|---:|
 | Format version | 1 |
 | PE/COFF machine | `0x8664` (`IMAGE_FILE_MACHINE_AMD64`) |
-| Section bytes | 341,304 |
-| Unique targets | 42,657 |
-| Quick candidates | 42,375 |
+| Section bytes | 341,240 |
+| Unique targets | 42,649 |
+| Quick candidates | 42,367 |
 | JNI candidates | 280 |
 | Trampoline candidates | 7 |
 | Indirect-callable thunk candidates | 0 |
-| Code begin/end | 3,602,664 / 18,601,981 |
-| Adler-32 | `8a4f8dc2` |
+| Code begin/end | 3,602,664 / 18,600,765 |
+| Adler-32 | `9b1588cd` |
 
 Candidate counts can overlap because one deduplicated address may carry more
 than one role. These figures characterize one passing cache set. ART/OAT
 outputs are path-sensitive caches, so neither these values nor the artifact
 hashes define a cross-generation byte-reproducibility requirement.
 
-The final CFG probe DLL was 25,600 bytes with SHA-256
-`b5bcaadb84bb8969182aec18df0cebbd491125b755802fcca89a40ccb47f05e3`.
+The final CFG probe DLL was 62,464 bytes with SHA-256
+`ec4de70c9d8c76ca9804186e7840e76765e378bd83104497daf4c4dcf5499390`.
+The layout probe executable was 108,544 bytes with SHA-256
+`d85087fa067645d32b158130b1011dc4488fad23fe22d868948ad46e0b4dda01`.
 
 ## Disposition
 
-- Step 7 is `PARTIAL`: the writer, ELF transport, loader parser, policy
-  snapshot, structural validator, and live executable-open gate work; the
-  exhaustive two-open-mode corruption and eight-case layout matrices remain.
+- Step 7 is `COMPLETE`: the writer, ELF transport, both loader modes, policy
+  snapshot, semantic corruption corpus, all eight production layouts,
+  structural validator, and live executable-open gate pass.
 - Step 11 is `PARTIAL`: forced-CFG observation and guarded incoming quick/JNI
   calls pass with default-valid OAT-1 executable pages; the separate allocation
   feasibility and resource measurements remain.

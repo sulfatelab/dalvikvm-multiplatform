@@ -108,6 +108,10 @@ def check_source(repo: Path) -> dict[str, int]:
         "native CFG observation",
         "GetProcessMitigationPolicy",
         "guarded_quick=pass guarded_jni=pass",
+        "Java_W032AotCfgProbe_nativeAuditCorruption",
+        "art::OatFile::Open(",
+        "for (bool executable : {false, true})",
+        "W032_CFG_CORRUPTION_PASS cases=18 opens=38",
         "target_api_calls=0",
     )
     active = "\n".join((runtime, oat_file, bridge, probe))
@@ -117,6 +121,8 @@ def check_source(repo: Path) -> dict[str, int]:
         "cfg_section_names": 1,
         "dynamic_anchors": 2,
         "guard_dispatch_bridges": 1,
+        "runtime_open_modes": 2,
+        "corruption_cases": 18,
         "target_api_calls": 0,
     }
 
@@ -134,8 +140,13 @@ def check_pe(probe: Path, llvm_readobj: Path) -> dict[str, int]:
     if dispatch is None or int(dispatch.group(1), 16) == 0:
         raise ContractError("W-032 probe has no CFG dispatch pointer")
     exports = _run(llvm_readobj, "--coff-exports", str(probe))
-    _require(exports, "W-032 probe exports", "Java_W032AotCfgProbe_nativeAudit")
-    return {"cfg_flags": 2, "guard_dispatch_pointer": 1, "jni_exports": 1}
+    _require(
+        exports,
+        "W-032 probe exports",
+        "Java_W032AotCfgProbe_nativeAudit",
+        "Java_W032AotCfgProbe_nativeAuditCorruption",
+    )
+    return {"cfg_flags": 2, "guard_dispatch_pointer": 1, "jni_exports": 2}
 
 
 def main() -> int:
@@ -168,7 +179,8 @@ def main() -> int:
         os.replace(temporary, result)
         print(
             "W032_CFG_STRUCTURE_PASS cfg_flags=2 guard_dispatch=present "
-            "dynamic_anchors=2 target_api_calls=0"
+            "dynamic_anchors=2 runtime_open_modes=2 corruption_cases=18 "
+            "target_api_calls=0"
         )
         return 0
     except (ContractError, OSError, UnicodeError, ValueError) as exc:

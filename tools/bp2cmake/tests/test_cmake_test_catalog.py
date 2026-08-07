@@ -40,6 +40,7 @@ set(_art_windows_system_compile_options "")
 set(_art_bundle_lib "{(tmp_path / 'bundle' / 'lib').as_posix()}")
 add_library(art SHARED IMPORTED GLOBAL)
 set_target_properties(art PROPERTIES IMPORTED_LOCATION "{tmp_path / 'art.dll'}")
+add_library(elffile INTERFACE)
 add_executable(dalvikvm IMPORTED GLOBAL)
 set_target_properties(dalvikvm PROPERTIES IMPORTED_LOCATION "{tmp_path / 'dalvikvm.exe'}")
 add_executable(dex2oat IMPORTED GLOBAL)
@@ -69,9 +70,9 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         (binary / "art-tests" / "art_test_catalog.json").read_text(encoding="utf-8")
     )
     assert catalog["target_id"] == "windows-x86_64-msvc"
-    assert len(catalog["probes"]) == 102
-    assert sum(probe["applicable"] for probe in catalog["probes"]) == 99
-    assert sum(bool(probe["target_ids"]) for probe in catalog["probes"]) == 48
+    assert len(catalog["probes"]) == 104
+    assert sum(probe["applicable"] for probe in catalog["probes"]) == 101
+    assert sum(bool(probe["target_ids"]) for probe in catalog["probes"]) == 50
     assert sum(not probe["target_ids"] for probe in catalog["probes"]) == 54
     w002_attach = next(
         probe for probe in catalog["probes"] if probe["name"] == "managed_w002_attach"
@@ -210,7 +211,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     assert async_close["ctest_registered"] is False
     assert sum(
         probe["execution"] == "target-runnable" for probe in catalog["probes"]
-    ) == 77
+    ) == 78
     assert all(
         probe["type"] != "SHARED"
         for probe in catalog["probes"]
@@ -294,6 +295,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         "windows_w030_private_copy_probe": 60,
         "windows_w030_boot_image_startup": 1800,
         "managed_w031_aot_unwind": 1800,
+        "windows_w032_cfg_layout": 180,
         "managed_w032_aot_cfg": 1800,
     }
     assert [
@@ -360,15 +362,25 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
     w032 = [probe for probe in catalog["probes"] if probe["stage"] == "w032"]
     assert [probe["name"] for probe in w032] == [
         "w032aotcfgprobe",
+        "w032cfglayoutprobe",
         "windows_w032_cfg_structure",
+        "windows_w032_cfg_layout",
         "managed_w032_aot_cfg",
     ]
     assert [probe["execution"] for probe in w032] == [
         "compile-only",
+        "compile-only",
         "host-review",
         "target-runnable",
+        "target-runnable",
     ]
-    assert [probe["ctest_registered"] for probe in w032] == [False, True, False]
+    assert [probe["ctest_registered"] for probe in w032] == [
+        False,
+        False,
+        True,
+        False,
+        False,
+    ]
     assert all(probe["target_ids"] == ["windows-x86_64-msvc"] for probe in w032)
 
     variant_binary = tmp_path / "variant-build"
@@ -489,7 +501,7 @@ add_subdirectory("{(repo / 'tests').as_posix()}" art-tests)
         (binary / "art-tests" / "art_test_catalog.json").read_text(encoding="utf-8")
     )
     applicable = [probe for probe in catalog["probes"] if probe["applicable"]]
-    assert len(catalog["probes"]) == 102
+    assert len(catalog["probes"]) == 104
     assert [probe["name"] for probe in applicable] == [
         "criticalnativeprobe",
         "nativeabiprobe",

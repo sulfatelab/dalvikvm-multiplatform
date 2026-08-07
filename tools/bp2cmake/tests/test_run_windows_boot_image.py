@@ -205,6 +205,7 @@ def test_launcher_forces_cfg_for_w032_gate(tmp_path, monkeypatch):
     launcher = tmp_path / "bin" / "W025PolicyLauncher.exe"
     launcher.write_bytes(b"launcher")
     args.policy_launcher = launcher
+    args.cfg_corruption_matrix = True
     args.expect = [
         "W032_CFG_TABLE_PASS machine=0x8664",
         "main end exception=0",
@@ -232,10 +233,30 @@ def test_launcher_forces_cfg_for_w032_gate(tmp_path, monkeypatch):
         "validate_windows_oat_cfg",
         lambda path: cfg_record,
     )
+    corruption_record = {
+        "case_count": 18,
+        "canonical_open_count": 2,
+        "rejection_open_count": 36,
+        "total_open_count": 38,
+    }
+    corruption_roots = []
+
+    def build_corruption(oat, vdex, output_root):
+        assert oat.read_bytes() == b"boot.oat"
+        assert vdex.read_bytes() == b"boot.vdex"
+        corruption_roots.append(output_root)
+        output_root.mkdir()
+        return corruption_record
+
+    monkeypatch.setattr(
+        run_windows_boot_image.run_dex2oat_no_image,
+        "build_windows_oat_cfg_corruption_corpus",
+        build_corruption,
+    )
     calls = []
 
     def run(command, **options):
-        calls.append(command)
+        calls.append((command, options))
         return subprocess.CompletedProcess(
             command,
             0,
@@ -246,7 +267,10 @@ def test_launcher_forces_cfg_for_w032_gate(tmp_path, monkeypatch):
     monkeypatch.setattr(run_windows_boot_image.subprocess, "run", run)
     output = run_windows_boot_image.run_gate(args)
 
-    assert calls[0][:4] == [str(launcher), "cfg", "zero", str(args.dalvikvm)]
+    command, options = calls[0]
+    assert command[:4] == [str(launcher), "cfg", "zero", str(args.dalvikvm)]
+    assert options["env"]["W032_CFG_CORRUPTION_ROOT"] == str(corruption_roots[0])
     record = json.loads((output / "result.json").read_text(encoding="utf-8"))
     assert record["cfg_policy_forced"] is True
     assert record["windows_oat_cfg"] == cfg_record
+    assert record["windows_oat_cfg_corruption"] == corruption_record
