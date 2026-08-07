@@ -9,7 +9,7 @@ ART branch: `artmp_android-16.0.0_r4`
 ART revision: `03d55ca0174dbf39b54444ce5fdf4a55e5dce331`
 
 Companion feasibility analysis:
-[`art_wasm64_feasibility.md`](art_wasm64_feasibility.md)
+[`art_wasm_feasibility.md`](art_wasm_feasibility.md)
 
 ## How to read this consolidated audit
 

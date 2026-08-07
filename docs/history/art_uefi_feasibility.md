@@ -53,7 +53,7 @@ byte-addressable executable code, and ART-supported instruction families.
 quick-frame concepts can remain meaningful if compiled code is placed in the
 firmware-loaded image. This removes the Wasm function-table/code-address
 mismatch described in
-[`art_wasm64_feasibility.md`](art_wasm64_feasibility.md), but it does not supply
+[`art_wasm_feasibility.md`](art_wasm_feasibility.md), but it does not supply
 the missing operating-system contracts.
 
 The resulting judgment is:
