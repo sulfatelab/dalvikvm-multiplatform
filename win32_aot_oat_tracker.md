@@ -50,6 +50,11 @@ submodule update.
 W-037 requires no nested ART change; its containing root commit owns the
 relocation/fault/GC-root probe, catalog entry, and accepted record against that
 same nested snapshot.
+W-038's nterp compiled-invoke adapter repair is nested ART commit
+`c2ac04128f186388f43162e71fc268452cf1d959`, based on
+`03d55ca0174dbf39b54444ce5fdf4a55e5dce331`. Its containing root commit owns
+the managed/native probe, catalog entry, structural reviewer extension,
+accepted record, and submodule update.
 Commit `1a9aa837ad2fb697d246855c695d44f2b53c69e8` removes the
 `--force-determinism` request from both OAT generators; manifests still bind
 each generated cache set.
@@ -98,8 +103,10 @@ opens additionally register one stable `RUNTIME_FUNCTION` array, verify sample
 lookups, and delete it before releasing memory. Native W-031 proves managed,
 JNI, and all seven trampoline lookups plus synthetic `RtlVirtualUnwind`, while
 the managed launcher passes managed and JNI runtime calls with JIT disabled.
-Corruption/fallback injection, exception/fatal stack walking, and stronger
-XMM-bearing boot-AOT frame coverage remain.
+W-038 now passes an explicit managed throw and a fatal live unwind through the
+exact armed boot-OAT function to ART's UEF and one valid minidump. The step
+remains partial only for corruption/fallback injection and stronger XMM-bearing
+boot-AOT frame coverage.
 
 Step 8 is `COMPLETE`, and step 9 is `PARTIAL`. Windows now generates and stages
 an LZ4 `boot.art`, ordinary ELF `boot.oat`, and VDEX, then launches with exact
@@ -122,13 +129,16 @@ without directly invoking the OAT body. W-037 then requires a nonzero
 low-address access violation inside registered OAT RX code from an ordinary
 null call to `Arrays.sort(int[])`, allows ART to recover it as a
 `NullPointerException`, and preserves the same non-null OAT BSS GC root through
-eight completed explicit `System.gc()` rounds. Broader
-exception and fatal stack walking plus relocation, fault, and root variants
-outside that focused case remain before the step is complete. The accepted
-records are
-[`docs/history/windows_x64_w036_result.md`](docs/history/windows_x64_w036_result.md)
+eight completed explicit `System.gc()` rounds. W-038 then selects registered
+boot-OAT methods for an explicit managed throw and a fatal native callback. The
+managed Java trace names its target; the fatal live Windows walk reaches the
+exact armed OAT record, progresses through it, reaches ART's UEF, and writes one
+valid `MDMP`. Relocation, fault, root, and other explicitly untested execution
+variants remain before the step is complete. The accepted records are
+[`docs/history/windows_x64_w036_result.md`](docs/history/windows_x64_w036_result.md),
+[`docs/history/windows_x64_w037_result.md`](docs/history/windows_x64_w037_result.md),
 and
-[`docs/history/windows_x64_w037_result.md`](docs/history/windows_x64_w037_result.md).
+[`docs/history/windows_x64_w038_result.md`](docs/history/windows_x64_w038_result.md).
 
 Step 7 is now `COMPLETE`; step 11 remains `PARTIAL`. W-032 emits and validates
 `.oat_cfg.windows`, records CFG policy, and uses a PE-audited CFG-instrumented
@@ -169,11 +179,11 @@ numbered step 1 or executable Windows OAT loading.
 | 3. Pre-dispatch characterization and trampoline regression | `PARTIAL` | Characterization tests exist in `oat_file_test.cc` and the shared trampoline lowering has been source-reviewed | Close H-005 by running the focused tests; add Linux-`GS`/Windows-`R15` disassembly and resolution/quick-to-interpreter execution gates |
 | 4. Windows private-copy `ElfOatFile` mapping | `COMPLETE` | Windows `ElfFileImpl::Load()` privately copies every file-backed `PT_LOAD` into the existing ART-owned private allocation; W-030 covers validation-only and executable opens, rejected foreign/section/unaligned/range inputs, exact address, R/RX/RW, no-access gaps, zero fill, owner sharing, source privacy, and cache flush | Retain W-030; no boot-only step-4 exit condition remains |
 | 5. VDEX aperture and ownership | `COMPLETE` | Windows reused VDEX mappings use the same checked private-copy primitive for the exact `oatdex` bytes, return an owner-sharing slice, and pass canonical boot startup through `ComputeFields -> LoadVdex -> Setup` | Retain the native end-to-end gate; add broader rollback injection with product-level fallback work |
-| 6. `.oat_unwind.windows` | `PARTIAL` | Managed/JNI/seven-trampoline emission, deduplication, checksum, anchors, validation-only parsing, executable registration/lifetime, sample lookup, synthetic `RtlVirtualUnwind`, and JIT-disabled managed/JNI runtime calls pass W-031 | Add corruption/fallback injection, managed exception/fatal stack walking, and stronger XMM-bearing boot-AOT frame execution |
+| 6. `.oat_unwind.windows` | `PARTIAL` | Managed/JNI/seven-trampoline emission, deduplication, checksum, anchors, validation-only parsing, executable registration/lifetime, sample lookup, synthetic `RtlVirtualUnwind`, and JIT-disabled managed/JNI runtime calls pass W-031; W-038 passes explicit managed-exception and fatal boot-OAT walking to UEF/minidump | Add corruption/fallback injection and stronger XMM-bearing boot-AOT frame execution |
 | 7. `.oat_cfg.windows` | `COMPLETE` | W-032 independently collects sorted quick/JNI/seven-trampoline targets, merges deduplicated roles, emits the checksum and anchors, parses both open modes, rejects 18 semantic corruptions through validation-only and executable opens, passes all eight metadata/data-img-rel-ro layouts, records policy, and passes forced-CFG guarded quick/JNI calls without target-state API calls | Retain the W-032 transport, corruption, layout, and observation gates; explicit-target allocation is a separate step-11 concern |
 | 8. Boot ART/OAT/VDEX generation and staging | `COMPLETE` | W-030 exercises native `ImageWriter`, emits Windows LZ4 `boot.art` plus matching OAT/VDEX, binds the path-sensitive set with one manifest, validates hashes/identity, stages the exact single-component topology, and passes canonical startup | Retain per-generation set integrity; cross-generation byte identity is intentionally not required |
 | 9. Experimental selection and fallback | `PARTIAL` | W-030 explicitly selects the staged set, runs from package root, rejects seven launcher mismatches, and fails if ART silently enters imageless startup | Integrate a reviewed product option and exercise successful missing/stale/wrong-target/cross-artifact whole-transaction fallback |
-| 10. Real boot-OAT execution | `PARTIAL` | W-031 locates underlying managed/JNI bodies; W-036 observes ordinary `Integer.parseInt(String)` dispatch exactly once at its current registered boot-OAT entry PC; W-037 proves a paired nonzero aligned image/OAT relocation, one recovered access violation from a null `Arrays.sort(int[])` call inside registered OAT RX code, and one BSS root surviving eight completed explicit GC rounds, all with JIT disabled | Cover broader exception and fatal stack walking plus relocation, fault, and root variants outside W-037's focused case on Server 2025 |
+| 10. Real boot-OAT execution | `PARTIAL` | W-031 locates underlying managed/JNI bodies; W-036 observes ordinary `Integer.parseInt(String)` dispatch exactly once at its current registered boot-OAT entry PC; W-037 proves a paired nonzero aligned image/OAT relocation, one recovered access violation from a null `Arrays.sort(int[])` call inside registered OAT RX code, and one BSS root surviving eight completed explicit GC rounds; W-038 proves explicit managed-exception and fatal boot-OAT walking, all with JIT disabled | Cover concrete relocation, fault, root, and other execution variants outside the accepted W-036/W-037/W-038 focused cases on Server 2025 |
 | 11. CFG observation and loader decision | `PARTIAL` | W-032 forces CFG on, verifies the PE guard dispatch, enters exact quick/JNI boot-OAT targets, records policy, and proves current OAT-1 default-valid usability with zero target API calls | Run W-033's private-copy/candidate allocation matrix; record reservation, commit, padding, startup, working set, source/ownership complexity, and Linux semantic impact; then explicitly stop or conditionally authorize W-034. No dual-loader product mode is permitted |
 
 ## Step 1 implementation record
@@ -490,10 +500,57 @@ W037BootOatRelocationFaultGcProbe PASS relocation=observed fault=recovered gc_ro
 
 This closes the focused nonzero-relocation, null-fault recovery, and BSS-root
 survival case. Step 10 remains `PARTIAL`: this one run does not establish every
-relocation sign/topology, implicit-fault form, root slot/collector combination,
-or broader managed exception and fatal stack walk. The complete native record
-is
+relocation sign/topology, implicit-fault form, or root slot/collector
+combination. The complete native record is
 [`docs/history/windows_x64_w037_result.md`](docs/history/windows_x64_w037_result.md).
+
+## W-038 implementation record
+
+W-038 closes the explicit managed-exception/fatal-stack-walk condition without
+replacing an `ArtMethod` entrypoint or directly calling OAT code. Its managed
+child selects `Integer.parseInt(String)` only while the current entrypoint
+equals the underlying boot-OAT code and begins an exact registered Windows
+function. An ordinary invalid call throws `NumberFormatException`; the
+nonempty Java trace contains the selected method, and native verification
+requires the exact entrypoint to remain published.
+
+The fatal child selects registered
+`Arrays.sort(Object[], Comparator)` boot-OAT code and supplies a comparator
+whose native callback raises a hardware access violation. With ART's bounded
+fatal trace enabled, `RtlVirtualUnwind` reaches the exact armed OAT
+`RUNTIME_FUNCTION` at frame 6, advances RSP from `0x73ba72f560` to
+`0x73ba72f5b0`, crosses all remaining ART/executable/OS frames, and ends at zero
+PC after 20 frames. ART's UEF runs and writes exactly one valid 1,207,378-byte
+`MDMP`.
+
+Bring-up isolated the defect to the nterp-to-compiled PE boundary. The repeated
+adapter PC represented two legitimate nterp frames with increasing RSP, but
+the adapter's synthetic allocation skipped the nterp frame without restoring
+its saved nonvolatile registers. The following OAT frame therefore saw the
+wrong RBP. All 187 dynamic-gap adapters now describe saved RBX, RBP, and
+R12-R15 as well as the allocation, while retaining the existing normal-return
+continuation slot. Public range markers allow the structural reviewer to check
+the exact count, allocation and save-offset sequences, zero prologues, and
+contiguous ranges. The rebuilt native W-010 stage passes 8/8 with the enhanced
+audit.
+
+Server 2025 reports:
+
+```text
+W038_MANAGED_EXCEPTION_PASS target=int java.lang.Integer.parseInt(java.lang.String) type=explicit caught=1 trace=nonempty trace_target=1 entry_unchanged=1 jit=disabled
+W038BootOatManagedExceptionProbe PASS exception=caught trace=target entry=oat jit=disabled
+W038_FATAL_ARM target=void java.util.Arrays.sort(java.lang.Object[], java.util.Comparator) oat_base=0x60b20718 begin=0xc896c8 end=0xc89764 jit=disabled
+ART_WINDOWS_X64_UNWIND_TRACE frame=6 pc=0x617a9e6a rsp=0x73ba72f560 lookup=1 image=0x60b20718 begin=0x00c896c8 end=0x00c89764 unwind=0x0123cb34
+ART_WINDOWS_X64_UNWIND_TRACE step=6 kind=virtual next_pc=0x7ffdae47c0fb next_rsp=0x73ba72f5b0 establisher=0x73ba72f5a8
+ART_WINDOWS_X64_UNWIND_TRACE end frames=20 reason=zero_pc final_pc=0x0 final_rsp=0x73ba72fd60
+ART Win32 UEF: exception 0xc0000005 at 0x7ffdbbb73010 access=1 fault_addr=0x1234
+```
+
+W-038 passes 1/1 in 2.47 seconds, with its two child contracts complete and
+one minidump. This accepts the managed-exception/fatal-walk condition for steps
+6 and 10. The steps remain `PARTIAL` only for their other stated exit
+conditions. The complete native record is
+[`docs/history/windows_x64_w038_result.md`](docs/history/windows_x64_w038_result.md).
 
 ## Evidence log
 
@@ -516,8 +573,11 @@ is
 | 2026-08-07 | Windows Server 2025 build 26100 plus fresh agent01 Linux regression | W-032 passes 3/3 with a CFG-instrumented PE caller, forced policy, 42,649 unique targets, guarded quick/JNI calls, 18 semantic corruptions rejected through 38 real opens, and all eight metadata/relro layouts accepted; the Python suite passes 225/225, full Linux build/boot generation passes, and Linux catalog passes 15/15 | **Authoritative CFG transport and observation evidence**; step 7 complete and step 11 partial; explicit-target allocation/resource characterization remains |
 | 2026-08-07 | Windows Server 2025 build 26100 | W-036 passes 1/1 with JIT disabled; ordinary `Integer.parseInt(String)` dispatch hits its exact current registered boot-OAT RX entry PC once, with zero unrelated single-step exceptions | **Authoritative representative ordinary-dispatch evidence**; step 10 remains partial only for relocation, fault, GC/root, exception, and fatal-walk breadth; see [`docs/history/windows_x64_w036_result.md`](docs/history/windows_x64_w036_result.md) |
 | 2026-08-07 | Windows Server 2025 build 26100 affected-stage regression plus fresh agent01 Linux regression | W-030 passes 2/2, W-031 passes 1/1, W-032 passes 3/3, and W-036 passes 1/1 against a fresh path-sensitive cache set; the Python suite passes 225/225, full Linux build/boot generation passes, and Linux catalog passes 15/15 | **7/7 native regression PASS** after preserving boot-AOT entrypoints; loading, unwind, CFG observation/corruption/layout, ordinary dispatch, and the shared Linux baseline remain compatible |
-| 2026-08-07 | Windows Server 2025 build 26100 | W-037 passes 1/1 in 1.29 s; an ordinary null `Arrays.sort(int[])` call under a nonzero 64-KiB-aligned image/OAT relocation produces exactly one registered boot-OAT access violation recovered as `NullPointerException`, and one non-null BSS root remains identical through eight completed explicit collections | **Authoritative focused relocation/fault/root evidence**; step 10 remains partial for broader exception/fatal walking and variants outside the focused case; see [`docs/history/windows_x64_w037_result.md`](docs/history/windows_x64_w037_result.md) |
+| 2026-08-07 | Windows Server 2025 build 26100 | W-037 passes 1/1 in 1.29 s; an ordinary null `Arrays.sort(int[])` call under a nonzero 64-KiB-aligned image/OAT relocation produces exactly one registered boot-OAT access violation recovered as `NullPointerException`, and one non-null BSS root remains identical through eight completed explicit collections | **Authoritative focused relocation/fault/root evidence**; at this pre-W-038 checkpoint, step 10 still lacked broader exception/fatal walking and variants outside the focused case; see [`docs/history/windows_x64_w037_result.md`](docs/history/windows_x64_w037_result.md) |
 | 2026-08-07 | Windows Server 2025 build 26100 affected-stage regression plus fresh agent01 Linux regression | W-030 passes 2/2, W-031 passes 1/1, W-032 passes 3/3, W-036 passes 1/1, and W-037 passes 1/1 in 1.28 s against a fresh cache set; the Python suite passes 227/227, full Linux build/boot generation passes, and Linux catalog passes 15/15 | **8/8 native regression PASS**; the initial and final W-037 generations observe distinct valid relocation deltas and cache bytes while loading, unwind, CFG, dispatch, fault recovery, root survival, and the shared Linux baseline remain compatible |
+| 2026-08-07 | Windows Server 2025 build 26100 | W-038 passes 1/1 in 2.47 s: the explicit managed exception retains its registered boot-OAT entrypoint and names the target in its Java trace; the fatal child unwinds through the exact armed boot-OAT frame, reaches ART's UEF, and creates one valid 1,207,378-byte `MDMP` | **Authoritative managed-exception/fatal-walk evidence**; this closes that listed step-6/step-10 gap while both steps remain partial for their other stated breadth; see [`docs/history/windows_x64_w038_result.md`](docs/history/windows_x64_w038_result.md) |
+| 2026-08-07 | Windows Server 2025 build 26100 affected-stage regression | W-030 passes 2/2, W-031 passes 1/1, W-032 passes 3/3, W-036 passes 1/1, W-037 passes 1/1, and W-038 passes 1/1; the enhanced W-010 adapter structural audit separately passes 8/8 | **9/9 boot-OAT regression PASS** with all 187 nterp compiled-invoke adapter records audited; loading, unwind, CFG, dispatch, fault/root, managed-exception, and fatal-walk behavior remain compatible |
+| 2026-08-07 | Fresh agent01 Linux regression | Focused Python passes 10/10; the full host/bp2cmake suite passes 320/320; Linux configure audits 2,090 compile commands, 2,174 Ninja commands, and 33 product links; full build/boot generation and the 15/15 Linux catalog pass; x86-64 mterp generation succeeds | Shared nterp/runtime and catalog changes retain the Linux baseline; stale case-inventory counts and missing adjacent AOT result records are corrected |
 
 The two accepted native runs and the post-correction Wine diagnostic have
 SHA-256
@@ -532,12 +592,11 @@ diagnostic evidence; native Server 2025 is the acceptance authority.
 ## Immediate work queue
 
 1. Retain W-037's focused paired relocation, managed null-fault, and BSS-root
-   gate. Add broader exception and fatal stack-walk execution with the W-031
-   unwind table active, then cover relocation/fault/root variants only where a
-   concrete untested product contract requires them.
-2. Add `.oat_unwind.windows` corruption/fallback injection, managed
-   exception/fatal stack walking, and an actual XMM-bearing boot-AOT frame
-   execution gate.
+   gate plus W-038's managed-exception/fatal-walk gate. Add relocation,
+   fault/root, or other execution variants only where a concrete untested
+   product contract requires them.
+2. Add `.oat_unwind.windows` corruption/fallback injection and an actual
+   XMM-bearing boot-AOT frame execution gate.
 3. Integrate reviewed product boot-AOT selection plus successful
    whole-transaction imageless fallback and ART-level negative identity
    diagnostics.

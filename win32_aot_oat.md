@@ -18,8 +18,8 @@ successful imageless fallback are not integrated. W-031 implements the
 Windows x64 boot-AOT unwind writer, section-local checksum, dynamic anchors,
 validation-only parser, executable registration, and managed/JNI/trampoline
 lookup plus synthetic unwind gate. Step 6 is consequently partial rather than
-complete: corruption/fallback injection, exception/fatal stack walking, and
-stronger XMM-bearing AOT-frame execution remain. W-031 also locates underlying
+complete: corruption/fallback injection and stronger XMM-bearing AOT-frame
+execution remain. W-031 also locates underlying
 managed/JNI bodies and passes corresponding runtime calls with JIT disabled.
 W-036 corrects the Windows post-start nterp visitor so it repairs only methods
 still using the switch-interpreter bridge and preserves published boot-AOT
@@ -32,9 +32,14 @@ the boot OAT retains the same delta, an ordinary `Arrays.sort(int[])` null call
 produces exactly one low-address access violation inside registered OAT RX code
 and recovers as a Java `NullPointerException`, and one non-null OAT BSS GC root
 remains the same object through eight completed explicit `System.gc()` rounds.
-Step 10 remains partial for
-broader exception and fatal stack-walk execution plus relocation, fault, and
-root variants outside this focused case. W-032 now implements
+W-038 then proves an explicit managed exception with the selected boot-OAT
+method in its Java trace and a fatal native callback whose live Windows unwind
+crosses the exact armed boot-OAT function, reaches ART's UEF, and writes exactly
+one valid minidump. It repairs the nterp-to-compiled PE boundary by restoring
+RBX, RBP, and R12-R15 in all 187 dynamic-gap adapter records. Step 10 remains
+partial for relocation, fault, and root variants outside W-037's focused case
+and other explicitly untested execution breadth; the managed-exception and
+fatal-walk contract is accepted. W-032 now implements
 `.oat_cfg.windows` emission, dynamic anchors, runtime validation and policy
 observation, plus a forced-CFG PE caller that successfully enters quick and
 compiled-JNI boot-OAT code without target-state API calls. Steps 7 and 11 are
@@ -68,6 +73,8 @@ The W-036 ordinary-dispatch result is
 [`docs/history/windows_x64_w036_result.md`](docs/history/windows_x64_w036_result.md).
 The W-037 relocation/fault/GC-root result is
 [`docs/history/windows_x64_w037_result.md`](docs/history/windows_x64_w037_result.md).
+The W-038 managed-exception/fatal-unwind result is
+[`docs/history/windows_x64_w038_result.md`](docs/history/windows_x64_w038_result.md).
 The authoritative implementation gate is Windows Server 2025 Datacenter
 Evaluation, x64 build 26100. Linux and Wine remain development and structural
 gates; the former Windows 10 lab host is unavailable.
@@ -82,7 +89,8 @@ jump on Windows. The current verdict for every finding is recorded under
 "Design review findings".
 
 The implemented source snapshot is `vendor/art` at
-`03d55ca0174dbf39b54444ce5fdf4a55e5dce331`
+`c2ac04128f186388f43162e71fc268452cf1d959`, whose W-038 nterp boundary
+repair is based on `03d55ca0174dbf39b54444ce5fdf4a55e5dce331`
 (`android-16.0.0_r4-97-g03d55ca017`); W-036's startup correction is based on
 the W-032 transport snapshot
 `30db175a1240780c23c674e5bf29d281570becfd`. W-030's private-copy slice is
@@ -1993,7 +2001,8 @@ transport:
   representative quick, JNI, and trampoline PC, and `RtlVirtualUnwind()`
   restores the `RBP`-anchored frame from a boot-OAT method; and
 - a native exception gate: a managed throw, a translated NPE, and a fatal dump
-  each walk through boot-OAT frames with correct nonvolatile restoration.
+  each walk through boot-OAT frames with correct nonvolatile restoration. W-037
+  and W-038 jointly pass this execution contract; retain them as regressions.
 
 ## Windows CFG format and integration
 
@@ -2427,9 +2436,11 @@ W-032 requires:
 
 All four transport gates above pass W-032. W-036 subsequently proves one
 representative ordinary managed-dispatch path, and W-037 proves one relocated
-ordinary null-fault path plus focused OAT BSS-root survival. Real resolution,
-IMT, interpreter, broader fault/root variants, exceptions, and fatal walking
-remain step-10/step-11 work; they do not reopen the completed section transport.
+ordinary null-fault path plus focused OAT BSS-root survival. W-038 proves one
+explicit managed-exception path and one fatal boot-OAT walk through ART's UEF
+to a valid minidump. Real resolution, IMT, interpreter, and broader fault/root
+variants remain step-10/step-11 work; they do not reopen the completed section
+transport.
 
 The following gates are separate and do not block W-032:
 
@@ -2499,8 +2510,9 @@ evidence before transport and image integration.
    predicate, `CompiledMethod` storage, dedup-safe `OatWriter` entry collection,
    `.oat_unwind.windows` emission with two anchors and its section-local
    version/checksum, then `WindowsAotUnwindRegistry`. W-031 implements this
-   core path; corruption/fallback injection, exception/fatal stack walking,
-   and stronger XMM-bearing AOT-frame execution remain before completion.
+   core path, and W-038 accepts managed-exception/fatal stack walking;
+   corruption/fallback injection and stronger XMM-bearing AOT-frame execution
+   remain before completion.
 7. Implement `.oat_cfg.windows` collection, independent serialization,
    conditional ELF layout/anchors, and runtime validation as W-032. Keep
    observation mode as the default, require a verified guarded caller in the
@@ -2689,10 +2701,35 @@ rounds, the heap's completed-GC counter has advanced by at least eight, and the
 OAT root slot is still non-null and names the same object. The selected method
 still publishes the exact registered boot-OAT entrypoint captured before the
 call. This closes the focused relocation, managed-null-fault, and BSS-root
-case, but not all of step 10: broader exception and fatal stack walking plus
-relocation, fault, and root variants outside this single case remain. The
-accepted record is
+case, but not all of step 10: relocation, fault, and root variants outside this
+single case remain. The accepted record is
 [`docs/history/windows_x64_w037_result.md`](docs/history/windows_x64_w037_result.md).
+
+W-038 closes the separately listed managed-exception/fatal-walk contract. Its
+first JIT-disabled child selects a method only while the current entrypoint
+equals registered boot-OAT code, invokes it normally with invalid input, catches
+the explicit managed exception, finds the selected method in the nonempty Java
+trace, and verifies that the entrypoint is unchanged. Server 2025 selects
+`Integer.parseInt(String)`.
+
+The fatal child similarly selects registered
+`Arrays.sort(Object[], Comparator)` boot-OAT code and supplies a comparator
+whose native callback raises an access violation. ART's bounded live
+`RtlVirtualUnwind` trace reaches that exact armed `RUNTIME_FUNCTION` at frame 6,
+advances RSP through it, crosses the remaining ART/executable/OS records, ends
+at zero PC, reaches ART's UEF, and creates exactly one valid `MDMP` dump.
+
+The failure found during bring-up was at the nterp-to-compiled PE boundary, not
+in the OAT record. A dynamic-gap adapter described the stack allocation but did
+not restore the nterp-saved RBX, RBP, and R12-R15 values before the next OAT
+record used them. All 187 adapters now carry the six `SAVE_NONVOL` operations
+while retaining the original continuation slot. Public range markers let the
+Windows reviewer require the exact record count, allocation/save-offset
+sequence, zero prologues, and contiguous ranges; the rebuilt native W-010
+structural stage passes 8/8. W-038 itself passes 1/1, its two child contracts
+complete, and its fatal child produces one 1,207,378-byte minidump. The accepted
+record is
+[`docs/history/windows_x64_w038_result.md`](docs/history/windows_x64_w038_result.md).
 
 ### Pre-dispatch characterization record
 
@@ -2810,9 +2847,11 @@ calls without target-state mutation. W-036 preserves published boot-AOT
 entrypoints across the Windows nterp repair pass and proves one representative
 ordinary managed dispatch at the exact registered boot-OAT RX PC. W-037 adds a
 focused paired relocation, recovered null fault, and surviving BSS-root case.
-Residual risk remains medium/high because broader relocation/fault/root and
-unwind negative matrices, exception/fatal walking, product selection/fallback,
-and full measurements remain open. Explicit CFG
+W-038 adds an explicit managed throw plus a fatal Windows walk through the
+armed boot-OAT frame to ART's UEF and one valid minidump. Residual risk remains
+medium/high because broader relocation/fault/root and unwind negative matrices,
+other untested execution breadth, product selection/fallback, and full
+measurements remain open. Explicit CFG
 additionally depends on an unresolved invalid-by-default allocation sequence.
 CFG explicit
 enforcement, teardown recovery from a failed function-table deletion,
@@ -2980,7 +3019,7 @@ tool policy are deferred.
 | Native `dex2oat.exe` operation regresses | Medium | Keep the accepted W-028 real single-JAR no-image `.oat`/`.vdex` compile as a native Server 2025 regression gate; `--version` is not supported and is not a substitute |
 | Boot class path / dex location strings disagree between generation and load | High | W-029 pins logical `/system/framework/boot.jar`; W-030 makes generation, manifest, staging, and startup consume it and rejects launcher drift without normalization; ART-level intentional-mismatch diagnostics remain required |
 | Path-sensitive cache artifacts are mixed across generations | High | Treat each generated ART/OAT/VDEX set as one unit, record its intentional logical locations and per-run sizes/hashes, validate the manifest before staging, and never require or infer cross-generation byte identity |
-| Image loads but normal dispatch never uses boot-OAT code | Mitigated for two focused paths | W-036 observes ordinary `Integer.parseInt(String)` dispatch at its exact current registered boot-OAT entry PC; W-037 observes ordinary `Arrays.sort(int[])` faulting inside registered relocated boot-OAT RX code and recovering with its BSS root intact; retain both JIT-disabled gates and complete broader exception/fatal-walk and untested relocation/fault/root variants |
+| Image loads but normal dispatch never uses boot-OAT code | Mitigated for focused W-036/W-037/W-038 paths | W-036 observes ordinary `Integer.parseInt(String)` dispatch at its exact current registered boot-OAT entry PC; W-037 observes ordinary `Arrays.sort(int[])` faulting inside registered relocated boot-OAT RX code and recovering with its BSS root intact; W-038 proves explicit managed-exception and fatal-walk execution through registered boot-OAT methods; retain all three JIT-disabled gates and complete only concrete untested execution and relocation/fault/root variants |
 | Boot reservation commit dominates the measured cost | Medium operational | Windows `MemMap` commits whole spans, so the image+OAT reservation, not the 64-KiB padding, is the term to report and later optimize |
 | Unwind predicate narrows the existing Windows condition | Medium | Preserve the semantic union of Windows-host and Windows-target compilation; test both even if a shared constexpr replaces the current preprocessor spelling |
 | `kDynamicSymbolCount` grows implicitly with the enum | Medium | It derives from `DynamicSymbol::kLast`; append Windows-only values after `kLast`, `static_assert` the base count, reserve from writer mode at `Start()`, and test Linux byte identity |
@@ -3014,7 +3053,8 @@ Before claiming Windows AOT support, require:
   writer/loader/dedup gates listed under "Unwind gates";
 - proof that representative `ArtMethod` entrypoints lie in the boot OAT RX
   range and execute without JIT compilation; W-036 supplies the first accepted
-  entry-PC case and W-037 supplies a relocated managed-fault case;
+  entry-PC case, W-037 supplies a relocated managed-fault case, and W-038
+  supplies explicit-exception and fatal-walk cases;
 - `.oat_cfg.windows` writer/parser/checksum/anchor/layout tests, with the
   section optional in observation mode and shared OAT version unchanged;
 - real quick/JNI/trampoline/method indirect calls in observation mode while
@@ -3025,7 +3065,8 @@ Before claiming Windows AOT support, require:
   nterp/JIT;
 - focused GC, roots, deoptimization, translated fault, JNI, reflection, class
   initialization, and fatal-dump execution through boot OAT; W-037 covers one
-  translated null fault and one BSS root through explicit GC rounds;
+  translated null fault and one BSS root through explicit GC rounds, while
+  W-038 covers one explicit managed exception and one fatal UEF/minidump path;
 - behavioral execution of the Stage 1 tests currently blocked by H-005; and
 - OAT-1 startup time, total committed span, and working-set measurements,
   reporting the boot image reservation, the OAT prefix consumed from it, and
@@ -3086,9 +3127,9 @@ semantics; Wine is structural only.
    JNI emission, `CompiledMethod` storage, dedup-safe `OatWriter` entries,
    seven trampoline entries, the `.oat_unwind.windows` section and anchors,
    section-local checksum, validation-only parsing, executable registration,
-   lookup verification, and fatal unregister invariant. Complete the remaining
-   corruption/fallback injection, managed exception/fatal stack walking, and
-   stronger XMM-bearing boot-AOT frame gates.
+   lookup verification, fatal unregister invariant, and W-038
+   managed-exception/fatal-walk execution. Complete the remaining
+   corruption/fallback injection and stronger XMM-bearing boot-AOT frame gates.
 7. Retain W-032's implemented `.oat_cfg.windows` target collection, checksum,
    conditional anchors/layout, parser, policy snapshot, and forced-CFG
    observation gate, including the passing exhaustive two-open-mode corruption
@@ -3108,8 +3149,10 @@ semantics; Wine is structural only.
 10. Retain W-036's accepted ordinary managed dispatch at the exact current,
     registered boot-OAT RX entry PC and W-037's paired nonzero relocation,
     recovered boot-OAT null fault, and BSS-root survival with JIT disabled.
-    Complete broader exception and fatal stack walking plus relocation, fault,
-    and root variants outside W-037's focused case on Server 2025. Continue to
+    Retain W-038's explicit managed exception and fatal walk through the exact
+    armed boot-OAT function to ART's UEF and one valid minidump. Complete only
+    concrete relocation, fault, root, and other execution variants outside the
+    accepted focused cases on Server 2025. Continue to
     distinguish current dispatch from merely locating an underlying OAT body
     through `GetOatMethodQuickCode()`.
 11. Retain W-032's passing forced-CFG observation through a verified guarded
@@ -3170,6 +3213,12 @@ AOT unwind transport:
 - `vendor/art/compiler/utils/x86_64/assembler_x86_64.{h,cc}` (unwind builder)
 - `vendor/art/dex2oat/linker/x86/relative_patcher_x86_base.cc` (no x86-64
   thunks)
+- `vendor/art/runtime/interpreter/mterp/x86_64ng/main.S` and
+  `vendor/art/runtime/nterp_helpers.cc` (W-038's dynamic-gap nterp-to-compiled
+  PE boundary)
+- `tests/cases/aot-exception-fatal-unwind/` and
+  `tests/support/windows/check_win32_boundary_unwind.py` (live and structural
+  W-038 gates)
 - [x64 exception handling and unwind data](https://learn.microsoft.com/cpp/build/exception-handling-x64)
 
 Bionic baseline:

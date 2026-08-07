@@ -8,7 +8,7 @@ REVIEWER_ROOT = REPO_ROOT / "tests" / "support" / "windows"
 
 def test_windows_reviewers_are_python_owned_and_syntax_valid():
     reviewers = sorted(REVIEWER_ROOT.glob("check_*.py"))
-    assert len(reviewers) == 9
+    assert len(reviewers) == 11
     assert not list(
         (REPO_ROOT / "tools" / "verify" / "windows_x64_phase1").glob("*.py")
     )
