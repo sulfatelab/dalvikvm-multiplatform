@@ -44,14 +44,14 @@ def test_catalog_native_sources_are_case_owned_with_adjacent_results():
         for path in case_root.glob("*/*")
         if path.is_file() and path.suffix in source_suffixes
     }
-    assert len(source_cases) == 36
+    assert len(source_cases) == 37
     assert all((case / "RESULT.md").is_file() for case in source_cases)
 
 
 def test_managed_java_sources_are_case_owned_with_adjacent_results():
     case_root = REPO_ROOT / "tests" / "cases"
     java_sources = sorted(case_root.glob("*/*.java"))
-    assert len(java_sources) == 54
+    assert len(java_sources) == 56
     assert all((source.parent / "RESULT.md").is_file() for source in java_sources)
     assert not list((REPO_ROOT / "tools" / "verify").glob("**/*.java"))
 

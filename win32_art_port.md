@@ -108,10 +108,13 @@ LZ4 boot set and passes validation-only plus executable private-copy ELF/VDEX
 loading under an experimental `-Xint` startup. W-031 implements the core
 `.oat_unwind.windows` writer/parser/registration path, locates underlying
 managed/JNI AOT bodies, and passes corresponding JIT-disabled runtime calls,
-but ordinary dispatch
-inside boot-OAT RX ranges remains unproven because startup upgrades many
-current entrypoints to nterp. Deeper unwind, CFG, and product integration remain
-pending. Step 8 is complete because
+while W-036 through W-038 prove ordinary dispatch, paired relocation,
+translated NPE/BSS-root survival, managed exception, and fatal live walking
+through registered boot-OAT code. W-039 rejects 23 semantic unwind corruptions
+through both real open modes, proves registration/deletion lifetime, and passes
+23 diagnosed imageless fallbacks. Actual XMM-bearing boot-AOT restoration, the
+finite remaining execution-path matrix, and product integration remain.
+Step 8 is complete because
 one manifest binds and validates each matching path-sensitive cache set;
 cross-generation byte identity is not required.
 
@@ -814,8 +817,11 @@ all product paths. Windows NIO.2 remains a non-goal.
   unrepresentable exact file view in the committed reservation; Linux remains
   uncompressed. W-031 proves the core unwind transport, managed/JNI and seven
   trampoline lookups, synthetic virtual unwind, and JIT-disabled managed/JNI
-  runtime calls. Corruption/fallback injection, exception/fatal stack walking, stronger
-  XMM-bearing AOT-frame execution, and normal RX dispatch proof remain.
+  runtime calls. W-036 through W-038 prove representative normal RX dispatch,
+  relocation/fault/root execution, managed exception, and fatal walking.
+  W-039 completes the 23-case semantic corruption, registration-lifetime, and
+  unwind-fallback matrix. Actual XMM-bearing boot-AOT frame execution remains
+  for step 6.
 - An alternate PE-form OAT, `LoadLibraryExW`, `SEC_IMAGE`, a general
   Bionic-linker port, application OAT, unloading, and OAT-2 replacement are
   outside the initial milestone. Security hardening is deferred. CFG uses one
@@ -830,10 +836,11 @@ all product paths. Windows NIO.2 remains a non-goal.
   views, and a temporary RW/NX construction alias. W-033 must prove the
   Windows API composition and material benefit before W-034/W-035.
 - The remaining functional work is ART-level negative identity diagnostics,
-  unwind completion, normal product selection with
-  successful whole-transaction imageless fallback, OAT-1 measurements, and
-  proof that real boot methods execute from the OAT RX range rather than
-  JIT/nterp. The CFG transport is implemented and native-accepted. OAT-2 is a
+  actual XMM-bearing boot-AOT restoration, normal product selection with
+  missing/stale/wrong-target/cross-artifact imageless fallback, OAT-1
+  measurements, and the finite resolution/IMT/quick-to-interpreter/
+  deoptimization/SOE/reflection/class-initialization execution matrix. The CFG
+  transport is implemented and native-accepted. OAT-2 is a
   conditional replacement candidate and does not change the shared OAT format;
   the final product must retain one executable Windows loader.
 - The format analysis, Bionic reuse boundary, mapping design, risk register,

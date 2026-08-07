@@ -274,3 +274,92 @@ def test_launcher_forces_cfg_for_w032_gate(tmp_path, monkeypatch):
     assert record["cfg_policy_forced"] is True
     assert record["windows_oat_cfg"] == cfg_record
     assert record["windows_oat_cfg_corruption"] == corruption_record
+
+
+def test_launcher_runs_w039_unwind_open_and_fallback_matrices(tmp_path, monkeypatch):
+    args = _args(tmp_path)
+    probe = tmp_path / "inputs" / "w039probe.dll"
+    probe.write_bytes(b"probe")
+    args.main_class = "W039BootOatUnwindCorruptionProbe"
+    args.execution_mode = "aot"
+    args.probe = probe
+    args.probe_name = "w039probe"
+    args.unwind_corruption_matrix = True
+    args.unwind_fallback_main_class = "W039BootOatUnwindFallbackProbe"
+    args.expect = [
+        "W039_UNWIND_CORRUPTION_PASS cases=23 opens=50",
+        "main end exception=0",
+    ]
+    cases = [f"case-{index}" for index in range(23)]
+    corruption_record = {
+        "case_count": 23,
+        "cases": cases,
+        "canonical_open_count": 4,
+        "rejection_open_count": 46,
+        "total_open_count": 50,
+        "fallback_count": 23,
+        "first_entry_offset": 0x10100,
+    }
+
+    def build_corruption(oat, vdex, output_root):
+        assert oat.read_bytes() == b"boot.oat"
+        assert vdex.read_bytes() == b"boot.vdex"
+        output_root.mkdir()
+        (output_root / "canonical.oat").write_bytes(b"boot.oat")
+        for name in cases:
+            (output_root / f"{name}.oat").write_bytes(name.encode("ascii"))
+        return corruption_record
+
+    monkeypatch.setattr(
+        run_windows_boot_image.run_dex2oat_no_image,
+        "build_windows_oat_unwind_corruption_corpus",
+        build_corruption,
+    )
+    calls = []
+
+    def run(command, **options):
+        calls.append((command, options))
+        case_name = options["env"].get("W039_UNWIND_FALLBACK_CASE")
+        if case_name is None:
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=(
+                    "W039_UNWIND_CORRUPTION_PASS cases=23 opens=50 "
+                    "validation_only=25 executable=25 lifecycle=clean\n"
+                    "main end exception=0\n"
+                ),
+                stderr="",
+            )
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=(
+                f"W039_UNWIND_FALLBACK_PASS case={case_name} image_spaces=0\n"
+            ),
+            stderr=(
+                "Windows OAT unwind checksum mismatch. "
+                "Attempting to fall back to imageless running.\n"
+                "main end exception=0\n"
+            ),
+        )
+
+    monkeypatch.setattr(run_windows_boot_image.subprocess, "run", run)
+    output = run_windows_boot_image.run_gate(args)
+
+    assert len(calls) == 24
+    assert "-Xusejit:false" in calls[0][0]
+    assert all("-Xint" in command for command, _options in calls[1:])
+    assert [
+        options["env"]["W039_UNWIND_FALLBACK_CASE"]
+        for _command, options in calls[1:]
+    ] == cases
+    record = json.loads((output / "result.json").read_text(encoding="utf-8"))
+    assert record["windows_oat_unwind_corruption"] == corruption_record
+    assert record["windows_oat_unwind_fallback"]["case_count"] == 23
+    assert record["windows_oat_unwind_fallback"]["diagnosed_count"] == 23
+    assert record["windows_oat_unwind_fallback"]["imageless_count"] == 23
+    assert record["windows_oat_unwind_fallback"]["empty_image_spaces_count"] == 23
+    assert (
+        output / "package" / "runtime" / "boot-image" / "x86_64" / "boot.oat"
+    ).read_bytes() == b"boot.oat"

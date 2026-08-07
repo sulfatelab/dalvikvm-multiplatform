@@ -680,7 +680,7 @@ endfunction()
 
 add_custom_target(art-tests)
 add_custom_target(art-managed-tests)
-foreach(stage w002 w003 w004 w010 w013 w014 w025 w027 w028 w029 w030 w031 w032 w036 w037 w038)
+foreach(stage w002 w003 w004 w010 w013 w014 w025 w027 w028 w029 w030 w031 w032 w036 w037 w038 w039)
     art_define_test_stage("${stage}")
 endforeach()
 
@@ -2455,6 +2455,62 @@ art_add_target_probe(
         --icu-data "${_art_icu_data}"
         --work-root "${CMAKE_CURRENT_BINARY_DIR}/results/w038-aot-exception-fatal-unwind"
         --probe "$<TARGET_FILE:w038aotunwindprobe>"
+        ${_art_managed_runtime_library_args}
+        --timeout 600)
+
+# W-039 rejects independently checksummed unwind-header, entry-array,
+# UNWIND_INFO, and odd-slot-padding corruptions through both real OAT open
+# modes. It verifies canonical function-table deletion, then injects every
+# corrupt artifact into boot startup and requires diagnosed imageless fallback.
+art_add_target_probe(
+    NAME w039aotunwindcorruptionprobe STAGE w039 TYPE SHARED EXECUTION compile-only
+    ${_art_windows_x86_64_msvc_selector}
+    SOURCES "${_art_test_cases_root}/aot-unwind-corruption/probe.cc"
+    LINK_LIBRARIES art
+    COMPILE_OPTIONS
+        -fno-rtti -Wno-thread-safety -Wno-unused-command-line-argument
+        -Wno-microsoft-cast -Wno-invalid-offsetof
+    COMPILE_DEFINITIONS ART_CONSUMING_LIBART
+    CONTRACTS aot boot-image fallback runtime-load unwind
+    PREFIX lib OUTPUT_NAME w039aotunwindcorruptionprobe
+    WINDOWS_EXPORT_ALL_SYMBOLS PRODUCT_POLICY)
+art_add_target_probe(
+    NAME managed_w039_aot_unwind_corruption STAGE w039 TYPE MANAGED
+    EXECUTION target-runnable TIMEOUT 1800
+    ${_art_windows_x86_64_msvc_selector}
+    SOURCES
+        "${_art_test_cases_root}/aot-unwind-corruption/W039BootOatUnwindCorruptionProbe.java"
+        "${_art_test_cases_root}/aot-unwind-corruption/W039BootOatUnwindFallbackProbe.java"
+    DEPENDS
+        art-runtime-boot-image
+        w039aotunwindcorruptionprobe
+        dalvikvm
+        icu_jni
+        javacore
+        openjdk
+    CONTRACTS aot boot-image fallback runtime-load unwind
+    OUTPUT_NAME w039aotunwindcorruptionprobe
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_windows_boot_image_runner}"
+        --target-id "${ART_TARGET_ID}"
+        --dalvikvm "$<TARGET_FILE:dalvikvm>"
+        --boot-jar "${_art_boot_jar}"
+        --app-jar "${_art_managed_root}/w039aotunwindcorruptionprobe.jar"
+        --boot-image-dir "${_art_boot_image_root}"
+        --icu-data "${_art_icu_data}"
+        --work-root "${CMAKE_CURRENT_BINARY_DIR}/results/w039-aot-unwind-corruption"
+        --probe "$<TARGET_FILE:w039aotunwindcorruptionprobe>"
+        --probe-name w039aotunwindcorruptionprobe
+        --main-class W039BootOatUnwindCorruptionProbe
+        --execution-mode aot
+        --unwind-corruption-matrix
+        --unwind-fallback-main-class W039BootOatUnwindFallbackProbe
+        --expect "W039_UNWIND_CORRUPTION_PASS cases=23 opens=50 validation_only=25 executable=25 lifecycle=clean"
+        --expect "W039BootOatUnwindCorruptionProbe PASS"
+        --expect "main end exception=0"
+        --forbid "W039_UNWIND_CORRUPTION_FAIL"
+        --forbid AssertionError
         ${_art_managed_runtime_library_args}
         --timeout 600)
 

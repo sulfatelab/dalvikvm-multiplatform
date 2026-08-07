@@ -605,8 +605,20 @@ VDEX loading but not execution from boot-OAT code. Repeat artifacts are not
 compared byte-for-byte across generations: OAT is a path-sensitive cache
 artifact, and the gate instead validates one manifest-bound matching set. The
 generators do not pass `--force-determinism`. This experimental path remains
-outside normal product staging because selection and successful fallback are
-not integrated.
+outside normal product staging because selection and the full cache-set
+fallback matrix are not integrated.
+
+W-039 extends that unique runner with the unwind corruption/fallback matrix.
+It derives 23 independently checksummed `.oat_unwind.windows` mutations from
+the generated boot OAT, then requires validation-only and executable
+`OatFile::Open()` to reject each with an unwind-specific diagnostic. Canonical
+executable opens prove `RtlLookupFunctionEntry()` registration and clean
+deletion before release. The runner then substitutes every corrupt OAT into
+the staged set, starts ART in interpreter mode, and requires unwind diagnosis,
+ART's imageless-fallback marker, exit zero, and an empty boot image-space list.
+It restores the canonical OAT even on failure. This closes unwind-corruption
+rollback/fallback, not reviewed product selection or the missing/stale/wrong-
+target/cross-artifact fallback cases.
 
 Managed runtime gates must use `support/runtime_gate.py` unless a case has a
 genuinely unique runner. The shared runner invokes `dalvikvm` with `shell=False`,

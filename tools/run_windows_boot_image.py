@@ -43,6 +43,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--probe-name")
     parser.add_argument("--policy-launcher", type=Path)
     parser.add_argument("--cfg-corruption-matrix", action="store_true")
+    parser.add_argument("--unwind-corruption-matrix", action="store_true")
+    parser.add_argument(
+        "--unwind-fallback-main-class",
+        default="W039BootOatUnwindFallbackProbe",
+    )
     parser.add_argument("--expect", action="append", default=[])
     parser.add_argument("--forbid", action="append", default=[])
     parser.add_argument("--timeout", type=int, default=180)
@@ -87,9 +92,16 @@ def run_gate(args: argparse.Namespace) -> Path:
     cfg_corruption_requested = bool(
         getattr(args, "cfg_corruption_matrix", False)
     )
+    unwind_corruption_requested = bool(
+        getattr(args, "unwind_corruption_matrix", False)
+    )
     if cfg_corruption_requested and policy_launcher_arg is None:
         raise WindowsBootImageError(
             "--cfg-corruption-matrix requires --policy-launcher"
+        )
+    if unwind_corruption_requested and getattr(args, "probe", None) is None:
+        raise WindowsBootImageError(
+            "--unwind-corruption-matrix requires --probe and --probe-name"
         )
     windows_cfg: dict[str, object] | None = None
     cfg_marker: str | None = None
@@ -162,6 +174,7 @@ def run_gate(args: argparse.Namespace) -> Path:
         )
     shutil.copyfile(image_root / "manifest.json", image_destination / "manifest.json")
     cfg_corruption: dict[str, object] | None = None
+    unwind_corruption: dict[str, object] | None = None
     if cfg_corruption_requested:
         try:
             cfg_corruption = (
@@ -173,6 +186,21 @@ def run_gate(args: argparse.Namespace) -> Path:
                     / windows_aot_identity.INSTRUCTION_SET
                     / "boot.vdex",
                     package_root / "cfg-corruption",
+                )
+            )
+        except run_dex2oat_no_image.Dex2OatProbeError as exc:
+            raise WindowsBootImageError(str(exc)) from exc
+    if unwind_corruption_requested:
+        try:
+            unwind_corruption = (
+                run_dex2oat_no_image.build_windows_oat_unwind_corruption_corpus(
+                    image_destination
+                    / windows_aot_identity.INSTRUCTION_SET
+                    / "boot.oat",
+                    image_destination
+                    / windows_aot_identity.INSTRUCTION_SET
+                    / "boot.vdex",
+                    package_root / "unwind-corruption",
                 )
             )
         except run_dex2oat_no_image.Dex2OatProbeError as exc:
@@ -231,6 +259,10 @@ def run_gate(args: argparse.Namespace) -> Path:
         environment["W032_CFG_CORRUPTION_ROOT"] = str(
             package_root / "cfg-corruption"
         )
+    if unwind_corruption is not None:
+        environment["W039_UNWIND_CORRUPTION_ROOT"] = str(
+            package_root / "unwind-corruption"
+        )
     if os.name == "nt":
         system_root = environment.get("SystemRoot", r"C:\Windows")
         environment["PATH"] = os.pathsep.join(
@@ -267,6 +299,36 @@ def run_gate(args: argparse.Namespace) -> Path:
     )
     missing = [marker for marker in required if marker not in combined]
     present = [marker for marker in forbidden if marker in combined]
+    unwind_fallback: dict[str, object] | None = None
+    if (
+        unwind_corruption is not None
+        and result.returncode == 0
+        and not missing
+        and not present
+    ):
+        unwind_fallback = _run_unwind_fallback_matrix(
+            dalvikvm=dalvikvm,
+            identity=generation_identity,
+            package_root=package_root,
+            work_root=work_root,
+            environment=environment,
+            staged_oat=(
+                image_destination
+                / windows_aot_identity.INSTRUCTION_SET
+                / "boot.oat"
+            ),
+            corpus_root=package_root / "unwind-corruption",
+            cases=[str(name) for name in unwind_corruption["cases"]],
+            probe_name=probe_name,
+            main_class=str(
+                getattr(
+                    args,
+                    "unwind_fallback_main_class",
+                    "W039BootOatUnwindFallbackProbe",
+                )
+            ),
+            timeout=args.timeout,
+        )
 
     record = {
         "schema_version": 1,
@@ -278,6 +340,8 @@ def run_gate(args: argparse.Namespace) -> Path:
         "cfg_policy_forced": policy_launcher is not None,
         "windows_oat_cfg": windows_cfg,
         "windows_oat_cfg_corruption": cfg_corruption,
+        "windows_oat_unwind_corruption": unwind_corruption,
+        "windows_oat_unwind_fallback": unwind_fallback,
         "working_directory": "package",
         "actual_exit": result.returncode,
         "missing_markers": missing,
@@ -297,11 +361,117 @@ def run_gate(args: argparse.Namespace) -> Path:
         )
     if cfg_marker is not None:
         print(cfg_marker)
+    if unwind_fallback is not None:
+        print(
+            "W039_UNWIND_FALLBACK_MATRIX_PASS "
+            f"cases={unwind_fallback['case_count']} "
+            "diagnostics=unwind image_spaces=0"
+        )
     print(
         "native Windows boot-image gate passed: "
         f"artifacts={len(artifact_records)}, mismatches={len(rejected)}"
     )
     return work_root
+
+
+def _run_unwind_fallback_matrix(
+    *,
+    dalvikvm: Path,
+    identity: windows_aot_identity.IdentityUse,
+    package_root: Path,
+    work_root: Path,
+    environment: dict[str, str],
+    staged_oat: Path,
+    corpus_root: Path,
+    cases: list[str],
+    probe_name: str | None,
+    main_class: str,
+    timeout: int,
+) -> dict[str, object]:
+    if probe_name is None or not cases:
+        raise WindowsBootImageError("unwind fallback matrix inputs are incomplete")
+    if not main_class or any(character.isspace() for character in main_class):
+        raise WindowsBootImageError(
+            "unwind fallback main class must be one nonempty token"
+        )
+    fallback_root = work_root / "unwind-fallback"
+    fallback_root.mkdir()
+    command = _startup_command(
+        dalvikvm,
+        identity,
+        main_class=main_class,
+        execution_mode="interpreter",
+        probe_name=probe_name,
+    )
+    records: list[dict[str, object]] = []
+    try:
+        for case_name in cases:
+            source = _regular_file(corpus_root / f"{case_name}.oat")
+            shutil.copyfile(source, staged_oat)
+            case_environment = dict(environment)
+            case_environment["W039_UNWIND_FALLBACK_CASE"] = case_name
+            result = subprocess.run(
+                command,
+                cwd=package_root,
+                env=case_environment,
+                shell=False,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+            case_root = fallback_root / case_name
+            case_root.mkdir()
+            (case_root / "stdout.txt").write_text(result.stdout, encoding="utf-8")
+            (case_root / "stderr.txt").write_text(result.stderr, encoding="utf-8")
+            combined = result.stdout + "\n" + result.stderr
+            fallback_marker = "Attempting to fall back to imageless running"
+            diagnostic = any(
+                marker in combined
+                for marker in (
+                    "Windows OAT unwind",
+                    ".oat_unwind.windows",
+                    "oatunwindwindows",
+                )
+            )
+            pass_marker = (
+                f"W039_UNWIND_FALLBACK_PASS case={case_name} image_spaces=0"
+            )
+            valid = (
+                result.returncode == 0
+                and fallback_marker in combined
+                and diagnostic
+                and pass_marker in combined
+                and "main end exception=0" in combined
+                and "W039_UNWIND_FALLBACK_FAIL" not in combined
+                and "AssertionError" not in combined
+            )
+            records.append(
+                {
+                    "case": case_name,
+                    "actual_exit": result.returncode,
+                    "unwind_diagnostic": diagnostic,
+                    "imageless_fallback": fallback_marker in combined,
+                    "empty_image_spaces": pass_marker in combined,
+                }
+            )
+            if not valid:
+                tail = "\n".join(combined.splitlines()[-100:])
+                raise WindowsBootImageError(
+                    "unwind fallback case failed: "
+                    f"case={case_name}, exit={result.returncode}\n{tail}"
+                )
+    finally:
+        shutil.copyfile(_regular_file(corpus_root / "canonical.oat"), staged_oat)
+    return {
+        "case_count": len(cases),
+        "diagnosed_count": sum(bool(record["unwind_diagnostic"]) for record in records),
+        "imageless_count": sum(bool(record["imageless_fallback"]) for record in records),
+        "empty_image_spaces_count": sum(
+            bool(record["empty_image_spaces"]) for record in records
+        ),
+        "cases": records,
+    }
 
 
 def _startup_command(

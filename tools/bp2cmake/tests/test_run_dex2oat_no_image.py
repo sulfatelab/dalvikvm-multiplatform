@@ -146,7 +146,7 @@ def _fake_windows_boot_oat() -> bytes:
     entry_count = 7
     entries_offset = 48
     unwind_blob_offset = entries_offset + entry_count * 12
-    unwind_payload = bytearray(unwind_blob_offset + 4)
+    unwind_payload = bytearray(unwind_blob_offset + 8)
     struct.pack_into(
         "<4s11I",
         unwind_payload,
@@ -159,7 +159,7 @@ def _fake_windows_boot_oat() -> bytes:
         entry_count,
         entries_offset,
         unwind_blob_offset,
-        4,
+        8,
         text_address - rodata_address,
         text_address - rodata_address + text_size,
         0,
@@ -174,7 +174,9 @@ def _fake_windows_boot_oat() -> bytes:
             begin + 8,
             unwind_address - rodata_address + unwind_blob_offset,
         )
-    unwind_payload[unwind_blob_offset:] = b"\x01\0\0\0"
+    # One odd-slot UWOP_ALLOC_SMALL descriptor exercises operation and padding
+    # validation while remaining shared by all seven synthetic functions.
+    unwind_payload[unwind_blob_offset:] = b"\x01\x01\x01\0\x01\x02\0\0"
     struct.pack_into(
         "<I", unwind_payload, 44, zlib.adler32(unwind_payload) & 0xFFFFFFFF
     )
@@ -467,6 +469,39 @@ def test_windows_unwind_validator_rejects_blob_corruption(tmp_path):
         run_dex2oat_no_image.validate_windows_oat_unwind(oat)
 
 
+def test_windows_unwind_corruption_corpus_rejects_all_semantic_mutations(tmp_path):
+    oat = tmp_path / "boot.oat"
+    vdex = tmp_path / "boot.vdex"
+    output = tmp_path / "unwind-corruption"
+    oat.write_bytes(_fake_windows_boot_oat())
+    vdex.write_bytes(_fake_vdex())
+
+    record = run_dex2oat_no_image.build_windows_oat_unwind_corruption_corpus(
+        oat, vdex, output
+    )
+
+    assert record["case_count"] == 23
+    assert record["canonical_open_count"] == 4
+    assert record["rejection_open_count"] == 46
+    assert record["total_open_count"] == 50
+    assert record["fallback_count"] == 23
+    assert run_dex2oat_no_image.validate_windows_oat_unwind(
+        output / "canonical.oat"
+    )
+    cases = (output / "cases.txt").read_text(encoding="ascii").splitlines()
+    assert cases == record["cases"]
+    assert len(set(cases)) == 23
+    assert int(
+        (output / "first-entry.txt").read_text(encoding="ascii").strip()
+    ) == record["first_entry_offset"]
+    for name in cases:
+        assert (output / f"{name}.vdex").is_file()
+        with pytest.raises(run_dex2oat_no_image.Dex2OatProbeError):
+            run_dex2oat_no_image.validate_windows_oat_unwind(
+                output / f"{name}.oat"
+            )
+
+
 def test_windows_cfg_validator_accepts_canonical_transport(tmp_path):
     oat = tmp_path / "boot.oat"
     oat.write_bytes(_fake_windows_boot_oat())
@@ -509,7 +544,7 @@ def test_windows_cfg_corruption_corpus_rejects_all_semantic_mutations(tmp_path):
 def test_windows_cfg_validator_rejects_checksum_corruption(tmp_path):
     oat = tmp_path / "boot.oat"
     data = bytearray(_fake_windows_boot_oat())
-    data[0x588 + 48] ^= 0x10
+    data[0x58C + 48] ^= 0x10
     oat.write_bytes(data)
 
     with pytest.raises(run_dex2oat_no_image.Dex2OatProbeError, match="checksum"):
@@ -531,7 +566,7 @@ def test_windows_cfg_validator_rejects_invalid_target(
 ):
     oat = tmp_path / "boot.oat"
     data = bytearray(_fake_windows_boot_oat())
-    struct.pack_into("<II", data, 0x588 + 48 + entry_index * 8, code_offset, kind_flags)
+    struct.pack_into("<II", data, 0x58C + 48 + entry_index * 8, code_offset, kind_flags)
     _rewrite_fake_cfg_checksum(data)
     oat.write_bytes(data)
 
@@ -542,7 +577,7 @@ def test_windows_cfg_validator_rejects_invalid_target(
 def test_windows_cfg_validator_rejects_missing_trampoline_role(tmp_path):
     oat = tmp_path / "boot.oat"
     data = bytearray(_fake_windows_boot_oat())
-    struct.pack_into("<I", data, 0x588 + 48 + 2 * 8 + 4, 1)
+    struct.pack_into("<I", data, 0x58C + 48 + 2 * 8 + 4, 1)
     _rewrite_fake_cfg_checksum(data)
     oat.write_bytes(data)
 

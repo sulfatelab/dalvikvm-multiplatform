@@ -522,18 +522,15 @@ def validate_windows_oat_unwind(path: Path) -> dict[str, object]:
         previous_end = end_offset
         unique_unwind_offsets.add(unwind_info_offset)
 
-    for unwind_info_offset in unique_unwind_offsets:
+    sorted_unwind_offsets = sorted(unique_unwind_offsets)
+    for index, unwind_info_offset in enumerate(sorted_unwind_offsets):
         local_offset = unwind_info_offset - section_oat_offset
-        if local_offset + 4 > len(payload):
-            raise Dex2OatProbeError("boot.oat has truncated x64 UNWIND_INFO")
-        version_and_flags, _prologue_size, slot_count, _frame = struct.unpack_from(
-            "<4B", payload, local_offset
+        local_end = (
+            sorted_unwind_offsets[index + 1] - section_oat_offset
+            if index + 1 < len(sorted_unwind_offsets)
+            else len(payload)
         )
-        if version_and_flags != 1:
-            raise Dex2OatProbeError("boot.oat has unsupported x64 UNWIND_INFO flags/version")
-        descriptor_size = 4 + ((slot_count + 1) & ~1) * 2
-        if local_offset + descriptor_size > len(payload):
-            raise Dex2OatProbeError("boot.oat has truncated x64 unwind slots")
+        _validate_windows_x64_unwind_info(payload[local_offset:local_end])
 
     _validate_dynamic_symbol(
         data,
@@ -564,6 +561,103 @@ def validate_windows_oat_unwind(path: Path) -> dict[str, object]:
         "code_end": code_end,
         "size": unwind_section_size,
     }
+
+
+def _validate_windows_x64_unwind_info(data: bytes) -> None:
+    """Mirror the runtime's supported version-1 AMD64 UNWIND_INFO subset."""
+    if len(data) < 4 or data[0] != 1:
+        raise Dex2OatProbeError(
+            "boot.oat has unsupported x64 UNWIND_INFO flags/version"
+        )
+    prologue_size = data[1]
+    slot_count = data[2]
+    frame_register = data[3] & 0xF
+    frame_offset = data[3] >> 4
+    padded_slot_count = (slot_count + 1) & ~1
+    descriptor_size = 4 + padded_slot_count * 2
+    if descriptor_size > len(data):
+        raise Dex2OatProbeError("boot.oat has truncated x64 unwind slots")
+
+    nonvolatile_gprs = {3, 5, 6, 7, 12, 13, 14, 15}
+    nonvolatile_xmms = set(range(6, 16))
+    slot = 0
+    previous_code_offset = 256
+    set_frame_pointer_count = 0
+    while slot < slot_count:
+        code_offset = data[4 + slot * 2]
+        operation_and_info = data[5 + slot * 2]
+        operation = operation_and_info & 0xF
+        operation_info = operation_and_info >> 4
+        if (
+            code_offset == 0
+            or code_offset > prologue_size
+            or code_offset >= previous_code_offset
+        ):
+            raise Dex2OatProbeError(
+                "boot.oat has unordered x64 unwind prologue offsets"
+            )
+        previous_code_offset = code_offset
+        used_slots = 1
+        if operation == 0:  # UWOP_PUSH_NONVOL.
+            if operation_info not in nonvolatile_gprs:
+                raise Dex2OatProbeError(
+                    "boot.oat x64 unwind pushes a volatile register"
+                )
+        elif operation == 1:  # UWOP_ALLOC_LARGE.
+            if operation_info > 1:
+                raise Dex2OatProbeError(
+                    "boot.oat has an invalid x64 UWOP_ALLOC_LARGE"
+                )
+            used_slots = 2 if operation_info == 0 else 3
+        elif operation == 2:  # UWOP_ALLOC_SMALL.
+            pass
+        elif operation == 3:  # UWOP_SET_FPREG.
+            if operation_info != 0:
+                raise Dex2OatProbeError(
+                    "boot.oat has an invalid x64 UWOP_SET_FPREG"
+                )
+            set_frame_pointer_count += 1
+        elif operation in (4, 5):  # UWOP_SAVE_NONVOL[_FAR].
+            if operation_info not in nonvolatile_gprs:
+                raise Dex2OatProbeError(
+                    "boot.oat x64 unwind saves a volatile register"
+                )
+            used_slots = 2 if operation == 4 else 3
+        elif operation in (8, 9):  # UWOP_SAVE_XMM128[_FAR].
+            if operation_info not in nonvolatile_xmms:
+                raise Dex2OatProbeError(
+                    "boot.oat x64 unwind saves a volatile XMM register"
+                )
+            used_slots = 2 if operation == 8 else 3
+        elif operation == 10:  # UWOP_PUSH_MACHFRAME.
+            if operation_info > 1:
+                raise Dex2OatProbeError(
+                    "boot.oat has an invalid x64 UWOP_PUSH_MACHFRAME"
+                )
+        else:
+            raise Dex2OatProbeError(
+                "boot.oat has an unsupported x64 unwind operation"
+            )
+        if used_slots > slot_count - slot:
+            raise Dex2OatProbeError(
+                "boot.oat has a truncated x64 multi-slot unwind operation"
+            )
+        slot += used_slots
+
+    if slot_count & 1 and data[4 + slot_count * 2 : 6 + slot_count * 2] != b"\0\0":
+        raise Dex2OatProbeError("boot.oat has nonzero x64 unwind slot padding")
+    if frame_register == 0:
+        if frame_offset != 0 or set_frame_pointer_count != 0:
+            raise Dex2OatProbeError(
+                "boot.oat has an inconsistent x64 unwind frame register"
+            )
+    elif (
+        frame_register not in nonvolatile_gprs
+        or set_frame_pointer_count != 1
+    ):
+        raise Dex2OatProbeError("boot.oat has an invalid x64 unwind frame register")
+    if any(data[descriptor_size:]):
+        raise Dex2OatProbeError("boot.oat has nonzero x64 unwind trailing bytes")
 
 
 def validate_windows_oat_cfg(path: Path) -> dict[str, object]:
@@ -705,6 +799,199 @@ def validate_windows_oat_cfg(path: Path) -> dict[str, object]:
         "code_begin": code_begin,
         "code_end": code_end,
         "size": cfg_section_size,
+    }
+
+
+def build_windows_oat_unwind_corruption_corpus(
+    oat_path: Path, vdex_path: Path, output_root: Path
+) -> dict[str, object]:
+    """Create semantic unwind corruptions for ART opens and boot fallback."""
+    oat_path = _regular_file(oat_path)
+    vdex_path = _regular_file(vdex_path)
+    output_root = Path(os.path.abspath(output_root))
+    if output_root.is_symlink():
+        raise Dex2OatProbeError(
+            f"refusing symbolic-link unwind corruption root: {output_root}"
+        )
+    if output_root.exists():
+        if not output_root.is_dir():
+            raise Dex2OatProbeError(
+                f"unwind corruption root is not a directory: {output_root}"
+            )
+        shutil.rmtree(output_root)
+    output_root.mkdir(parents=True)
+
+    original = oat_path.read_bytes()
+    _data, _loads, _raw_sections, sections = _read_windows_boot_oat_layout(oat_path)
+    if ".oat_unwind.windows" not in sections or ".rodata" not in sections:
+        raise Dex2OatProbeError("boot.oat is missing .oat_unwind.windows")
+    _, unwind_section = sections[".oat_unwind.windows"]
+    _, rodata_section = sections[".rodata"]
+    unwind_address, unwind_offset, unwind_size = unwind_section[3:6]
+    rodata_address = rodata_section[3]
+    if unwind_size < 64 or unwind_offset + unwind_size > len(original):
+        raise Dex2OatProbeError("boot.oat has an unusable unwind mutation section")
+    header = struct.unpack_from("<4s11I", original, unwind_offset)
+    entry_count = header[5]
+    entries_offset = header[6]
+    unwind_blob_offset = header[7]
+    code_begin = header[9]
+    code_end = header[10]
+    if (
+        entry_count < 2
+        or entries_offset != 48
+        or entries_offset + entry_count * 12 != unwind_blob_offset
+        or unwind_blob_offset >= unwind_size
+    ):
+        raise Dex2OatProbeError("boot.oat unwind entries cannot support mutation")
+    section_oat_offset = unwind_address - rodata_address
+
+    def rewrite_checksum(data: bytearray) -> None:
+        struct.pack_into("<I", data, unwind_offset + 44, 0)
+        checksum = zlib.adler32(
+            data[unwind_offset : unwind_offset + unwind_size]
+        ) & 0xFFFFFFFF
+        struct.pack_into("<I", data, unwind_offset + 44, checksum)
+
+    def link_vdex(name: str) -> None:
+        destination = output_root / f"{name}.vdex"
+        try:
+            os.link(vdex_path, destination)
+        except OSError:
+            shutil.copyfile(vdex_path, destination)
+
+    cases: list[str] = []
+
+    def write_case(name: str, data: bytearray, update_checksum: bool = True) -> None:
+        if update_checksum:
+            rewrite_checksum(data)
+        (output_root / f"{name}.oat").write_bytes(data)
+        link_vdex(name)
+        cases.append(name)
+
+    (output_root / "canonical.oat").write_bytes(original)
+    link_vdex("canonical")
+
+    header_mutations: tuple[tuple[str, int, int], ...] = (
+        ("version", 4, 2),
+        ("header-size", 8, 52),
+        ("target-machine", 12, 0xAA64),
+        ("entry-size", 16, 16),
+        ("entry-count", 20, 0),
+        ("entries-offset", 24, 52),
+        ("unwind-offset", 28, unwind_blob_offset + 4),
+        ("unwind-size", 32, header[8] - 4),
+        ("code-begin", 36, code_begin + 1),
+        ("code-end", 40, code_end - 1),
+    )
+    magic = bytearray(original)
+    magic[unwind_offset] ^= 1
+    write_case("magic", magic)
+    for name, relative_offset, value in header_mutations:
+        data = bytearray(original)
+        struct.pack_into("<I", data, unwind_offset + relative_offset, value)
+        write_case(name, data)
+    checksum = bytearray(original)
+    checksum[unwind_offset + 44] ^= 1
+    write_case("checksum", checksum, update_checksum=False)
+
+    first_entry = unwind_offset + entries_offset
+    second_entry = first_entry + 12
+    last_entry = first_entry + (entry_count - 1) * 12
+    first_begin, first_end, first_info = struct.unpack_from(
+        "<III", original, first_entry
+    )
+    second_begin, second_end, second_info = struct.unpack_from(
+        "<III", original, second_entry
+    )
+    last_begin, _last_end, last_info = struct.unpack_from("<III", original, last_entry)
+    entry_mutations: tuple[tuple[str, int, int, int, int], ...] = (
+        ("entry-before-code", first_entry, code_begin - 1, first_end, first_info),
+        ("entry-overlap", second_entry, first_end - 1, second_end, second_info),
+        ("entry-empty", first_entry, first_begin, first_begin, first_info),
+        ("entry-after-code", last_entry, last_begin, code_end + 1, last_info),
+        ("entry-unaligned-info", first_entry, first_begin, first_end, first_info + 1),
+        (
+            "entry-info-before-blob",
+            first_entry,
+            first_begin,
+            first_end,
+            section_oat_offset + unwind_blob_offset - 4,
+        ),
+        (
+            "entry-info-at-end",
+            last_entry,
+            last_begin,
+            code_end,
+            section_oat_offset + unwind_size,
+        ),
+    )
+    for name, offset, begin, end, info in entry_mutations:
+        data = bytearray(original)
+        struct.pack_into("<III", data, offset, begin, end, info)
+        write_case(name, data)
+
+    info_offsets = sorted(
+        {
+            struct.unpack_from(
+                "<I", original, first_entry + index * 12 + 8
+            )[0]
+            for index in range(entry_count)
+        }
+    )
+    local_info_offsets = [offset - section_oat_offset for offset in info_offsets]
+    if not local_info_offsets or any(
+        offset < unwind_blob_offset or offset + 4 > unwind_size
+        for offset in local_info_offsets
+    ):
+        raise Dex2OatProbeError("boot.oat has unusable unwind descriptors")
+    operation_descriptor: int | None = None
+    odd_slot_descriptor: int | None = None
+    for local_offset in local_info_offsets:
+        slot_count = original[unwind_offset + local_offset + 2]
+        descriptor_size = 4 + ((slot_count + 1) & ~1) * 2
+        if local_offset + descriptor_size > unwind_size:
+            raise Dex2OatProbeError("boot.oat has a truncated unwind descriptor")
+        if slot_count > 0 and operation_descriptor is None:
+            operation_descriptor = local_offset
+        if slot_count & 1 and odd_slot_descriptor is None:
+            odd_slot_descriptor = local_offset
+    if operation_descriptor is None or odd_slot_descriptor is None:
+        raise Dex2OatProbeError(
+            "boot.oat needs nonempty and odd-slot unwind descriptors for mutation"
+        )
+
+    info_version = bytearray(original)
+    info_version[unwind_offset + local_info_offsets[0]] = 2
+    write_case("info-version", info_version)
+
+    volatile_register = bytearray(original)
+    volatile_register[unwind_offset + operation_descriptor + 5] = 0x10
+    write_case("info-volatile-register", volatile_register)
+
+    unsupported_operation = bytearray(original)
+    unsupported_operation[unwind_offset + operation_descriptor + 5] = 0x06
+    write_case("info-unsupported-operation", unsupported_operation)
+
+    slot_count = original[unwind_offset + odd_slot_descriptor + 2]
+    nonzero_padding = bytearray(original)
+    nonzero_padding[unwind_offset + odd_slot_descriptor + 4 + slot_count * 2] = 1
+    write_case("info-nonzero-padding", nonzero_padding)
+
+    (output_root / "cases.txt").write_text(
+        "\n".join(cases) + "\n", encoding="ascii"
+    )
+    (output_root / "first-entry.txt").write_text(
+        f"{first_begin}\n", encoding="ascii"
+    )
+    return {
+        "case_count": len(cases),
+        "cases": cases,
+        "canonical_open_count": 4,
+        "rejection_open_count": len(cases) * 2,
+        "total_open_count": len(cases) * 2 + 4,
+        "fallback_count": len(cases),
+        "first_entry_offset": first_begin,
     }
 
 

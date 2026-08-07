@@ -1,6 +1,6 @@
 # Windows AOT and OAT design
 
-Status: active boot-only early bring-up (revised 2026-08-07). This document
+Status: active boot-only early bring-up (revised 2026-08-08). This document
 records the current ART OAT/VDEX/image contracts and the selected Windows AOT
 artifact and loader design. Windows keeps the same ELF64 coat and header
 identity as Linux, while using 64-KiB ELF/image segment alignment for the
@@ -13,13 +13,17 @@ package-root launcher consume that identity, implements private-copy ELF/VDEX
 loading, and passes validation-only plus executable boot loading on the
 authoritative native host. Steps 4, 5, and 8 are complete. Steps 2 and 9 remain
 partial: the seven negative identities are still launcher-level pre-spawn
-checks rather than ART diagnostics, and normal product selection plus
-successful imageless fallback are not integrated. W-031 implements the
+checks rather than ART diagnostics, and normal product selection plus the
+missing/stale/wrong-target/cross-artifact fallback matrix are not integrated.
+W-039 covers unwind-corruption fallback only. W-031 implements the
 Windows x64 boot-AOT unwind writer, section-local checksum, dynamic anchors,
 validation-only parser, executable registration, and managed/JNI/trampoline
-lookup plus synthetic unwind gate. Step 6 is consequently partial rather than
-complete: corruption/fallback injection and stronger XMM-bearing AOT-frame
-execution remain. W-031 also locates underlying
+lookup plus synthetic unwind gate. W-039 rejects 23 independently checksummed
+header, entry, `UNWIND_INFO`, and padding corruptions through both real OAT
+open modes, proves canonical registration/deletion lifetime, and exercises a
+diagnosed, clean imageless fallback for every corrupt staged boot OAT. Step 6
+is consequently partial only for actual XMM-bearing boot-AOT frame execution.
+W-031 also locates underlying
 managed/JNI bodies and passes corresponding runtime calls with JIT disabled.
 W-036 corrects the Windows post-start nterp visitor so it repairs only methods
 still using the switch-interpreter bridge and preserves published boot-AOT
@@ -37,9 +41,11 @@ method in its Java trace and a fatal native callback whose live Windows unwind
 crosses the exact armed boot-OAT function, reaches ART's UEF, and writes exactly
 one valid minidump. It repairs the nterp-to-compiled PE boundary by restoring
 RBX, RBP, and R12-R15 in all 187 dynamic-gap adapter records. Step 10 remains
-partial for relocation, fault, and root variants outside W-037's focused case
-and other explicitly untested execution breadth; the managed-exception and
-fatal-walk contract is accepted. W-032 now implements
+partial for the explicit resolution-trampoline, interface/IMT,
+quick-to-interpreter, deoptimization, translated-SOE, reflection, and class-
+initialization matrix defined below; the accepted relocation, translated-NPE,
+BSS-root, managed-exception, and fatal-walk cases are not open-ended requests
+for duplicate variants. W-032 now implements
 `.oat_cfg.windows` emission, dynamic anchors, runtime validation and policy
 observation, plus a forced-CFG PE caller that successfully enters quick and
 compiled-JNI boot-OAT code without target-state API calls. Steps 7 and 11 are
@@ -75,6 +81,8 @@ The W-037 relocation/fault/GC-root result is
 [`docs/evidence/windows_x64_w037_result.md`](docs/evidence/windows_x64_w037_result.md).
 The W-038 managed-exception/fatal-unwind result is
 [`docs/evidence/windows_x64_w038_result.md`](docs/evidence/windows_x64_w038_result.md).
+The W-039 unwind-corruption/fallback result is
+[`docs/evidence/windows_x64_w039_result.md`](docs/evidence/windows_x64_w039_result.md).
 The authoritative implementation gate is Windows Server 2025 Datacenter
 Evaluation, x64 build 26100. Linux and Wine remain development and structural
 gates; the former Windows 10 lab host is unavailable.
@@ -565,13 +573,17 @@ oatdataimgrelro, oatdataimgrelrolastword,
 oatdataimgrelroappimage,
 oatbss, oatbssmethods, oatbssroots, oatbsslastword,
 oatdex, oatdexlastword,
-oatunwindwindows, oatunwindwindowslastword
+oatunwindwindows, oatunwindwindowslastword,
+oatcfgwindows, oatcfgwindowslastword
 ```
 
 `oatunwindwindows`/`oatunwindwindowslastword` are the two anchors added for the
 Windows x64 AOT unwind table. They are required for a Windows boot OAT with
 quick code and must resolve inside an R segment. Both open modes validate the
 pair and section; a validation-only open does not register it.
+`oatcfgwindows`/`oatcfgwindowslastword` are the optional observation-mode CFG
+pair. If either is present, both must resolve inside the same checked
+read-only metadata envelope and the section must validate.
 
 Validate complete dynamic/string/symbol/hash ranges, exact entry sizes, bounded
 counts, in-range NUL termination, bucket/chain indexes and termination,
@@ -2001,8 +2013,13 @@ transport:
   representative quick, JNI, and trampoline PC, and `RtlVirtualUnwind()`
   restores the `RBP`-anchored frame from a boot-OAT method; and
 - a native exception gate: a managed throw, a translated NPE, and a fatal dump
-  each walk through boot-OAT frames with correct nonvolatile restoration. W-037
-  and W-038 jointly pass this execution contract; retain them as regressions.
+  exercise boot-OAT frames, with an actual XMM-bearing boot-AOT frame proving
+  nonvolatile restoration. W-037 proves translated-NPE recovery from an OAT
+  PC, and W-038 proves the managed Java trace plus a live Windows fatal walk
+  through the exact OAT record and repaired nterp GPR boundary. Neither proves
+  XMM restoration in an actual boot-AOT frame. W-039 completes the malformed-
+  table rejection, registration-lifetime, and imageless-fallback part of this
+  matrix. Retain all three gates and add the XMM-bearing frame case.
 
 ## Windows CFG format and integration
 
@@ -2289,11 +2306,12 @@ target through the module's `__guard_dispatch_icall_fptr`; its machine code is
 independently disassembled to prove that the guarded dispatch, rather than an
 unguarded `call` or `jmp`, reaches the OAT address. The bridge enters selected
 underlying quick and JNI boot-OAT bodies and verifies their results. Ordinary
-managed workloads exercise resolution, JNI, interface/IMT,
-quick-to-interpreter, and nterp paths; the gate records which paths actually
-entered an OAT address rather than claiming that structural lookup executed
-all seven trampolines. The complete trampoline set is still required in the
-serialized-table audit.
+managed workloads eventually exercise resolution, JNI, interface/IMT,
+quick-to-interpreter, and nterp paths. Those behavioral cases belong to
+sequence step 10, not the step-7 transport or step-11 allocation decision.
+Each gate records which paths actually entered an OAT address rather than
+claiming that structural lookup executed all seven trampolines. The complete
+trampoline set is still required in the serialized-table audit.
 
 If CFG cannot be forced on, if the caller lacks a guard dispatch, or if no
 representative guarded call reaches an address in the boot-OAT RX range, the
@@ -2439,7 +2457,7 @@ representative ordinary managed-dispatch path, and W-037 proves one relocated
 ordinary null-fault path plus focused OAT BSS-root survival. W-038 proves one
 explicit managed-exception path and one fatal boot-OAT walk through ART's UEF
 to a valid minidump. Real resolution, IMT, interpreter, and broader fault/root
-variants remain step-10/step-11 work; they do not reopen the completed section
+variants remain step-10 work; they do not reopen the completed section
 transport.
 
 The following gates are separate and do not block W-032:
@@ -2466,7 +2484,8 @@ The product integration must define:
   supported;
 - the input boot class path and compiler filter;
 - the target-specific staging paths for the matching ART/OAT/VDEX set;
-- whether the first staged set is single- or multi-component;
+- the selected single-component `boot` topology, with any extension component
+  rejected as an identity mismatch;
 - an explicit opt-in while AOT remains experimental; and
 - startup behavior when any component is missing, mismatched, cannot consume
   its exact reservation, fails VDEX/setup validation, or cannot register
@@ -2492,13 +2511,16 @@ evidence before transport and image integration.
    twice on Server 2025 build 26100, completing this step.
 2. Select stable textual boot-class-path, dex-location, and `-Ximage:`
    identities. W-029 selects the single-component package-relative contract
-   and passes its mismatch preflight on native Server 2025. Complete the step
-   only when the Windows generator and launcher consume it and native ART
-   accepts the canonical strings while diagnosing the intentional mismatches.
+   and passes its mismatch preflight on native Server 2025. W-030 makes the
+   generator and launcher consume it and native ART accepts the canonical
+   strings. Complete the step when ART itself diagnoses the intentional
+   mismatches; the current seven-case launcher preflight rejects before spawn.
 3. Execute the existing characterization tests, closing H-005 rather than
    relying only on syntax/build evidence. Add a two-target trampoline
-   regression gate proving that the shared producer emits Linux `GS` Thread
-   access and Windows `R15` Thread access through the target-aware assembler.
+   disassembly regression proving that the shared producer emits Linux `GS`
+   Thread access and Windows `R15` Thread access through the target-aware
+   assembler. Behavioral resolution and quick-to-interpreter traversal belongs
+   to step 10.
 4. Add the narrow Windows private-copy replacement for file-backed
    `MapFileAtAddress(..., reuse=true)` under `ElfOatFile`. Test both
    validation-only allocation and executable reservation consumption while
@@ -2510,9 +2532,10 @@ evidence before transport and image integration.
    predicate, `CompiledMethod` storage, dedup-safe `OatWriter` entry collection,
    `.oat_unwind.windows` emission with two anchors and its section-local
    version/checksum, then `WindowsAotUnwindRegistry`. W-031 implements this
-   core path, and W-038 accepts managed-exception/fatal stack walking;
-   corruption/fallback injection and stronger XMM-bearing AOT-frame execution
-   remain before completion.
+   core path, W-038 accepts managed-exception/fatal stack walking, and W-039
+   accepts semantic corruption rejection, registration lifetime, rollback,
+   and diagnosed imageless fallback. Actual XMM-bearing boot-AOT frame
+   execution remains before completion.
 7. Implement `.oat_cfg.windows` collection, independent serialization,
    conditional ELF layout/anchors, and runtime validation as W-032. Keep
    observation mode as the default, require a verified guarded caller in the
@@ -2660,7 +2683,9 @@ including at `-j1`, is non-blocking characterization. The generators do not
 request `--force-determinism`. Step 9 remains `PARTIAL`
 because W-030 is an explicit experimental gate, not
 normal product selection, and it detects rather than successfully exercises
-the whole-transaction imageless fallback. The gate uses `-Xint`, so W-030 by
+the whole-transaction imageless fallback. W-039 now proves that fallback for
+all 23 semantic unwind-table failures, but missing, stale, wrong-target, and
+cross-artifact cache-set failures remain. The gate uses `-Xint`, so W-030 by
 itself provides loading rather than step-10 execution evidence.
 
 ### Numbered sequence step 10 execution status
@@ -2700,9 +2725,9 @@ OAT BSS GC root. After allocation pressure and eight explicit `System.gc()`
 rounds, the heap's completed-GC counter has advanced by at least eight, and the
 OAT root slot is still non-null and names the same object. The selected method
 still publishes the exact registered boot-OAT entrypoint captured before the
-call. This closes the focused relocation, managed-null-fault, and BSS-root
-case, but not all of step 10: relocation, fault, and root variants outside this
-single case remain. The accepted record is
+call. This closes step 10's representative paired-relocation,
+managed-null-fault, and BSS-root conditions; it does not by itself cover the
+other named execution paths below. The accepted record is
 [`docs/evidence/windows_x64_w037_result.md`](docs/evidence/windows_x64_w037_result.md).
 
 W-038 closes the separately listed managed-exception/fatal-walk contract. Its
@@ -2730,6 +2755,36 @@ structural stage passes 8/8. W-038 itself passes 1/1, its two child contracts
 complete, and its fatal child produces one 1,207,378-byte minidump. The accepted
 record is
 [`docs/evidence/windows_x64_w038_result.md`](docs/evidence/windows_x64_w038_result.md).
+
+The remaining step-10 exit matrix is finite and owned here: exercise the
+resolution trampoline, interface/IMT dispatch, quick-to-interpreter bridge,
+deoptimization, translated stack overflow, reflection, and class
+initialization while JIT is disabled, and record entry into boot-OAT RX code
+where that path is expected to execute compiled code. W-036 through W-038
+already satisfy representative ordinary dispatch, paired relocation,
+translated NPE, BSS-root survival, managed exception, and fatal-dump walking.
+Those accepted cases do not require unspecified duplicate relocation, fault,
+or root variants before step 10 can complete.
+
+W-039 closes the unwind-corruption and ordinary rollback/fallback condition.
+Its generated corpus mutates all version-1 transport layers while recomputing
+the section checksum except in the checksum case: 12 header/checksum cases,
+seven function-entry cases, and four `UNWIND_INFO`/padding cases. The native
+probe opens the canonical OAT and every corrupt OAT through validation-only
+and executable `OatFile::Open()`, requiring an unwind-specific diagnostic for
+each rejection. It also proves that an executable canonical open is visible to
+`RtlLookupFunctionEntry()` and that destroying the OAT removes the entry before
+the mapping is released. This produces 50 opens: 25 per mode, including four
+canonical opens and 46 corrupt rejections.
+
+The launcher then substitutes every corrupt OAT into the staged cache set and
+starts ART in interpreter mode. Each of the 23 processes reports the unwind
+diagnostic, reaches ART's normal "Attempting to fall back to imageless
+running" path, exits zero, and has an empty `Heap::GetBootImageSpaces()` list.
+The canonical OAT is restored even on failure. This proves safe ordinary
+unwind-registration failure before publication; it does not weaken the fatal
+`RtlDeleteFunctionTable()` invariant. The accepted record is
+[`docs/evidence/windows_x64_w039_result.md`](docs/evidence/windows_x64_w039_result.md).
 
 ### Pre-dispatch characterization record
 
@@ -2811,7 +2866,7 @@ cannot sit between `.text` and `.data.img.rel.ro` without breaking
 |---|---|---|---|
 | 1 | The seven shared OAT trampolines still use the source spelling `gs()->jmp(Address::ThreadOffsetAddr(...))`, allegedly leaving Windows output `GS`-relative | **Rejected: false critical finding** | On Windows, `X86_64Assembler::gs()` emits no `0x65` prefix and `ThreadOffsetAddr()` constructs an `R15`-relative address. The existing producer is already target-aware. Retain Linux/Windows disassembly and execution gates as regression tests; no trampoline regeneration is required. |
 | 2 | A proposed unwind-emission predicate based only on `kIsTargetWindows` would exclude Windows host builds | **Accepted, with wording correction** | Preserve the semantic union of host Windows and target Windows used by the current `_WIN32 \|\| ART_TARGET_WINDOWS` gates. A shared constexpr is acceptable if it expresses that union; identical preprocessor spelling is not required. |
-| 3 | Boot-class-path and dex-location identity is exact `':'`-joined text, without Windows path normalization or case folding | **Accepted; preflight implemented** | W-029 pins `/system/framework/boot.jar`, the single-component topology, and package-relative `runtime/boot-image/boot.art`; it rejects seven intentional mismatches natively. Actual Windows generation and ART startup must still consume and prove the contract. |
+| 3 | Boot-class-path and dex-location identity is exact `':'`-joined text, without Windows path normalization or case folding | **Accepted; canonical path implemented** | W-029 pins `/system/framework/boot.jar`, the single-component topology, and package-relative `runtime/boot-image/boot.art`; it rejects seven intentional mismatches natively. W-030 makes native generation, the manifest, staging, and canonical ART startup consume that contract. The remaining gap is ART-level diagnosis of the intentional negative cases; the current seven-case matrix rejects in the launcher before spawn. |
 | 4 | Image mode reaches Windows runtime paths not covered by imageless smoke tests, while some heap/image layout invariants are fatal | **Accepted, with narrower scope** | Expected compatibility failures must reject the artifact before trusted-layout invariants. `ImageSpace::LoadBootImage()` already supports a false-return/imageless path; debug-only trusted-layout `CHECK`s such as boot-image contiguity remain internal invariants and need not become hostile-input recovery checks. |
 | 5 | Native `dex2oat.exe` operation was unproven | **Accepted and closed, with gate correction** | `--version` is unsupported. W-028 defines the real trivial single-JAR no-image OAT/VDEX compile and passes twice on native Server 2025 with structurally valid artifacts; the recorded outputs happened to match, but byte identity is not an acceptance condition. It exercises compiler and watchdog paths, not `ImageWriter`; boot-set generation remains a later step. |
 | 6 | Whole-span Windows commit, not just 64-KiB alignment gaps, dominates reservation cost | **Accepted** | Measure the full boot-image reservation, OAT prefix, padding, committed span, and working set separately. |
@@ -2848,9 +2903,10 @@ entrypoints across the Windows nterp repair pass and proves one representative
 ordinary managed dispatch at the exact registered boot-OAT RX PC. W-037 adds a
 focused paired relocation, recovered null fault, and surviving BSS-root case.
 W-038 adds an explicit managed throw plus a fatal Windows walk through the
-armed boot-OAT frame to ART's UEF and one valid minidump. Residual risk remains
-medium/high because broader relocation/fault/root and unwind negative matrices,
-other untested execution breadth, product selection/fallback, and full
+armed boot-OAT frame to ART's UEF and one valid minidump. W-039 closes the
+23-case unwind-negative and ordinary fallback matrices. Residual risk remains
+medium/high because actual boot-AOT XMM restoration, the finite remaining
+step-10 path matrix, product selection/cache-set fallback, and full
 measurements remain open. Explicit CFG
 additionally depends on an unresolved invalid-by-default allocation sequence.
 CFG explicit
@@ -3015,11 +3071,11 @@ tool policy are deferred.
 | Private-copy memory/startup | High operational | Whole-span commit for simplicity; measure 64-KiB padding and committed gaps before optimizing |
 | Wrong cross-OS boot artifacts staged | High | Windows-target-specific staging plus image/OAT checksums and actual AOT execution tests |
 | Boot topology mismatch | High | Enforce W-029's selected single `boot` component in generation, the staged manifest, image-header validation, and startup; reject an unexpected extension component |
-| Target-aware trampoline lowering regresses | Medium | The shared producer already lowers Thread access to Linux `GS` or Windows `R15`; retain two-target disassembly plus resolution/quick-to-interpreter execution gates |
+| Target-aware trampoline lowering regresses | Medium | The shared producer already lowers Thread access to Linux `GS` or Windows `R15`; retain step-3 two-target disassembly and step-10 resolution/quick-to-interpreter execution gates |
 | Native `dex2oat.exe` operation regresses | Medium | Keep the accepted W-028 real single-JAR no-image `.oat`/`.vdex` compile as a native Server 2025 regression gate; `--version` is not supported and is not a substitute |
 | Boot class path / dex location strings disagree between generation and load | High | W-029 pins logical `/system/framework/boot.jar`; W-030 makes generation, manifest, staging, and startup consume it and rejects launcher drift without normalization; ART-level intentional-mismatch diagnostics remain required |
 | Path-sensitive cache artifacts are mixed across generations | High | Treat each generated ART/OAT/VDEX set as one unit, record its intentional logical locations and per-run sizes/hashes, validate the manifest before staging, and never require or infer cross-generation byte identity |
-| Image loads but normal dispatch never uses boot-OAT code | Mitigated for focused W-036/W-037/W-038 paths | W-036 observes ordinary `Integer.parseInt(String)` dispatch at its exact current registered boot-OAT entry PC; W-037 observes ordinary `Arrays.sort(int[])` faulting inside registered relocated boot-OAT RX code and recovering with its BSS root intact; W-038 proves explicit managed-exception and fatal-walk execution through registered boot-OAT methods; retain all three JIT-disabled gates and complete only concrete untested execution and relocation/fault/root variants |
+| Image loads but normal dispatch never uses boot-OAT code | Mitigated for focused W-036/W-037/W-038 paths | W-036 observes ordinary `Integer.parseInt(String)` dispatch at its exact current registered boot-OAT entry PC; W-037 observes ordinary `Arrays.sort(int[])` faulting inside registered relocated boot-OAT RX code and recovering with its BSS root intact; W-038 proves explicit managed-exception and fatal-walk execution through registered boot-OAT methods; retain all three JIT-disabled gates and complete the finite remaining step-10 path matrix |
 | Boot reservation commit dominates the measured cost | Medium operational | Windows `MemMap` commits whole spans, so the image+OAT reservation, not the 64-KiB padding, is the term to report and later optimize |
 | Unwind predicate narrows the existing Windows condition | Medium | Preserve the semantic union of Windows-host and Windows-target compilation; test both even if a shared constexpr replaces the current preprocessor spelling |
 | `kDynamicSymbolCount` grows implicitly with the enum | Medium | It derives from `DynamicSymbol::kLast`; append Windows-only values after `kLast`, `static_assert` the base count, reserve from writer mode at `Start()`, and test Linux byte identity |
@@ -3044,7 +3100,7 @@ Before claiming Windows AOT support, require:
 - `GetSystemInfo()` proof of the expected Windows 4-KiB page and 64-KiB
   allocation granularity;
 - exact boot reservation, deliberate collision, relocation-delta, and selected
-  single- or multi-component image tests;
+  single-component image tests, including rejection of an extension component;
 - VDEX and ART-image positive/mismatch/truncation/relocation cases;
 - `VirtualQuery` proof of R/RX/RW/no-access and no W+X stage;
 - execution after `FlushInstructionCache`;
@@ -3062,11 +3118,14 @@ Before claiming Windows AOT support, require:
 - validation-only and executable private-copy opens, plus missing, mismatched,
   reservation-failure, VDEX-failure, setup-failure, and ordinary
   unwind-registration-failure cases that clean up and continue with imageless
-  nterp/JIT;
+  nterp/JIT; W-039 covers the unwind-corruption member of this matrix;
 - focused GC, roots, deoptimization, translated fault, JNI, reflection, class
   initialization, and fatal-dump execution through boot OAT; W-037 covers one
   translated null fault and one BSS root through explicit GC rounds, while
-  W-038 covers one explicit managed exception and one fatal UEF/minidump path;
+  W-038 covers one explicit managed exception and one fatal UEF/minidump path.
+  The remaining exact step-10 cases are resolution-trampoline, interface/IMT,
+  quick-to-interpreter, deoptimization, translated-SOE, reflection, and class-
+  initialization execution;
 - behavioral execution of the Stage 1 tests currently blocked by H-005; and
 - OAT-1 startup time, total committed span, and working-set measurements,
   reporting the boot image reservation, the OAT prefix consumed from it, and
@@ -3075,10 +3134,11 @@ Before claiming Windows AOT support, require:
 The 2026-08-05 review adds these gates, which cover generation-side
 prerequisites the original list assumed rather than required:
 
-- a trampoline regression gate: disassemble the seven emitted OAT trampolines
-  on both targets and require Linux `GS` and Windows `R15` Thread addressing,
-  then execute a boot-image method reached through the resolution trampoline
-  and one reached through the quick-to-interpreter bridge;
+- a trampoline regression gate: step 3 disassembles the seven emitted OAT
+  trampolines on both targets and requires Linux `GS` and Windows `R15` Thread
+  addressing; step 10 executes a boot-image method reached through the
+  resolution trampoline and one reached through the quick-to-interpreter
+  bridge;
 - a `dex2oat` operation gate on Server 2025: a real trivial single-JAR
   no-image compile producing parseable `.oat`/`.vdex`, run before any boot-set
   generation claim; do not use the unsupported `--version` option;
@@ -3114,8 +3174,9 @@ semantics; Wine is structural only.
    ART-level negative diagnostics for the intentional mismatch matrix. The
    launcher-level pre-spawn matrix is already accepted.
 3. Close H-005 and prove the existing loader characterization contracts. Add
-   the two-target trampoline disassembly/execution regression gate; no
-   trampoline producer change is currently required.
+   the two-target trampoline disassembly regression; no trampoline producer
+   change is currently required. Resolution and quick-to-interpreter execution
+   are step-10 work.
 4. Retain the accepted W-030 Windows private-copy `ElfOatFile` path for both
    validation-only and executable opens, including its direct primitive and
    native boot-loading regressions. No step-4 exit condition remains.
@@ -3128,8 +3189,10 @@ semantics; Wine is structural only.
    seven trampoline entries, the `.oat_unwind.windows` section and anchors,
    section-local checksum, validation-only parsing, executable registration,
    lookup verification, fatal unregister invariant, and W-038
-   managed-exception/fatal-walk execution. Complete the remaining
-   corruption/fallback injection and stronger XMM-bearing boot-AOT frame gates.
+   managed-exception/fatal-walk execution. Retain W-039's 23-case semantic
+   corruption rejection, canonical unregister lifecycle, and diagnosed
+   imageless fallback matrix. Complete the remaining actual XMM-bearing boot-
+   AOT frame gate.
 7. Retain W-032's implemented `.oat_cfg.windows` target collection, checksum,
    conditional anchors/layout, parser, policy snapshot, and forced-CFG
    observation gate, including the passing exhaustive two-open-mode corruption
@@ -3145,14 +3208,16 @@ semantics; Wine is structural only.
 9. Move W-030's explicit experimental selection into a reviewed product option
    and exercise successful whole-transaction imageless fallback for expected
    missing, stale, wrong-target, and cross-artifact cases before trusted-layout
-   image/heap invariants.
+   image/heap invariants. W-039 already proves the unwind-corruption fallback
+   member of the transaction matrix.
 10. Retain W-036's accepted ordinary managed dispatch at the exact current,
     registered boot-OAT RX entry PC and W-037's paired nonzero relocation,
     recovered boot-OAT null fault, and BSS-root survival with JIT disabled.
     Retain W-038's explicit managed exception and fatal walk through the exact
-    armed boot-OAT function to ART's UEF and one valid minidump. Complete only
-    concrete relocation, fault, root, and other execution variants outside the
-    accepted focused cases on Server 2025. Continue to
+    armed boot-OAT function to ART's UEF and one valid minidump. Complete the
+    named resolution-trampoline, interface/IMT, quick-to-interpreter,
+    deoptimization, translated-SOE, reflection, and class-initialization cases
+    on Server 2025. Continue to
     distinguish current dispatch from merely locating an underlying OAT body
     through `GetOatMethodQuickCode()`.
 11. Retain W-032's passing forced-CFG observation through a verified guarded
