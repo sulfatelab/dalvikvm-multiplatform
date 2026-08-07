@@ -13,6 +13,7 @@ boot-AOT path is selected and every required gate for that path passes.
 | State | Meaning |
 |---|---|
 | `NOT STARTED` | No implementation intended to satisfy the step has landed. |
+| `DESIGNED` | A reviewed implementation contract and gate sequence exist, but implementation has not started. |
 | `ACTIVE` | Work is in progress and no useful step-level result is ready yet. |
 | `PARTIAL` | A useful implementation or gate exists, but one or more stated exit conditions remain. |
 | `BLOCKED` | Progress requires an unavailable dependency, authority, or external-state change. |
@@ -124,6 +125,18 @@ instrument outgoing indirect branches in generated quick code. The accepted
 record is
 [`docs/history/windows_x64_w032_result.md`](docs/history/windows_x64_w032_result.md).
 
+OAT-2 is now `DESIGNED`, not implemented. The detailed design is
+[`win32_aot_oat2.md`](win32_aot_oat2.md). It does not change the shared OAT
+version or Windows cache bytes. It replaces the executable boot transaction's
+ordinary combined reservation with one placeholder-partitioned,
+pagefile-section-backed image/OAT span, exact R/RW/RX primary views, and one
+temporary RW/NX construction alias. Code is created RX plus invalid CFG
+targets and never becomes writable; exact serialized targets are activated
+only after the alias is removed. W-033 must first prove the composed Windows
+API semantics. W-034 owns the synthetic mapping/rollback ledger, and W-035 is
+the first real single-component boot integration. None of those packages
+reopens completed OAT-1 or CFG-transport steps.
+
 The earlier `runtime/oat/oat_file_test.cc` additions are a pre-dispatch loader
 characterization suite. They support sequence step 3 and do not constitute
 numbered step 1 or executable Windows OAT loading.
@@ -142,7 +155,7 @@ numbered step 1 or executable Windows OAT loading.
 | 8. Boot ART/OAT/VDEX generation and staging | `COMPLETE` | W-030 exercises native `ImageWriter`, emits Windows LZ4 `boot.art` plus matching OAT/VDEX, binds the path-sensitive set with one manifest, validates hashes/identity, stages the exact single-component topology, and passes canonical startup | Retain per-generation set integrity; cross-generation byte identity is intentionally not required |
 | 9. Experimental selection and fallback | `PARTIAL` | W-030 explicitly selects the staged set, runs from package root, rejects seven launcher mismatches, and fails if ART silently enters imageless startup | Integrate a reviewed product option and exercise successful missing/stale/wrong-target/cross-artifact whole-transaction fallback |
 | 10. Real boot-OAT execution | `PARTIAL` | W-031 locates underlying managed and JNI boot-OAT bodies, validates their registered unwind entries, and passes corresponding JIT-disabled runtime calls | Prove representative ordinary dispatch PCs execute inside boot-OAT RX ranges, then cover relocation, faults, GC/roots, exceptions, and fatal stack walking on Server 2025 |
-| 11. CFG observation and OAT-1 measurements | `PARTIAL` | W-032 forces CFG on, verifies the PE guard dispatch, enters exact quick/JNI boot-OAT targets, records policy, and proves current OAT-1 default-valid usability with zero target API calls | Run the separate invalid-by-default allocation matrix and record reservation, commit, padding, startup, and working-set measurements; explicit CFG, outgoing quick-code instrumentation, OAT-2, application OAT, unloading, and security remain deferred |
+| 11. CFG observation and OAT-1 measurements | `PARTIAL` | W-032 forces CFG on, verifies the PE guard dispatch, enters exact quick/JNI boot-OAT targets, records policy, and proves current OAT-1 default-valid usability with zero target API calls | Run W-033's invalid-by-default OAT-1/OAT-2 allocation matrix and record reservation, commit, padding, startup, and working-set measurements; W-034/W-035 OAT-2 integration, outgoing quick-code instrumentation, application OAT, unloading, and security remain separate |
 
 ## Step 1 implementation record
 
@@ -428,19 +441,26 @@ diagnostic evidence; native Server 2025 is the acceptance authority.
 
 ## Immediate work queue
 
-1. Run the separate explicit-target allocation/protection characterization;
-   do not infer OAT-1 support from `PAGE_TARGETS_NO_UPDATE` or from the existing
-   JIT gate.
-2. Add `.oat_unwind.windows` corruption/fallback injection, managed
+1. Implement W-033's allocation/protection characterization. Prove or reject
+   exact placeholder replacement with `MapViewOfFile3`, an RX-invalid primary
+   paging-section view, one RW/NX alias, exact target activation,
+   omitted-target failure, and complete rollback. Do not infer OAT-1 support
+   from `PAGE_TARGETS_NO_UPDATE` or from the existing JIT gate.
+2. If W-033 passes, implement W-034's synthetic combined-view owner, mapping
+   plan, acquisition ledger, and fault-injected rollback. Do not enter real
+   `ImageSpace`/OAT integration before that owner closes cleanly.
+3. Add `.oat_unwind.windows` corruption/fallback injection, managed
    exception/fatal stack walking, and an actual XMM-bearing boot-AOT frame
    execution gate.
-3. Prove representative ordinary dispatch PCs execute inside boot-OAT RX
+4. Prove representative ordinary dispatch PCs execute inside boot-OAT RX
    ranges despite the current startup nterp upgrade, then extend coverage to
    relocation, faults, and GC/roots.
-4. Integrate reviewed product selection plus successful whole-transaction
+5. Integrate reviewed product selection plus successful whole-transaction
    imageless fallback and ART-level negative identity diagnostics.
-5. Promote the cross-target 16-/64-KiB artifact comparison into an automated
+6. Promote the cross-target 16-/64-KiB artifact comparison into an automated
    regression, close H-005, and add the two-target trampoline regression.
 
-Do not begin application OAT, OAT-2, successful-load unloading, explicit CFG
-enforcement, or security hardening merely to close an early boot-only step.
+Do not begin W-035 real boot integration before W-033 and W-034 pass. Do not
+begin application OAT, successful-load unloading, outgoing quick-code CFG
+instrumentation, or security hardening merely to close an early boot-only
+step.

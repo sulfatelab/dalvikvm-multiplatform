@@ -37,6 +37,9 @@ outgoing quick-code CFG instrumentation. The supported Windows product remains
 imageless nterp/JIT while this experimental track is incomplete. Progress and
 evidence are tracked in
 [`win32_aot_oat_tracker.md`](win32_aot_oat_tracker.md). The
+separately gated OAT-2 topology is now specified in
+[`win32_aot_oat2.md`](win32_aot_oat2.md); it reuses the current cache formats
+but is not implemented or required by OAT-1 bring-up. The
 accepted native result is
 [`docs/history/windows_x64_w028_result.md`](docs/history/windows_x64_w028_result.md).
 The accepted W-029 preflight is
@@ -110,11 +113,12 @@ See "Design review findings".
    which records policy and proves real indirect OAT calls without changing
    target state. A later explicit-target mode consumes the independently
    versioned `.oat_cfg.windows` target list. That mode is not an early blocker
-   and cannot be enabled until the invalid-by-default allocation sequence is
-   proven with the committed OAT-1 reservation.
-7. Application OAT, successful-load unloading, shared-view/OAT-2 work, and
-   cache/adversarial-input security hardening are outside the early bring-up
-   scope. Security-sensitive product enablement requires a later review.
+   and cannot be enabled until W-033 proves the selected invalid-by-default
+   OAT-2 paging-section view sequence. OAT-1 remains observation-only.
+7. Application OAT, successful-load unloading, OAT-2 implementation, and
+   cache/adversarial-input security hardening are outside the early OAT-1
+   bring-up scope. Security-sensitive product enablement requires a later
+   review.
 8. The full Bionic linker, `soinfo`, dependency, relocation, namespace, TLS,
    constructor, and symbol-interposition machinery remain rejected. Reuse the
    existing ART ELF reader first; copy selected Bionic algorithms only if a
@@ -430,7 +434,8 @@ a general ELF DSO loader.
   constructors/destructors, symbol interposition, or namespaces.
 - Application OAT, application images, duplicate-instance/class-unloading
   semantics, and successful boot-OAT unloading in the initial milestone.
-- Shared 64-KiB file views or a separately versioned OAT-2 layout.
+- OAT-2 implementation or direct disk-backed/cross-process cache sharing in
+  the initial OAT-1 milestone.
 - Cache threat modeling, hostile-input hardening, Authenticode treatment, and
   debugger/profiler behavior equivalent to a DLL in early bring-up.
 - `ProhibitDynamicCode`/ACG compatibility or policy bypasses.
@@ -735,27 +740,35 @@ Costs:
 These costs are accepted for bring-up. Measure startup and memory before
 expanding the scope.
 
-### Deferred shared-view/OAT-2 work
+### Designed dual-view OAT-2 work
 
-OAT-2 is not part of the current plan. A future investigation may retain ELF
-while aligning backing/protection groups to the Windows allocation granularity
-for cross-process sharing. It would be a separately reviewed format/layout
-change and must not complicate OAT-1 bring-up.
+[`win32_aot_oat2.md`](win32_aot_oat2.md) now specifies OAT-2 in detail. OAT-2
+is a Windows loader/address-space topology, not an on-disk OAT version. It
+retains the current ELF/OAT/VDEX/image formats, Linux ELF identity, Windows
+64-KiB artifact alignment, and Windows metadata sections.
 
-The selected writer already provides 64-KiB-congruent `PT_LOAD` offsets and
-addresses on Windows. Shared-view OAT-2 would still require:
+The selected topology reserves the complete boot image/OAT span as one
+placeholder at one relocation delta, splits exact 64-KiB protection groups,
+and backs the combined span with one unnamed paging section. Exact primary R,
+RW, and RX views replace their placeholders. One temporary full-span RW/NX
+alias populates the backing and is removed before publication; gaps remain
+inaccessible placeholders. Code receives RX plus invalid CFG-target state in
+its initial `MapViewOfFile3()` call and never becomes writable or changes
+protection. Exact serialized targets are activated only after population,
+relocation, validation, cache flush, and alias removal.
 
-- independently viewable 64-KiB protection/ownership groups for R, RX,
-  copy-on-write, BSS, and VDEX ranges, with any additional padding they need;
-- one `VirtualAlloc2` placeholder reservation;
-- exact placeholder splitting;
-- `MapViewOfFile3(..., MEM_REPLACE_PLACEHOLDER, ...)` data/pagefile views;
-- RX code with no writable executable alias;
-- private/COW image-relro and BSS;
-- an owner for all views and remaining placeholders; and
-- idempotent reverse-order rollback.
+This supersedes the earlier idea of independently mapping disk-backed OAT
+segments. The paging-section design keeps one backing object and one address
+translation while avoiding direct-view/COW/VDEX ownership complexity. It does
+not claim cross-process sharing.
 
-No OAT-2 implementation or equivalence gate is required before boot OAT works.
+The next W-033 allocation gate must prove the composed
+`MapViewOfFile3(MEM_REPLACE_PLACEHOLDER, PAGE_EXECUTE_READ |
+PAGE_TARGETS_INVALID)` behavior, exact target activation, omitted-target
+failure, no W+X, and complete placeholder rollback on native Windows. W-034
+then builds the synthetic owner/ledger, and W-035 integrates the selected
+single-component boot set. OAT-2 remains optional and cannot complicate or
+silently replace accepted OAT-1 observation behavior.
 
 ### Boot placement and lifetime
 
@@ -1964,7 +1977,7 @@ potential CFG violation in a disposable child process:
 | Current OAT-1 RW/NX population then ordinary RX | Confirm the documented default-valid behavior and current usability | Observation only |
 | RW/NX population then RX plus `PAGE_TARGETS_NO_UPDATE` | Characterize native behavior without assuming that non-executable pages own a useful invalid bitmap | No enablement from an empirical pass alone |
 | Allocate/commit RX plus `PAGE_TARGETS_INVALID` | Prove exact target activation and omitted-target fast-fail independently of artifact loading | Does not solve how code is populated without W+X |
-| Paging-section RX invalid view using `FILE_MAP_TARGETS_INVALID` (or a separately proven `MapViewOfFile3` equivalent) plus RW/NX alias | Evaluate the documented dual-view route and exact-address/placeholder composition | OAT-2 candidate, not an OAT-1 patch |
+| Placeholder-replacing paging-section RX view created with `PAGE_TARGETS_INVALID` plus one RW/NX construction alias | Prove the selected OAT-2 exact-view composition and activate only serialized targets | W-033 gate for the detailed OAT-2 design, never an OAT-1 patch |
 
 An explicit-mode decision also has to occur before allocation/population;
 `PostSetup()` and a late CFG parser cannot retroactively establish
@@ -2701,9 +2714,10 @@ semantics; Wine is structural only.
 11. Retain W-032's passing forced-CFG observation through a verified guarded
     PE caller. Run the separate explicit-target allocation characterization
     and measure OAT-1 startup, reservation, commit, padding, and working-set
-    cost. Defer explicit CFG, outgoing quick-code call-site instrumentation,
-    application OAT, unloading, OAT-2, cache security, hostile-input hardening,
-    and rich tooling integration to separately reviewed work.
+    cost. Keep explicit CFG and the designed W-033/W-034/W-035 OAT-2 packages
+    separate from the initial milestone. Defer outgoing quick-code call-site
+    instrumentation, application OAT, unloading, cache security,
+    hostile-input hardening, and rich tooling integration.
 
 ## Primary references
 
@@ -2762,11 +2776,14 @@ Bionic baseline:
 
 Windows APIs:
 
+- [Detailed OAT-2 mapping design](win32_aot_oat2.md)
 - [PE/COFF machine types](https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#machine-types)
 - [CreateFileMappingW](https://learn.microsoft.com/windows/win32/api/memoryapi/nf-memoryapi-createfilemappingw)
 - [MapViewOfFile](https://learn.microsoft.com/windows/win32/api/memoryapi/nf-memoryapi-mapviewoffile)
 - [MapViewOfFile3](https://learn.microsoft.com/windows/win32/api/memoryapi/nf-memoryapi-mapviewoffile3)
+- [UnmapViewOfFile2](https://learn.microsoft.com/windows/win32/api/memoryapi/nf-memoryapi-unmapviewoffile2)
 - [VirtualAlloc2](https://learn.microsoft.com/windows/win32/api/memoryapi/nf-memoryapi-virtualalloc2)
+- [VirtualFree](https://learn.microsoft.com/windows/win32/api/memoryapi/nf-memoryapi-virtualfree)
 - [VirtualProtect](https://learn.microsoft.com/windows/win32/api/memoryapi/nf-memoryapi-virtualprotect)
 - [FlushInstructionCache](https://learn.microsoft.com/windows/win32/api/processthreadsapi/nf-processthreadsapi-flushinstructioncache)
 - [RtlAddFunctionTable](https://learn.microsoft.com/windows/win32/api/winnt/nf-winnt-rtladdfunctiontable)

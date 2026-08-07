@@ -817,26 +817,27 @@ all product paths. Windows NIO.2 remains a non-goal.
   runtime calls. Corruption/fallback injection, exception/fatal stack walking, stronger
   XMM-bearing AOT-frame execution, and normal RX dispatch proof remain.
 - An alternate PE-form OAT, `LoadLibraryExW`, `SEC_IMAGE`, a general
-  Bionic-linker port, application OAT, unloading, and shared-view/OAT-2 work
-  are outside the initial milestone. Security hardening is deferred. CFG uses one
+  Bionic-linker port, application OAT, unloading, and OAT-2 implementation are
+  outside the initial milestone. Security hardening is deferred. CFG uses one
   architecture-neutral `.oat_cfg.windows` section with target ABI in its
-  independently versioned header. Observation mode is the early default and
-  characterizes guarded incoming OAT calls without target API changes. W-032
-  is bounded to that metadata/observation path and does not instrument outgoing
-  indirect branches in generated quick code. Explicit-target mode is
-  separately gated on establishing invalid-by-default CFG state without W+X;
-  the documented OAT-1 RW/NX-to-RX transition is default-valid, so a
-  dual-view/OAT-2 allocation may be required.
+  independently versioned header. W-032 completes its writer/parser/layout/
+  corruption transport and forced-policy guarded quick/JNI observation without
+  target API changes; it does not instrument outgoing indirect branches in
+  generated quick code. Explicit-target mode is separately gated on
+  invalid-by-default state without W+X. The detailed OAT-2 design uses one
+  placeholder-partitioned, pagefile-section-backed combined boot span, exact
+  RX-invalid primary code views, and a temporary RW/NX construction alias;
+  W-033 must prove the Windows API composition before integration.
 - The remaining functional work is ART-level negative identity diagnostics,
-  unwind completion and CFG transport, normal product selection with
+  unwind completion, normal product selection with
   successful whole-transaction imageless fallback, OAT-1 measurements, and
   proof that real boot methods execute from the OAT RX range rather than
-  JIT/nterp. The compiler-to-OAT unwind and CFG transports are no longer open
-  format design: their layouts, writer integration, runtime validation, and
-  mode boundaries are specified and now await implementation and native gates.
+  JIT/nterp. The CFG transport is implemented and native-accepted. OAT-2 is a
+  separately gated loader topology and does not change the shared OAT format.
 - The format analysis, Bionic reuse boundary, mapping design, risk register,
   correctness invariants, and Server 2025 proof gates are in
-  [win32_aot_oat.md](win32_aot_oat.md); live progress is in
+  [win32_aot_oat.md](win32_aot_oat.md); the optional topology is specified in
+  [win32_aot_oat2.md](win32_aot_oat2.md), and live progress is in
   [win32_aot_oat_tracker.md](win32_aot_oat_tracker.md).
 
 **Historical planning estimate:** the original estimate was 12–24 months for a
