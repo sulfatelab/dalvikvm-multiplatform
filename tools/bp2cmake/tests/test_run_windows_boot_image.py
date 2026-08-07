@@ -198,3 +198,55 @@ def test_launcher_stages_native_probe_and_selects_aot_mode(tmp_path, monkeypatch
     record = json.loads((output / "result.json").read_text(encoding="utf-8"))
     assert record["main_class"] == "W031Probe"
     assert record["execution_mode"] == "aot"
+
+
+def test_launcher_forces_cfg_for_w032_gate(tmp_path, monkeypatch):
+    args = _args(tmp_path)
+    launcher = tmp_path / "bin" / "W025PolicyLauncher.exe"
+    launcher.write_bytes(b"launcher")
+    args.policy_launcher = launcher
+    args.expect = [
+        "W032_CFG_TABLE_PASS machine=0x8664",
+        "main end exception=0",
+    ]
+    cfg_record = {
+        "section": ".oat_cfg.windows",
+        "format_version": 1,
+        "target_machine": 0x8664,
+        "target_count": 9,
+        "quick_candidate_count": 1,
+        "jni_candidate_count": 1,
+        "trampoline_candidate_count": 7,
+        "thunk_candidate_count": 0,
+        "checksum": "12345678",
+        "code_begin": 0x10000,
+        "code_end": 0x20000,
+        "size": 120,
+    }
+    manifest_path = args.boot_image_dir / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["windows_oat_cfg"] = cfg_record
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    monkeypatch.setattr(
+        run_windows_boot_image.run_dex2oat_no_image,
+        "validate_windows_oat_cfg",
+        lambda path: cfg_record,
+    )
+    calls = []
+
+    def run(command, **options):
+        calls.append(command)
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout="Hello from dalvikvm!\nmain end exception=0\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr(run_windows_boot_image.subprocess, "run", run)
+    output = run_windows_boot_image.run_gate(args)
+
+    assert calls[0][:4] == [str(launcher), "cfg", "zero", str(args.dalvikvm)]
+    record = json.loads((output / "result.json").read_text(encoding="utf-8"))
+    assert record["cfg_policy_forced"] is True
+    assert record["windows_oat_cfg"] == cfg_record

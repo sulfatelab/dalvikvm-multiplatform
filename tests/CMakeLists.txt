@@ -680,7 +680,7 @@ endfunction()
 
 add_custom_target(art-tests)
 add_custom_target(art-managed-tests)
-foreach(stage w002 w003 w004 w010 w013 w014 w025 w027 w028 w029 w030 w031)
+foreach(stage w002 w003 w004 w010 w013 w014 w025 w027 w028 w029 w030 w031 w032)
     art_define_test_stage("${stage}")
 endforeach()
 
@@ -2192,6 +2192,83 @@ art_add_target_probe(
         --expect "W031AotUnwindProbe PASS"
         --expect "main end exception=0"
         --forbid "W031_AOT_UNWIND_FAIL"
+        --forbid AssertionError
+        ${_art_managed_runtime_library_args}
+        --timeout 600)
+
+# W-032 keeps CFG in observation mode: the boot OAT carries a complete target
+# manifest, while a CFG-instrumented PE bridge enters representative managed
+# quick and JNI bodies through __guard_dispatch_icall_fptr. The W-025 launcher
+# forces CFG on for dalvikvm; no CFG target-state API is called.
+art_add_target_probe(
+    NAME w032aotcfgprobe STAGE w032 TYPE SHARED EXECUTION compile-only
+    ${_art_windows_x86_64_msvc_selector}
+    SOURCES
+        "${_art_test_cases_root}/aot-cfg/probe.cc"
+        "${_art_test_cases_root}/aot-cfg/guarded_invoke_x86_64.S"
+    LINK_LIBRARIES art
+    COMPILE_OPTIONS
+        "$<$<COMPILE_LANGUAGE:CXX>:-Xclang>"
+        "$<$<COMPILE_LANGUAGE:CXX>:-cfguard>"
+        "$<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>"
+        "$<$<COMPILE_LANGUAGE:CXX>:-Wno-thread-safety>"
+        "$<$<COMPILE_LANGUAGE:CXX>:-Wno-microsoft-cast>"
+        "$<$<COMPILE_LANGUAGE:CXX>:-Wno-invalid-offsetof>"
+    COMPILE_DEFINITIONS ART_CONSUMING_LIBART
+    LINK_OPTIONS "LINKER:/guard:cf"
+    CONTRACTS aot cfg runtime-load
+    PREFIX lib OUTPUT_NAME w032aotcfgprobe WINDOWS_EXPORT_ALL_SYMBOLS PRODUCT_POLICY)
+art_add_target_probe(
+    NAME windows_w032_cfg_structure STAGE w032 TYPE GATE
+    EXECUTION host-review
+    ${_art_windows_x86_64_msvc_selector}
+    DEPENDS w032aotcfgprobe
+    CONTRACTS aot cfg source-policy pe-policy
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_test_repo_root}/tests/support/windows/check_w032_cfg_contract.py"
+        --repo "${_art_test_repo_root}"
+        --probe "$<TARGET_FILE:w032aotcfgprobe>"
+        --llvm-readobj "${ART_LLVM_READOBJ}"
+        --result
+            "${CMAKE_CURRENT_BINARY_DIR}/results/w032-cfg-structure/result.json")
+art_add_target_probe(
+    NAME managed_w032_aot_cfg STAGE w032 TYPE MANAGED
+    EXECUTION target-runnable TIMEOUT 1800
+    ${_art_windows_x86_64_msvc_selector}
+    SOURCES "${_art_test_cases_root}/aot-cfg/W032AotCfgProbe.java"
+    DEPENDS
+        art-runtime-boot-image
+        w032aotcfgprobe
+        windows_w025_policy_launcher
+        dalvikvm
+        icu_jni
+        javacore
+        openjdk
+    CONTRACTS aot boot-image cfg runtime-load
+    OUTPUT_NAME w032aotcfgprobe
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${_art_windows_boot_image_runner}"
+        --target-id "${ART_TARGET_ID}"
+        --dalvikvm "$<TARGET_FILE:dalvikvm>"
+        --boot-jar "${_art_boot_jar}"
+        --app-jar "${_art_managed_root}/w032aotcfgprobe.jar"
+        --boot-image-dir "${_art_boot_image_root}"
+        --icu-data "${_art_icu_data}"
+        --work-root "${CMAKE_CURRENT_BINARY_DIR}/results/w032-aot-cfg"
+        --probe "$<TARGET_FILE:w032aotcfgprobe>"
+        --probe-name w032aotcfgprobe
+        --policy-launcher "$<TARGET_FILE:windows_w025_policy_launcher>"
+        --main-class W032AotCfgProbe
+        --execution-mode aot
+        --expect "W032_CFG_TABLE_PASS machine=0x8664"
+        --expect "W032_CFG_OBSERVATION_PASS cfg_enabled=1"
+        --expect "guard_dispatch=verified guarded_quick=pass guarded_jni=pass target_api_calls=0"
+        --expect "W032AotCfgProbe PASS"
+        --expect "W025_POLICY_LAUNCHER_PASS policy=cfg child_exit=0 expected=zero"
+        --expect "main end exception=0"
+        --forbid "W032_CFG_OBSERVATION_FAIL"
         --forbid AssertionError
         ${_art_managed_runtime_library_args}
         --timeout 600)

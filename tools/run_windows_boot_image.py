@@ -15,8 +15,10 @@ import sys
 
 if __package__:
     from . import windows_aot_identity
+    from . import run_dex2oat_no_image
 else:
     import windows_aot_identity  # type: ignore[no-redef]
+    import run_dex2oat_no_image  # type: ignore[no-redef]
 
 
 class WindowsBootImageError(RuntimeError):
@@ -39,6 +41,7 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--probe", type=Path)
     parser.add_argument("--probe-name")
+    parser.add_argument("--policy-launcher", type=Path)
     parser.add_argument("--expect", action="append", default=[])
     parser.add_argument("--forbid", action="append", default=[])
     parser.add_argument("--timeout", type=int, default=180)
@@ -79,6 +82,27 @@ def run_gate(args: argparse.Namespace) -> Path:
         library_dirs.insert(0, dalvikvm.parent)
 
     manifest = _validate_image_manifest(image_root, boot_jar, args.target_id)
+    policy_launcher_arg = getattr(args, "policy_launcher", None)
+    windows_cfg: dict[str, object] | None = None
+    cfg_marker: str | None = None
+    if policy_launcher_arg is not None:
+        try:
+            windows_cfg = run_dex2oat_no_image.validate_windows_oat_cfg(
+                image_root / windows_aot_identity.INSTRUCTION_SET / "boot.oat"
+            )
+        except run_dex2oat_no_image.Dex2OatProbeError as exc:
+            raise WindowsBootImageError(str(exc)) from exc
+        if manifest.get("windows_oat_cfg") != windows_cfg:
+            raise WindowsBootImageError("boot OAT CFG metadata changed after generation")
+        cfg_marker = (
+            "W032_CFG_TABLE_PASS "
+            f"machine={windows_cfg['target_machine']:#06x} "
+            f"targets={windows_cfg['target_count']} "
+            f"quick_candidates={windows_cfg['quick_candidate_count']} "
+            f"jni_candidates={windows_cfg['jni_candidate_count']} "
+            f"trampoline_candidates={windows_cfg['trampoline_candidate_count']} "
+            f"checksum={windows_cfg['checksum']}"
+        )
     main_class = getattr(args, "main_class", "Hello")
     execution_mode = getattr(args, "execution_mode", "interpreter")
     probe_arg = getattr(args, "probe", None)
@@ -93,6 +117,9 @@ def run_gate(args: argparse.Namespace) -> Path:
         not probe_name or not all(character.isalnum() or character == "_" for character in probe_name)
     ):
         raise WindowsBootImageError("probe name must contain only letters, digits, or underscore")
+    policy_launcher = (
+        _regular_file(policy_launcher_arg) if policy_launcher_arg is not None else None
+    )
     work_root = _prepare_output_root(args.work_root)
     package_root = work_root / "package"
     runtime_root = package_root / "runtime"
@@ -161,6 +188,8 @@ def run_gate(args: argparse.Namespace) -> Path:
         execution_mode=execution_mode,
         probe_name=probe_name,
     )
+    if policy_launcher is not None:
+        command = [str(policy_launcher), "cfg", "zero", *command]
     environment = dict(os.environ)
     environment.update(
         {
@@ -196,6 +225,8 @@ def run_gate(args: argparse.Namespace) -> Path:
     (work_root / "stdout.txt").write_text(result.stdout, encoding="utf-8")
     (work_root / "stderr.txt").write_text(result.stderr, encoding="utf-8")
     combined = result.stdout + "\n" + result.stderr
+    if cfg_marker is not None:
+        combined += "\n" + cfg_marker
     required = tuple(getattr(args, "expect", ())) or (
         "Hello from dalvikvm!",
         "main end exception=0",
@@ -216,6 +247,8 @@ def run_gate(args: argparse.Namespace) -> Path:
         "startup_options": list(windows_aot_identity.startup_options()),
         "main_class": main_class,
         "execution_mode": execution_mode,
+        "cfg_policy_forced": policy_launcher is not None,
+        "windows_oat_cfg": windows_cfg,
         "working_directory": "package",
         "actual_exit": result.returncode,
         "missing_markers": missing,
@@ -233,6 +266,8 @@ def run_gate(args: argparse.Namespace) -> Path:
             f"boot-image startup failed: exit={result.returncode}, "
             f"missing={missing}, forbidden={present}\n{tail}"
         )
+    if cfg_marker is not None:
+        print(cfg_marker)
     print(
         "native Windows boot-image gate passed: "
         f"artifacts={len(artifact_records)}, mismatches={len(rejected)}"

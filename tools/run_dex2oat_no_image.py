@@ -327,8 +327,15 @@ def validate_oat_elf(path: Path, *, expected_alignment: int) -> dict[str, object
     }
 
 
-def validate_windows_oat_unwind(path: Path) -> dict[str, object]:
-    """Validate the boot-only .oat_unwind.windows transport and its anchors."""
+def _read_windows_boot_oat_layout(
+    path: Path,
+) -> tuple[
+    bytes,
+    list[tuple[int, ...]],
+    list[tuple[int, ...]],
+    dict[str, tuple[int, tuple[int, ...]]],
+]:
+    """Read the common Windows boot-OAT ELF envelope used by metadata validators."""
     data = _regular_file(path).read_bytes()
     header_format = "<16sHHIQQQIHHHHHH"
     header_size = struct.calcsize(header_format)
@@ -409,6 +416,12 @@ def validate_windows_oat_unwind(path: Path) -> dict[str, object]:
         if name in sections:
             raise Dex2OatProbeError(f"boot.oat repeats section {name!r}")
         sections[name] = (index, section)
+    return data, load_segments, raw_sections, sections
+
+
+def validate_windows_oat_unwind(path: Path) -> dict[str, object]:
+    """Validate the boot-only .oat_unwind.windows transport and its anchors."""
+    data, load_segments, raw_sections, sections = _read_windows_boot_oat_layout(path)
 
     required = (".rodata", ".text", ".oat_unwind.windows", ".dynsym", ".dynstr")
     missing = [name for name in required if name not in sections]
@@ -550,6 +563,148 @@ def validate_windows_oat_unwind(path: Path) -> dict[str, object]:
         "code_begin": code_begin,
         "code_end": code_end,
         "size": unwind_section_size,
+    }
+
+
+def validate_windows_oat_cfg(path: Path) -> dict[str, object]:
+    """Validate the boot-only .oat_cfg.windows target manifest and anchors."""
+    data, load_segments, raw_sections, sections = _read_windows_boot_oat_layout(path)
+    required = (".rodata", ".text", ".oat_cfg.windows", ".dynsym", ".dynstr")
+    missing = [name for name in required if name not in sections]
+    if missing:
+        raise Dex2OatProbeError(f"boot.oat is missing Windows CFG sections: {missing}")
+
+    cfg_index, cfg_section = sections[".oat_cfg.windows"]
+    _, rodata_section = sections[".rodata"]
+    _, text_section = sections[".text"]
+    cfg_type, cfg_flags = cfg_section[1:3]
+    cfg_address, cfg_file_offset, cfg_section_size = cfg_section[3:6]
+    cfg_alignment = cfg_section[8]
+    if (
+        cfg_type != 1
+        or cfg_flags != 2
+        or cfg_alignment != 4
+        or cfg_section_size < 48
+        or cfg_file_offset + cfg_section_size > len(data)
+    ):
+        raise Dex2OatProbeError("boot.oat has an invalid .oat_cfg.windows section")
+    if ".bss" in sections and cfg_index >= sections[".bss"][0]:
+        raise Dex2OatProbeError(".oat_cfg.windows does not precede .bss")
+    if ".data.img.rel.ro" in sections and sections[".data.img.rel.ro"][0] >= cfg_index:
+        raise Dex2OatProbeError(".oat_cfg.windows does not follow .data.img.rel.ro")
+    if ".oat_unwind.windows" in sections and sections[".oat_unwind.windows"][0] >= cfg_index:
+        raise Dex2OatProbeError(".oat_cfg.windows does not follow .oat_unwind.windows")
+    if not any(
+        segment[1] == 4
+        and segment[2] <= cfg_file_offset
+        and cfg_file_offset + cfg_section_size <= segment[2] + segment[5]
+        and segment[3] <= cfg_address
+        and cfg_address + cfg_section_size <= segment[3] + segment[6]
+        for segment in load_segments
+    ):
+        raise Dex2OatProbeError(
+            ".oat_cfg.windows is not contained by one read-only PT_LOAD"
+        )
+
+    payload = data[cfg_file_offset : cfg_file_offset + cfg_section_size]
+    (
+        magic,
+        format_version,
+        serialized_header_size,
+        target_machine,
+        table_flags,
+        target_size,
+        target_count,
+        targets_offset,
+        code_begin,
+        code_end,
+        stored_checksum,
+        reserved,
+    ) = struct.unpack_from("<4s11I", payload)
+    if (
+        magic != b"ocfg"
+        or format_version != 1
+        or serialized_header_size != 48
+        or target_machine != 0x8664
+        or table_flags != 1
+        or target_size != 8
+        or target_count == 0
+        or targets_offset != 48
+        or targets_offset + target_count * target_size != len(payload)
+        or reserved != 0
+    ):
+        raise Dex2OatProbeError("boot.oat has an invalid Windows CFG header")
+    checksum_payload = bytearray(payload)
+    checksum_payload[40:44] = b"\0\0\0\0"
+    computed_checksum = zlib.adler32(checksum_payload) & 0xFFFFFFFF
+    if stored_checksum != computed_checksum:
+        raise Dex2OatProbeError(
+            "boot.oat Windows CFG checksum mismatch: "
+            f"stored={stored_checksum:#x}, computed={computed_checksum:#x}"
+        )
+
+    rodata_address = rodata_section[3]
+    text_address, text_size = text_section[3], text_section[5]
+    expected_code_begin = text_address - rodata_address
+    expected_code_end = expected_code_begin + text_size
+    if (code_begin, code_end) != (expected_code_begin, expected_code_end):
+        raise Dex2OatProbeError("boot.oat Windows CFG code bounds do not match .text")
+
+    previous_offset: int | None = None
+    role_counts = {"quick": 0, "jni": 0, "trampoline": 0, "thunk": 0}
+    for index in range(target_count):
+        target_offset = targets_offset + index * target_size
+        code_offset, kind_flags = struct.unpack_from("<II", payload, target_offset)
+        if (
+            code_offset < code_begin
+            or code_offset >= code_end
+            or (rodata_address + code_offset) % 16
+            or (previous_offset is not None and code_offset <= previous_offset)
+            or kind_flags == 0
+            or kind_flags & ~0xF
+        ):
+            raise Dex2OatProbeError(f"boot.oat has an invalid Windows CFG target {index}")
+        previous_offset = code_offset
+        role_counts["quick"] += bool(kind_flags & 0x1)
+        role_counts["jni"] += bool(kind_flags & 0x2)
+        role_counts["trampoline"] += bool(kind_flags & 0x4)
+        role_counts["thunk"] += bool(kind_flags & 0x8)
+    if role_counts["trampoline"] != 7:
+        raise Dex2OatProbeError(
+            "boot.oat Windows CFG table does not contain exactly seven trampolines"
+        )
+
+    _validate_dynamic_symbol(
+        data,
+        raw_sections,
+        sections,
+        "oatcfgwindows",
+        cfg_index,
+        cfg_address,
+        cfg_section_size,
+    )
+    _validate_dynamic_symbol(
+        data,
+        raw_sections,
+        sections,
+        "oatcfgwindowslastword",
+        cfg_index,
+        cfg_address + cfg_section_size - 4,
+        4,
+    )
+    return {
+        "section": ".oat_cfg.windows",
+        "format_version": format_version,
+        "target_machine": target_machine,
+        "target_count": target_count,
+        "quick_candidate_count": role_counts["quick"],
+        "jni_candidate_count": role_counts["jni"],
+        "trampoline_candidate_count": role_counts["trampoline"],
+        "thunk_candidate_count": role_counts["thunk"],
+        "checksum": f"{stored_checksum:08x}",
+        "code_begin": code_begin,
+        "code_end": code_end,
+        "size": cfg_section_size,
     }
 
 

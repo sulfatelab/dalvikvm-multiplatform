@@ -38,6 +38,10 @@ probe, and tests are commit `a0400259954d95161f45c74d3a8a4317a3427a62`.
 W-031's unwind writer/registry is nested ART commit
 `ba16ea923a9156ef5cbaebfabbc1dceba069889f`; its root gate and accepted record
 are commit `48c2b785ca6878044f2e5ca1aa556d0c4ae4928f`.
+W-032's CFG target writer/parser is nested ART commit
+`30db175a1240780c23c674e5bf29d281570becfd`; its containing root commit owns
+the forced-policy runner, guarded probe, structural gate, accepted record, and
+submodule update.
 Commit `1a9aa837ad2fb697d246855c695d44f2b53c69e8` removes the
 `--force-determinism` request from both OAT generators; manifests still bind
 each generated cache set.
@@ -106,14 +110,18 @@ startup upgrades many eligible current entrypoints to nterp, and the probe
 intentionally obtains the underlying compiled address with
 `ArtMethod::GetOatMethodQuickCode()`.
 
-Step 7 remains `NOT STARTED`, but its W-032 implementation boundary is now
-frozen. W-032 emits and validates `.oat_cfg.windows`, records CFG policy, and
-uses a PE-audited CFG-instrumented caller in a forced-CFG process to enter
-representative boot-OAT code. It does not call
-`SetProcessValidCallTargets`. Fine-grained explicit targets remain a separate
-allocation experiment because OAT-1's committed RW/NX-to-RX transition has
-default-valid CFG semantics. CFG metadata does not instrument outgoing
-indirect branches in generated quick code.
+Steps 7 and 11 are now `PARTIAL`. W-032 emits and validates
+`.oat_cfg.windows`, records CFG policy, and uses a PE-audited CFG-instrumented
+caller in a forced-CFG process to enter representative quick and compiled-JNI
+boot-OAT bodies. The authoritative Server 2025 gate passes with all seven
+trampolines represented and no target-state API calls. The exhaustive
+two-open-mode corruption and eight-case layout matrices remain for step 7;
+the separate OAT-1 allocation/resource characterization remains for step 11.
+Fine-grained explicit targets are not enabled because the current committed
+RW/NX-to-RX transition has default-valid CFG semantics. CFG metadata does not
+instrument outgoing indirect branches in generated quick code. The accepted
+record is
+[`docs/history/windows_x64_w032_result.md`](docs/history/windows_x64_w032_result.md).
 
 The earlier `runtime/oat/oat_file_test.cc` additions are a pre-dispatch loader
 characterization suite. They support sequence step 3 and do not constitute
@@ -129,11 +137,11 @@ numbered step 1 or executable Windows OAT loading.
 | 4. Windows private-copy `ElfOatFile` mapping | `COMPLETE` | Windows `ElfFileImpl::Load()` privately copies every file-backed `PT_LOAD` into the existing ART-owned private allocation; W-030 covers validation-only and executable opens, rejected foreign/section/unaligned/range inputs, exact address, R/RX/RW, no-access gaps, zero fill, owner sharing, source privacy, and cache flush | Retain W-030; no boot-only step-4 exit condition remains |
 | 5. VDEX aperture and ownership | `COMPLETE` | Windows reused VDEX mappings use the same checked private-copy primitive for the exact `oatdex` bytes, return an owner-sharing slice, and pass canonical boot startup through `ComputeFields -> LoadVdex -> Setup` | Retain the native end-to-end gate; add broader rollback injection with product-level fallback work |
 | 6. `.oat_unwind.windows` | `PARTIAL` | Managed/JNI/seven-trampoline emission, deduplication, checksum, anchors, validation-only parsing, executable registration/lifetime, sample lookup, synthetic `RtlVirtualUnwind`, and JIT-disabled managed/JNI runtime calls pass W-031 | Add corruption/fallback injection, managed exception/fatal stack walking, and stronger XMM-bearing boot-AOT frame execution |
-| 7. `.oat_cfg.windows` | `NOT STARTED` | W-032 is bounded to independent collection/serialization/parser plus forced-policy observation through a verified CFG-instrumented caller; outgoing quick-code call-site instrumentation is explicitly outside this transport | Implement W-032 without `SetProcessValidCallTargets`; keep explicit mode gated on the separate committed-allocation feasibility proof |
+| 7. `.oat_cfg.windows` | `PARTIAL` | W-032 independently collects sorted quick/JNI/seven-trampoline targets, merges deduplicated roles, emits the checksum and anchors, parses both open modes, records policy, and passes forced-CFG guarded quick/JNI calls without target-state API calls | Complete the exhaustive header/entry corruption matrix through validation-only and executable opens and the eight-case metadata/data-img-rel-ro ELF layout matrix |
 | 8. Boot ART/OAT/VDEX generation and staging | `COMPLETE` | W-030 exercises native `ImageWriter`, emits Windows LZ4 `boot.art` plus matching OAT/VDEX, binds the path-sensitive set with one manifest, validates hashes/identity, stages the exact single-component topology, and passes canonical startup | Retain per-generation set integrity; cross-generation byte identity is intentionally not required |
 | 9. Experimental selection and fallback | `PARTIAL` | W-030 explicitly selects the staged set, runs from package root, rejects seven launcher mismatches, and fails if ART silently enters imageless startup | Integrate a reviewed product option and exercise successful missing/stale/wrong-target/cross-artifact whole-transaction fallback |
 | 10. Real boot-OAT execution | `PARTIAL` | W-031 locates underlying managed and JNI boot-OAT bodies, validates their registered unwind entries, and passes corresponding JIT-disabled runtime calls | Prove representative ordinary dispatch PCs execute inside boot-OAT RX ranges, then cover relocation, faults, GC/roots, exceptions, and fatal stack walking on Server 2025 |
-| 11. CFG observation and OAT-1 measurements | `NOT STARTED` | Required forced policy, guarded incoming call path, reservation, commit, padding, startup, and working-set observations are specified | Pass W-032 with a CFG-instrumented PE caller and record the measurements; explicit CFG, outgoing quick-code instrumentation, OAT-2, application OAT, unloading, and security remain deferred |
+| 11. CFG observation and OAT-1 measurements | `PARTIAL` | W-032 forces CFG on, verifies the PE guard dispatch, enters exact quick/JNI boot-OAT targets, records policy, and proves current OAT-1 default-valid usability with zero target API calls | Run the separate invalid-by-default allocation matrix and record reservation, commit, padding, startup, and working-set measurements; explicit CFG, outgoing quick-code instrumentation, OAT-2, application OAT, unloading, and security remain deferred |
 
 ## Step 1 implementation record
 
@@ -404,7 +412,8 @@ The sanitized native record is
 | 2026-08-06 | Windows Server 2025 build 26100 repeated-generation characterization with the superseded forced-determinism request | Normal parallel and three `-j1` generations all start successfully; VDEX remains stable while `boot.art` and OAT `.text` size/hash change | Non-blocking path-sensitive cache variation; per-generation manifest integrity, not cross-generation byte identity, is the contract |
 | 2026-08-07 | Windows Server 2025 build 26100, no forced byte determinism | W-030 private-copy probe passes in 0.07 s; canonical LZ4 boot startup passes in 1.13 s, and W-028/W-029 pass in 0.64/0.12 s | **Authoritative correction acceptance**; steps 4/5/8 complete, step 9 partial, and step 10 open |
 | 2026-08-07 | Fresh agent01 Linux and Linux-hosted Windows builds | Full Linux graph and 15/15 catalog gates pass; the full Windows cross graph builds; focused Python harness tests pass 21/21 | Shared compiler/writer/runtime changes compile on both targets and retain the Linux runtime baseline |
-| 2026-08-07 | Windows Server 2025 build 26100 | W-025 passes 9/9, W-030 passes 2/2, and W-031 passes 1/1; W-031 reports managed/JNI runtime calls plus 42,663 registered entries, seven trampolines, and synthetic virtual unwind | **Authoritative unwind implementation evidence**; step 6 and step 10 are partial; CFG remains unimplemented |
+| 2026-08-07 | Windows Server 2025 build 26100 | W-025 passes 9/9, W-030 passes 2/2, and W-031 passes 1/1; W-031 reports managed/JNI runtime calls plus 42,663 registered entries, seven trampolines, and synthetic virtual unwind | **Authoritative unwind implementation evidence**; step 6 and step 10 are partial; this pre-W-032 checkpoint is superseded for CFG status by the next row |
+| 2026-08-07 | Windows Server 2025 build 26100 plus fresh agent01 Linux regression | W-032 passes 2/2 with a CFG-instrumented PE caller, forced policy, 42,657 unique targets, guarded quick/JNI calls, seven trampoline candidates, and zero target-state API calls; the Python suite passes 224/224, full Linux build/boot generation passes, and Linux catalog passes 15/15 | **Authoritative CFG observation evidence**; steps 7 and 11 are partial; explicit-target allocation and exhaustive negative/layout matrices remain |
 
 The two accepted native runs and the post-correction Wine diagnostic have
 SHA-256
@@ -418,10 +427,9 @@ diagnostic evidence; native Server 2025 is the acceptance authority.
 
 ## Immediate work queue
 
-1. Implement W-032 `.oat_cfg.windows` serialization/parser and its forced-CFG
-   observation gate. Audit the guarded PE call site, enter representative
-   quick/JNI OAT code, structurally cover all seven trampoline targets, and do
-   not call `SetProcessValidCallTargets`.
+1. Complete W-032's exhaustive two-open-mode CFG corruption matrix and the
+   eight-case neither/unwind/CFG/both ELF layout matrix, with and without
+   `.data.img.rel.ro`.
 2. Run the separate explicit-target allocation/protection characterization;
    do not infer OAT-1 support from `PAGE_TARGETS_NO_UPDATE` or from the existing
    JIT gate.

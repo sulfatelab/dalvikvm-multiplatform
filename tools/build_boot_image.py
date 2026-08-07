@@ -189,9 +189,13 @@ def build_boot_image(args: argparse.Namespace) -> Path:
             if path.stat().st_size == 0:
                 raise BootImageError(f"dex2oat produced an empty artifact: {path.name}")
         windows_unwind: dict[str, object] | None = None
+        windows_cfg: dict[str, object] | None = None
         if windows_identity is not None:
             try:
                 windows_unwind = run_dex2oat_no_image.validate_windows_oat_unwind(
+                    image_dir / "boot.oat"
+                )
+                windows_cfg = run_dex2oat_no_image.validate_windows_oat_cfg(
                     image_dir / "boot.oat"
                 )
             except run_dex2oat_no_image.Dex2OatProbeError as exc:
@@ -238,6 +242,7 @@ def build_boot_image(args: argparse.Namespace) -> Path:
             manifest["generation_options"] = list(generation_options)
             manifest["windows_aot_identity"] = windows_identity
             manifest["windows_oat_unwind"] = windows_unwind
+            manifest["windows_oat_cfg"] = windows_cfg
         (image_root / "manifest.json").write_text(
             json.dumps(manifest, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",

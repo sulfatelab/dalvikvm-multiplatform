@@ -99,7 +99,8 @@ def _fake_vdex() -> bytes:
 
 def _fake_windows_boot_oat() -> bytes:
     section_names = (
-        b"\0.rodata\0.text\0.oat_unwind.windows\0.bss\0.dynsym\0.dynstr\0.shstrtab\0"
+        b"\0.rodata\0.text\0.oat_unwind.windows\0.oat_cfg.windows\0"
+        b".bss\0.dynsym\0.dynstr\0.shstrtab\0"
     )
     section_name_offsets = {
         name: section_names.index(name.encode("ascii"))
@@ -107,25 +108,37 @@ def _fake_windows_boot_oat() -> bytes:
             ".rodata",
             ".text",
             ".oat_unwind.windows",
+            ".oat_cfg.windows",
             ".bss",
             ".dynsym",
             ".dynstr",
             ".shstrtab",
         )
     }
-    dynamic_names = b"\0oatunwindwindows\0oatunwindwindowslastword\0"
+    dynamic_names = (
+        b"\0oatunwindwindows\0oatunwindwindowslastword\0"
+        b"oatcfgwindows\0oatcfgwindowslastword\0"
+    )
     dynamic_name_offsets = {
         name: dynamic_names.index(name.encode("ascii"))
-        for name in ("oatunwindwindows", "oatunwindwindowslastword")
+        for name in (
+            "oatunwindwindows",
+            "oatunwindwindowslastword",
+            "oatcfgwindows",
+            "oatcfgwindowslastword",
+        )
     }
 
     data = bytearray(0x1000)
     program_offset = 64
     program_count = 3
     section_offset = 0x900
-    section_count = 8
-    section_names_index = 7
-    rodata_address = 0x10200
+    section_count = 9
+    section_names_index = 8
+    # `oatdata` itself need not have code alignment. OAT code offsets are
+    # relative to this address, while CFG alignment applies to the resulting
+    # target virtual address.
+    rodata_address = 0x10208
     text_address = 0x20300
     text_size = 0x100
     unwind_address = 0x30500
@@ -165,6 +178,34 @@ def _fake_windows_boot_oat() -> bytes:
     struct.pack_into(
         "<I", unwind_payload, 44, zlib.adler32(unwind_payload) & 0xFFFFFFFF
     )
+    cfg_file_offset = unwind_file_offset + len(unwind_payload)
+    cfg_address = unwind_address + len(unwind_payload)
+    target_count = 9
+    cfg_payload = bytearray(48 + target_count * 8)
+    code_begin = text_address - rodata_address
+    struct.pack_into(
+        "<4s11I",
+        cfg_payload,
+        0,
+        b"ocfg",
+        1,
+        48,
+        0x8664,
+        1,
+        8,
+        target_count,
+        48,
+        code_begin,
+        code_begin + text_size,
+        0,
+        0,
+    )
+    for index in range(target_count):
+        kind_flags = 1 if index == 0 else 2 if index == 1 else 4
+        struct.pack_into(
+            "<II", cfg_payload, 48 + index * 8, code_begin + index * 0x10, kind_flags
+        )
+    struct.pack_into("<I", cfg_payload, 40, zlib.adler32(cfg_payload) & 0xFFFFFFFF)
 
     ident = b"\x7fELF" + bytes((2, 1, 1, 3, 0)) + bytes(7)
     struct.pack_into(
@@ -187,7 +228,7 @@ def _fake_windows_boot_oat() -> bytes:
         section_names_index,
     )
     program_headers = (
-        (1, 4, 0x200, rodata_address, 0, 0x80, 0x80, 0x10000),
+        (1, 4, 0x208, rodata_address, 0, 0x80, 0x80, 0x10000),
         (1, 5, 0x300, text_address, 0, text_size, text_size, 0x10000),
         (
             1,
@@ -195,16 +236,17 @@ def _fake_windows_boot_oat() -> bytes:
             unwind_file_offset,
             unwind_address,
             0,
-            len(unwind_payload),
-            len(unwind_payload),
+            len(unwind_payload) + len(cfg_payload),
+            len(unwind_payload) + len(cfg_payload),
             0x10000,
         ),
     )
     for index, values in enumerate(program_headers):
         struct.pack_into("<IIQQQQQQ", data, program_offset + index * 56, *values)
 
-    data[0x200:0x208] = b"oat\n265\0"
+    data[0x208:0x210] = b"oat\n265\0"
     data[unwind_file_offset : unwind_file_offset + len(unwind_payload)] = unwind_payload
+    data[cfg_file_offset : cfg_file_offset + len(cfg_payload)] = cfg_payload
     dynsym_offset = 0x700
     dynstr_offset = 0x780
     data[dynstr_offset : dynstr_offset + len(dynamic_names)] = dynamic_names
@@ -230,11 +272,33 @@ def _fake_windows_boot_oat() -> bytes:
         unwind_address + len(unwind_payload) - 4,
         4,
     )
-    section_names_offset = 0xB00
+    struct.pack_into(
+        "<IBBHQQ",
+        data,
+        dynsym_offset + 72,
+        dynamic_name_offsets["oatcfgwindows"],
+        0x11,
+        0,
+        4,
+        cfg_address,
+        len(cfg_payload),
+    )
+    struct.pack_into(
+        "<IBBHQQ",
+        data,
+        dynsym_offset + 96,
+        dynamic_name_offsets["oatcfgwindowslastword"],
+        0x11,
+        0,
+        4,
+        cfg_address + len(cfg_payload) - 4,
+        4,
+    )
+    section_names_offset = 0xB80
     data[section_names_offset : section_names_offset + len(section_names)] = section_names
     section_values = (
         (0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
-        (section_name_offsets[".rodata"], 1, 2, rodata_address, 0x200, 0x80, 0, 0, 4, 0),
+        (section_name_offsets[".rodata"], 1, 2, rodata_address, 0x208, 0x80, 0, 0, 4, 0),
         (section_name_offsets[".text"], 1, 6, text_address, 0x300, text_size, 0, 0, 16, 0),
         (
             section_name_offsets[".oat_unwind.windows"],
@@ -248,8 +312,20 @@ def _fake_windows_boot_oat() -> bytes:
             0x10000,
             0,
         ),
+        (
+            section_name_offsets[".oat_cfg.windows"],
+            1,
+            2,
+            cfg_address,
+            cfg_file_offset,
+            len(cfg_payload),
+            0,
+            0,
+            4,
+            0,
+        ),
         (section_name_offsets[".bss"], 8, 3, 0x40000, 0x600, 0x80, 0, 0, 0x10000, 0),
-        (section_name_offsets[".dynsym"], 11, 2, 0x10100, dynsym_offset, 72, 6, 1, 8, 24),
+        (section_name_offsets[".dynsym"], 11, 2, 0x10100, dynsym_offset, 120, 7, 1, 8, 24),
         (
             section_name_offsets[".dynstr"],
             3,
@@ -288,6 +364,14 @@ def _rewrite_fake_unwind_checksum(data: bytearray) -> None:
         data[unwind_file_offset : unwind_file_offset + unwind_size]
     ) & 0xFFFFFFFF
     struct.pack_into("<I", data, unwind_file_offset + 44, checksum)
+
+
+def _rewrite_fake_cfg_checksum(data: bytearray) -> None:
+    cfg_section_offset = 0x900 + 4 * 64
+    cfg_file_offset, cfg_size = struct.unpack_from("<QQ", data, cfg_section_offset + 24)
+    struct.pack_into("<I", data, cfg_file_offset + 40, 0)
+    checksum = zlib.adler32(data[cfg_file_offset : cfg_file_offset + cfg_size]) & 0xFFFFFFFF
+    struct.pack_into("<I", data, cfg_file_offset + 40, checksum)
 
 
 def test_no_image_probe_runs_shell_free_and_validates_outputs(tmp_path, monkeypatch):
@@ -381,6 +465,74 @@ def test_windows_unwind_validator_rejects_blob_corruption(tmp_path):
 
     with pytest.raises(run_dex2oat_no_image.Dex2OatProbeError, match="flags/version"):
         run_dex2oat_no_image.validate_windows_oat_unwind(oat)
+
+
+def test_windows_cfg_validator_accepts_canonical_transport(tmp_path):
+    oat = tmp_path / "boot.oat"
+    oat.write_bytes(_fake_windows_boot_oat())
+
+    result = run_dex2oat_no_image.validate_windows_oat_cfg(oat)
+
+    assert result["section"] == ".oat_cfg.windows"
+    assert result["target_machine"] == 0x8664
+    assert result["target_count"] == 9
+    assert result["quick_candidate_count"] == 1
+    assert result["jni_candidate_count"] == 1
+    assert result["trampoline_candidate_count"] == 7
+
+
+def test_windows_cfg_validator_rejects_checksum_corruption(tmp_path):
+    oat = tmp_path / "boot.oat"
+    data = bytearray(_fake_windows_boot_oat())
+    data[0x588 + 48] ^= 0x10
+    oat.write_bytes(data)
+
+    with pytest.raises(run_dex2oat_no_image.Dex2OatProbeError, match="checksum"):
+        run_dex2oat_no_image.validate_windows_oat_cfg(oat)
+
+
+@pytest.mark.parametrize(
+    ("entry_index", "code_offset", "kind_flags"),
+    (
+        (1, 0x10109, 2),  # Target virtual address is not 16-byte aligned.
+        (1, 0x100f8, 2),  # Not strictly ascending/unique.
+        (1, 0x10108, 0),  # No target role.
+        (1, 0x10108, 0x10),  # Unknown serialized role.
+        (8, 0x101f8, 4),  # Outside the half-open code range.
+    ),
+)
+def test_windows_cfg_validator_rejects_invalid_target(
+    tmp_path, entry_index, code_offset, kind_flags
+):
+    oat = tmp_path / "boot.oat"
+    data = bytearray(_fake_windows_boot_oat())
+    struct.pack_into("<II", data, 0x588 + 48 + entry_index * 8, code_offset, kind_flags)
+    _rewrite_fake_cfg_checksum(data)
+    oat.write_bytes(data)
+
+    with pytest.raises(run_dex2oat_no_image.Dex2OatProbeError, match="target"):
+        run_dex2oat_no_image.validate_windows_oat_cfg(oat)
+
+
+def test_windows_cfg_validator_rejects_missing_trampoline_role(tmp_path):
+    oat = tmp_path / "boot.oat"
+    data = bytearray(_fake_windows_boot_oat())
+    struct.pack_into("<I", data, 0x588 + 48 + 2 * 8 + 4, 1)
+    _rewrite_fake_cfg_checksum(data)
+    oat.write_bytes(data)
+
+    with pytest.raises(run_dex2oat_no_image.Dex2OatProbeError, match="seven trampolines"):
+        run_dex2oat_no_image.validate_windows_oat_cfg(oat)
+
+
+def test_windows_cfg_validator_rejects_anchor_corruption(tmp_path):
+    oat = tmp_path / "boot.oat"
+    data = bytearray(_fake_windows_boot_oat())
+    struct.pack_into("<Q", data, 0x700 + 72 + 8, 0x30580)
+    oat.write_bytes(data)
+
+    with pytest.raises(run_dex2oat_no_image.Dex2OatProbeError, match="anchor"):
+        run_dex2oat_no_image.validate_windows_oat_cfg(oat)
 
 
 def test_elf_section_reader_accepts_nobits_beyond_file_bytes():
