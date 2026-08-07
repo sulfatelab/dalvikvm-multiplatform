@@ -35,6 +35,9 @@ The first implementation slice is pinned to nested ART commit
 W-030's private-copy loader is nested ART commit
 `fd6accf065a550fc1e436cb9f28617b466f7593e`; its root generator, launcher,
 probe, and tests are commit `a0400259954d95161f45c74d3a8a4317a3427a62`.
+W-031's unwind writer/registry is nested ART commit
+`ba16ea923a9156ef5cbaebfabbc1dceba069889f`; its root gate and accepted record
+are commit `48c2b785ca6878044f2e5ca1aa556d0c4ae4928f`.
 Commit `1a9aa837ad2fb697d246855c695d44f2b53c69e8` removes the
 `--force-determinism` request from both OAT generators; manifests still bind
 each generated cache set.
@@ -103,6 +106,15 @@ startup upgrades many eligible current entrypoints to nterp, and the probe
 intentionally obtains the underlying compiled address with
 `ArtMethod::GetOatMethodQuickCode()`.
 
+Step 7 remains `NOT STARTED`, but its W-032 implementation boundary is now
+frozen. W-032 emits and validates `.oat_cfg.windows`, records CFG policy, and
+uses a PE-audited CFG-instrumented caller in a forced-CFG process to enter
+representative boot-OAT code. It does not call
+`SetProcessValidCallTargets`. Fine-grained explicit targets remain a separate
+allocation experiment because OAT-1's committed RW/NX-to-RX transition has
+default-valid CFG semantics. CFG metadata does not instrument outgoing
+indirect branches in generated quick code.
+
 The earlier `runtime/oat/oat_file_test.cc` additions are a pre-dispatch loader
 characterization suite. They support sequence step 3 and do not constitute
 numbered step 1 or executable Windows OAT loading.
@@ -117,11 +129,11 @@ numbered step 1 or executable Windows OAT loading.
 | 4. Windows private-copy `ElfOatFile` mapping | `COMPLETE` | Windows `ElfFileImpl::Load()` privately copies every file-backed `PT_LOAD` into the existing ART-owned private allocation; W-030 covers validation-only and executable opens, rejected foreign/section/unaligned/range inputs, exact address, R/RX/RW, no-access gaps, zero fill, owner sharing, source privacy, and cache flush | Retain W-030; no boot-only step-4 exit condition remains |
 | 5. VDEX aperture and ownership | `COMPLETE` | Windows reused VDEX mappings use the same checked private-copy primitive for the exact `oatdex` bytes, return an owner-sharing slice, and pass canonical boot startup through `ComputeFields -> LoadVdex -> Setup` | Retain the native end-to-end gate; add broader rollback injection with product-level fallback work |
 | 6. `.oat_unwind.windows` | `PARTIAL` | Managed/JNI/seven-trampoline emission, deduplication, checksum, anchors, validation-only parsing, executable registration/lifetime, sample lookup, synthetic `RtlVirtualUnwind`, and JIT-disabled managed/JNI runtime calls pass W-031 | Add corruption/fallback injection, managed exception/fatal stack walking, and stronger XMM-bearing boot-AOT frame execution |
-| 7. `.oat_cfg.windows` | `NOT STARTED` | Independent format and observation/explicit mode split are specified | Implement collection/serialization/parser; pass observation mode; keep explicit mode gated on the separate committed-allocation feasibility proof |
+| 7. `.oat_cfg.windows` | `NOT STARTED` | W-032 is bounded to independent collection/serialization/parser plus forced-policy observation through a verified CFG-instrumented caller; outgoing quick-code call-site instrumentation is explicitly outside this transport | Implement W-032 without `SetProcessValidCallTargets`; keep explicit mode gated on the separate committed-allocation feasibility proof |
 | 8. Boot ART/OAT/VDEX generation and staging | `COMPLETE` | W-030 exercises native `ImageWriter`, emits Windows LZ4 `boot.art` plus matching OAT/VDEX, binds the path-sensitive set with one manifest, validates hashes/identity, stages the exact single-component topology, and passes canonical startup | Retain per-generation set integrity; cross-generation byte identity is intentionally not required |
 | 9. Experimental selection and fallback | `PARTIAL` | W-030 explicitly selects the staged set, runs from package root, rejects seven launcher mismatches, and fails if ART silently enters imageless startup | Integrate a reviewed product option and exercise successful missing/stale/wrong-target/cross-artifact whole-transaction fallback |
 | 10. Real boot-OAT execution | `PARTIAL` | W-031 locates underlying managed and JNI boot-OAT bodies, validates their registered unwind entries, and passes corresponding JIT-disabled runtime calls | Prove representative ordinary dispatch PCs execute inside boot-OAT RX ranges, then cover relocation, faults, GC/roots, exceptions, and fatal stack walking on Server 2025 |
-| 11. CFG observation and OAT-1 measurements | `NOT STARTED` | Required policy, call-path, reservation, commit, padding, startup, and working-set observations are specified | Pass the native observation gate and record the measurements; explicit CFG, OAT-2, application OAT, unloading, and security remain deferred |
+| 11. CFG observation and OAT-1 measurements | `NOT STARTED` | Required forced policy, guarded incoming call path, reservation, commit, padding, startup, and working-set observations are specified | Pass W-032 with a CFG-instrumented PE caller and record the measurements; explicit CFG, outgoing quick-code instrumentation, OAT-2, application OAT, unloading, and security remain deferred |
 
 ## Step 1 implementation record
 
@@ -406,18 +418,22 @@ diagnostic evidence; native Server 2025 is the acceptance authority.
 
 ## Immediate work queue
 
-1. Add `.oat_unwind.windows` corruption/fallback injection, managed
+1. Implement W-032 `.oat_cfg.windows` serialization/parser and its forced-CFG
+   observation gate. Audit the guarded PE call site, enter representative
+   quick/JNI OAT code, structurally cover all seven trampoline targets, and do
+   not call `SetProcessValidCallTargets`.
+2. Run the separate explicit-target allocation/protection characterization;
+   do not infer OAT-1 support from `PAGE_TARGETS_NO_UPDATE` or from the existing
+   JIT gate.
+3. Add `.oat_unwind.windows` corruption/fallback injection, managed
    exception/fatal stack walking, and an actual XMM-bearing boot-AOT frame
    execution gate.
-2. Prove representative ordinary dispatch PCs execute inside boot-OAT RX
+4. Prove representative ordinary dispatch PCs execute inside boot-OAT RX
    ranges despite the current startup nterp upgrade, then extend coverage to
    relocation, faults, and GC/roots.
-3. Implement `.oat_cfg.windows` serialization/parser and the native CFG
-   observation gate; keep explicit-target mode behind its separate allocation
-   feasibility proof.
-4. Integrate reviewed product selection plus successful whole-transaction
+5. Integrate reviewed product selection plus successful whole-transaction
    imageless fallback and ART-level negative identity diagnostics.
-5. Promote the cross-target 16-/64-KiB artifact comparison into an automated
+6. Promote the cross-target 16-/64-KiB artifact comparison into an automated
    regression, close H-005, and add the two-target trampoline regression.
 
 Do not begin application OAT, OAT-2, successful-load unloading, explicit CFG

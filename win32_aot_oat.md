@@ -21,12 +21,16 @@ lookup plus synthetic unwind gate. Step 6 is consequently partial rather than
 complete: corruption/fallback injection, exception/fatal stack walking, and
 stronger XMM-bearing AOT-frame execution remain. W-031 also locates underlying
 managed/JNI bodies and passes corresponding runtime calls with JIT disabled,
-but startup replaces many current dispatch entrypoints with nterp. The gate obtains the compiled
-body through `ArtMethod::GetOatMethodQuickCode()`; it does not yet prove that
-representative normal dispatch PCs execute inside the boot-OAT RX mapping.
-Step 10 therefore remains partial. CFG is still unimplemented. The supported
-Windows product remains imageless nterp/JIT while this experimental track is
-incomplete. Progress and evidence are tracked in
+but startup replaces many current dispatch entrypoints with nterp. The gate
+obtains the compiled body through `ArtMethod::GetOatMethodQuickCode()`; it does
+not yet prove that representative normal dispatch PCs execute inside the
+boot-OAT RX mapping.
+Step 10 therefore remains partial. CFG is still unimplemented. Its next
+implementation package, W-032, is limited to `.oat_cfg.windows`
+emission/validation and forced-policy observation; it does not claim
+fine-grained target enforcement. The supported Windows product remains
+imageless nterp/JIT while this experimental track is incomplete. Progress and
+evidence are tracked in
 [`win32_aot_oat_tracker.md`](win32_aot_oat_tracker.md). The
 accepted native result is
 [`docs/history/windows_x64_w028_result.md`](docs/history/windows_x64_w028_result.md).
@@ -50,8 +54,10 @@ jump on Windows. The current verdict for every finding is recorded under
 "Design review findings".
 
 The implemented source snapshot is `vendor/art` at
-`fd6accf065a550fc1e436cb9f28617b466f7593e`; W-030's private-copy slice is
-based on `android-16.0.0_r4-93-g681f2f38a2`. The design was originally written against
+`ba16ea923a9156ef5cbaebfabbc1dceba069889f`
+(`android-16.0.0_r4-95-gba16ea923a`); W-030's private-copy slice is
+`fd6accf065a550fc1e436cb9f28617b466f7593e`, based on the first W-028 slice at
+`android-16.0.0_r4-93-g681f2f38a2`. The design was originally written against
 `android-16.0.0_r4-76-g4eab6e7423`; the 16 commits through
 `android-16.0.0_r4-92-gffbfe48fd1` are W-027 Unicode and build-prelude
 cleanups, and the next commit is the first implementation slice recorded here.
@@ -423,6 +429,8 @@ a general ELF DSO loader.
 - `ProhibitDynamicCode`/ACG compatibility or policy bypasses.
 - XFG, CFG export suppression, strict CFG policy, and fine-grained CFG
   enforcement as an early support requirement.
+- CFG call-site instrumentation for outgoing indirect branches in generated
+  quick code.
 
 CFG observation mode is the initial default. Native execution tests record the
 process policy and exercise real indirect targets without calling
@@ -922,10 +930,11 @@ Keep responsibilities separate:
 5. `WindowsAotUnwindRegistry`: `.oat_unwind.windows` validation, one multi-entry
    `RtlAddFunctionTable`/`RtlDeleteFunctionTable` lifetime per OAT component,
    and structural lookup proof.
-6. `WindowsAotCfgManager`: `.oat_cfg.windows` validation, process-policy
-   observation, and the separately gated explicit target-state transaction.
-   It does not own a fictitious CFG registration handle; CFG state belongs to
-   the virtual memory.
+6. `WindowsAotCfgTable`: `.oat_cfg.windows` validation and process-policy
+   observation for W-032. It owns parsed diagnostics, not a fictitious CFG
+   registration handle. Any future explicit target-state transaction starts
+   at allocation time and belongs to the virtual memory, not to this late
+   parser.
 7. Existing generated-code registry: fault/stack readers and publication
    ordering shared with nterp/JIT.
 
@@ -1642,6 +1651,36 @@ new ART enum or section name. This naming decision does not claim ARM64,
 ARM64EC, x86, or ARM32 OAT support; the initial executable profile remains
 Windows x86-64.
 
+### Scope and stage boundary
+
+Windows CFG has two independent halves:
+
+- a CFG-instrumented indirect **call site** performs the check; and
+- the destination page's CFG bitmap determines whether the target is valid.
+
+`.oat_cfg.windows` describes the second half only. It does not cause the ART
+compiler to insert guard checks into outgoing indirect calls in generated
+quick code. W-032 therefore proves that guarded PE code can enter selected
+boot-OAT targets in a process with CFG forced on, and that the complete target
+manifest can be transported and validated. It does not claim that indirect
+branches originating inside boot-OAT code are CFG-protected. Instrumenting
+those outgoing branches, XFG signature hashes, export suppression, strict-CFG
+product policy, and adversarial-cache hardening remain later security work.
+
+The first implementation is deliberately split as follows:
+
+1. **W-032 metadata and observation:** emit and validate the target manifest,
+   record the process policy, and execute through a verified CFG-instrumented
+   test caller without changing any CFG target state.
+2. **Explicit-target feasibility:** separately characterize whether a
+   documented invalid-by-default, no-W+X allocation sequence can compose with
+   the boot reservation. This experiment cannot enable a product mode.
+3. **Explicit-target product mode:** only after the feasibility result and a
+   new review, use the serialized list to restrict incoming guarded calls.
+
+This boundary keeps observation useful for early bring-up without describing
+default-valid executable pages as fine-grained enforcement.
+
 ### Serialized CFG target table
 
 The section is an explicit little-endian byte format, never a native-struct or
@@ -1680,9 +1719,12 @@ entry flag bits, and no trailing data. The only version-1 header flag is:
 kCompleteTargetSet = 1u << 0
 ```
 
-It asserts that the array is the complete set of indirect-callable addresses
-the ART writer knows inside `[code_begin, code_end)`. Explicit-target mode
-requires it; the writer always sets it when emitting version 1.
+It asserts that the array is the complete set of ART-owned callable
+entrypoints emitted into `[code_begin, code_end)`, according to the candidate
+sources below. Explicit-target mode requires it; the writer always sets it
+when emitting version 1. This is a trusted matching-writer assertion, not a
+claim that the runtime parser can reconstruct compiler intent from arbitrary
+machine code.
 
 `target_machine` uses the standard PE/COFF `Machine` value described above.
 The runtime requires the upper 16 bits to be zero, cross-checks the value
@@ -1728,6 +1770,26 @@ callable entrypoints, and PE functions already owned by `art.dll`. An x86-64
 relative patcher currently emits no thunks; assert that fact instead of adding
 synthetic targets. The target list is intentionally finer than “all addresses
 in every executable page.”
+
+Completeness is checked at the writer boundary, where the semantic sources
+still exist:
+
+- every nonzero compiled `OatMethodOffsets::code_offset_` contributes exactly
+  one adjusted target before deduplication, classified as quick or JNI from
+  the method access flags;
+- every nonzero callable boot-trampoline offset stored in `OatHeader`
+  contributes its adjusted target;
+- an architecture relative patcher must explicitly report any
+  indirect-callable thunk, while x86-64 asserts that the set is empty; and
+- deduplication may reduce the number of serialized offsets but must preserve
+  the OR of all known roles and the pre-dedup candidate count used by tests.
+
+The runtime validates the claimed set structurally and against the mapped RX
+range. W-032 independently audits selected loaded methods and all seven
+`OatHeader` trampoline addresses against the parsed table. A future
+security-sensitive explicit mode must re-review whether the trusted-writer
+assertion is sufficient; W-032 does not turn the cache parser into a machine-
+code entrypoint recognizer.
 
 Like the unwind section, `.oat_cfg.windows` has its own accidental-corruption
 gate. The writer serializes the complete section with `checksum` zero,
@@ -1801,9 +1863,9 @@ same rules as other begin/lastword pairs: both absent means no section; only
 one present, an anchor outside an R segment, reversed bounds, or a section
 shorter than the fixed header rejects the load. Validation then recomputes the
 checksum and checks the fixed version-1 fields, target machine, known bits,
-checked array size, sorted uniqueness, exact adjusted entrypoints,
-Windows-required target granularity/alignment, RX containment, and allowed
-kinds.
+checked array size, sorted uniqueness, Windows-required target
+granularity/alignment, RX containment, and allowed kinds. Semantic
+completeness remains a writer/gate invariant as described above.
 Validation-only opens perform all of those checks when the section is present
 but never change process CFG state.
 
@@ -1811,16 +1873,17 @@ There are two product/runtime modes:
 
 1. **Observation mode, the early default.** Query and record
    `ProcessControlFlowGuardPolicy`. Missing `.oat_cfg.windows` is allowed; when
-   present it is validated. The private-copy loader follows its ordinary
-   RW/NX population to final RX transition and does not call
-   `SetProcessValidCallTargets`. Windows normally makes addresses in newly
-   executable private pages valid CFG targets unless the allocation established
-   invalid-by-default state, but the native gate must verify that behavior for
-   OAT-1 rather than infer it from JIT. With CFG enabled, execute real indirect
-   calls to quick methods, JNI stubs, all boot trampolines, and representative
-   method entrypoints. Passing proves functional compatibility with the
-   observed default policy; it is not a claim of fine-grained target
-   enforcement.
+   present it is validated. W-032 generation requires the section and audits
+   its content even though the observation-mode loader remains tolerant of an
+   absent optional section. The private-copy loader follows its ordinary RW/NX
+   population to final RX transition and does not resolve or call
+   `SetProcessValidCallTargets`. Windows documents that a `VirtualProtect()`
+   transition to executable protection marks all locations as valid call
+   targets by default unless suitable state is preserved with
+   `PAGE_TARGETS_NO_UPDATE`. The native gate verifies the resulting OAT-1
+   behavior rather than inferring it from JIT. Passing proves functional
+   compatibility with the observed default-valid policy; it is not a claim of
+   fine-grained target enforcement.
 2. **Explicit-target mode, separately gated.** Require CFG to be enabled, the
    CFG APIs to be available, and `.oat_cfg.windows` to be present and complete.
    Establish OAT code pages as CFG-invalid-by-default without ever introducing
@@ -1833,6 +1896,27 @@ There are two product/runtime modes:
    entrypoints only after every batch succeeds. Any failure rejects the still
    unpublished OAT and selects imageless fallback after safe cleanup.
 
+The observation gate must itself have a real guard check. The test DLL is
+compiled with Clang's CFG instrumentation and linked with `/guard:cf`; PE
+inspection must report `CF_INSTRUMENTED` and
+`CF_FUNCTION_TABLE_PRESENT`. The existing policy launcher starts `dalvikvm`
+with CFG forced on, and the child must report `EnableControlFlowGuard == 1`.
+A small x86-64 test bridge establishes the ART quick ABI and dispatches the
+target through the module's `__guard_dispatch_icall_fptr`; its machine code is
+independently disassembled to prove that the guarded dispatch, rather than an
+unguarded `call` or `jmp`, reaches the OAT address. The bridge enters selected
+underlying quick and JNI boot-OAT bodies and verifies their results. Ordinary
+managed workloads exercise resolution, JNI, interface/IMT,
+quick-to-interpreter, and nterp paths; the gate records which paths actually
+entered an OAT address rather than claiming that structural lookup executed
+all seven trampolines. The complete trampoline set is still required in the
+serialized-table audit.
+
+If CFG cannot be forced on, if the caller lacks a guard dispatch, or if no
+representative guarded call reaches an address in the boot-OAT RX range, the
+native observation result is not accepted. A successful unguarded managed
+call, `RtlLookupFunctionEntry()`, or policy query alone is insufficient.
+
 For the x86-64 API contract used here, every CFG offset must be 16-byte
 aligned and the array passed to `SetProcessValidCallTargets()` must be in
 ascending order. ART's current x86-64 code alignment is also 16 bytes. The
@@ -1843,15 +1927,33 @@ offset admits every address in a 16-byte region, and do not add a redundant
 offset semantics. A future ISA must state and test its own API and code-
 alignment requirements before enabling explicit-target mode.
 
-The second mode has a deliberate feasibility gate. `PAGE_TARGETS_INVALID` is
-not a general `VirtualProtect()` modifier and cannot simply be applied after
-the current committed OAT-1 reservation has been populated. Likewise,
-`PAGE_TARGETS_NO_UPDATE` preserves suitable pre-existing CFG state; it does not
-create invalid-by-default state. A native allocation/protection probe must
-first establish the supported no-W+X sequence and show how it composes with
-the already committed boot reservation. Until that passes, do not enable
-explicit-target mode or claim that OAT-1 can enforce the serialized allow-list.
-Observation mode remains usable and non-blocking.
+The second mode has a deliberate feasibility gate. Microsoft documents
+`PAGE_TARGETS_INVALID` for executable allocation but explicitly does not
+support it with `VirtualProtect()`. It also documents
+`PAGE_TARGETS_NO_UPDATE` as preserving suitable existing CFG information while
+changing to executable protection; it is not a request to create
+invalid-by-default state. The current OAT-1 reservation is already committed,
+is populated RW/NX, and becomes RX through `VirtualProtect()`. Its documented
+default is therefore all-valid, which is correct for observation but cannot
+enforce the serialized allow-list.
+
+The native feasibility probe must keep these cases distinct and run each
+potential CFG violation in a disposable child process:
+
+| Case | Purpose | Product consequence |
+|---|---|---|
+| Current OAT-1 RW/NX population then ordinary RX | Confirm the documented default-valid behavior and current usability | Observation only |
+| RW/NX population then RX plus `PAGE_TARGETS_NO_UPDATE` | Characterize native behavior without assuming that non-executable pages own a useful invalid bitmap | No enablement from an empirical pass alone |
+| Allocate/commit RX plus `PAGE_TARGETS_INVALID` | Prove exact target activation and omitted-target fast-fail independently of artifact loading | Does not solve how code is populated without W+X |
+| Paging-section RX invalid view using `FILE_MAP_TARGETS_INVALID` (or a separately proven `MapViewOfFile3` equivalent) plus RW/NX alias | Evaluate the documented dual-view route and exact-address/placeholder composition | OAT-2 candidate, not an OAT-1 patch |
+
+An explicit-mode decision also has to occur before allocation/population;
+`PostSetup()` and a late CFG parser cannot retroactively establish
+the required page state. Unless the probe finds a documented OAT-1-compatible
+sequence, explicit enforcement requires the separately reviewed OAT-2
+dual-view/placeholder design. Until then, do not enable explicit-target mode
+or claim that OAT-1 enforces the serialized allow-list. Observation remains
+usable and non-blocking.
 
 CFG has no table-registration handle and no unregister operation analogous to
 `RtlDeleteFunctionTable()`. Target state belongs to the virtual-memory
@@ -1870,24 +1972,75 @@ format. XFG, export suppression, strict CFG policy, and ACG/
 `ProhibitDynamicCode` require later explicit review and are not implied by
 either CFG mode.
 
+### W-032 implementation package
+
+W-032 is the next bounded implementation package. It does not call
+`SetProcessValidCallTargets` and cannot enable explicit-target mode.
+
+1. Add `ShouldEmitWindowsCfg()` with the same Windows x86-64 boot-image and
+   boot-image-extension predicate as unwind. Collect adjusted method targets
+   independently in `LayoutReserveOffsetCodeMethodVisitor`; OR quick/JNI roles
+   when code is deduplicated. Add the seven adjusted trampoline offsets from
+   `InitOatCode()` and assert that the x86-64 relative patcher reports no
+   indirect-callable thunks.
+2. Canonically sort the target map, serialize version 1, compute the
+   section-local Adler-32, and extend the already conditional Windows metadata
+   writer path with the CFG section and two dynamic anchors. Canonical ordering
+   is required for parsing and review; byte identity between path-sensitive
+   cache generations is not a gate.
+3. Add a narrow `WindowsAotCfgTable` parser/owner beside
+   `WindowsAotUnwindRegistry`. It owns parsed diagnostic entries and one
+   immutable snapshot of the defined process-policy fields, but no operating-
+   system registration handle. Validation-only and executable opens parse the
+   same bytes. Observation mode has no target-state mutation or rollback step.
+4. Add writer/parser/layout/corruption tests, PE guard-policy inspection, a
+   forced-CFG managed runner, a guarded quick/JNI bridge, structural checks for
+   all seven trampolines, and size/count/policy markers. Record the accepted
+   Server 2025 result in `docs/history/windows_x64_w032_result.md`.
+5. Keep the explicit allocation probe as a separately reported
+   characterization. Its result may refine this design, but it cannot silently
+   change the W-032 loader mode.
+
+The accepted gate emits machine-readable markers with per-generation values:
+
+```text
+W032_CFG_TABLE_PASS machine=0x8664 targets=<unique> quick_candidates=<n> jni_candidates=<n> trampoline_candidates=7 checksum=<hex>
+W032_CFG_OBSERVATION_PASS cfg_enabled=1 cfg_strict=<0|1> cfg_export_suppression=<0|1> guard_dispatch=verified guarded_quick=pass guarded_jni=pass target_api_calls=0
+```
+
+Candidate counts are characterization of that path-sensitive cache set, not a
+cross-generation reproducibility baseline. The allocation experiment uses a
+different `W032_CFG_ALLOCATION_OBSERVED` marker and cannot substitute for
+either required pass marker.
+
 ### CFG gates
 
+W-032 requires:
+
 - a writer gate proving sorted unique adjusted offsets, dedup-role merging,
-  complete quick/JNI/trampoline coverage, deterministic output, and rejection
-  of unknown kinds, internal labels, and out-of-range targets;
+  complete quick/JNI/trampoline coverage, insertion-order-independent
+  canonical serialization, and rejection of unknown kinds, internal labels,
+  and out-of-range targets;
 - a corruption gate that flips each header field, array field, and checksum and
   requires validation-only and executable opens to reject before publication;
 - the eight-case ELF layout matrix: neither/unwind/CFG/both, each with and
   without `.data.img.rel.ro`, proving a single R metadata segment and unchanged
   Linux/Android output;
-- a native observation-mode gate with process CFG enabled, policy recorded, no
-  target API calls, and real indirect quick/JNI/trampoline/method execution;
-- a native explicit-mode feasibility gate proving invalid-by-default state,
-  the no-W+X transition, target granularity, page/region batching, exact target
-  acceptance, and rejection of a deliberately omitted, 16-byte-aligned target;
-- partial-batch and exact-address-reuse failures that leave no published
-  entrypoint and no stale target state; and
-- a separate native gate before any non-AMD64 machine value is accepted.
+- a native observation-mode gate with process CFG forced on, policy recorded,
+  no target API calls, a PE-audited CFG-instrumented caller, a guarded entry
+  into representative quick/JNI OAT code, real managed resolution/JNI/IMT/
+  interpreter paths, and structural coverage of every trampoline target.
+
+The following gates are separate and do not block W-032:
+
+- the native explicit-mode allocation matrix above, including
+  invalid-by-default state, no-W+X feasibility, target granularity,
+  page/region batching, exact target acceptance, and rejection of a
+  deliberately omitted, 16-byte-aligned target;
+- before explicit product enablement, partial-batch and exact-address-reuse
+  failures that leave no published entrypoint and no stale target state; and
+- before accepting any non-AMD64 machine value, a separate native writer,
+  loader, guarded-call, and allocation-behavior gate.
 
 ### Boot generation, selection, and fallback
 
@@ -1949,9 +2102,10 @@ evidence before transport and image integration.
    core path; corruption/fallback injection, exception/fatal stack walking,
    and stronger XMM-bearing AOT-frame execution remain before completion.
 7. Implement `.oat_cfg.windows` collection, independent serialization,
-   conditional ELF layout/anchors, and runtime validation. Keep observation
-   mode as the default; run the explicit-target allocation feasibility probe
-   as a separate gate.
+   conditional ELF layout/anchors, and runtime validation as W-032. Keep
+   observation mode as the default, require a verified guarded caller in the
+   native gate, and run the explicit-target allocation feasibility probe as a
+   separate characterization.
 8. Build and stage the Windows `boot.art`, `boot.oat`, and `boot.vdex` set with
    unchanged shared ELF header identity, Windows 64-KiB alignment, and the
    selected boot-component topology. This is the first gate that exercises
@@ -1963,9 +2117,10 @@ evidence before transport and image integration.
 10. On Server 2025, prove representative method entrypoints lie inside the
     boot OAT RX range and execute without JIT compilation; exercise VDEX,
     image relocation, JNI, faults, stack walking, and unwind lookup.
-11. Pass the native CFG observation-mode gate and record OAT-1 startup/commit
-    measurements. Keep explicit-target CFG, OAT-2, and security work from
-    blocking the initial milestone.
+11. Pass the native forced-CFG observation-mode gate and record OAT-1 startup/
+    commit measurements. Keep explicit-target CFG, outgoing quick-code
+    call-site instrumentation, OAT-2, and security work from blocking the
+    initial milestone.
 
 Review each upstream ART update against two invariants: Linux/Android ELF
 generation and loading remain unchanged, and all Windows-specific mapping and
@@ -2500,10 +2655,12 @@ semantics; Wine is structural only.
     Server 2025. Do not treat the underlying OAT body returned by
     `GetOatMethodQuickCode()` as proof that startup dispatch retained that body;
     current startup upgrades many eligible entrypoints to nterp.
-11. Pass CFG observation-mode characterization and measure OAT-1 startup,
-    reservation, commit, padding, and working-set cost. Defer explicit CFG,
-    application OAT, unloading, OAT-2, cache security, hostile-input
-    hardening, and rich tooling integration to separately reviewed work.
+11. Pass forced-CFG observation-mode characterization through a verified
+    guarded PE caller and measure OAT-1 startup, reservation, commit, padding,
+    and working-set cost. Defer explicit CFG, outgoing quick-code call-site
+    instrumentation, application OAT, unloading, OAT-2, cache security,
+    hostile-input hardening, and rich tooling integration to separately
+    reviewed work.
 
 ## Primary references
 
@@ -2564,6 +2721,7 @@ Windows APIs:
 
 - [PE/COFF machine types](https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#machine-types)
 - [CreateFileMappingW](https://learn.microsoft.com/windows/win32/api/memoryapi/nf-memoryapi-createfilemappingw)
+- [MapViewOfFile](https://learn.microsoft.com/windows/win32/api/memoryapi/nf-memoryapi-mapviewoffile)
 - [MapViewOfFile3](https://learn.microsoft.com/windows/win32/api/memoryapi/nf-memoryapi-mapviewoffile3)
 - [VirtualAlloc2](https://learn.microsoft.com/windows/win32/api/memoryapi/nf-memoryapi-virtualalloc2)
 - [VirtualProtect](https://learn.microsoft.com/windows/win32/api/memoryapi/nf-memoryapi-virtualprotect)

@@ -821,17 +821,19 @@ all product paths. Windows NIO.2 remains a non-goal.
   are outside the initial milestone. Security hardening is deferred. CFG uses one
   architecture-neutral `.oat_cfg.windows` section with target ABI in its
   independently versioned header. Observation mode is the early default and
-  characterizes real indirect OAT calls without target API changes;
-  explicit-target mode is separately gated on establishing invalid-by-default
-  CFG state in the committed OAT-1 reservation without W+X.
+  characterizes guarded incoming OAT calls without target API changes. W-032
+  is bounded to that metadata/observation path and does not instrument outgoing
+  indirect branches in generated quick code. Explicit-target mode is
+  separately gated on establishing invalid-by-default CFG state without W+X;
+  the documented OAT-1 RW/NX-to-RX transition is default-valid, so a
+  dual-view/OAT-2 allocation may be required.
 - The remaining functional work is ART-level negative identity diagnostics,
-  unwind/CFG transport, normal product selection with successful whole-
-  transaction imageless fallback, OAT-1
-  measurements, and proof that real boot methods execute from the OAT RX range
-  rather than JIT/nterp. The compiler-to-OAT unwind and CFG transports are no
-  longer open format design: their layouts, writer integration, runtime
-  validation, and mode boundaries are specified and now await implementation
-  and native gates.
+  unwind completion and CFG transport, normal product selection with
+  successful whole-transaction imageless fallback, OAT-1 measurements, and
+  proof that real boot methods execute from the OAT RX range rather than
+  JIT/nterp. The compiler-to-OAT unwind and CFG transports are no longer open
+  format design: their layouts, writer integration, runtime validation, and
+  mode boundaries are specified and now await implementation and native gates.
 - The format analysis, Bionic reuse boundary, mapping design, risk register,
   correctness invariants, and Server 2025 proof gates are in
   [win32_aot_oat.md](win32_aot_oat.md); live progress is in

@@ -52,7 +52,7 @@ items are closed.
 | Legacy build removal | COMPLETE | the checked-in Linux snapshot/generator, split overlays, Linux miniature graphs, Windows Phase-0/Phase-1 and libcore/ICU graphs, product package scripts, and final POSIX-only boot-image entry points are retired; historical records remain documentation only | prevent alternative product paths from returning |
 | CI/acceptance automation | IMPLEMENTED / activation pending | checked-in shell-free Python driver and GitHub workflow define host, fresh Linux, Windows-cross, and native Windows cells; machine paths enter only through an external CI TOML binding | register/provision the two self-hosted runner labels and obtain accepted workflow runs |
 | Additional architectures | PARTIAL / Linux AArch64 experimental | all 15 identities in the revised closed registry are registered; `linux-aarch64-gnu` now generates, builds, stages, and passes exact CriticalNative and normal/FastNative JNI/JIT/tracing, Math CriticalNative, compiler-DSO topology/loading, show-version, imageless-Hello, GC-stress, HandleLeak, PerfSmoke, ThreadHeavy, libcore CoreProbe, InterruptProbe, and RtMem, and 128 MiB non-moving-heap gates through an explicit QEMU user-mode binding; Windows AArch64/ARM64EC remain planned and unstarted while their design is incomplete, Windows x86/ARMv7 remain unstarted and outside current scope, and all PosixShim profiles remain capability-gated | admit another target only after its design and target-specific evidence are complete |
-| Windows AOT/OAT | PARTIAL / separate track | W-028 accepts trivial generation, W-029 pins the identity, W-030 implements Windows private-copy ELF/VDEX loading plus LZ4 boot generation/staging, and W-031 implements the core `.oat_unwind.windows` transport; native W-031 passes managed/JNI/trampoline lookup, synthetic virtual unwind, and JIT-disabled managed/JNI runtime calls | add unwind negative/exception/fatal/XMM-bearing-frame gates, ordinary boot-OAT dispatch proof, CFG, and product selection/fallback in `win32_aot_oat_tracker.md` |
+| Windows AOT/OAT | PARTIAL / separate track | W-028 accepts trivial generation, W-029 pins the identity, W-030 implements Windows private-copy ELF/VDEX loading plus LZ4 boot generation/staging, and W-031 implements the core `.oat_unwind.windows` transport; native W-031 passes managed/JNI/trampoline lookup, synthetic virtual unwind, and JIT-disabled managed/JNI runtime calls; W-032 is designed as CFG metadata/validation plus forced-policy observation, not explicit target enforcement | implement W-032 through a verified guarded PE caller; add unwind negative/exception/fatal/XMM-bearing-frame gates, ordinary boot-OAT dispatch proof, and product selection/fallback in `win32_aot_oat_tracker.md` |
 
 ### Latest verification baseline (2026-08-07)
 
@@ -4407,8 +4407,9 @@ compiler tools. It does not by itself provide:
 - compiler-to-OAT Windows x64 unwind transport and runtime registration;
 - normal product boot selection, clean successful imageless fallback, and
   proof of real OAT entrypoint execution;
-- the `.oat_cfg.windows` writer/loader path, default observation-mode native
-  gate, and separately gated explicit-target allocation semantics; or
+- the `.oat_cfg.windows` writer/loader path and W-032 forced-CFG observation
+  through a verified guarded PE caller; explicit-target allocation semantics
+  and outgoing quick-code call-site instrumentation remain separate; or
 - the acceptance gates in `win32_aot_oat.md`.
 
 Until the loader and execution gates pass, the default Windows product
